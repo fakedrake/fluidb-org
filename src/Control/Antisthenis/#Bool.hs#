@@ -1,0 +1,313 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RoleAnnotations #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
+module Control.Antisthenis.Bool () where
+
+import Data.Utils.AShow
+import Data.Maybe
+import Control.Monad.Trans.Free
+import Data.Coerce
+import Data.Profunctor
+import Control.Monad.Identity
+import qualified Data.List.NonEmpty as NEL
+import Data.Utils.Default
+import Control.Antisthenis.AssocContainer
+import Control.Antisthenis.Types
+import Control.Antisthenis.Zipper
+import GHC.Generics
+
+-- The bound here is a pair of values which are monotonically
+-- increasing functions to the MINIMUM number of steps required if the
+-- result is True and the Minimum number of steps if the final result
+-- is false.
+--
+-- At each step we evaluate the process that would minimize our
+-- result. thre resut is either a) the steps required a to reach the
+-- absorbing element (AE) or b) the number of steps all the processes
+-- will need to reach the non-absrbing element.
+--
+-- In any case while running we want to shift strategies when the one
+-- we are after stops being beneficial. This is reified by the cap on
+-- steps we enforce on computing the process. Here the cap has a bit
+-- more structure than just a less-than operator. The bound returned
+-- on the absorbing element side must not exceed the absorbing element
+-- bound of the second most promising process, and on the
+-- non-absorbing element side it must not exceed the size.
+--
+-- The logic of enforement is in the argument of mkMachine.
+
+newtype Cost = Cost Integer
+  deriving (Generic,Eq)
+instance AShow Cost
+instance Default Cost where
+  def = Cost 0
+instance Ord Cost where
+  compare (Cost a) (Cost b) = compare a b
+instance Semigroup Cost where
+  Cost a <> Cost b = Cost $ a + b
+instance Monoid Cost where
+  mempty = Cost 0
+
+-- | At least one.
+newtype Exists = Exists { unExists :: Bool} deriving Generic
+instance AShow Exists
+instance Semigroup Exists where
+  Exists a <> Exists b = Exists $ a || b
+instance Monoid Exists where
+  mempty = Exists False
+instance Default Exists where
+  def = Exists False
+
+
+data GAbsorbing v = GAbsorbing { gaAbsorbing :: v,gaNonAbsorbing :: v }
+data GBool op v = GBool { gbTrue :: v,gbFalse :: v }
+  deriving (Eq,Generic)
+type BoolBound op = GBool op Cost
+type BoolV op = GBool op Exists
+hasFalse :: BoolV op -> Bool
+hasFalse GBool {gbFalse = Exists v} = v
+hasTrue :: BoolV op -> Bool
+hasTrue GBool {gbTrue = Exists v} = v
+
+instance Semigroup a => Semigroup (GBool op a) where
+  GBool a b <> GBool a' b' =
+    GBool (a <> a') (b <> b')
+instance Monoid a => Monoid (GBool op a) where
+  mempty = GBool mempty mempty
+
+instance Ord (BoolBound op) where
+  compare (GBool a b) (GBool a' b') =
+    compare (min a b) (min a' b')
+
+data Or
+data And
+
+ifelse :: a -> a -> Bool -> a
+ifelse t e p = if p then t else e
+
+data ElemType = AbsorbingElem | NormalElem
+elemType :: BoolOp op => GBool op Exists -> ElemType
+elemType =
+  ifelse AbsorbingElem NormalElem . unExists . gaAbsorbing . toGAbsorbing
+-- | Implement it for or:
+--
+-- non-absorbings  = sum the non-absorbing iterations
+-- absorbings  = min of the absorbing iterations
+zBound :: BoolOp op => Zipper (BoolV op) (ArrProc (BoolV op) m) -> BoolBound op
+zBound z =
+  toGBool
+  $ GAbsorbing
+  { gaAbsorbing = Cost
+      $ if null $ bgsInits bgs
+      then gaAbsorbing $ assocMinCost $ bgsIts bgs else 1
+   ,gaNonAbsorbing = Cost
+      $ gaNonAbsorbing (assocMinCost $ bgsIts bgs)
+      + toInteger (length $ bgsInits bgs)
+  }
+  where
+    bgs = zBgState z
+
+
+-- | It is finished if the result is absorbing or if the inits and its
+-- are empty.
+zFinished :: BoolOp op => Zipper (BoolV op) (ArrProc (BoolV op) m) -> Bool
+zFinished z =
+  maybe
+    False
+    (either (const zIsEmpty)
+     $ (\case
+          AbsorbingElem -> True
+          NormalElem -> zIsEmpty) . elemType)
+  $ zRes z
+  where
+    zIsEmpty =
+      null (bgsInits $ zBgState z)
+      && isNothing (acNonEmpty $ bgsIts $ zBgState z)
+
+-- bgsInits :: [InitProc a]
+-- ,bgsIts :: ZItAssoc w (InitProc a,ItProc a)
+-- ,bgsCoits :: [(Either (ZErr w) (ZRes w),CoitProc a)]
+
+class BoolOp op where
+  -- | Whether the Bool or error is trumped or trumps the result
+  -- depends on the operation.
+  toGAbsorbing :: GBool op v -> GAbsorbing v
+  toGBool :: GAbsorbing v -> GBool op v
+
+instance BoolOp Or where
+  toGAbsorbing
+    GBool {..} = GAbsorbing { gaNonAbsorbing = gbFalse,gaAbsorbing = gbTrue }
+  toGBool
+    GAbsorbing {..} = GBool { gbFalse = gaNonAbsorbing,gbTrue = gaAbsorbing }
+
+instance BoolOp And where
+  toGAbsorbing
+    GBool {..} = GAbsorbing { gaNonAbsorbing = gbTrue,gaAbsorbing = gbFalse }
+  toGBool
+    GAbsorbing {..} = GBool { gbTrue = gaNonAbsorbing,gbFalse = gaAbsorbing }
+
+-- | Combine a local result with a partial resut. Bounded result would
+-- never.
+combBoolBndR
+  :: BoolOp op
+  => BndR (BoolV op)
+  -> Either Err (BoolV op)
+  -> Either Err (BoolV op)
+combBoolBndR newRes oldRes = case (newRes,oldRes) of
+  (BndRes r,Left e) -> case elemType r of
+    AbsorbingElem -> Right r
+    NormalElem -> Left e
+  (BndRes r,Right r') -> Right $ r <> r'
+  (BndErr e,Right r) -> case elemType r of
+    AbsorbingElem -> Right r
+    NormalElem -> Left e
+  (BndErr e,Left _) -> Left e
+  (BndBnd _,x) -> x
+
+data CountingAssoc f g a b =
+  CountingAssoc
+  { assocMinKey :: g a
+   ,assocSize :: Int
+   ,assocData :: SimpleAssoc f a b
+   ,assocMinCost :: GAbsorbing Integer
+  }
+  deriving Foldable
+
+
+instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
+  type KeyAC (CountingAssoc [] Maybe a) = a
+  type NonEmptyAC (CountingAssoc [] Maybe a) =
+    CountingAssoc NEL.NonEmpty Identity a
+  acInsert k v cass =
+    CountingAssoc
+    { assocMinKey = Identity $ maybe k (min k) $ assocMinKey cass
+     ,assocSize = assocSize cass + 1
+     ,assocData = acInsert k v $ assocData cass
+     ,assocMinCost = _ k $ assocMinCost cass
+    }
+  acEmpty =
+    CountingAssoc { assocMinKey = Nothing,assocSize = 0,assocData = acEmpty }
+  acNonEmpty cass = do
+    minKey <- assocMinKey cass
+    dat <- acNonEmpty $ assocData cass
+    return
+      CountingAssoc
+      { assocMinKey = Identity minKey
+       ,assocSize = assocSize cass
+       ,assocData = dat
+       ,assocMinCost = _
+      }
+  acUnlift cass =
+    CountingAssoc
+    { assocMinKey = Just $ runIdentity $ assocMinKey cass
+     ,assocSize = assocSize cass
+     ,assocData = acUnlift $ assocData cass
+     ,assocMinCost = _
+    }
+
+instance (Ord (BoolBound op),BoolOp op) => ZipperParams (BoolV op) where
+  type ZErr (BoolV op) = Err
+  type ZBnd (BoolV op) = BoolBound op
+  type ZRes (BoolV op) = BoolV op
+  type ZCap (BoolV op) = BoolBound op
+  type ZPartialRes (BoolV op) =
+    Maybe (Either Err (BoolV op))
+  type ZItAssoc (BoolV op) =
+    CountingAssoc [] Maybe (BoolBound op)
+  zprocEvolution =
+    ZProcEvolution
+    { evolutionControl = boolEvolutionControl
+     ,evolutionStrategy = boolEvolutionStrategy
+     ,evolutionEmptyErr = error "No arguments provided"
+    }
+  putRes newBnd (partialRes,newZipper) =
+    (\() -> maybe newBnd' (Just . combBoolBndR newBnd) partialRes)
+    <$> newZipper
+    where
+      newBnd' = case newBnd of
+        BndBnd _ -> Nothing -- the bound will be inserted in the assoc list
+        BndRes r -> Just $ Right r
+        BndErr e -> Just $ Left e
+  -- | The oldBound is certainly a bound.
+  replaceRes _oldBnd newBnd (oldRes,newZipper) = do
+    oldRes' <- oldRes
+    return $ (\() -> Just $ combBoolBndR newBnd oldRes') <$> newZipper
+  -- | As a cap use the minimum bound.
+  -- XXX: revisit this
+  localizeConf conf z = conf { confCap = maybe (confCap conf) Cap $ do
+    bnd <- assocMinKey $ bgsIts $ zBgState z
+    gcap <- case confCap conf of
+      Cap cap -> Just cap
+      _ -> Nothing
+    return $ min bnd gcap }
+
+
+boolEvolutionStrategy
+  :: Monad m
+  => x
+  -> FreeT
+    (ItInit (ExZipper (BoolV op)) (CountingAssoc [] Maybe (BoolBound op)))
+    m
+    (x,BndR (BoolV op))
+  -> m (x,BndR (BoolV op))
+boolEvolutionStrategy fin = recur
+  where
+    recur (FreeT m) = m >>= \case
+      Pure a -> return a
+      Free f -> case f of
+        CmdItInit _it ini -> recur ini
+        CmdIt it -> recur
+          $ it (error "Unimpl: function to select the cheapest")
+        CmdInit ini -> recur ini
+        CmdFinished (ExZipper z) -> return
+          (fin,fromMaybe (BndErr undefined) $ either BndErr BndRes <$> zRes z)
+
+-- | Return Just when we have a result the could be the restult of the
+-- poperator.
+boolEvolutionControl
+  :: forall op m .
+  (Ord (BoolBound op),Monad m,BoolOp op)
+  => GConf (BoolV op)
+  -> Zipper (BoolV op) (ArrProc (BoolV op) m)
+  -> Maybe (BndR (BoolV op))
+boolEvolutionControl conf z = case confCap conf of
+  WasFinished -> return $ BndErr undefined
+  DoNothing -> localRes
+  MinimumWork -> either BndErr BndRes <$> zRes z
+  ForceResult -> zRes z >>= \case
+    Left _e -> Nothing -- xxx: should check if zero is even possible.
+    Right x -> if zFinished z then Just $ BndRes x else Nothing
+  Cap cap -> if cap < localBnd then return $ BndBnd localBnd else Nothing
+  where
+    localBnd = zBound z
+    localRes = do
+      if zLocalIsFinal
+        z then either BndErr BndRes <$> zRes z else Just $ BndBnd $ zBound z
+
+zLocalIsFinal :: BoolOp op => Zipper (BoolV op) (ArrProc (BoolV op) m) -> Bool
+zLocalIsFinal z = zIsAbsorbing z || (zEmptyInits z && zEmptyIts z)
+zEmptyInits :: Zipper (BoolV op) (ArrProc (BoolV op) m) -> Bool
+zEmptyInits = null . bgsInits . zBgState
+zEmptyIts :: Zipper (BoolV op) (ArrProc (BoolV op) m) -> Bool
+zEmptyIts = isNothing . acNonEmpty . bgsIts . zBgState
+zIsAbsorbing :: BoolOp op => Zipper (BoolV op) (ArrProc (BoolV op) m) -> Bool
+zIsAbsorbing z = case zRes z of
+  Just (Right r) -> case elemType r of
+    AbsorbingElem -> True
+    NormalElem -> False
+  _ -> False
+
+-- | The problem is that there is no w type in Conf w, just ZCap w so
+-- we need to translate Conf w into a functor of ZCap w. This can be
+-- done via generics. Then we can coerce without any problems.
+boolProcCoerce :: Monad m => ArrProc (BoolV Or) m -> ArrProc (BoolV And) m
+boolProcCoerce = dimap (to . coerce . from) (to . coerce . from)

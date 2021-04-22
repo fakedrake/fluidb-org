@@ -1,0 +1,19 @@
+* Concepts
+
+  - Monad state stacks => global state.
+  - TPC-H query regeneration
+  - Deterministic vs exploratory optimization
+  - ListT
+  - Unique symbols
+  - Parser
+  - Decorrelation
+  - Equivalent hashing (Either,Const,CoConst)
+  - Cluster bifunctorial interfaces to the metadata of clusters (see
+    CanPutIdentity)
+  - Quantified type errors
+  - Log parsing
+
+* Workqueue
+
+  - Write down the plan for Stratis
+  - Include graph main

@@ -1,0 +1,96 @@
+* Plan
+
+* Motivation
+
+  The operation of the QDAG assumes that queries yielding the same
+  result will be represented as the same node. We use normalization to
+  achieve this. Each query is represented as a relational algebraic
+  expression as described in other sections. This algebraic expression
+  is conceptually much closer to a logical query plan than an
+  identifier for the query itself. It is obvious for example that the
+  expressions $\sigma_p \sigma_q A$ and $\sigma_{p \land q} A$ are
+  algebraically equivalent. It is clear however that in order to
+  properly reuse such an expression it is important that they are both
+  represented as the same node in the graph. Normal froms of relations
+  are discussed extensively in the literature at the level of the
+  actual data. Furthermore query equivalence is also quite well
+  studied [[ref:zhou]]. These approaches are, however, a bit of an
+  overkill for our application and they lack an importan feature that
+  is imperative for us: the abuility to perform lookups on maps that
+  have queries as keys. For that we need, not just fast equivalence
+  check, but also a total order, or even better hashing for the
+  queries. We decided that we would be willing to possibly sacrifice
+  some rigor in our notion of query equivalence to achieve hashing and
+  developed a system for query normalization.
+
+* Basic functionality
+
+  Our notion if query equivalence, and thereby normalization, is
+  independent of the content of the primary tables that the
+  expressions refer to. For example $\sigma_p A$ and $\sigma_q A$ are
+  equivalent for any $p$ and $q$ if $A = \nothing$ but they are not
+  equivalent. In other words we normalize based on the rewrites, not
+  by evaluation. We consider queries to be equivalent only if they are
+  reducible to each other under specific relational algebraic axioms.
+
+  Furthermore, while we refer to the normal froms of queries as such,
+  they are in fact not relatonal algebraic expressions
+  themselves. Instead we construct a data structure that index the set
+  of sets of relational algebra expression that are rewritable to each
+  other. We shal refer to these constructs as CNFs. For example if
+  there exists a $q_3$ that can be derived from queries $q_1$ and
+  $q_2$ then necessarily $q_1$, $q_2$ correspond to the same
+  CNF. Furthermore if there exists no such $q_3$, then $q_1$ and $q_2$
+  must correspond to different CNFs.
+
+  To explain the CNF we will start with a basic normalization of
+  relational queries into the form $\pi \sigma (A_0 \times ... \times
+  A_k)$. Where $A_i$ are subqueries that have at their root a
+  relational operator that is not a product, selection, projection or
+  join. We refer to the set of $\{A_0..A_k\}$ as the product set of
+  the CNF. This notion is extended in the following ways:
+
+  - We distinguish two types of such a form: one with a projection at
+    the root and where $A_i$ may not have a
+    projection/selection/product at their root, and with a aggregation
+    at the root and where $A_i$ may not have a
+    aggregation/selection/product at their root.
+  - The selection condition is itself in conjunctive normal form.
+  - The remapping of expressions to symbols in the top
+    projection/aggregation is a mulitset set of expressions. We do not
+    wish to distinguish between CNFs based on column names. We use a
+    singleton instead of a multiset here to represent a CNF column.
+  - All references to columns are translated to either CNF columns or
+    primary columns. The latter occurs only if the primary table
+    referenced is in the product set. This way we completely abstract
+    user-defined names away. We call this a CNF name.
+  - CNF names are indexed with natural numbers to disambiguate between
+    equivalent columns that would be otherwise be distinguished by
+    using different names in projections. Because the indexes CNF
+    names are assigned falsely distinguish oterwise equivalent CNFs,
+    when hashing or comparing CNFs we in fact consider sets of CNF
+    structures (TODO example).
+  - While most rewrites we want to capture regard slections,
+    projections and joins, we want to still be able to capture any
+    rewrite at least inefficiently. To mitigate this, as $A_i$ terms
+    we actually actually a set of relational algebra expressions that
+    are rewrites of each other.
+  - Rather than primary table symbols, at the leaves of $A_i$ we have
+    either primary table symbols or CNFs.
+
+    # TODO: A few words about construction
+
+** [0%] Hashing and deduplication
+
+  Traversal in a purely functional environment like haskell can be
+  extremely expensive. Expecially in our case, representing column
+  symbols the columns themselves creates a huge amount of internal
+  references. In pure functional contexts like ours (haskell)
+  traversing a term requires time proportional to the tree size of the
+  term as opposed to its graph size [[ref:selsam]]. Because of GHC's
+  moving gabage collector [[ref]] we can't depend on perfect sharing and
+  therefore leveraging pointer equality is not an option even if we
+  were willing to break referential transparency. That said we want to
+  make the best of sharing.
+
+  TODO: see selsam et al. about pointer optimizations.

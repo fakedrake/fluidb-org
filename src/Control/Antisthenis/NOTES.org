@@ -1,0 +1,4 @@
+* Stuff
+
+  ~minMachine~ calls ~zFullResultMin~ on the zipper returned by
+  ~CmdFinished~.
