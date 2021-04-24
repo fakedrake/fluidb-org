@@ -67,7 +67,7 @@ library:
     - FluiDB.Schema.TPCH.Main
     - FluiDB.Schema.Graph.Main
 executables:
-  fluidb-star-benchmark: &benchmark
+  benchmark: &benchmark
       main: Main.hs
       source-dirs: tools/Benchmark
       ghc-options: -rtsopts

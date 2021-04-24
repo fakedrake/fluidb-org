@@ -80,8 +80,8 @@ instance MonadFail (Either String) where
 
 instance MonadFakeIO (Either String)
 
-actualMain :: [WorkloadConfig] -> IO ()
-actualMain wlConfs = do
+actualMain :: WorkloadConfig -> IO ()
+actualMain wlConf = do
   putStrLn $ printf "Plans:"
   putStrLn $ ashow [(q,evaluationDesc <$> vs) | (q,vs) <- vals]
   where
@@ -99,7 +99,7 @@ actualMain wlConfs = do
           Right r -> r
         -- budget=Just $ maybe 50 workloadBudget $ listToMaybe wlConfs
         queryVariations :: Workload
-        queryVariations = mkWorkload =<< wlConfs
+        queryVariations = mkWorkload wlConf
         showQ :: Query e s -> SExp
         showQ = \case
           J _ l r -> ashow' (toList l,toList r)
@@ -134,26 +134,6 @@ defaultConfig = WorkloadConfig {
   workloadSize=20,
   workloadBudget=20
   }
-onHead :: (a -> a) -> [a] -> [a]
-onHead _ []     = []
-onHead f (x:xs) = f x:xs
-
--- -n simple-start --newWorkload -n alternating-star
-argsParse :: [String] -> [WorkloadConfig] -> [WorkloadConfig]
-argsParse []            = id
-argsParse ("-n":rest) = argsParse ("--workloadName":rest)
-argsParse ("--workloadName":n:rest) =
-  argsParse rest . onHead (\c -> c{workloadName=n})
-argsParse ("-s":rest) = argsParse ("--workloadSize":rest)
-argsParse ("--workloadSize":s:rest) =
-  argsParse rest . onHead (\c -> c{workloadSize=read s})
-argsParse ("--newWorkload":rest) = argsParse rest . (defaultConfig:)
-argsParse ("--budget":b:rest) =
-  argsParse rest . onHead (\c -> c{workloadBudget=read b})
-argsParse (a:_) = error $ printf "Unrecognized argument '%s'" a
-
 
 graphMain :: IO ()
-graphMain = do
-  confs <- ($ [defaultConfig]) . argsParse <$> getArgs
-  actualMain confs
+graphMain = actualMain defaultConfig
