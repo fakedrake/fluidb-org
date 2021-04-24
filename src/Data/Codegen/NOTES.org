@@ -1,0 +1,16 @@
+* Codegen
+
+  The code generation revolves around the ~CodeBuilderT~ monad
+  transformer. It is a failable writer monad which builds c++
+  imperative code and to which one may ~tell~ the declarations and
+  definitions that the code requires. The library is responsible for
+  deduplicating the declarations so that the types used line up
+  [[example]].
+
+  We first cycle through the epochs to set the context of the node
+  states to be consistent with eac other and with the transitions
+  being triggered. Each epoch contains its own sequence of transitions
+  that are in the correct order. The transitions are grouped together
+  into executable bundles as more than one transitions refer to a
+  single operation. Each bundle is handled in the context of the
+  active epoch.

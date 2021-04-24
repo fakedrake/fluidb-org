@@ -1,4 +1,4 @@
-name: fluidb-org
+name: fluidb
 version: 0.1.0.1
 synopsis: Stochastic cache management for NVM database
 description: Please see README.md
@@ -66,3 +66,10 @@ library:
   exposed-modules:
     - FluiDB.Schema.TPCH.Main
     - FluiDB.Schema.Graph.Main
+executables:
+  fluidb-star-benchmark: &benchmark
+      main: Main.hs
+      source-dirs: tools/Benchmark
+      ghc-options: -rtsopts
+      dependencies:
+        - fluidb

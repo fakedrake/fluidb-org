@@ -1,0 +1,4 @@
+.stack-work/
+fluidb.cabal
+stack.yaml.lock
+tags
