@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE CPP        #-}
 {-# LANGUAGE FlexibleContexts     #-}
@@ -12,6 +14,8 @@
 module FluiDB.Schema.Graph.Main
   (graphMain) where
 
+import Data.QueryPlan.CostTypes
+import FluiDB.Classes
 import Data.Utils.Unsafe
 import Data.Cluster.Types.Clusters
 import Data.CnfQuery.BuildUtils
@@ -71,22 +75,28 @@ evaluationDesc = \case
   ReverseEval clust io q -> R [(q,io,snd $ primaryNRef clust)]
   Delete n q -> D [(q,Tup2 [] [],n)]
 
+instance MonadFail (Either String) where
+  fail = Left
+
+instance MonadFakeIO (Either String)
+
 actualMain :: [WorkloadConfig] -> IO ()
 actualMain wlConfs = do
   putStrLn $ printf "Plans:"
-  putStrLn $ ashow [(q,first evaluationDesc <$> vs) | (q,vs) <- vals]
-  -- putStrLn $ printf "Costs(%s):" $ show mode
-  putStrLn $ ashow [(q,sum $ snd <$> vs) | (q,vs) <- vals]
+  putStrLn $ ashow [(q,evaluationDesc <$> vs) | (q,vs) <- vals]
   where
     vals :: forall e s t n .
          (s ~ Integer,GraphTypeVars e s t n)
-         => [([Integer],[(Evaluation e s t n SExp,Integer)])]
+         => [([Integer],[(Evaluation e s t n SExp)])]
     vals =
       zip (nub <$> fmap (toInts =<<) queryVariations)
-      $ runIdentity
-      $ fmap3 (first $ fmap $ showQ . cnfOrigDEBUG)
-      $ runWorkload queryVariations
+      $ fmap3 (showQ . cnfOrigDEBUG . head)
+      $ fromRight
+      $ runWorkloadEvals id queryVariations
       where
+        fromRight = \case
+          Left e -> error e
+          Right r -> r
         -- budget=Just $ maybe 50 workloadBudget $ listToMaybe wlConfs
         queryVariations :: Workload
         queryVariations = mkWorkload =<< wlConfs

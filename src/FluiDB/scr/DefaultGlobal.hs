@@ -55,7 +55,7 @@ instance MonadFakeIO m => DefaultGlobal ExpTypeSym (Maybe FileSet) () () m Int w
   defGlobalConf _ _ = tpchGlobalConf
   getIOQuery i = do
     seed <- globalPopUniqueNum
-    (qtext,_) <- cmd "/bin/bash" [
+    (qtext,_) <- ioCmd "/bin/bash" [
       "-c",
       printf "DSS_QUERY=%s/queries %s/qgen -b %s/dists.dss -r %d %d | sed -e 's/where rownum <=/limit/g' -e 's/;//g'" qgenRoot qgenRoot qgenRoot (seed + 1) i]
     parseTpchQuery qtext

@@ -301,9 +301,7 @@ selCall outAssoc p = do
 
 
 getQueriesFromClust
-  :: (Hashables2 e s
-     ,MonadError (CodeBuildErr e s t n) m
-     ,MonadReader (ClusterConfig e s t n) m)
+  :: (Hashables2 e s,MonadReader (ClusterConfig e s t n) m)
   => AnyCluster e s t n
   -> m [CNFQuery e s]
 getQueriesFromClust clust = getNodeCnfN $ snd $ primaryNRef clust

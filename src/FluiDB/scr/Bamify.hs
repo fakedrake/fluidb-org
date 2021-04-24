@@ -56,16 +56,16 @@ tblToBama :: MonadFakeIO m =>
           -> FilePath
           -> GlobalSolveT e s t n m ()
 tblToBama limit tblFN bamaFN = do
-  logMsg $ tblFN ++ " -> " ++ bamaFN ++ " limit: " ++ show limit
+  ioLogMsg $ tblFN ++ " -> " ++ bamaFN ++ " limit: " ++ show limit
   safeFileTbl <- existing tblFN
-  liftFakeIO $ do
+  ioLiftIO $ do
     fileContents <- BS.readFile safeFileTbl
     schema <- getSchemaOrDie $ TSymbol $ takeBaseName tblFN
     fd <- openBinaryFile bamaFN WriteMode
     let eitherRes = parseLines schema safeFileTbl fileContents limit
     units <- mapM (writeResultIO fd) eitherRes
     hClose fd
-    logMsg $ "Lines: " <> show (length units)
+    ioLogMsg $ "Lines: " <> show (length units)
 
 bamaToDat :: forall e s t n m .
             (ExpressionLike e, Hashables2 e s, AShow e, AShow s,
@@ -75,13 +75,13 @@ bamaToDat :: forall e s t n m .
           -> FilePath
           -> GlobalSolveT e s t n m ()
 bamaToDat q bam dat = do
-  logMsg $ bam ++ " -> " ++ dat
+  ioLogMsg $ bam ++ " -> " ++ dat
   cppCode <- bamToDatCode
   let cpp = dat ++ ".cpp"
   let exe = dat ++ ".exe"
-  writeFileFake cpp cppCode
+  ioWriteFile ioOps cpp cppCode
   compileAndRunCppFile cpp exe
-  inDir (resourcesDir "tpch_data/") $ void $ cmd exe []
+  inDir (resourcesDir "tpch_data/") $ void $ ioCmd exe []
   where
     bamToDatCode = runCodeBuild $ lift $ do
       tellInclude $ CC.LocalInclude $ resourcesDir "include/bamify.hh"

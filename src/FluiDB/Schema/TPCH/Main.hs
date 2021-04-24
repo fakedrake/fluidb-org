@@ -41,13 +41,15 @@ workloadTpch = [7,8,7,8,7,8,7,8]
 
 runWorkload' :: (Int -> Int) -> _ -> IO (Either String _)
 runWorkload' f wl = do
-  let modBudget gc = gc{
-        globalGCConfig=(globalGCConfig gc){
-            budget=fmap f $ budget $ globalGCConfig gc}}
-  logMsg "Schema:"
-  logMsg $ ashow $ globalSchemaAssoc $ defGlobalConf (Proxy :: Proxy IO) wl
-  logMsg $ "Running workload: " ++ show wl
-  runExceptT $ runWorkload modBudget wl
+  let modBudget gc =
+        gc { globalGCConfig = (globalGCConfig gc)
+               { budget = fmap f $ budget $ globalGCConfig gc }
+           }
+  let log = ioLogMsg ioOps
+  log "Schema:"
+  log $ ashow $ globalSchemaAssoc $ defGlobalConf (Proxy :: Proxy IO) wl
+  log $ "Running workload: " ++ show wl
+  runExceptT $ runWorkloadCpp modBudget wl
 
 tpchMain :: IO ()
 tpchMain = timeoutSecs 15 $ do

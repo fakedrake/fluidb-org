@@ -125,12 +125,14 @@ splitNodeRoles dir (int,inp0,out0) =
       ReverseTrigger -> (out0, inp0)
 
 -- | Get the cluster corresponding to the node.
-getClusterT :: (Hashables2 e s, HasCallStack,
-               MonadState (ClusterConfig e s t n) m,
-               MonadError (CodeBuildErr e s t n) m) =>
-              NodeRef t
-            -> m (CNFQuery e s, AnyCluster e s t n)
-getClusterT t = maybe (throwError $ NoClusterForT t) return =<< lookupClusterT t
+getClusterT
+  :: (Hashables2 e s
+     ,MonadState (ClusterConfig e s t n) m
+     ,MonadAShowErr e s err m)
+  => NodeRef t
+  -> m (CNFQuery e s,AnyCluster e s t n)
+getClusterT t =
+  maybe (throwAStr $ "No cluster for: " ++ ashow t) return =<< lookupClusterT t
 
 getClusterN :: (Hashables2 e s,
                MonadState (ClusterConfig e s t n) m,

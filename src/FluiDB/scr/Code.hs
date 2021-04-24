@@ -134,7 +134,7 @@ sqlToSolution query serializeSols getSolution = do
   -- traceM "Orig query:\n"
   -- traceM $ ashow $ first planSymOrig query
   qs <- optQueryPlan @e @s cppConf symIso query
-  logMsg $ "Opt queries: [" ++  show (lengthF qs) ++ "]\n"
+  ioLogMsg $ "Opt queries: [" ++  show (lengthF qs) ++ "]\n"
   -- SANITY CHECK
   when False $ wrapTrace "Sanity checking..." $ do
     let toCnfs q = HS.fromList
@@ -244,8 +244,12 @@ runCodeBuild x = do
                       -> GlobalSolveT e s t n m' a
       globalSolveWrap = hoist lift
 
-compileAndRunCppFile :: forall e s t n m . MonadFakeIO m =>
-                       FilePath -> FilePath -> GlobalSolveT e s t n m ()
+compileAndRunCppFile
+  :: forall e s t n m .
+  MonadFakeIO m
+  => FilePath
+  -> FilePath
+  -> GlobalSolveT e s t n m ()
 compileAndRunCppFile cpp exe = do
   inFn <- existing cpp
   let command = [
@@ -256,9 +260,9 @@ compileAndRunCppFile cpp exe = do
         , inFn
         , "-o"
         , exe]
-  -- cmd "c++" command
-  logMsg $ "NOT: " ++ unwords ("c++":command)
-  -- inDir (resourcesDir "tpch_data/") $ cmd exe []
+  -- ioCmd "c++" command
+  ioLogMsg $ "NOT: " ++ unwords ("c++":command)
+  -- inDir (resourcesDir "tpch_data/") $ ioCmd exe []
 
 
 #if 0

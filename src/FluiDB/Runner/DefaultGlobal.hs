@@ -39,12 +39,14 @@ import Data.Utils.Hashable
 import FluiDB.Classes
 import Data.CppAst.ExpressionLike
 
-
-class (ExpressionLike e,MonadFakeIO m,Hashables2 e s) => DefaultGlobal e s t n m q | q -> e,q -> s,q -> t ,q -> n where
+-- XXX: deprecate this in favor of workload params
+class (ExpressionLike e,MonadFakeIO m,Hashables2 e s)
+  => DefaultGlobal e s t n m q | q -> e,q -> s,q -> t,q -> n where
   defGlobalConf :: Proxy m -> [q] -> GlobalConf e s t n
-  getIOQuery :: q -> GlobalSolveT e s t n m (Query (PlanSym e s) (QueryPlan e s,s))
-  putPS :: Monad m =>
-          Proxy q
+  getIOQuery
+    :: q -> GlobalSolveT e s t n m (Query (PlanSym e s) (QueryPlan e s,s))
+  putPS :: Monad m
+        => Proxy q
         -> Query e s
         -> GlobalSolveT e s t n m (Query (PlanSym e s) (QueryPlan e s,s))
 
@@ -59,7 +61,7 @@ instance MonadFakeIO m
   defGlobalConf _ _ = tpchGlobalConf
   getIOQuery i = do
     seed <- globalPopUniqueNum
-    (qtext,_) <- cmd
+    (qtext,_) <- ioCmd ioOps
       "/bin/bash"
       ["-c"
       ,printf

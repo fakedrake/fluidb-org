@@ -67,19 +67,19 @@ data TransitionBundle e s t n =
 mkTransitionBundle
   :: (Hashables2 e s
      ,MonadReader (ClusterConfig e s t n) m
-     ,MonadError (CodeBuildErr e s t n) m)
+     ,MonadAShowErr e s err m)
   => Transition t n
   -> m (TransitionBundle e s t n)
 mkTransitionBundle = dropState (ask,const $ return ()) . \case
   RTrigger i t o -> do
     clust <- snd <$> getClusterT t
     -- Reversed IO for reverse trigger
-    let i' =  filter (`elem` clusterOutputs clust) i
+    let i' = filter (`elem` clusterOutputs clust) i
     let o' = filter (`elem` clusterInputs clust) o
     return $ ReverseTransitionBundle (Tup2 i' o') clust
   Trigger i t o -> do
     clust <- snd <$> getClusterT t
-    let i' =  filter (`elem` clusterInputs clust) i
+    let i' = filter (`elem` clusterInputs clust) i
     let o' = filter (`elem` clusterOutputs clust) o
     return $ ForwardTransitionBundle (Tup2 i' o') clust
   DelNode n -> return $ DeleteTransitionBundle n
@@ -101,32 +101,31 @@ isIntermediateDeletion = \case
       _ -> return False
   _ -> return False
 
-bundleTransitions :: forall e s t n m .
-                    (Hashables2 e s,
-                     MonadReader (ClusterConfig e s t n) m,
-                     MonadError (CodeBuildErr e s t n) m) =>
-                    [Transition t n]
-                  -> m [TransitionBundle e s t n]
-bundleTransitions trns =
-  foldl mergeTransBundles []
-  <$> traverse mkTransitionBundle trns
+bundleTransitions
+  :: forall e s t n m err .
+  (Hashables2 e s
+  ,MonadReader (ClusterConfig e s t n) m
+  ,MonadAShowErr e s err m)
+  => [Transition t n]
+  -> m [TransitionBundle e s t n]
+bundleTransitions
+  trns = foldl mergeTransBundles [] <$> traverse mkTransitionBundle trns
   where
-    mergeTransBundles :: [TransitionBundle e s t n]
-                      -> TransitionBundle e s t n
-                      -> [TransitionBundle e s t n]
+    mergeTransBundles
+      :: [TransitionBundle e s t n]
+      -> TransitionBundle e s t n
+      -> [TransitionBundle e s t n]
     mergeTransBundles [] x = [x]
     mergeTransBundles (b:bs) x = case (b,x) of
-      (ForwardTransitionBundle (Tup2 i o) c,
-       ForwardTransitionBundle (Tup2 i' o') c') ->
-        if c == c'
-        then ForwardTransitionBundle (Tup2 (nub $ i ++ i') (nub $ o ++ o')) c':bs
-        else x:b:bs
-      (ReverseTransitionBundle (Tup2 i o) c,
-       ReverseTransitionBundle (Tup2 i' o') c') ->
-        if c == c'
-        then ReverseTransitionBundle (Tup2 (nub $ i ++ i') (nub $ o ++ o')) c':bs
-        else x:b:bs
-      _ -> x:b:bs
+      (ForwardTransitionBundle (Tup2 i o) c
+        ,ForwardTransitionBundle (Tup2 i' o') c') -> if c == c'
+        then ForwardTransitionBundle (Tup2 (nub $ i ++ i') (nub $ o ++ o')) c'
+          : bs else x : b : bs
+      (ReverseTransitionBundle (Tup2 i o) c
+        ,ReverseTransitionBundle (Tup2 i' o') c') -> if c == c'
+        then ReverseTransitionBundle (Tup2 (nub $ i ++ i') (nub $ o ++ o')) c'
+          : bs else x : b : bs
+      _ -> x : b : bs
 
 -- Call classes
 

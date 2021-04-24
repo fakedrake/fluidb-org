@@ -48,73 +48,73 @@ type RunningContext e s t n m qio =
 type OutStr = String
 type ErrStr = String
 class Monad m => MonadFakeIO m where
-  liftFakeIO :: IO () -> m ()
-  default liftFakeIO :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => IO () -> m ()
-  liftFakeIO = lift . liftFakeIO
-  readFileFake :: FilePath -> m String
-  default readFileFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
+  ioLiftIO :: IO () -> m ()
+  default ioLiftIO :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => IO () -> m ()
+  ioLiftIO = lift . ioLiftIO
+  ioReadFile :: FilePath -> m String
+  default ioReadFile :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
                          FilePath -> m String
-  readFileFake = lift . readFileFake
-  writeFileFake :: FilePath -> String -> m ()
-  default writeFileFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
+  ioReadFile = lift . ioReadFile
+  ioWriteFile :: FilePath -> String -> m ()
+  default ioWriteFile :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
                           FilePath -> String -> m ()
-  writeFileFake x y = lift $ writeFileFake x y
-  fileExistFake :: FilePath -> m Bool
-  default fileExistFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => FilePath -> m Bool
-  fileExistFake = lift . fileExistFake
-  cmd :: String -> [String] -> GlobalSolveT e s t n m (OutStr,ErrStr)
+  ioWriteFile x y = lift $ ioWriteFile x y
+  ioFileExists :: FilePath -> m Bool
+  default ioFileExists :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => FilePath -> m Bool
+  ioFileExists = lift . ioFileExists
+  ioCmd :: String -> [String] -> GlobalSolveT e s t n m (OutStr,ErrStr)
   default cmd :: (MonadTrans tr,MonadFakeIO m0,m ~ tr m0) =>
                 Monad m => String -> [String] -> GlobalSolveT e s t n m (OutStr,ErrStr)
   cmd cxx args = hoist (hoist lift) $ cmd cxx args
-  dieFake :: String -> m a
-  default dieFake :: (MonadTrans tr,MonadFakeIO m0,m ~ tr m0) => String -> m a
-  dieFake = lift . dieFake
-  setCurrentDirFake :: FilePath -> m ()
-  default setCurrentDirFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
+  ioDie :: String -> m a
+  default ioDie :: (MonadTrans tr,MonadFakeIO m0,m ~ tr m0) => String -> m a
+  ioDie = lift . ioDie
+  ioSetCurrentDir :: FilePath -> m ()
+  default ioSetCurrentDir :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
                               FilePath -> m ()
-  setCurrentDirFake = lift . setCurrentDirFake
-  getCurrentDirFake :: m FilePath
-  default getCurrentDirFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
+  ioSetCurrentDir = lift . ioSetCurrentDir
+  ioGetCurrentDir :: m FilePath
+  default ioGetCurrentDir :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
                               m FilePath
-  getCurrentDirFake = lift getCurrentDirFake
-  logMsg :: String -> m ()
-  default logMsg :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => String -> m ()
-  logMsg = lift . logMsg
+  ioGetCurrentDir = lift ioGetCurrentDir
+  ioLogMsg :: String -> m ()
+  default ioLogMsg :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => String -> m ()
+  ioLogMsg = lift . ioLogMsg
 
 existing :: forall e s t n m .
            (Monad m, MonadFakeIO m) =>
            FilePath
          -> GlobalSolveT e s t n m FilePath
 existing fp = do
-  ex <- fileExistFake fp
-  if ex then return fp else lift2 $ dieFake $ printf "Can't find file: %s" fp
+  ex <- ioFileExists fp
+  if ex then return fp else lift2 $ ioDie $ printf "Can't find file: %s" fp
 
 inDir :: (Monad m, MonadFakeIO m) => FilePath -> m a -> m a
 inDir dir mon = do
-  rollback <- getCurrentDirFake
-  setCurrentDirFake dir
+  rollback <- ioGetCurrentDir
+  ioSetCurrentDir dir
   ret <- mon
-  setCurrentDirFake rollback
+  ioSetCurrentDir rollback
   return ret
 
 instance MonadFakeIO Identity where
-  fileExistFake _ = return False
-  writeFileFake = logMsg ... printf "Writing %s <- '%s'"
-  readFileFake = dieFake . printf "We don't support reading: readFileFake \"%s\""
-  logMsg = traceM
+  ioFileExists _ = return False
+  ioWriteFile = ioLogMsg ... printf "Writing %s <- '%s'"
+  ioReadFile = ioDie . printf "We don't support reading: ioReadFile \"%s\""
+  ioLogMsg = traceM
   cmd cxx args =
-    lift2 $ dieFake $ printf "can't run command $ %s %s" cxx $ unwords args
-  setCurrentDirFake _ = return ()
-  getCurrentDirFake = dieFake $ printf "can't get directory"
-  liftFakeIO = undefined
-  dieFake = error
+    lift2 $ ioDie $ printf "can't run command $ %s %s" cxx $ unwords args
+  ioSetCurrentDir _ = return ()
+  ioGetCurrentDir = dieFake $ printf "can't get directory"
+  ioLiftIO = undefined
+  ioDie = error
 
 
 
 instance MonadFakeIO IO where
-  fileExistFake = doesFileExist
-  writeFileFake = writeFile
-  readFileFake = readFile
+  ioFileExists = doesFileExist
+  ioWriteFile = writeFile
+  ioReadFile = readFile
   cmd cxx args = do
     prErr $ printf "$ %s %s" cxx $ unwords args
     (code,out,err) <- liftIO $ readProcessWithExitCode cxx args ""
@@ -126,14 +126,14 @@ instance MonadFakeIO IO where
         return (out,err)
     where
       prErr = liftIO . hPutStrLn stderr
-  setCurrentDirFake = setCurrentDirectory
-  getCurrentDirFake = getCurrentDirectory
-  liftFakeIO = id
-  logMsg = putStrLn
-  dieFake = die
+  ioSetCurrentDir = setCurrentDirectory
+  ioGetCurrentDir = getCurrentDirectory
+  ioLiftIO = id
+  ioLogMsg = putStrLn
+  ioDie = die
 
 instance (MonadFakeIO m) => MonadFakeIO (StateT s m)
 instance (MonadFakeIO m) => MonadFakeIO (ReaderT r m)
 instance (MonadFakeIO m,Monoid w) => MonadFakeIO (WriterT w m)
 instance (MonadFakeIO m,IsString e) => MonadFakeIO (ExceptT e m) where
-  dieFake = throwError . fromString
+  ioDie = throwError . fromString

@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ConstraintKinds       #-}
@@ -16,7 +17,12 @@
 {-# LANGUAGE UndecidableInstances  #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
-module FluiDB.Classes (RunningContext,MonadFakeIO(..),existing,inDir) where
+module FluiDB.Classes
+  (RunningContext
+  ,MonadFakeIO(..)
+  ,existing
+  ,inDir
+  ,IOOps(..)) where
 
 import Data.Utils.Debug
 import Data.Utils.Functors
@@ -44,93 +50,92 @@ type RunningContext e s t n m qio =
 
 type OutStr = String
 type ErrStr = String
+
+data IOOps m =
+  IOOps
+  { ioLiftIO :: IO () -> m ()
+   ,ioReadFile :: FilePath -> m String
+   ,ioWriteFile :: FilePath -> String -> m ()
+   ,ioFileExists :: FilePath -> m Bool
+   ,ioCmd :: forall e s t n .
+        String
+        -> [String]
+        -> GlobalSolveT e s t n m (OutStr,ErrStr)
+   ,ioDie :: forall a . String -> m a
+   ,ioSetCurrentDir :: FilePath -> m ()
+   ,ioGetCurrentDir :: m FilePath
+   ,ioLogMsg :: String -> m ()
+  }
+
 class Monad m => MonadFakeIO m where
-  liftFakeIO :: IO () -> m ()
-  default liftFakeIO :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => IO () -> m ()
-  liftFakeIO = lift . liftFakeIO
-  readFileFake :: FilePath -> m String
-  default readFileFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
-                         FilePath -> m String
-  readFileFake = lift . readFileFake
-  writeFileFake :: FilePath -> String -> m ()
-  default writeFileFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
-                          FilePath -> String -> m ()
-  writeFileFake x y = lift $ writeFileFake x y
-  fileExistFake :: FilePath -> m Bool
-  default fileExistFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => FilePath -> m Bool
-  fileExistFake = lift . fileExistFake
-  cmd :: String -> [String] -> GlobalSolveT e s t n m (OutStr,ErrStr)
-  default cmd :: (MonadTrans tr,MonadFakeIO m0,m ~ tr m0) =>
-                Monad m => String -> [String] -> GlobalSolveT e s t n m (OutStr,ErrStr)
-  cmd cxx args = hoist (hoist lift) $ cmd cxx args
-  dieFake :: String -> m a
-  default dieFake :: (MonadTrans tr,MonadFakeIO m0,m ~ tr m0) => String -> m a
-  dieFake = lift . dieFake
-  setCurrentDirFake :: FilePath -> m ()
-  default setCurrentDirFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
-                              FilePath -> m ()
-  setCurrentDirFake = lift . setCurrentDirFake
-  getCurrentDirFake :: m FilePath
-  default getCurrentDirFake :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) =>
-                              m FilePath
-  getCurrentDirFake = lift getCurrentDirFake
-  logMsg :: String -> m ()
-  default logMsg :: (MonadTrans t,MonadFakeIO m0,m ~ t m0) => String -> m ()
-  logMsg = lift . logMsg
+  ioOps :: IOOps m
+  default ioOps :: IOOps m
+  ioOps = unsafeFakeIOOps
 
 existing :: forall e s t n m .
            (Monad m, MonadFakeIO m) =>
            FilePath
          -> GlobalSolveT e s t n m FilePath
 existing fp = do
-  ex <- fileExistFake fp
-  if ex then return fp else lift2 $ dieFake $ printf "Can't find file: %s" fp
+  ex <- ioFileExists ioOps fp
+  if ex
+    then return fp else lift2 $ ioDie ioOps $ printf "Can't find file: %s" fp
 
 inDir :: (Monad m, MonadFakeIO m) => FilePath -> m a -> m a
 inDir dir mon = do
-  rollback <- getCurrentDirFake
-  setCurrentDirFake dir
+  rollback <- ioGetCurrentDir ioOps
+  ioSetCurrentDir ioOps dir
   ret <- mon
-  setCurrentDirFake rollback
+  ioSetCurrentDir ioOps rollback
   return ret
 
-instance MonadFakeIO Identity where
-  fileExistFake _ = return False
-  writeFileFake = logMsg ... printf "Writing %s <- '%s'"
-  readFileFake = dieFake . printf "We don't support reading: readFileFake \"%s\""
-  logMsg = traceM
-  cmd cxx args =
-    lift2 $ dieFake $ printf "can't run command $ %s %s" cxx $ unwords args
-  setCurrentDirFake _ = return ()
-  getCurrentDirFake = dieFake $ printf "can't get directory"
-  liftFakeIO = undefined
-  dieFake = error
+instance MonadFakeIO Identity
 
+unsafeFakeIOOps :: Monad m => IOOps m
+unsafeFakeIOOps =
+  IOOps
+  { ioFileExists = const $ return False
+   ,ioWriteFile = traceM ... printf "Writing %s <- '%s'"
+   ,ioReadFile = error . printf "We don't support reading: ioReadFile \"%s\""
+   ,ioLogMsg = traceM
+   ,ioCmd = \cxx args
+      -> lift2 $ error $ printf "can't run command $ %s %s" cxx $ unwords args
+   ,ioSetCurrentDir = const $ return ()
+   ,ioGetCurrentDir = error $ printf "can't get directory"
+   ,ioLiftIO = undefined
+   ,ioDie = error
+  }
 
+realCmd cxx args = do
+  prErr $ printf "$ %s %s" cxx $ unwords args
+  (code,out,err) <- liftIO $ readProcessWithExitCode cxx args ""
+  case code of
+    ExitFailure c -> prErr (printf "Command failed (code: %d)" c)
+      >> throwError (CommandError cxx args c)
+    ExitSuccess -> do
+      prErr "Command success!"
+      return (out,err)
+  where
+    prErr = liftIO . hPutStrLn stderr
+realIOOps :: IOOps IO
+realIOOps =
+  IOOps
+  { ioFileExists = doesFileExist
+   ,ioWriteFile = writeFile
+   ,ioReadFile = readFile
+   ,ioCmd = realCmd
+   ,ioSetCurrentDir = setCurrentDirectory
+   ,ioGetCurrentDir = getCurrentDirectory
+   ,ioLiftIO = id
+   ,ioLogMsg = putStrLn
+   ,ioDie = die
+  }
 
 instance MonadFakeIO IO where
-  fileExistFake = doesFileExist
-  writeFileFake = writeFile
-  readFileFake = readFile
-  cmd cxx args = do
-    prErr $ printf "$ %s %s" cxx $ unwords args
-    (code,out,err) <- liftIO $ readProcessWithExitCode cxx args ""
-    case code of
-      ExitFailure c -> prErr (printf "Command failed (code: %d)" c)
-        >> throwError (CommandError cxx args c)
-      ExitSuccess -> do
-        prErr "Command success!"
-        return (out,err)
-    where
-      prErr = liftIO . hPutStrLn stderr
-  setCurrentDirFake = setCurrentDirectory
-  getCurrentDirFake = getCurrentDirectory
-  liftFakeIO = id
-  logMsg = putStrLn
-  dieFake = die
 
 instance (MonadFakeIO m) => MonadFakeIO (StateT s m)
 instance (MonadFakeIO m) => MonadFakeIO (ReaderT r m)
 instance (MonadFakeIO m,Monoid w) => MonadFakeIO (WriterT w m)
-instance (MonadFakeIO m,IsString e) => MonadFakeIO (ExceptT e m) where
-  dieFake = throwError . fromString
+instance (MonadFakeIO m,IsString e)
+  => MonadFakeIO (ExceptT e m) where
+  ioOps = unsafeFakeIOOps --  { ioDie = throwError . fromString }

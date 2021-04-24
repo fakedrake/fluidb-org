@@ -8,35 +8,35 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Data.Utils.AShow
-  ( AShow(..)
-  , aprint
-  , aassert
-  , HasCallStack
-  , SExp(..)
-  , ARead(..)
-  , AShowList
-  , VecType
-  , AShowV
-  , AReadV
-  , mkErrAStr
-  , mkAStr
-  , genericARead'
-  , aread
-  , ashow
-  , sexp
-  , recSexp
-  , genericAShow'
-  , gshow
-  , garead'
-  , AShowStr(..)
-  , AShowError(..)
-  , throwAStr
-  , demoteAStr
-  , ashowCase'
-  , areadCase'
-  , AShow2
-  , AShowV2
-  ) where
+  (AShow(..)
+  ,aprint
+  ,aassert
+  ,MonadAShowErr
+  ,HasCallStack
+  ,SExp(..)
+  ,ARead(..)
+  ,AShowList
+  ,VecType
+  ,AShowV
+  ,AReadV
+  ,mkErrAStr
+  ,mkAStr
+  ,genericARead'
+  ,aread
+  ,ashow
+  ,sexp
+  ,recSexp
+  ,genericAShow'
+  ,gshow
+  ,garead'
+  ,AShowStr(..)
+  ,AShowError(..)
+  ,throwAStr
+  ,demoteAStr
+  ,ashowCase'
+  ,areadCase'
+  ,AShow2
+  ,AShowV2) where
 
 import           Data.Utils.AShow.ARead
 import           Data.Utils.AShow.AShowStr

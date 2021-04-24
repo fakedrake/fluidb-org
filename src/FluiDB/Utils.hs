@@ -17,7 +17,7 @@
 {-# OPTIONS_GHC -Wno-type-defaults -Wno-unused-top-binds #-}
 
 module FluiDB.Utils
-  (mRun
+  (runGlobalSolve
   ,selectGlobalBy
   ,ListLike
   ,searchForBudget) where
@@ -42,12 +42,14 @@ instance Ord a => Ord (MaxOrd a) where
   MOJust x <= MOJust y = x <= y
 
 
-mRun :: forall e s t n a m . Monad m =>
-       GlobalConf e s t n
-     -> (GlobalError e s t n -> m a)
-     -> GlobalSolveT e s t n m a
-     -> m a
-mRun conf handle s = evalStateT (stripExcept s) conf
+runGlobalSolve
+  :: forall e s t n a m .
+  Monad m
+  => GlobalConf e s t n
+  -> (GlobalError e s t n -> m a)
+  -> GlobalSolveT e s t n m a
+  -> m a
+runGlobalSolve conf handle s = evalStateT (stripExcept s) conf
   where
     stripExcept :: GlobalSolveT e s t n m a -> StateT (GlobalConf e s t n) m a
     stripExcept = join . fmap handleFailure . runExceptT where

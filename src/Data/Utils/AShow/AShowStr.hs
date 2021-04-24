@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP                    #-}
 {-# LANGUAGE DefaultSignatures      #-}
 {-# LANGUAGE DeriveGeneric          #-}
@@ -12,16 +13,16 @@
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE UndecidableInstances   #-}
 module Data.Utils.AShow.AShowStr
-  ( AShowStr(..)
-  , AShowError(..)
-  , HasCallStack
-  , aassert
-  , bimapAShowStr
-  , throwAStr
-  , mkErrAStr
-  , mkAStr
-  , demoteAStr
-  ) where
+  (AShowStr(..)
+  ,AShowError(..)
+  ,HasCallStack
+  ,MonadAShowErr
+  ,aassert
+  ,bimapAShowStr
+  ,throwAStr
+  ,mkErrAStr
+  ,mkAStr
+  ,demoteAStr) where
 
 import           Control.Monad.Except
 import qualified Data.Constraint         as DC
@@ -61,16 +62,13 @@ mkErrAStr msg = fromAShowAStr $ mkAStr msg
 instance AShowError e s (AShowStr e s) where
   fromAShowAStr = id
 
-#if 0
-throwAStr :: forall e s err m a . (AShowError e s err, MonadError err m) =>
-            ((AShowV e, AShowV s) => String) -> m a
-throwAStr msg = throwError $ mkErrAStr msg
-#else
-throwAStr :: forall e s err m a . (HasCallStack, AShowError e s err, MonadError err m) =>
+type MonadAShowErr e s err m =
+  (HasCallStack,AShowError e s err,MonadError err m)
+
+throwAStr :: forall e s err m a . MonadAShowErr e s err m =>
             ((AShowV e, AShowV s) => String) -> m a
 throwAStr msg =
   throwError $ mkErrAStr $ prettyCallStack callStack ++ "\n--\n" ++ msg
-#endif
 
 aassert :: forall e s err m . (HasCallStack, AShowError e s err, MonadError err m) =>
           Bool -> ((AShowV e,AShowV s) => String) -> m ()

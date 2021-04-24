@@ -20,8 +20,9 @@
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds -Wno-unused-imports -Wno-type-defaults #-}
 
-module FluiDB.Schema.Workload
-  (runWorkload) where
+-- | The entry point is `sqlToSolution'
+
+module FluiDB.Schema.Workload (runWorkloadCpp,runWorkloadEvals) where
 
 import Data.Foldable
 import Data.Query.QuerySchema.SchemaBase
@@ -99,7 +100,7 @@ sqlToSolution query serializeSols getSolution = do
   -- traceM "Orig query:\n"
   -- traceM $ ashow $ first planSymOrig query
   qs <- optQueryPlan @e @s (literalType cppConf) symIso query
-  logMsg $ "Opt queries: [" ++  show (lengthF qs) ++ "]\n"
+  ioLogMsg ioOps $ "Opt queries: [" ++  show (lengthF qs) ++ "]\n"
   -- SANITY CHECK
   when False $ wrapTrace "Sanity checking..." $ do
     let toCnfs q = HS.fromList
@@ -193,36 +194,6 @@ insertAndRun queries postSolution = do
       (,conf) <$> lift (local (const conf) $ postSolution)
 
 
--- | Run a query and return the planned cost and the initial nodes used.
-runSingleQuery
-  :: (Hashables2 e s,AShow e,AShow s,ExpressionLike e,MonadFakeIO m)
-  => Query (PlanSym e s) (QueryPlan e s,s)
-  -> GlobalSolveT e s t n m ([Transition t n],String)
-runSingleQuery query = do
-  sqlToSolution query popSol $ do
-    ts <- transitions . NEL.head . epochs <$> getGCState
-    (ts,) <$> getQuerySolutionCpp
-  where
-    popSol :: Monad m => [x] -> m x
-    popSol [] = error "No solution for query"
-    popSol (x:_) = return x
-
-compileAndRunCppFile :: forall e s t n m . MonadFakeIO m =>
-                       FilePath -> FilePath -> GlobalSolveT e s t n m ()
-compileAndRunCppFile cpp exe = do
-  inFn <- existing cpp
-  let command = [
-        "-std=c++17"
-        , "-g"
-        , "-I" ++ resourcesDir "include"
-        , resourcesDir "include/book.cc"
-        , inFn
-        , "-o"
-        , exe]
-  -- cmd "c++" command
-  logMsg $ "NOT: " ++ unwords ("c++":command)
-  -- inDir (resourcesDir "tpch_data/") $ cmd exe []
-
 planFrontier :: [Transition t n] -> [NodeRef n]
 planFrontier
   ts = toNodeList $ uncurry nsDifference $ foldl' go (mempty,mempty) ts
@@ -233,34 +204,85 @@ planFrontier
       RTrigger i' _ o' -> (i <> fromNodeList i',o <> fromNodeList o')
       DelNode _ -> (i,o)
 
--- | Return the planned (not the actually run) cost and the nodes used
--- for materialized
-runWorkload
-  :: forall e s t n m q .
+
+type CppCode = String
+runSingleQuery
+  :: (Hashables2 e s,AShow e,AShow s,ExpressionLike e,MonadFakeIO m)
+  => Query (PlanSym e s) (QueryPlan e s,s)
+  -> GlobalSolveT e s t n m ([Transition t n],CppCode)
+runSingleQuery query = do
+  sqlToSolution query popSol $ do
+    ts <- transitions . NEL.head . epochs <$> getGCState
+    (ts,) <$> getQuerySolutionCpp
+  where
+    popSol :: Monad m => [x] -> m x
+    popSol [] = error "No solution for query"
+    popSol (x:_) = return x
+
+
+-- | Iterate over the queryes
+forEachQuery
+  :: forall e s t n m q a .
   (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
   => (GlobalConf e s t n -> GlobalConf e s t n)
   -> [q]
-  -> m [([(Transition t n,Cost)],[NodeRef n])]
-runWorkload modGCnf qios =
-  mRun
+  -> (Int -> Query (PlanSym e s) (QueryPlan e s,s) -> GlobalSolveT e s t n m a)
+  -> m [a]
+forEachQuery modGCnf qios m =
+  runGlobalSolve
     (modGCnf $ defGlobalConf (Proxy :: Proxy m) qios)
     (\x -> fail $ "No solution found: " ++ ashow x)
   $ forM (zip [1 ..] qios)
   $ \(i,qio) -> do
     query <- getIOQuery qio
-    (trigs,cppCode) <- runSingleQuery query
-    gcc :: GCConfig t n <- getGlobalConf <$> get
-    costTrigs <- either (throwError . toGlobalError) return
-      $ dropReader (return gcc)
-      $ mapM (\t -> (t,) <$> transitionCost t) trigs
-    writeFileFake (cppFile i) cppCode
-    compileAndRunCppFile (cppFile i) $ exeFile i
-    return (costTrigs,planFrontier trigs)
+    m i query
+
+
+-- | Return the planned (not the actually run) cost and the nodes used
+-- for materialized
+runWorkloadCpp
+  :: forall e s t n m q a .
+  (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
+  => (GlobalConf e s t n -> GlobalConf e s t n)
+  -> [q]
+  -> m [([(Transition t n,Cost)],[NodeRef n])]
+runWorkloadCpp modGCnf qios = forEachQuery modGCnf qios $ \i query -> do
+  (trigs,cppCode) <- runSingleQuery query
+  gcc :: GCConfig t n <- getGlobalConf <$> get
+  costTrigs <- either (throwError . toGlobalError) return
+    $ dropReader (return gcc)
+    $ mapM (\t -> (t,) <$> transitionCost t) trigs
+  ioWriteFile ioOps (cppFile i) cppCode
+  inFn <- existing $ cppFile i
+  let command =
+        ["-std=c++17"
+        ,"-g"
+        ,"-I" ++ resourcesDir "include"
+        ,resourcesDir "include/book.cc"
+        ,inFn
+        ,"-o"
+        ,"-"]
+  -- ioCmd "c++" command
+  ioLogMsg ioOps $ "NOT: " ++ unwords ("c++" : command)
+  return (costTrigs,planFrontier trigs)
+
+runWorkloadEvals
+  :: forall e s t n m q a .
+  (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
+  => (GlobalConf e s t n -> GlobalConf e s t n)
+  -> [q]
+  -> m [[Evaluation e s t n [CNFQuery e s]]]
+runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \i query -> do
+  sqlToSolution query (return . head)
+    $ dropReader (lift2 askStates)
+    $ getEvaluations
+  where
+    askStates = (,,,) <$> get <*> lift2 get <*> lift3 get <*> lift3 ask
 
 getTpchQuery :: SqlTypeVars e s t n => Int -> IO (Query e s)
 getTpchQuery q =
   fmap (bimap planSymOrig snd)
-  $ mRun
+  $ runGlobalSolve
     (defGlobalConf (Proxy :: Proxy IO) ([] :: [Int]))
     (\x -> fail $ "Couldn't get query: " ++ ashow x)
   $ getIOQuery q
