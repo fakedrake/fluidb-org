@@ -12,12 +12,14 @@ module Data.Cluster.PutCluster.Join
   , QRef(..)
   ) where
 
+import Data.List.Extra
+import Data.Utils.ListT
+import Data.Utils.Debug
 import Data.CnfQuery.BuildUtils
 import Data.Utils.Unsafe
 import Data.Utils.Functors
 import Data.Utils.Tup
 import Data.Utils.Hashable
-import Data.Utils.Default
 import Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
@@ -140,17 +142,21 @@ mkCNF (first planSymOrig -> q) = do
 
 -- | Make an NCNF. This is for building and therefore we just drop the
 -- query plan.
-mkNCNF :: (Hashables2 e s, Monad m,HasCallStack) =>
-         Query e (NCNFQuery e s)
-       -> CGraphBuilderT e s t n m
-         (NCNFResultI (Query (CNFName e s,e) ()) e s)
-mkNCNF = liftCnfError
-  . return
-  . fmap fromJustErr
-  . (`evalStateT` def)
-  . listTMaxCNF (snd . ncnfResNCNF)
-  . toNCNFQuery
-  . fmap ((,()) . second putEmptyCNFQ)
+mkNCNF :: (Hashables2 e s,Monad m,HasCallStack)
+       => Query e (NCNFQuery e s)
+       -> CGraphBuilderT e s t n m (NCNFResultI (Query (CNFName e s,e) ()) e s)
+mkNCNF q = do
+  cnfCache <- gets $ cnfBuildCache . clustBuildCache
+  (ret,cnfCache') <- liftCnfError
+    $ return
+    $ (`runStateT` cnfCache)
+    $ fmap (maximumOn (hash . snd . ncnfResNCNF))
+    $ runListT
+    $ toNCNFQuery
+    $ (,()) . second putEmptyCNFQ <$> q
+  modify $ \s -> s
+    { clustBuildCache = (clustBuildCache s) { cnfBuildCache = cnfCache' } }
+  return ret
 
 liftCnfError :: Monad m =>
                m (Either (CNFError e s) a)

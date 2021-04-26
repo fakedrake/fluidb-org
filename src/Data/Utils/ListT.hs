@@ -42,7 +42,6 @@ import           Control.Monad.State
 import           Control.Monad.Zip
 import           Data.Maybe
 
-
 newtype ListT m a = ListT {unListT :: m (Maybe (a, ListT m a))}
 consListT :: Monad m => a -> ListT m a -> ListT m a
 consListT x l = ListT $ return $ Just (x, l)
@@ -98,7 +97,7 @@ instance Monad m => MonadPlus (ListT m) where
   {-# INLINE mplus #-}
 
 instance MonadTrans ListT where
-  lift l = ListT $ fmap (\a -> Just (a, mempty)) l
+  lift l = ListT $ fmap (\a -> Just (a,ListT $ return Nothing)) l
   {-# INLINE lift #-}
 
 
@@ -147,7 +146,8 @@ mkListT m = ListT $ go <$> m where
 runListT :: Monad m => ListT m a -> m [a]
 runListT vM = unListT vM >>= \case
   Nothing -> return []
-  Just (v, rest) -> (v:) <$> runListT rest
+  Just (v,rest) -> (v :) <$> runListT rest
+{-# INLINE runListT #-}
 
 eitherlListT :: Monad m => ListT m a -> ListT m a -> ListT m a
 eitherlListT xM yl = ListT $ unListT xM >>= \case

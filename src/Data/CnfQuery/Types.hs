@@ -18,60 +18,60 @@
 -- | Normalize queries for comparison
 
 module Data.CnfQuery.Types
-  ( CNFError(..)
-  , CNFCache(..)
-  , CNFBuild
-  , CNFSelName
-  , CNFNameSPC(..)
-  , CNFColSPC
-  , CNFNameC
-  , CNFQueryDCF
-  , CNFQuerySPDCF(..)
-  , CNFQueryCF
-  , CNFName
-  , CNFNameAggr
-  , CNFNameProj
-  , CNFQueryAggrF
-  , CNFQueryProjF
-  , CNFProd
-  , CNFSel
-  , CNFProj
-  , CNFAggr
-  , NameMap
-  , NameMapC
-  , NameMapAggr
-  , NameMapProj
-  , NCNFQuery
-  , NCNFQueryI
-  , NCNFQueryCF
-  , NCNFQueryDCF
-  , NCNFQueryF
-  , NCNFQueryAggrF
-  , NCNFQueryProjF
-  , CNFQueryAggr
-  , CNFQueryProj
-  , CNFQuery
-  , CNFQueryI
-  , CNFQueryF
-  , CNFCol
-  , CNFColC
-  , CNFColProj
-  , CNFColAggr
-  , CNFConstr
-  , CNFSemigroup(..)
-  , NCNFResultDF(..)
-  , NCNFResultF
-  , NCNFResultI
-  , NCNFResult
-  , HashableCNF
-  , HashableCNFSPCF
-  , HashableCNFC
-  , updateHash
-  , updateHashProd
-  , updateHashSel
-  , updateHashCol
-  , cnfCached
-  ) where
+  (CNFError(..)
+  ,CNFCache(..)
+  ,CNFBuild
+  ,CNFSelName
+  ,CNFNameSPC(..)
+  ,CNFColSPC
+  ,CNFNameC
+  ,CNFQueryDCF
+  ,CNFQuerySPDCF(..)
+  ,CNFQueryCF
+  ,CNFName
+  ,CNFNameAggr
+  ,CNFNameProj
+  ,CNFQueryAggrF
+  ,CNFQueryProjF
+  ,CNFProd
+  ,CNFSel
+  ,CNFProj
+  ,CNFAggr
+  ,NameMap
+  ,NameMapC
+  ,NameMapAggr
+  ,NameMapProj
+  ,NCNFQuery
+  ,NCNFQueryI
+  ,NCNFQueryCF
+  ,NCNFQueryDCF
+  ,NCNFQueryF
+  ,NCNFQueryAggrF
+  ,NCNFQueryProjF
+  ,CNFQueryAggr
+  ,CNFQueryProj
+  ,CNFQuery
+  ,CNFQueryI
+  ,CNFQueryF
+  ,CNFCol
+  ,CNFColC
+  ,CNFColProj
+  ,CNFColAggr
+  ,CNFConstr
+  ,CNFSemigroup(..)
+  ,NCNFResultDF(..)
+  ,NCNFResultF
+  ,NCNFResultI
+  ,NCNFResult
+  ,HashableCNF
+  ,HashableCNFSPCF
+  ,HashableCNFC
+  ,nameMap
+  ,updateHash
+  ,updateHashProd
+  ,updateHashSel
+  ,updateHashCol
+  ,cnfCached) where
 
 import Data.Utils.Function
 import Data.Utils.Tup
@@ -144,6 +144,9 @@ type NameMapAggr e s = NameMapC CoConst e s
 type NameMapProj e s = NameMapC Const e s
 type NameMap e s = NameMapC Either e s
 type NCNFQueryDCF d c f e s = (NameMapC c e s, CNFQueryDCF d c f e s)
+nameMap :: NCNFQueryDCF d c f e s -> NameMapC c e s
+nameMap = fst
+{-# INLINE nameMap #-}
 type NCNFQueryCF c f e s = NCNFQueryDCF EmptyF c f e s
 type NCNFQuery e s = NCNFQueryDCF Identity Either HashBag e s
 -- A cnf query without the cnfQueryDebug
@@ -297,7 +300,8 @@ data NCNFResultDF d f op e s = NCNFResult {
   -- to 0 or 1 name in the output. So if cnfResOp is QProj or
   -- cnfResInOutNames has no meaning and will be `const Nothing`
   ncnfResInOutNames :: [((e,CNFCol e s), (e,CNFCol e s))]
-  }
+  } deriving Generic
+instance Hashables3 e s op => Hashable (NCNFResultDF d f op e s)
 
 type NCNFResultI = NCNFResultDF EmptyF HashBag
 type NCNFResult = NCNFResultDF Identity HashBag

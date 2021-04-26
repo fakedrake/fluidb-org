@@ -56,17 +56,19 @@ insertQueryPlan
   -> CGraphBuilderT e s t n m (NodeRef n)
 insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
   recur :: QueryForest e s -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
-  recur forest = cachedM forest $ case qfQueries forest of
-    Right s -> go0 s
-    Left qs -> fmap foldInsPlanRes $ forM qs $ \case
-      Q2 o l r -> go2 o (queryToForest l) (queryToForest r)
-      Q1 o q   -> go1 o (queryToForest q)
-      Q0 s     -> recur s
+  recur forest = do
+    ret <- cachedM forest $ case qfQueries forest of
+      Right s -> go0 s
+      Left qs -> fmap foldInsPlanRes $ forM qs $ \case
+        Q2 o l r -> go2 o (queryToForest l) (queryToForest r)
+        Q1 o q   -> go1 o (queryToForest q)
+        Q0 s     -> recur s
+    return ret
     where
       cachedM :: QueryForest e s
               -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
               -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
-      cachedM forest' m =
+      cachedM forest' m = do
         HM.lookup forest' . queriesCache . clustBuildCache <$> get >>= \case
           Just ret -> return ret
           Nothing -> do
@@ -83,7 +85,7 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
         ref <- mkNodeFromCnf (ncnfToCnf ncnfS) >>= \case
           [ref] -> return ref
           _ -> throwAStr $ "Multiple refs for symbol " ++ ashow s
-        void $ putNCluster plan (ref,ncnfS)
+        _ <- putNCluster plan (ref,ncnfS)
         return InsPlanRes {
           insPlanRef=ref,
           insPlanNCNFs=HS.singleton $ second putEmptyCNFQ ncnfS,

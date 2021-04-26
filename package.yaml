@@ -63,6 +63,26 @@ dependencies:
 
 library:
   source-dirs: src
+  default-extensions:
+    - GADTs
+    - LambdaCase
+    - FlexibleContexts
+    - FlexibleInstances
+    - MultiParamTypeClasses
+    - MultiWayIf
+    - RankNTypes
+    - RecordWildCards
+    - ScopedTypeVariables
+    - TupleSections
+    - TypeOperators
+    - DeriveGeneric
+    - DeriveFunctor
+    - DeriveFoldable
+    - DeriveTraversable
+    - CPP
+    - InstanceSigs
+    - ConstraintKinds
+    - FunctionalDependencies
   exposed-modules:
     - FluiDB.Schema.TPCH.Main
     - FluiDB.Schema.Graph.Main

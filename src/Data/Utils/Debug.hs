@@ -41,7 +41,8 @@ assertM :: Monad m => m Bool -> m ()
 assertM bM = do {b <- bM; assert b $ return ()}
 
 initSeconds :: Double
-initSeconds = unsafePerformIO getSeconds
+initSeconds = unsafeDupablePerformIO getSeconds
+{-# NOINLINE initSeconds #-}
 getDSecs :: IO Double
 getDSecs = (+ (-initSeconds)) <$> getSeconds
 
@@ -52,7 +53,7 @@ getSeconds = getCurrentTime >>= return . fromRational . toRational . utctDayTime
 -- | The argument is a function that given the timestamp section
 -- builds the string.
 traceT :: String -> a -> a
-traceT str expr = unsafePerformIO $ do
+traceT str expr = unsafeDupablePerformIO $ do
   t <- getDSecs
   traceIO $ printf "[%.03f] %s" t str
   return expr

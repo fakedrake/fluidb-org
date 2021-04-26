@@ -10,6 +10,7 @@ module Data.Cluster.PutCluster
   , planSymAssoc
   ) where
 
+import Data.Utils.Debug
 import Data.Utils.Functors
 import Data.Utils.Tup
 import Data.CppAst.CppType
@@ -141,11 +142,14 @@ putUnClustPropagator symAssocs literalType clust op =
   (cPropToACProp $ unClustPropagator symAssocs literalType op,
    concat symAssocs)
 
-putNCluster :: (Hashables2 e s, Monad m) =>
-              QueryPlan e s
-            -> (NodeRef n, NCNFQuery e s)
-            -> CGraphBuilderT e s t n m (NClust e s t n)
-putNCluster plan (ref, ncnf) = idempotentClusterInsert [(nClustNode,ref)] $ do
+putNCluster
+  :: (Hashables2 e s,Monad m)
+  => QueryPlan e s
+  -> (NodeRef n,NCNFQuery e s)
+  -> CGraphBuilderT e s t n m (NClust e s t n)
+putNCluster plan (ref,ncnf) = idempotentClusterInsert [(nClustNode,ref)] $ do
   linkCnfClust (ncnfToCnf ncnf) $ NClustW $ NClust ref
-  putPlanPropagator (NClustW $ NClust ref) (cPropToACPropN $ nClustPropagator plan,[])
+  putPlanPropagator
+    (NClustW $ NClust ref)
+    (cPropToACPropN $ nClustPropagator plan,[])
   return $ NClust ref

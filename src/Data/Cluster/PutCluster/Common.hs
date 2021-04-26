@@ -16,6 +16,7 @@ module Data.Cluster.PutCluster.Common
   , ncnfJoinC
   ) where
 
+import Data.Utils.Debug
 import Data.CnfQuery.Build
 import           Control.Applicative
 import           Control.Monad
@@ -95,17 +96,22 @@ putRet ret c = do
 --
 -- Will check if there are clusters with all the references at the
 -- right places and will avoid running `do ..` if it finds anything.
-idempotentClusterInsert :: forall e s t n m f c .
-                          (Hashables2 e s, Monad m, SpecificCluster c,
-                           Eq (c NodeRef f t n),
-                           CanPutIdentity (c NodeRef f) (c Identity Identity) NodeRef f,
-                           Bitraversable (c Identity Identity),
-                           Zip2 (c Identity Identity),
-                           Hashable (c NodeRef f t n),
-                           f ~ ComposedType c (PlanSym e s) NodeRef) =>
-                          [(c NodeRef f t n -> f n,NodeRef n)]
-                        -> CGraphBuilderT e s t n m (c NodeRef f t n)
-                        -> CGraphBuilderT e s t n m (c NodeRef f t n)
+idempotentClusterInsert
+  :: forall e s t n m f c .
+  (Hashables2 e s
+  ,Monad m
+  ,SpecificCluster c
+  ,Eq (c NodeRef f t n)
+  ,CanPutIdentity (c NodeRef f) (c Identity Identity) NodeRef f
+  ,Bitraversable (c Identity Identity)
+  ,Zip2 (c Identity Identity)
+  ,Hashable (c NodeRef f t n)
+  ,f ~ ComposedType c (PlanSym e s) NodeRef)
+  => [(c NodeRef f t n
+       -> f n
+      ,NodeRef n)]
+  -> CGraphBuilderT e s t n m (c NodeRef f t n)
+  -> CGraphBuilderT e s t n m (c NodeRef f t n)
 idempotentClusterInsert constraints m = do
   constrainedClusterSets <- forM constraints $ \(f,ref) -> do
     clusts <- (>>= snd) <$> lookupClustersN ref

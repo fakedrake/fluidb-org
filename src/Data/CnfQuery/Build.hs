@@ -27,6 +27,8 @@ module Data.CnfQuery.Build
   ,listTMaxCNF
   ,toNCNF) where
 
+import Data.Utils.Compose
+import Data.Utils.Debug
 import           Control.Monad.Except
 import           Data.Bifunctor
 import           Data.CnfQuery.BuildProduct
@@ -42,7 +44,6 @@ import qualified Data.List.NonEmpty         as NEL
 import           Data.Maybe
 import           Data.Query.Algebra
 import           Data.Utils.AShow
-import           Data.Utils.Compose
 import           Data.Utils.Const
 import           Data.Utils.EmptyF
 import           Data.Utils.Functors
@@ -147,75 +148,84 @@ newtype MkQB e s = MkQB { mkQB :: forall a . a -> a -> Query (CNFName e s,e) a}
 -- list will be the same in different order.
 --
 -- listTMaxCNF (ncnfResNCNF)
-listTMaxCNF :: (Hashables2 e s,Monad m) =>
-              (a -> CNFQueryDCF d Either HashBag e s)
-            -> ListT m a -> m (Maybe a)
-listTMaxCNF f l = return . maximumOn (hash . f) <$> runListT l where
-toNCNFQueryB :: forall e s . (HasCallStack, Hashables2 e s) =>
-               BQOp e
-             -> NCNFQueryI e s
-             -> NCNFQueryI e s
-             -> ListT (CNFBuild e s)
-             (NCNFResultI (Either (BQOp (CNFName e s, e)) (MkQB e s)) e s)
+listTMaxCNF
+  :: (Hashables2 e s,Monad m)
+  => (a -> CNFQueryDCF d Either HashBag e s)
+  -> ListT m a
+  -> m (Maybe a)
+listTMaxCNF f l = return . maximumOn (hash . f) <$> runListT l
+
+toNCNFQueryB
+  :: forall e s .
+  (HasCallStack,Hashables2 e s)
+  => BQOp e
+  -> NCNFQueryI e s
+  -> NCNFQueryI e s
+  -> ListT
+    (CNFBuild e s)
+    (NCNFResultI (Either (BQOp (CNFName e s,e)) (MkQB e s)) e s)
 toNCNFQueryB o l r =
-  (sanityCheckRes ("BOP: " ++ ashow o) (Compose . \case {Left x -> Just x;Right _ -> Nothing}) =<<)
+  (sanityCheckRes ("BOP: " ++ ashow o) (Compose . either Just (const Nothing)) =<<)
   $ case o of
-      QJoin p -> mapOp' QJoin <$> ncnfJoin p l r
-      QProd -> do
-        ret <- mapOp' (const QProd) <$> ncnfProduct l r
-        when (bagNull $ cnfProd $ snd r) $
-          throwAStr $ "L Same in as out. R Cols: " ++ ashow (cnfColumns $ snd r)
-        return ret
-      QUnion -> lift2 $ mapOp' (const QUnion) <$> ncnfUnion l r
-      -- Note: Antijoins have unambiguous outputs but the operator may
-      -- have conflicting symbols. We solve the problem of symbol
-      -- conflict in joins so we inherit the work from there to
-      -- disambiguate the symbols in op by disambiguation but the
-      -- columns are not incremented.
-      QLeftAntijoin p -> do
-        p' <- ncnfResOrig <$> ncnfJoin p l r
-        return
-          $ mapOp' (const $ QLeftAntijoin p')
-          $ ncnfLeftAntijoin p' l r
-      QRightAntijoin p -> do
-        p' <- ncnfResOrig <$> ncnfJoin p l r
-        return
-          $ mapOp' (const $ QRightAntijoin p')
-          $ ncnfRightAntijoin p' l r
-      QProjQuery -> do
-        keyAssoc <- leftAsRightKeys
-        lift $ mapOp (\p -> Right $ MkQB $ \_ q -> Q1 (QProj p) (Q0 q))
-          <$> ncnfProject [(kl,E0 kr) | (kl,kr) <- keyAssoc] r
-      -- All columns in the left appear on the right so just keep the
-      -- columns of th right
-      QDistinct -> do
-        keyAssoc <- leftAsRightKeys
-        lift
-          $ mapOp (\(p,e) -> Right $ MkQB $ \_ q -> Q1 (QGroup p e) (Q0 q))
-          <$> ncnfAggregate
+    QJoin p -> mapOp' QJoin <$> ncnfJoin p l r
+    QProd -> do
+      ret <- mapOp' (const QProd) <$> ncnfProduct l r
+      when (bagNull $ cnfProd $ snd r)
+        $ throwAStr
+        $ "L Same in as out. R Cols: "
+        ++ ashow (cnfColumns $ snd r)
+      return ret
+    QUnion -> lift2 $ mapOp' (const QUnion) <$> ncnfUnion l r
+    -- Note: Antijoins have unambiguous outputs but the operator may
+    -- have conflicting symbols. We solve the problem of symbol
+    -- conflict in joins so we inherit the work from there to
+    -- disambiguate the symbols in op by disambiguation but the
+    -- columns are not incremented.
+    QLeftAntijoin p -> do
+      p' <- ncnfResOrig <$> ncnfJoin p l r
+      return $ mapOp' (const $ QLeftAntijoin p') $ ncnfLeftAntijoin p' l r
+    QRightAntijoin p -> do
+      p' <- ncnfResOrig <$> ncnfJoin p l r
+      return $ mapOp' (const $ QRightAntijoin p') $ ncnfRightAntijoin p' l r
+    QProjQuery -> lift $ do
+      keyAssoc <- leftAsRightKeys
+      ret <- mapOp (\p -> Right $ MkQB $ \_ q -> Q1 (QProj p) (Q0 q))
+        <$> ncnfProject [(kl,E0 kr) | (kl,kr) <- keyAssoc] r
+      return ret
+    -- All columns in the left appear on the right so just keep the
+    -- columns of th right
+    QDistinct -> lift $ do
+      keyAssoc <- leftAsRightKeys
+      mapOp (\(p,e) -> Right $ MkQB $ \_ q -> Q1 (QGroup p e) (Q0 q))
+        <$> ncnfAggregate
           [(kl,E0 $ NAggr AggrFirst $ E0 kr) | (kl,kr) <- keyAssoc]
-          (E0 .snd  <$> keyAssoc)
+          (E0 . snd <$> keyAssoc)
           r
   where
     -- In QDistinct and QProjQuery if l has automatically exposed
     -- unique keys they will have necessarily different names to the
     -- corresponding r uniquekeys. Keep the r version of each key to
     -- preserve the name.
-    leftAsRightKeys :: ListT (CNFBuild e s) [(e,e)]
-    leftAsRightKeys = traverse findColOnR $ HM.toList $ fst l
+    --
+    -- This function finds the keys on left that are also on r. This is
+    leftAsRightKeys :: CNFBuild e s [(e,e)]
+    leftAsRightKeys = traverse findColOnR $ HM.toList $ nameMap l
       where
-        findColOnR :: (e,CNFCol e s) -> ListT (CNFBuild e s) (e,e)
+        findColOnR :: (e,CNFCol e s) -> CNFBuild e s (e,e)
         findColOnR lcol =
           maybe
-          (throwAStr $ "Col in lhs not found in rhs")
-          (return . (fst lcol,) . fst)
-          $ find (equivCol lcol) $ HM.toList $ fst r
+            (throwAStr $ "Col in lhs not found in rhs")
+            (return . (fst lcol,) . fst)
+          $ find (equivCol lcol)
+          $ HM.toList
+          $ fst r
           where
             equivCol :: (e,CNFCol e s) -> (e,CNFCol e s) -> Bool
-            equivCol (el,cl) (er,cr) = el == er || cnfColumns cl == cnfColumns cr
-    mapOp' :: (op -> BQOp (CNFName e s, e))
+            equivCol (el,cl) (er,cr) =
+              el == er || cnfColumns cl == cnfColumns cr
+    mapOp' :: (op -> BQOp (CNFName e s,e))
            -> NCNFResultDF d f op e s
-           -> NCNFResultDF d f (Either (BQOp (CNFName e s, e)) (MkQB e s)) e s
+           -> NCNFResultDF d f (Either (BQOp (CNFName e s,e)) (MkQB e s)) e s
     mapOp' opf = mapOp $ Left . opf
 
 ncnfLeftAntijoin :: Hashables2 e s =>
@@ -233,31 +243,35 @@ ncnfRightAntijoin :: Hashables2 e s =>
                   -> NCNFQueryI e s
                   -> NCNFQueryI e s
                   -> NCNFResultI () e s
-ncnfRightAntijoin p' l r = mapOp (const ()) $ ncnfAny2 (const id) (lso,l,r) [(rso,r,l)]
+ncnfRightAntijoin p' l r =
+  mapOp (const ()) $ ncnfAny2 (const id) (lso,l,r) [(rso,r,l)]
   where
     lso = QRightAntijoin p'
     rso = QLeftAntijoin p'
 
-toNCNFQuery :: forall e s s0 . (HasCallStack,Hashables2 e s) =>
-              Query e (NCNFQueryI e s, s0)
-            -> ListT (CNFBuild e s)
-              (NCNFResultI (Query (CNFName e s,e) s0) e s)
-toNCNFQuery = recur where
-  recur = \case
-    Q2 o l r -> do
-      Tup2 resl resr <- recur `traverse` Tup2 l r
-      mapOp (either
+toNCNFQuery
+  :: forall e s s0 .
+  (HasCallStack,Hashables3 e s s0)
+  => Query e (NCNFQueryI e s,s0)
+  -> ListT (CNFBuild e s) (NCNFResultI (Query (CNFName e s,e) s0) e s)
+toNCNFQuery = recur
+  where
+    recur = \case
+      Q2 o l r -> do
+        Tup2 resl resr <- recur `traverse` Tup2 l r
+        mapOp
+          (either
              (\o' -> Q2 o' (ncnfResOrig resl) (ncnfResOrig resr))
              (\(MkQB f) -> join $ f (ncnfResOrig resl) (ncnfResOrig resr)))
-        <$> toNCNFQueryB o (ncnfResNCNF resl) (ncnfResNCNF resr)
-    Q1 o ncnf -> do
-      res <- recur ncnf
-      lift $ mapOp (`Q1` ncnfResOrig res) <$> toNCNFQueryU o (ncnfResNCNF res)
-    Q0 (s,s0) -> return NCNFResult{
-      ncnfResNCNF=s,
-      ncnfResOrig=Q0 s0,
-      ncnfResInOutNames=[]
-      }
+          <$> toNCNFQueryB o (ncnfResNCNF resl) (ncnfResNCNF resr)
+      Q1 o ncnf -> do
+        res <- recur ncnf
+        lift
+          $ mapOp (`Q1` ncnfResOrig res)
+          <$> toNCNFQueryU o (ncnfResNCNF res)
+      Q0 (s,s0) -> return
+        NCNFResult
+        { ncnfResNCNF = s,ncnfResOrig = Q0 s0,ncnfResInOutNames = [] }
 
 
 ncnfSymbol :: forall e s. HashableCNF HashBag e s =>

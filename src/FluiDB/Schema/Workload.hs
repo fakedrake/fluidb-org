@@ -100,7 +100,7 @@ sqlToSolution query serializeSols getSolution = do
   -- traceM "Orig query:\n"
   -- traceM $ ashow $ first planSymOrig query
   qs <- optQueryPlan @e @s (literalType cppConf) symIso query
-  ioLogMsg ioOps $ "Opt queries: [" ++  show (lengthF qs) ++ "]\n"
+  ioLogMsg ioOps $ "Opt queries: [size:" ++  show (lengthF qs) ++ "]\n"
   -- SANITY CHECK
   when False $ wrapTrace "Sanity checking..." $ do
     let toCnfs q = HS.fromList
@@ -115,7 +115,6 @@ sqlToSolution query serializeSols getSolution = do
       unless (bef == aft) $ throwAStr $ "UNEQUAL CNFa: "  ++ ashow (bef,aft)
   -- /SANITY CHECK
   hoistGlobalSolveT (serializeSols . dissolve @[])
-    $ wrapTrace "Insert and run queries..."
     $ insertAndRun qs getSolution
 
 
