@@ -86,62 +86,76 @@ instance Applicative VoidProxy where
 instance Monad VoidProxy where
   (>>=) = undefined -- Unreachable
 
-
-getDependencies :: forall t n m . (HasCallStack,Monad m) =>
-                  NodeRef n
-                -> ListT (PlanT t n m) (NodeSet n,StarScore (MetaOp t n) t n)
-getDependencies ref0 =  do
+getDependencies
+  :: forall t n m .
+  (HasCallStack,Monad m)
+  => NodeRef n
+  -> ListT (PlanT t n m) (NodeSet n,StarScore (MetaOp t n) t n)
+getDependencies ref0 = do
   stm <- nodeStates . NEL.head . epochs <$> get
   let isMat' ref = case refLU ref stm of
-        Just (Initial Mat)    -> True
+        Just (Initial Mat) -> True
         Just (Concrete _ Mat) -> True
-        _                     -> False
+        _ -> False
   cache <- matCacheVals . isMaterializableCache . gcCache <$> get
   hoistEvalStateListT cache storeStateT $ getDependencies' isMat' ref0
   where
-    storeStateT :: StateT (DCache t n) (PlanT t n m) (Maybe x)
-                -> RefMap n (Frontiers (MetaOp t n) t n)
-                -> PlanT t n m (Maybe x,RefMap n (Frontiers (MetaOp t n) t n))
+    storeStateT
+      :: StateT (DCache t n) (PlanT t n m) (Maybe x)
+      -> RefMap n (Frontiers (MetaOp t n) t n)
+      -> PlanT t n m (Maybe x,RefMap n (Frontiers (MetaOp t n) t n))
     storeStateT m s = do
       ret@(_,newS) <- fmap2 (refMapMaybe id) $ runStateT m $ Just . (,[]) <$> s
-      modify $ \gcState -> gcState{
-        gcCache=(gcCache gcState){
-            isMaterializableCache=toMatCache $ fst <$> newS}}
+      modify $ \gcState -> gcState
+        { gcCache = (gcCache gcState)
+            { isMaterializableCache = toMatCache $ fst <$> newS }
+        }
       return $ fmap2 fst ret
-{-# SPECIALIZE getDependencies :: NodeRef n
-                               -> ListT (PlanT t n Identity)
-                               (NodeSet n,StarScore (MetaOp t n) t n)  #-}
+{-# SPECIALISE getDependencies :: NodeRef n
+               -> ListT
+                 (PlanT t n Identity)
+                 (NodeSet n,StarScore (MetaOp t n) t n) #-}
 
-getDependencies' :: forall t n m . (HasCallStack,Monad m) =>
-                   (NodeRef n -> Bool)
-                 -> NodeRef n
-                 -> ListT
-                 (StateT (DCache t n) (PlanT t n m))
-                 (NodeSet n,StarScore (MetaOp t n) t n)
+getDependencies'
+  :: forall t n m .
+  (HasCallStack,Monad m)
+  => (NodeRef n -> Bool)
+  -> NodeRef n
+  -> ListT
+    (StateT (DCache t n) (PlanT t n m))
+    (NodeSet n,StarScore (MetaOp t n) t n)
 getDependencies' isFinalNode ref0 = go [] ref0
   where
     go :: Trail t n
        -> NodeRef n
-       -> ListT (StateT (DCache t n) (PlanT t n m))
-       (NodeSet n,StarScore (MetaOp t n) t n)
+       -> ListT
+         (StateT (DCache t n) (PlanT t n m))
+         (NodeSet n,StarScore (MetaOp t n) t n)
     go trail ref0' = withMemoized isFinalNode ref0' trail $ do
       metaOps <- lift2 $ findCostedMetaOps ref0'
-      (depset1,mop,mopCost) <- mkListT $ return
-        [(toNodeList $ metaOpIn mop,
-          mop,
-          mkStarScore mop $ fromIntegral $ costAsInt cost)
-        | (mop,cost) <- metaOps]
-      let trail' = (mop,ref0'):trail
+      (depset1,mop,mopCost) <- mkListT
+        $ return
+          [(toNodeList $ metaOpIn mop
+           ,mop
+           ,mkStarScore mop $ fromIntegral $ costAsInt cost)
+          | (mop,cost) <- metaOps]
+      let trail' = (mop,ref0') : trail
       when (null depset1) mzero
-      (depset,depStarSum) :: (NodeSet n,StarScore (MetaOp t n) t n) <-
-        orProd (\(s,d) (s',d') -> (s<>s',d<>d')) (go trail' <$> depset1)
+      (depset,depStarSum) :: (NodeSet n,StarScore (MetaOp t n) t n) <- orProd
+        (\(s,d) (s',d') -> (s <> s',d <> d'))
+        (go trail' <$> depset1)
       return (depset,depStarSum <> mopCost)
 
-singleFrontiers :: (NodeSet n,StarScore (MetaOp t n) t n) -> Frontiers (MetaOp t n) t n
+singleFrontiers
+  :: (NodeSet n,StarScore (MetaOp t n) t n)
+  -> Frontiers (MetaOp t n) t n
 singleFrontiers (ns,star) = Frontiers {
   frontierStar=(ns,star), frontierStars=HM.singleton ns star}
 
-insFrontiers :: (NodeSet n,StarScore (MetaOp t n) t n) -> Frontiers (MetaOp t n) t n -> Frontiers (MetaOp t n) t n
+insFrontiers
+  :: (NodeSet n,StarScore (MetaOp t n) t n)
+  -> Frontiers (MetaOp t n) t n
+  -> Frontiers (MetaOp t n) t n
 insFrontiers (ns,astar) ds = if snd (frontierStar ds) > astar
   then Frontiers {frontierStar=(ns,astar),
                   frontierStars=HM.insert ns astar $ frontierStars ds}

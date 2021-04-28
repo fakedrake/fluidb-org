@@ -28,6 +28,7 @@
 module Control.Antisthenis.Minimum
   (minTest) where
 
+import Data.Utils.FixState
 import Control.Monad.Trans.Free
 import GHC.Generics
 import Data.Utils.Debug

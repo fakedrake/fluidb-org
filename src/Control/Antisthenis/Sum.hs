@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -7,6 +9,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Control.Antisthenis.Sum () where
 
+import Data.Utils.FixState
 import Data.Utils.Debug
 import Data.Proxy
 import Control.Monad.Reader

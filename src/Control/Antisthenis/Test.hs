@@ -18,8 +18,9 @@
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Control.Antisthenis.Test (withTrail,incrTill,zeroAfter,FixStateT(..)) where
+module Control.Antisthenis.Test (withTrail,incrTill,zeroAfter) where
 
+import Data.Utils.FixState
 import Control.Antisthenis.Lens
 import Data.Utils.Debug
 import Control.Arrow
@@ -94,15 +95,6 @@ var lens = MealyArrow $ Kleisli $ \a -> do
   (nxt,r) <- c a
   modify $ modL lens $ const nxt
   return (nxt,r)
-
-newtype FixStateT f m a =
-  FixStateT { runFixStateT :: f (FixStateT f m) -> m (a,f (FixStateT f m)) }
-  deriving (Functor,Applicative,Monad,MonadState (f (FixStateT f m)),MonadFail
-           ,MonadReader r) via StateT (f (FixStateT f m)) m
-instance MonadTrans (FixStateT f) where
-  lift m = FixStateT $ \a -> (,a) <$> m
-  {-# INLINE lift #-}
-
 
 -- | Handle the error.
 handleBndErr

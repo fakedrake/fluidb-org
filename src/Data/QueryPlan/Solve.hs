@@ -121,8 +121,8 @@ haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost cost = do
   frefs <- toNodeList . frontier <$> get
   star :: Double <- sum <$> mapM getAStar frefs
-  -- histCost <- sum <$> expectedHistoricalCosts
-  let histCost = 0
+  histCost <- sum <$> expectedHistoricalCosts
+  -- let histCost = 0
   trM $ printf "Halt%s: %s" (show frefs) $ show (cost,star,histCost)
   halt $ PlanSearchScore cost (Just $ star + histCost)
   trM "Resume!"

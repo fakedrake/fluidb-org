@@ -17,42 +17,44 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# OPTIONS_GHC -Wno-orphans -Wno-name-shadowing -Wno-unused-top-binds #-}
 
-module Data.QueryPlan.Types (
-   Transition(..)
-  , PlanT
-  , PlanSearchScore(..)
-  , MonadHaltD
-  , MetaOp(..)
-  , showMetaOp
-  , throwPlan
-  , halt
-  , unPlanT
-  , GCState(..)
-  , GCConfig(..)
-  , GCEpoch(..)
-  , NodeState(..)
-  , PlanningError(..)
-  , IsMat(..)
-  , Cost(..)
-  , BotMonad(..)
-  , PlanSanityError(..)
-  , ProvenanceAtom(..)
-  , MonadLogic
-  , hoistPlanT
-  , costAsInt
-  , Count
-  , bot
-  , top
-  , runPlanT'
-  , liftPlanT
-  , trM
-  , mplusPlanT
-#ifdef GHCI
-  , getGcLog
-#endif
-  ) where
+module Data.QueryPlan.Types
+  (Transition(..)
+  ,QueryHistory(..)
+  ,PlanT
+  ,PlanSearchScore(..)
+  ,MonadHaltD
+  ,MetaOp(..)
+  ,showMetaOp
+  ,throwPlan
+  ,halt
+  ,GCState(..)
+  ,GCConfig(..)
+  ,GCEpoch(..)
+  ,NodeState(..)
+  ,PlanningError(..)
+  ,IsMat(..)
+  ,Cost(..)
+  ,BotMonad(..)
+  ,PlanSanityError(..)
+  ,ProvenanceAtom(..)
+  ,MonadLogic
+  ,hoistPlanT
+  ,costAsInt
+  ,Count
+  ,bot
+  ,top
+  ,runPlanT'
+  ,liftPlanT
+  ,trM
+  ,mplusPlanT) where
 
 
+import Control.Arrow
+import Control.Antisthenis.ATL.Transformers.Mealy
+import Data.Utils.Compose
+import Control.Monad.Writer
+import Control.Antisthenis.Types
+import Data.Utils.FixState
 import           Control.Applicative
 import           Control.Monad.Cont
 import           Control.Monad.Except
@@ -144,20 +146,26 @@ data GCState t n = GCState {
   epochFilter       :: HS.HashSet (GCEpoch t n, RefMap n Count),
   provenance        :: [ProvenanceAtom],
   traceDebug        :: [String],
-  aStarScores       :: RefMap n Double,
+  -- aStarScores       :: RefMap n Double,
   garbageCollecting :: Bool
   } deriving Generic
 
 type Certainty = Double
-data GCConfig t n = GCConfig {
-  -- These are configuration but ok.
-  propNet       :: Bipartite t n,
-  nodeSizes     :: RefMap n ([TableSize],Certainty),
-  intermediates :: NodeSet n,
-  budget        :: Maybe PageNum,
-  maxBranching  :: Maybe Count,
-  maxTreeDepth  :: Maybe Count
-  } deriving Generic
+data QueryHistory n = QueryHistory { unQueryHistory :: [NodeRef n] }
+  deriving Generic
+instance Default (QueryHistory n)
+data GCConfig t n =
+  GCConfig
+  { -- These are configuration but ok.
+    propNet :: Bipartite t n
+   ,nodeSizes :: RefMap n ([TableSize],Certainty)
+   ,intermediates :: NodeSet n
+   ,budget :: Maybe PageNum
+   ,queryHistory :: QueryHistory n
+   ,maxBranching :: Maybe Count
+   ,maxTreeDepth :: Maybe Count
+  }
+  deriving Generic
 instance Default (GCConfig t n)
 instance Default (GCEpoch t n)
 instance Default (GCState t n)
@@ -281,7 +289,7 @@ data PlanSanityError t n
   deriving (Eq, Show, Generic)
 instance AShow (PlanSanityError t n)
 data PlanSearchScore = PlanSearchScore {
-  planSeachScore      :: Double,
+  planSeachScore      :: Double, -- The cost of the current
   planSearchScoreStar :: Maybe Double
   } deriving (Generic,Show,Eq)
 instance Ord PlanSearchScore where
@@ -308,13 +316,8 @@ instance Semigroup PlanSearchScore where
     }
 type MonadLogic m = (MonadPlus m, BotMonad m, MonadHaltD m)
 type MonadHaltD m = (HValue m ~ PlanSearchScore, MonadHalt m)
-unPlanT :: PlanT t n m a
-       -> StateT (GCState t n)
-       (ReaderT (GCConfig t n)
-         (ExceptT (PlanningError t n) m)) a
-unPlanT = id
-type PlanT t n m
-   = StateT (GCState t n) (ReaderT (GCConfig t n) (ExceptT (PlanningError t n) m))
+type PlanT t n m =
+  StateT (GCState t n) (ReaderT (GCConfig t n) (ExceptT (PlanningError t n) m))
 
 hoistPlanT :: (m (Either (PlanningError t n) (a,GCState t n)) ->
               g (Either (PlanningError t n) (a,GCState t n)))
@@ -344,6 +347,11 @@ runPlanT' gcs conf = runExceptT
 mplusPlanT :: MonadPlus m => PlanT t n m a -> PlanT t n m a -> PlanT t n m a
 mplusPlanT = mplusPlanT'
 {-# INLINE mplusPlanT #-}
+
+
+-- | For epoch
+isMoreRecent :: Ord v => RefMap n v -> RefMap n v -> Bool
+isMoreRecent delta = or . refIntersectionWithKey (const $ (>=)) delta
 
 mplusPlanT' :: MonadPlus m =>
               StateT s (ReaderT r (ExceptT e m)) a

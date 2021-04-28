@@ -13,6 +13,7 @@
 module Control.Antisthenis.Bool
   (interpretBExp) where
 
+import Data.Utils.FixState
 import Data.Char
 import qualified Data.IntSet as IS
 import Control.Antisthenis.Test
