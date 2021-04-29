@@ -24,6 +24,8 @@
 
 module Control.Antisthenis.Types
   (Err(..)
+  ,NoArgError(..)
+  ,ExtParams(..)
   ,Zipper'(..)
   ,ZipperMonad(..)
   ,ExZipper(..)
@@ -144,16 +146,16 @@ data ZProcEvolution w m k =
    ,evolutionEmptyErr :: ZErr w
   }
 
-
 class (Monad m,ZipperParams w) => ZipperMonad w m where
   zCmpEpoch :: Proxy w -> ZEpoch w -> ZEpoch w -> m Bool
 
 class BndRParams w where
+  type ZErr w :: *
+
   type ZBnd w :: *
 
   type ZRes w :: *
 
-  type ZErr w :: *
 
 type Old a = a
 type New a = a
@@ -284,3 +286,11 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
      ,zCursor = (\(a,b,c) -> (a,f b,f c)) <$> zCursor
      ,zRes = g zRes
     }
+class ExtParams p where
+  type ExtEpoch p :: *
+  type ExtError p :: *
+class NoArgError e where
+  noArgumentsError :: e
+
+instance NoArgError Err where
+  noArgumentsError = NoArguments

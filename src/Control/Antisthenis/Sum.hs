@@ -7,7 +7,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveGeneric #-}
-module Control.Antisthenis.Sum () where
+module Control.Antisthenis.Sum (SumTag) where
 
 import Data.Utils.FixState
 import Data.Utils.Debug
@@ -25,6 +25,8 @@ import Data.Utils.Monoid
 import Control.Antisthenis.Zipper
 import Control.Antisthenis.AssocContainer
 
+data SumTag p v
+
 -- | Addition does not have an absorbing element. Therefore all
 -- elements need to be evaluated to get a rigid result. However it is
 -- often the case in antisthenis that a computation does not stop at a
@@ -32,22 +34,22 @@ import Control.Antisthenis.AssocContainer
 -- to have a bound derivative and to move in the most promising side
 -- but we do not so we will follow the greedy approach of finishing
 -- with each element in sequence.
+instance ExtParams p => BndRParams (SumTag p v) where
+  type ZErr (SumTag p v) = ExtError p
+  type ZBnd (SumTag p v) = Min v
+  type ZRes (SumTag p v) = Sum v
 
-instance BndRParams (Sum v) where
-  type ZErr (Sum v) = Err
-  type ZBnd (Sum v) = Min v
-  type ZRes (Sum v) = Sum v
-
-instance (Ord v,Num v,AShow v,Monad m)
-  => ZipperMonad (Sum v) m where
+instance (Ord v,Num v,AShow v,Monad m,ExtParams p,Ord (ExtEpoch p))
+  => ZipperMonad (SumTag p v) m where
   zCmpEpoch Proxy x y = return $ x < y
 
-instance (Ord v,Num v,AShow v) => ZipperParams (Sum v) where
-  type ZEpoch (Sum v) = Int
-  type ZCap (Sum v) = Min v
-  type ZPartialRes (Sum v) =
-    Either (ZErr (Sum v)) (ZBnd (Sum v))
-  type ZItAssoc (Sum v) = SimpleAssoc [] (ZBnd (Sum v))
+instance (Ord v,Num v,ExtParams p) => ZipperParams (SumTag p v) where
+  type ZEpoch (SumTag p v) = ExtEpoch p
+  type ZCap (SumTag p v) = Min v
+  type ZPartialRes (SumTag p v) =
+    Either (ZErr (SumTag p v)) (ZBnd (SumTag p v))
+  type ZItAssoc (SumTag p v) =
+    SimpleAssoc [] (ZBnd (SumTag p v))
   zprocEvolution =
     ZProcEvolution
     { evolutionControl = sumEvolutionControl
@@ -55,8 +57,7 @@ instance (Ord v,Num v,AShow v) => ZipperParams (Sum v) where
      ,evolutionEmptyErr = error "No arguments provided"
     }
   putRes newBnd (partialRes,newZipper) =
-    trace ("putRes: " ++ ashow (newBnd,partialRes))
-    $ (\() -> add <$> partialRes <*> toEither newBnd) <$> newZipper
+    (\() -> add <$> partialRes <*> toEither newBnd) <$> newZipper
     where
       add = curry $ \case
         (Min Nothing,x) -> x
@@ -67,9 +68,7 @@ instance (Ord v,Num v,AShow v) => ZipperParams (Sum v) where
         BndRes (Sum v) -> Right (Min v)
         BndErr e -> Left e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
-    trace ("replace: " ++ ashow (oldBnd,newBnd,oldRes))
-    $ Just
-    $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
+    Just $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
   localizeConf conf z = conf { confCap = case zRes z of
     Left _ -> WasFinished
     Right r -> case confCap conf of
@@ -80,9 +79,9 @@ instance (Ord v,Num v,AShow v) => ZipperParams (Sum v) where
 -- that needs to happen. This can only return bounds.
 sumEvolutionControl
   :: Ord v
-  => GConf (Sum v)
-  -> Zipper (Sum v) (ArrProc (Sum v) m)
-  -> Maybe (BndR (Sum v))
+  => GConf (SumTag p v)
+  -> Zipper (SumTag p v) (ArrProc (SumTag p v) m)
+  -> Maybe (BndR (SumTag p v))
 sumEvolutionControl conf z = case zRes z of
   Left e -> Just $ BndErr e
   Right bound -> case confCap conf of
@@ -96,10 +95,10 @@ sumEvolutionStrategy
   :: Monad m
   => x
   -> FreeT
-    (ItInit (ExZipper (Sum v)) (SimpleAssoc [] (Min v)))
+    (ItInit (ExZipper (SumTag p v)) (SimpleAssoc [] (Min v)))
     m
-    (x,BndR (Sum v))
-  -> m (x,BndR (Sum v))
+    (x,BndR (SumTag p v))
+  -> m (x,BndR (SumTag p v))
 sumEvolutionStrategy fin = recur
   where
     recur (FreeT m) = m >>= \case
@@ -116,15 +115,15 @@ sumToMin (Sum v) = Min v
 minToSum :: Min v -> Sum v
 minToSum (Min v) = Sum v
 
-sumTest :: IO (BndR (Sum Integer))
+sumTest :: IO (BndR (SumTag TestParams Integer))
 sumTest = fmap fst $ (`runReaderT` mempty) $ (`runFixStateT` def) $ do
   putMech 1 $ incrTill "1" ((+ 1),minToSum) $ Cap 3
   putMech 2 $ incrTill "2" ((+ 1),minToSum) $ Cap 1
   putMech 3 $ incrTill "3" ((+ 1),minToSum) $ Cap 2
-  let insTrail k tr =
-        if k `IS.member` tr
-        then Left $ ErrCycle k tr else Right $ IS.insert k tr
-  let getMech i = withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
   res <- runMech (mkProc $ getMech <$> [1,2,3]) def
   lift2 $ putStrLn $ "Result: " ++ ashow res
   return res
+  where
+    insTrail k tr =
+      if k `IS.member` tr then Left $ ErrCycle k tr else Right $ IS.insert k tr
+    getMech i = withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i

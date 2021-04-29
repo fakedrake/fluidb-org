@@ -24,12 +24,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-module Control.Antisthenis.Multiply (Mul(..)) where
+module Control.Antisthenis.Multiply (MulTag) where
 
+import Data.Utils.FixState
 import Control.Monad.Trans.Free
 import Data.Bifunctor
 import Control.Applicative
-import Data.Utils.AShowDebug
 import Control.Antisthenis.Test
 import Data.Utils.Monoid
 import Data.Utils.AShow
@@ -41,12 +41,13 @@ import GHC.Generics
 import Data.Utils.Functors
 import Data.Utils.Debug
 import Data.Utils.Default
-import Control.Antisthenis.Lens
 import Control.Monad.Identity
 import Control.Antisthenis.AssocContainer
 import Control.Antisthenis.Types
 import Control.Antisthenis.Zipper
 
+
+data MulTag p v
 
 -- | A partial result should always be able to reverse a bound result
 -- pushed to it. The absorbing elements therefore are counted instead
@@ -56,12 +57,15 @@ data PartialResMul w =
   { prBnd :: Maybe (ZBnd w),prRes :: Maybe (Either (ZErr w) (ZRes w)) }
   deriving Generic
 
-instance AShow v => AShow (PartialResMul (Mul v))
+instance (AShow (ExtError p),AShow v)
+  => AShow (PartialResMul (MulTag p v))
 instance Default (PartialResMul w)
 
 -- | Transform a partial result into a result that can be interfaced
 -- with other operations.
-prBndR :: (Num v,AShow (Mul v)) => PartialResMul (Mul v) -> Maybe (BndR (Mul v))
+prBndR :: (Num v,AShow (Mul v))
+       => PartialResMul (MulTag p v)
+       -> Maybe (BndR (MulTag p v))
 prBndR pr = case (prBnd pr,prRes pr) of
   (Nothing,Nothing) -> Nothing
   (Just bnd,Nothing) -> Just $ BndBnd bnd
@@ -78,37 +82,37 @@ prModRes (v,f) pr =
   pr { prRes = Just $ maybe (Right v) (fmap f) $ prRes pr }
 
 prModBnd'
-  :: (ZBnd (Mul v) -> ZBnd (Mul v))
-  -> PartialResMul (Mul v)
-  -> Maybe (PartialResMul (Mul v))
+  :: (ZBnd (MulTag p v) -> ZBnd (MulTag p v))
+  -> PartialResMul (MulTag p v)
+  -> Maybe (PartialResMul (MulTag p v))
 prModBnd' f pr = (\x -> pr { prBnd = Just $ f x }) <$> prBnd pr
 
-prSetResErr :: ZErr (Mul v) -> PartialResMul (Mul v) -> PartialResMul (Mul v)
+prSetResErr :: ZErr (MulTag p v) -> PartialResMul (MulTag p v) -> PartialResMul (MulTag p v)
 prSetResErr e pr@PartialResMul {prRes = Just (Right (Mul 0 _))} =
   pr { prRes = Just $ Left e }
 prSetResErr _ pr@PartialResMul {prRes = Just (Right _)} = pr
 prSetResErr e pr = pr { prRes = Just $ Left e }
 
-instance (Monad m,ZipperParams (Mul a))
-  => ZipperMonad (Mul a) m where
+instance (Integral a,Eq a,AShow a,Monad m,Ord (ExtEpoch p))
+  => ZipperMonad (MulTag p a) m where
   zCmpEpoch _ a b = return $ a < b
 
-instance BndRParams (Mul a) where
-  type ZBnd (Mul a) = Mul a
+instance BndRParams (MulTag p a) where
+  type ZBnd (MulTag p a) = Mul a
 
-  type ZRes (Mul a) = Mul a
+  type ZRes (MulTag p a) = Mul a
 
-  type ZErr (Mul a) = Err
+  type ZErr (MulTag p a) = ExtError p
 
-instance (AShow a,Eq a,Num a,Integral a) => ZipperParams (Mul a) where
+instance (AShow a,Eq a,Num a,Integral a) => ZipperParams (MulTag p a) where
 
-  type ZEpoch (Mul a) = Int
+  type ZEpoch (MulTag p a) = ExtEpoch p
 
-  type ZCap (Mul a) = Mul a
+  type ZCap (MulTag p a) = Mul a
 
-  type ZItAssoc (Mul a) = MulAssocList Maybe (Mul a)
+  type ZItAssoc (MulTag p a) = MulAssocList Maybe (Mul a)
 
-  type ZPartialRes (Mul a) = PartialResMul (Mul a)
+  type ZPartialRes (MulTag p a) = PartialResMul (MulTag p a)
 
   zprocEvolution =
     ZProcEvolution { evolutionControl = mulSolution
@@ -184,11 +188,11 @@ instance (Eq v,Num v) => AssocContainer (MulAssocList Maybe v) where
     (\h -> MulAssocList (Identity h) (malZ mal) (malList mal)) <$> malHead mal
 
 mulSolution
-  :: forall v p .
+  :: forall v p x .
   (AShow v,Ord v,Num v)
-  => Conf (ZBnd (Mul v))
-  -> Zipper (Mul v) p
-  -> Maybe (BndR (Mul v))
+  => Conf (MulTag p v)
+  -> Zipper (MulTag p v) x
+  -> Maybe (BndR (MulTag p v))
 mulSolution conf z = zeroRes <|> ret
   where
     zeroRes = case prRes $ zRes z of
@@ -207,14 +211,17 @@ mulSolution conf z = zeroRes <|> ret
         x -> Just x
       where
         noInits = null $ bgsInits $ zBgState z
-        resM :: Maybe (BndR (Mul v))
+        resM :: Maybe (BndR (MulTag p v))
         resM = if noInits then prBndR $ zRes z else Nothing
 
 mulStrategy
   :: (Num v,Monad m,AShow v)
   => r
-  -> FreeT (ItInit (ExZipper (Mul v)) (ZItAssoc (Mul v))) m (r,BndR (Mul v))
-  -> m (r,BndR (Mul v))
+  -> FreeT
+    (ItInit (ExZipper (MulTag p v)) (ZItAssoc (MulTag p v)))
+    m
+    (r,BndR (MulTag p v))
+  -> m (r,BndR (MulTag p v))
 mulStrategy fin = recur
   where
     recur (FreeT m) = m >>= \case
@@ -243,7 +250,7 @@ assert False = fail "assertion failed"
 
 -- | TESTING
 mulTest
-  :: IO (BndR (Mul Integer))
+  :: IO (BndR (MulTag TestParams Integer))
 mulTest = fmap fst $ (`runReaderT` mempty) $ (`runFixStateT` def) $ do
   putMech 1 $ incrTill "1" ((+ 1),id) $ Cap 3
   putMech 2 $ incrTill "B" ((+ 1),id) $ Cap 3
@@ -254,5 +261,7 @@ mulTest = fmap fst $ (`runReaderT` mempty) $ (`runFixStateT` def) $ do
   let getMech i = withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
   res <- runMech (mkProc $ getMech <$> [1,2,3]) def
   lift2 $ putStrLn $ "Result is: " ++ ashow res
-  assert $ case res of {BndRes _ -> True; _ -> False}
+  assert $ case res of
+    BndRes _ -> True
+    _ -> False
   return res

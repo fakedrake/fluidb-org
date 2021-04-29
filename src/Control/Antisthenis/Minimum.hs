@@ -26,7 +26,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Control.Antisthenis.Minimum
-  (minTest) where
+  (minTest,MinTag) where
 
 import Data.Utils.FixState
 import Control.Monad.Trans.Free
@@ -47,6 +47,8 @@ import Data.Utils.Default
 import Control.Antisthenis.AssocContainer
 import Control.Antisthenis.Types
 import Control.Antisthenis.Zipper
+
+data MinTag p v
 
 -- Ideally this should be a heap but for now this will not grow beyond
 -- 10 elements so we are good.
@@ -115,38 +117,38 @@ topMinAssocList mal = elemBnd
   where
     elemBnd = let x NEL.:| xs = fst <$> malElements mal in foldl' min x xs
 
-instance (Monad m,ZipperParams (Min a))
-  => ZipperMonad (Min a) m where
+instance (Monad m,ZipperParams (MinTag p a),Ord (ExtEpoch p))
+  => ZipperMonad (MinTag p a) m where
   zCmpEpoch _ a b = return $ a < b
 
-instance BndRParams (Min a) where
-  type ZErr (Min a) = Err
-  type ZBnd (Min a) = Min a
-  type ZRes (Min a) = Min a
+instance BndRParams (MinTag p a) where
+  type ZErr (MinTag p a) = ExtError p
+  type ZBnd (MinTag p a) = Min a
+  type ZRes (MinTag p a) = Min a
 
-instance (AShow a,Eq a,Ord a) => ZipperParams (Min a) where
-  type ZCap (Min a) = Min a
-  type ZEpoch (Min a) = Int
-  type ZPartialRes (Min a) = ()
-  type ZItAssoc (Min a) = MinAssocList [] (Min a)
+instance (AShow a,Eq a,Ord a,ExtParams p,NoArgError (ExtError p))
+  => ZipperParams (MinTag p a) where
+  type ZCap (MinTag p a) = Min a
+  type ZEpoch (MinTag p a) = ExtEpoch p
+  type ZPartialRes (MinTag p a) = ()
+  type ZItAssoc (MinTag p a) =
+    MinAssocList [] (MinTag p a)
   zprocEvolution =
     ZProcEvolution
     { evolutionControl =
         (\conf z -> deriveOrdSolution conf =<< zFullResultMin z)
      ,evolutionStrategy = minStrategy
-     ,evolutionEmptyErr = NoArguments
+     ,evolutionEmptyErr = noArgumentsError
     }
   -- We only need to do anything if the result is concrete. A
   -- non-error concrete result in combined with the result so far. In
   -- the case where the result is an error the error is
   -- updated. Bounded results are already stored in the associative
   -- structure.
-
   putRes newBnd ((),newZipper) = case newBnd of
     BndRes r -> zModIts (maybe (Just $ Right r) (Just . fmap (<> r))) newZipper
     BndErr e -> zModIts (const $ Just $ Left e) newZipper
     BndBnd _ -> newZipper
-
   -- Remove the bound from the result and insert the new one. Here we
   -- do not need to remove anything since the value of the bound is
   -- directly inferrable from the container of intermediates. Remember
@@ -174,11 +176,11 @@ instance (AShow a,Eq a,Ord a) => ZipperParams (Min a) where
 -- matches the configuration or Nothing if the zipper should keep
 -- evolving to get to a proper resilt.
 deriveOrdSolution
-  :: forall v .
+  :: forall v p .
   (Ord v,AShow v)
-  => Conf (ZBnd (Min v))
-  -> BndR (Min v)
-  -> Maybe (BndR (Min v))
+  => Conf (MinTag p v)
+  -> BndR (MinTag p v)
+  -> Maybe (BndR (MinTag p v))
 deriveOrdSolution conf res = case confCap conf of
   WasFinished -> Just $ BndErr undefined
   DoNothing -> Just res
@@ -191,7 +193,7 @@ deriveOrdSolution conf res = case confCap conf of
     BndBnd bnd -> if bnd <= cap then Nothing else Just $ BndBnd bnd
     x -> return x
 
-minBndR :: Ord v => BndR (Min v) -> BndR (Min v) -> BndR (Min v)
+minBndR :: Ord v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
 minBndR = curry $ \case
   (_,e@(BndErr _)) -> e
   (e@(BndErr _),_) -> e
@@ -205,8 +207,8 @@ minBndR = curry $ \case
 -- computation the zipper is actually.
 zFullResultMin
   :: (Foldable f,AShow v,Ord v)
-  => Zipper' (Min v) f r p
-  -> Maybe (BndR (Min v))
+  => Zipper' (MinTag p v) f r x
+  -> Maybe (BndR (MinTag p v))
 zFullResultMin z = case curs `minBndR'` softBound `minBndR'` hardBound of
   Nothing -> Nothing
   Just x -> Just x
@@ -225,8 +227,11 @@ zFullResultMin z = case curs `minBndR'` softBound `minBndR'` hardBound of
 minStrategy
   :: (AShow v,Ord v,Monad m)
   => k
-  -> FreeT (ItInit (ExZipper (Min v)) (ZItAssoc (Min v))) m (k,BndR (Min v))
-  -> m (k,BndR (Min v))
+  -> FreeT
+    (ItInit (ExZipper (MinTag p v)) (ZItAssoc (MinTag p v)))
+    m
+    (k,BndR (MinTag p v))
+  -> m (k,BndR (MinTag p v))
 minStrategy fin = recur
   where
     recur (FreeT m) = m >>= \case
@@ -238,7 +243,7 @@ minStrategy fin = recur
         CmdFinished (ExZipper x) -> return
           (fin,fromMaybe (undefined) $ zFullResultMin x)
 
-minTest :: IO (BndR (Min Integer))
+minTest :: IO (BndR (MinTag TestParams Integer))
 minTest = fmap fst $ (`runReaderT` mempty) $ (`runFixStateT` def) $ do
   putMech 1 $ incrTill "1" ((+ 1),id) $ Cap 3
   putMech 2 $ incrTill "2" ((+ 1),id) $ Cap 1

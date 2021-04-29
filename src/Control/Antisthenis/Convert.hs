@@ -15,7 +15,6 @@ module Control.Antisthenis.Convert
 
 import Control.Antisthenis.Minimum
 import Control.Antisthenis.Sum
-import Data.Utils.AShow
 import Control.Antisthenis.Types
 import Data.Utils.Monoid
 import Data.Coerce
@@ -76,7 +75,7 @@ convBndR Conv{..} = \case
   BndRes r -> BndRes $ convRes r
   BndBnd b -> BndBnd $ convBnd b
   BndErr e -> BndErr $ convErr e
-convSumMin :: (Num v,Eq v,Ord v,AShow v) => Conv (Sum v) (Min v)
+convSumMin :: Conv (SumTag p v) (MinTag p v)
 convSumMin =
   Conv
   { convEpoch = id
@@ -86,7 +85,7 @@ convSumMin =
    ,convErr = coerce
   }
 
-convMinSum :: forall v . Conv (Min v) (Sum v)
+convMinSum :: Conv (MinTag p v) (SumTag p v)
 convMinSum =
   Conv
   { convEpoch = id

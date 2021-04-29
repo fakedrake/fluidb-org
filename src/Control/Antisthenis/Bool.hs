@@ -211,7 +211,7 @@ instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
   type NonEmptyAC (CountingAssoc [] Maybe a) =
     CountingAssoc NEL.NonEmpty Identity a
   acInsert k v cass =
-    CountingAssoc
+    CountingAssoc`x`
     { assocMinKey = Identity $ maybe k (min k) $ assocMinKey cass
      ,assocSize = assocSize cass + 1
      ,assocData = acInsert k v $ assocData cass

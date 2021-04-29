@@ -18,7 +18,7 @@
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Control.Antisthenis.Test (withTrail,incrTill,zeroAfter) where
+module Control.Antisthenis.Test (withTrail,incrTill,zeroAfter,TestParams) where
 
 import Data.Utils.FixState
 import Control.Antisthenis.Lens
@@ -109,8 +109,6 @@ handleBndErr handle = recur
       Just e -> return (MealyArrow $ Kleisli c,BndErr e)
       Nothing -> first recur <$> c conf
 
-
-
 withTrail
   :: MonadReader trail m
   => (trail -> Either (ZErr w) trail)
@@ -119,3 +117,9 @@ withTrail
 withTrail insUniq = handleBndErr $ \handle -> asks insUniq >>= \case
   Left e -> handle $ Just e
   Right tr -> local (const tr) $ handle Nothing
+
+
+data TestParams
+instance ExtParams TestParams where
+  type ExtEpoch TestParams = Int
+  type ExtError TestParams = Err

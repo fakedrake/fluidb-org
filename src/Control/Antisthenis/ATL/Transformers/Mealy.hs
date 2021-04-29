@@ -235,6 +235,9 @@ yieldMB b = wrap $ MealyF $ (return,b)
 finishMB ::Monad m => b -> MB a b m Void
 finishMB b = fix $ (yieldMB b >>)
 
+
+-- | Use yieldMB and finishMB and yieldMB and make sure to never
+-- return.
 mkMealy :: Monad m => (a -> MB a b m Void) -> MealyArrow (Kleisli m) a b
 mkMealy mb = MealyArrow $ Kleisli $ \a -> runFreeT (mb a)
   >>= \(Free (MealyF (mb',b))) -> return (mkMealy mb',b)
