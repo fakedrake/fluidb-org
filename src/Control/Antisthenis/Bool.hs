@@ -273,12 +273,13 @@ instance (BoolOp op) => ZipperParams (BoolTag op) where
     return $ (\() -> Just $ combBoolBndR newBnd oldRes') <$> newZipper
   -- | As a cap use the minimum bound.
   -- XXX: revisit this
-  localizeConf conf z = conf { confCap = maybe (confCap conf) Cap $ do
-    bnd <- assocMinKey $ bgsIts $ zBgState z
-    gcap <- case confCap conf of
-      Cap cap -> Just cap
-      _ -> Nothing
-    return $ min bnd gcap }
+  zLocalizeConf conf z =
+    conf { confEpoch = _,confCap = maybe (confCap conf) Cap $ do
+      bnd <- assocMinKey $ bgsIts $ zBgState z
+      gcap <- case confCap conf of
+        Cap cap -> Just cap
+        _ -> Nothing
+      return $ min bnd gcap }
 
 
 boolEvolutionStrategy

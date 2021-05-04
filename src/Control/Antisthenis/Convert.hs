@@ -63,7 +63,11 @@ coerceConv GenericConv =
    ,convErr = coerce
   }
 
-convArrProc :: Monad m => Conv w w' -> ArrProc w m -> ArrProc w' m
+convArrProc
+  :: (ZCoEpoch w' ~ ZCoEpoch w,Monad m)
+  => Conv w w'
+  -> ArrProc w m
+  -> ArrProc w' m
 convArrProc conv = dimap (convConf conv) (convBndR conv)
 
 convConf :: Conv w w' -> Conf w' -> Conf w

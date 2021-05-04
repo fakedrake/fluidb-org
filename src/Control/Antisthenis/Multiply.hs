@@ -108,6 +108,8 @@ instance (AShow a,Eq a,Num a,Integral a) => ZipperParams (MulTag p a) where
 
   type ZEpoch (MulTag p a) = ExtEpoch p
 
+  type ZCoEpoch (MulTag p a) = ExtCoEpoch p
+
   type ZCap (MulTag p a) = Mul a
 
   type ZItAssoc (MulTag p a) = MulAssocList Maybe (Mul a)
@@ -129,7 +131,7 @@ instance (AShow a,Eq a,Num a,Integral a) => ZipperParams (MulTag p a) where
     return $ putRes newBnd (lackingRes,newZipper)
     where
       lackingResM = prModBnd' (`div` oldBnd) oldRes
-  localizeConf conf z = conf { confCap = newCap }
+  zLocalizeConf conf z = conf { confCap = newCap, confEpoch = _ }
     where
       newCap = fromZ (prRes $ zRes z) $ case confCap conf of
         Cap c -> case zRes z of

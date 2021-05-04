@@ -20,17 +20,15 @@
 
 module Control.Antisthenis.Test (withTrail,incrTill,zeroAfter,TestParams) where
 
-import Data.Utils.FixState
-import Control.Antisthenis.Lens
+import Data.Utils.Monoid
+import Control.Monad.Writer
+import Data.Utils.Functors
 import Data.Utils.Debug
 import Control.Arrow
 import Data.Void
 import Control.Antisthenis.ATL.Transformers.Mealy
 import Control.Antisthenis.Types
-import Control.Antisthenis.Zipper
-import Control.Monad.Cont
 import Control.Monad.Reader
-import Control.Monad.State
 
 
 incrTill
@@ -47,11 +45,12 @@ incrTill
       -> ZCap w
      ,ZBnd w
       -> ZRes w)
-  -> Cap (ZCap w)
+  -> ZCap w
   -> ArrProc w m
-incrTill name (step,asRes) (Cap cap) = mkMealy $ recur $ BndBnd 0
+incrTill name (step,asRes) cap = mkMealy $ recur $ BndBnd 0
   where
-    recur :: BndR w -> Conf w -> MB (Conf w) (BndR w) m Void
+    recur
+      :: BndR w -> Conf w -> MB (Conf w) (BndR w) (WriterT (ZCoEpoch w) m) Void
     recur cntr conf = do
       conf' <- trace ("[" ++ name ++ "] Yielding: " ++ ashow cntr)
         $ yieldMB cntr
@@ -61,8 +60,7 @@ incrTill name (step,asRes) (Cap cap) = mkMealy $ recur $ BndBnd 0
       WasFinished -> error "We should have finished"
       Cap c -> error "The cap is static.."
       MinimumWork -> recur res conf
-      ForceResult
-       -> finishMB $ BndRes $ asRes $ finalRes
+      ForceResult -> finishMB $ BndRes $ asRes $ finalRes
       DoNothing -> do
         conf' <- yieldMB res
         recurGuarded res conf'
@@ -87,30 +85,21 @@ zeroAfter i = mkMealy $ const $ do
   traceM $ "[Zero] Final Yielding: " ++ ashow res
   finishMB res
 
-var :: MonadState s m
-    => s :>: (MealyArrow (Kleisli m) a b)
-    -> MealyArrow (Kleisli m) a b
-var lens = MealyArrow $ Kleisli $ \a -> do
-  MealyArrow (Kleisli c) <- gets $ getL lens
-  (nxt,r) <- c a
-  modify $ modL lens $ const nxt
-  return (nxt,r)
-
 -- | Handle the error.
 handleBndErr
-  :: Monad m
+  :: (Monoid (ZCoEpoch w),Monad m)
   => (forall a . (Maybe (ZErr w) -> m a) -> m a)
   -> ArrProc w m
   -> ArrProc w m
 handleBndErr handle = recur
   where
-    recur
-      (MealyArrow (Kleisli c)) = MealyArrow $ Kleisli $ \conf -> handle $ \case
-      Just e -> return (MealyArrow $ Kleisli c,BndErr e)
-      Nothing -> first recur <$> c conf
+    recur (ArrProc c) = ArrProc $ \conf -> handle $ \case
+      Just e -> return (mempty,(ArrProc c,BndErr e))
+      Nothing -> fmap2 (first recur) $ c conf
+    recur _ = error "unreachable"
 
 withTrail
-  :: MonadReader trail m
+  :: (Monoid (ZCoEpoch w),MonadReader trail m)
   => (trail -> Either (ZErr w) trail)
   -> ArrProc w m
   -> ArrProc w m
@@ -122,4 +111,7 @@ withTrail insUniq = handleBndErr $ \handle -> asks insUniq >>= \case
 data TestParams
 instance ExtParams TestParams where
   type ExtEpoch TestParams = Int
+  type ExtCoEpoch TestParams = Max Int
   type ExtError TestParams = Err
+  extCombEpochs _ coe e a =
+    if coe < Max (Just e) then DontReset a else ShouldReset

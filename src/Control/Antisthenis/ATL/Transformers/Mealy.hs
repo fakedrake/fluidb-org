@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE Arrows                #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -10,14 +11,15 @@
 {-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.ATL.Transformers.Mealy
   (MealyArrow(..)
-  ,NMealyArrow(..)
   ,MB
+  ,hoistMealy
   ,mkMealy
   ,mealyScan
   ,mealyLift
   ,yieldMB
   ,finishMB) where
 
+import Control.Antisthenis.ATL.Class.Functorial
 import Control.Monad.Fix
 import Data.Void
 import Control.Monad.Trans.Free
@@ -152,62 +154,16 @@ instance ArrowReader c  => ArrowReader (MealyArrow c) where
   {-# INLINE arrLocal' #-}
   {-# INLINE arrCoLocal' #-}
 
-
--- MealyN
 
 
--- | Note that this is not a transformer because it is not isomorphic
--- to c.
-newtype NMealyArrow c0 c a b = NMealyArrow { runNMealyArrow :: c a (c0 a b,b) }
-instance (Arrow c0,ArrowApply c) => ArrowApply (NMealyArrow c0 c) where
-  app = NMealyArrow $ proc (NMealyArrow ab,a) -> do
-    (ab',b) <- app -< (ab,a)
-    returnA -< (arr snd >>> ab',b)
-  {-# INLINE app #-}
-
-instance (ArrowState c0,ArrowState c,AStateSt c ~ AStateSt c0)
-  => ArrowState (NMealyArrow c0 c) where
-  type AStateSt (NMealyArrow c0 c) = AStateSt c
-  type AStateArr (NMealyArrow c0 c) =
-    NMealyArrow (AStateArr c0) (AStateArr c)
-  arrCoModify (NMealyArrow c) =
-    NMealyArrow $ arrCoModify c >>> arr (\(s,(c',b)) -> (arrCoModify c',(s,b)))
-  arrModify (NMealyArrow c) =
-    NMealyArrow $ arrModify $ c >>> arr (\(c',(s,b)) -> (s,(arrModify c',b)))
-  {-# INLINE arrModify #-}
-  {-# INLINE arrCoModify #-}
-
-instance (Category c0,Arrow c) => Category (NMealyArrow c0 c) where
-  f . g = go f g where
-    go (NMealyArrow bc) (NMealyArrow ab) = NMealyArrow $ proc a -> do
-      (ab',b) <- ab -< a
-      (bc',c) <- bc -< b
-      returnA -< (bc' . ab',c)
-  id = NMealyArrow $ proc a -> returnA -< (id,a)
-  {-# INLINE id #-}
-  {-# INLINE (.) #-}
-
-instance (Arrow c0,Arrow c) => Arrow (NMealyArrow c0 c) where
-  arr f = NMealyArrow $ proc a -> returnA -< (arr f,f a)
-  first (NMealyArrow bc) = NMealyArrow $ proc (b,d) -> do
-    (nxt,c) <- bc -< b
-    returnA -< (first nxt,(c,d))
-  second (NMealyArrow bc) = NMealyArrow $ proc (d,b) -> do
-    (nxt,c) <- bc -< b
-    returnA -< (second nxt,(d,c))
-  NMealyArrow bc &&& NMealyArrow bc' = NMealyArrow $ proc b -> do
-    (nxt,c) <- bc -< b
-    (nxt',c') <- bc' -< b
-    returnA -< (nxt &&& nxt',(c,c'))
-  NMealyArrow bc *** NMealyArrow bc' = NMealyArrow $ proc (b,b') -> do
-    (nxt,c) <- bc -< b
-    (nxt',c') <- bc' -< b'
-    returnA -< (nxt *** nxt',(c,c'))
-  {-# INLINE arr #-}
-  {-# INLINE first #-}
-  {-# INLINE second #-}
-  {-# INLINE (&&&) #-}
-
+hoistMealy
+  :: Profunctor c'
+  => (c a (MealyArrow c a b,b) -> c' a' (MealyArrow c a b,b'))
+  -> MealyArrow c a b
+  -> MealyArrow c' a' b'
+hoistMealy f = go
+  where
+    go (MealyArrow c) = MealyArrow $ rmap (first go) $ f c
 
 instance Profunctor c => Profunctor (MealyArrow c) where
   rmap f = go
@@ -220,7 +176,6 @@ instance Profunctor c => Profunctor (MealyArrow c) where
   dimap f g = go
     where
       go (MealyArrow c) = MealyArrow $ dimap f (bimap go g) c
-
 
 -- | Constructing monadic xmealy arrows
 data MealyF a b x = MealyF (a -> x,b)
@@ -238,8 +193,10 @@ finishMB b = fix $ (yieldMB b >>)
 
 -- | Use yieldMB and finishMB and yieldMB and make sure to never
 -- return.
-mkMealy :: Monad m => (a -> MB a b m Void) -> MealyArrow (Kleisli m) a b
-mkMealy mb = MealyArrow $ Kleisli $ \a -> runFreeT (mb a)
+mkMealy :: (ArrowFunctor c,Monad (ArrFunctor c))
+        => (a -> MB a b (ArrFunctor c) Void)
+        -> MealyArrow c a b
+mkMealy mb = MealyArrow $ fromKleisli $ \a -> runFreeT (mb a)
   >>= \(Free (MealyF (mb',b))) -> return (mkMealy mb',b)
 
 mealyScan :: Monad m => MealyArrow (Kleisli m) a b -> [a] -> m [b]
@@ -252,53 +209,3 @@ mealyLift :: Profunctor c => c a b -> MealyArrow c a b
 mealyLift c = res
   where
     res = MealyArrow $ rmap (res,) c
-
-#if 0
-instance (ArrowChoice c0,ArrowChoice c) => ArrowChoice (NMealyArrow c0 c) where
-  NMealyArrow f +++ NMealyArrow g = NMealyArrow $ proc a -> case a of
-    Left l -> do
-      (nxt,b) <- f -< l
-      returnA -< (nxt +++ _ g,Left b)
-    Right r -> do
-      (nxt,b) <- g -< r
-      returnA -< (untelescope f +++ nxt,Right b)
-  NMealyArrow f ||| NMealyArrow g = NMealyArrow $ proc a -> case a of
-    Left l -> do
-      (nxt,b) <- f -< l
-      returnA -< (nxt ||| untelescope g,b)
-    Right r -> do
-      (nxt,b) <- g -< r
-      returnA -< (NMealyArrow f ||| nxt,b)
-  left (NMealyArrow f) = NMealyArrow $ proc a -> case a of
-    Left l -> do
-      (nxt,b) <- f -< l
-      returnA -< (left nxt,Left b)
-    Right r -> returnA -< (left $ untelescope f,Right r)
-  right (NMealyArrow f) = NMealyArrow $ proc a -> case a of
-    Right r -> do
-      (nxt,b) <- f -< r
-      returnA -< (right nxt,Right b)
-    Left l -> returnA -< (right $ NMealyArrow f,Left l)
-  {-# INLINE (+++) #-}
-  {-# INLINE (|||) #-}
-  {-# INLINE left #-}
-  {-# INLINE right #-}
-
-instance ArrowChoice c => ArrowMachine (NMealyArrow c0 c) where
-  type AMachineArr (NMealyArrow c0 c) = c
-  type AMachineNxtArr (NMealyArrow c0 c) = c0
-  telescope = runNMealyArrow
-  untelescope = NMealyArrow
-
-instance ArrowWriter c => ArrowWriter (NMealyArrow c0 c) where
-  type AWriterArr (NMealyArrow c0 c) =
-    NMealyArrow c0 (AWriterArr c)
-  type AWriterW (NMealyArrow c0 c) = AWriterW c0
-  arrListen' (NMealyArrow c) =
-    NMealyArrow $ arrListen' c >>> arr (\(w,(nxt,b)) -> (arrListen' nxt,(w,b)))
-  arrCoListen' (NMealyArrow c) =
-    NMealyArrow
-    $ arrCoListen'
-    $ c >>> arr (\(nxt,(w,b)) -> (w,(arrCoListen' nxt,b)))
-#endif
-

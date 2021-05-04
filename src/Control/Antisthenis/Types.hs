@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -24,10 +26,10 @@
 
 module Control.Antisthenis.Types
   (Err(..)
+  ,ArrProc'
   ,NoArgError(..)
   ,ExtParams(..)
   ,Zipper'(..)
-  ,ZipperMonad(..)
   ,ExZipper(..)
   ,ZProcEvolution(..)
   ,Zipper
@@ -36,6 +38,7 @@ module Control.Antisthenis.Types
   ,GConf
   ,LConf
   ,ArrProc
+  ,pattern ArrProc
   ,Cmds'(..)
   ,Cmds
   ,ItInit(..)
@@ -50,15 +53,15 @@ module Control.Antisthenis.Types
   ,ItProc
   ,CoitProc
   ,AShowW
-  ,traceZ
   ,ashowZ') where
 
-import Data.Utils.Debug
+import Data.Proxy
+import Control.Antisthenis.ATL.Transformers.Moore
+import Control.Antisthenis.ATL.Transformers.Writer
 import Data.Bifunctor
 import Data.Utils.EmptyF
 import Control.Monad.Identity
 import Control.Monad.Trans.Free
-import Data.Proxy
 import Control.Antisthenis.AssocContainer
 import Control.Arrow hiding (first,second)
 import Control.Antisthenis.ATL.Transformers.Mealy
@@ -75,11 +78,6 @@ data Cap b
   | Cap b
   deriving (Show,Functor,Generic)
 instance AShow b => AShow (Cap b)
-
-type GBnd v = v
-type LBnd v = v
-type LRes v = v
-type GRes v = v
 
 type InitProc a = a
 type ItProc a = a
@@ -146,9 +144,6 @@ data ZProcEvolution w m k =
    ,evolutionEmptyErr :: ZErr w
   }
 
-class (Monad m,ZipperParams w) => ZipperMonad w m where
-  zCmpEpoch :: Proxy w -> ZEpoch w -> ZEpoch w -> m Bool
-
 class BndRParams w where
   type ZErr w :: *
 
@@ -167,11 +162,14 @@ type New a = a
 type Local a = a
 class (KeyAC (ZItAssoc w) ~ ZBnd w
       ,BndRParams w
+      ,Monoid (ZCoEpoch w)
       ,AssocContainer (ZItAssoc w)
       ,Default (ZPartialRes w)) => ZipperParams w where
   type ZCap w :: *
 
   type ZEpoch w :: *
+
+  type ZCoEpoch w :: *
 
   type ZItAssoc w :: * -> *
 
@@ -197,8 +195,15 @@ class (KeyAC (ZItAssoc w) ~ ZBnd w
 
   -- | From the configuration that is global to the op make the local
   -- one to be propagated to the next argument process.β
-  localizeConf :: GConf w -> Zipper w p -> LConf w
-
+  zLocalizeConf :: ZCoEpoch w -> GConf w -> Zipper w p -> MayReset (LConf w)
+  default zLocalizeConf
+    :: forall c p v .
+    (w ~ c p v,ZEpoch w ~ ExtEpoch p,ZCoEpoch (c p v) ~ ExtCoEpoch p)
+    => ZCoEpoch w
+    -> GConf w
+    -> Zipper w p
+    -> MayReset (LConf w)
+  zLocalizeConf = undefined
 
 
 data BndR w
@@ -213,7 +218,11 @@ instance (Eq (ZErr w),Eq (ZRes w),Eq (ZBnd w)) => Eq (BndR w) where
 type AShowBndR w = (BndRParams w,AShow (ZBnd w),AShow (ZRes w),AShow (ZErr w))
 instance AShowBndR w => AShow (BndR w)
 
-type ArrProc w m = MealyArrow (Kleisli m) (LConf w) (BndR w)
+type ArrProc w m =
+  MealyArrow (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
+type ArrProc' w m =
+  MooreCat (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
+pattern ArrProc c = MealyArrow (WriterArrow (Kleisli c))
 
 data Conf w = Conf { confCap :: Cap (ZCap w),confEpoch :: ZEpoch w }
   deriving Generic
@@ -253,16 +262,7 @@ data Zipper' w cursf (p :: *) pr =
 instance Functor (Zipper' w cursf p) where
   fmap f Zipper {..} =
     Zipper { zCursor = zCursor,zBgState = zBgState,zRes = f zRes }
-traceZ
-  :: (AShowBndR w
-     ,AShow (ZPartialRes w)
-     ,Functor (ZItAssoc w)
-     ,BndRParams w
-     ,AShow (ZItAssoc w ((),())))
-  => String
-  -> Zipper w p
-  -> Zipper w p
-traceZ msg z = trace (msg ++ ashow (ashowZ' z)) z
+
 ashowZ'
   :: (AShowBndR w
      ,Functor (ZItAssoc w)
@@ -286,9 +286,15 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
      ,zCursor = (\(a,b,c) -> (a,f b,f c)) <$> zCursor
      ,zRes = g zRes
     }
-class ExtParams p where
+class Monoid (ExtCoEpoch p) => ExtParams p where
   type ExtEpoch p :: *
+
+  type ExtCoEpoch p :: *
+
   type ExtError p :: *
+
+  extCombEpochs :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> a -> MayReset a
+
 class NoArgError e where
   noArgumentsError :: e
 

@@ -1,3 +1,7 @@
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -6,6 +10,10 @@
 module Data.QueryPlan.NodeProc
   (NodeProc) where
 
+import Control.Antisthenis.ATL.Class.Functorial
+import Control.Antisthenis.ATL.Common
+import Control.Monad.Identity
+import Data.Proxy
 import Control.Antisthenis.Minimum
 import Control.Antisthenis.Sum
 import qualified Control.Category as C
@@ -19,14 +27,18 @@ import Control.Monad.Writer hiding (Sum)
 import Control.Antisthenis.ATL.Transformers.Mealy
 import Data.Utils.FixState
 import Control.Antisthenis.Types
-import Control.Arrow
+import Control.Arrow hiding ((>>>))
 import Control.Monad.Reader
 import Data.NodeContainers
 
 -- | A map containing all the proc maps. Mutually recursive with the
 -- proc itself.
-newtype NodeProcMap n w m =
-  NodeProcMap { unNodeProcMap :: RefMap n (ArrProc w m) }
+data NodeProcSt n w m =
+  NodeProcSt
+  { npsProcs :: RefMap n (ArrProc w m)
+   ,npsTrail :: NTrail n
+   ,npsEpoch :: ZEpoch w
+  }
 
 type NTrail = NodeSet
 -- for example ZEpoch v == RefMap n IsMat
@@ -34,72 +46,90 @@ type NodeProc n w = NodeProc0 n w w
 type NodeProc0 n w0 w =
   ArrProc
     w
-    (FixStateT (NodeProcMap n w0) (State (NTrail n)))
+    (FixStateT (NodeProcSt n w0) Identity)
 
 -- | Lookup a node process. If you can't find one substitute for the one
 -- provided.
-luNodeProc :: Monoid (ZEpoch w) => NodeProc n w -> NodeRef n -> NodeProc n w
-luNodeProc (MealyArrow (Kleisli mkProc)) k = MealyArrow $ Kleisli go
+luNodeProc :: Monoid (ZCoEpoch w) => NodeProc n w -> NodeRef n -> NodeProc n w
+luNodeProc (MealyArrow (toKleisli -> mkProc)) k = go
   where
-    go conf = gets (refLU k . unNodeProcMap) >>= \case
+    go = MealyArrow $ fromKleisli $ \conf -> gets (refLU k . npsProcs) >>= \case
       Nothing -> mkProc conf
-      Just (MealyArrow (Kleisli c)) -> do
+      Just (MealyArrow (toKleisli -> c)) -> do
         (nxt,r) <- c conf
-        modify $ NodeProcMap . refInsert k nxt . unNodeProcMap
-        return (MealyArrow $ Kleisli go,r)
+        modify $ \nps -> nps { npsProcs = refInsert k nxt $ npsProcs nps }
+        return (go,r)
 
 -- | depset has a constant part that is the cost of triggering and a
 -- variable part.
-data DSet n p v = DSet { dsetConst :: Sum v,dsetNeigh :: [NodeProc n (SumTag p v)] }
+data DSet n p v =
+  DSet { dsetConst :: Sum v,dsetNeigh :: [NodeProc n (SumTag p v)] }
 makeCostProc
-  :: forall v p n .
-  (Num v
-  ,Ord v
-  ,AShow v
-  ,Monoid (ZEpoch (SumTag p v))
-  ,NoArgError (ExtError p)
-  ,Ord (ExtEpoch p)
-  ,AShow (ExtError p)
-  ,ExtParams p)
-  => [DSet n p v]
-  -> NodeProc n (SumTag p v)
+  :: forall v n .
+  (Num v,Ord v,AShow v)
+  => [DSet n (PlanParams n) v]
+  -> NodeProc n (SumTag (PlanParams n) v)
 makeCostProc deps = convArrProc convMinSum $ procMin $ go <$> deps
   where
     go DSet {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
       where
         constArr = arr $ const $ BndRes dsetConst
-    procMin :: [NodeProc0 n (SumTag p v) (MinTag p v)]
-            -> NodeProc0 n (SumTag p v) (MinTag p v)
+    procMin :: [NodeProc0 n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
+            -> NodeProc0 n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
     procMin = mkProc
-    procSum :: [NodeProc n (SumTag p v)] -> NodeProc n (SumTag p v)
+    procSum :: [NodeProc n (SumTag (PlanParams n) v)]
+            -> NodeProc n (SumTag (PlanParams n) v)
     procSum = mkProc
 
-type family Arr x :: * -> * -> *
-type instance Arr (c a b) = c
 
-
-modTrailE :: (NTrail n -> Either (ZErr w) (NTrail n))
-          -> Arr (NodeProc n w) a (Either (ZErr w) a)
-modTrailE f = mealyLift $ Kleisli $ \a -> lift (gets f) >>= \case
+modTrailE
+  :: Monoid (ZCoEpoch w)
+  => (NTrail n -> Either (ZErr w) (NTrail n))
+  -> Arr (NodeProc n w) a (Either (ZErr w) a)
+modTrailE f = mealyLift $ fromKleisli $ \a -> gets (f . npsTrail) >>= \case
   Left e -> return $ Left e
-  Right r -> lift (put r) >> return (Right a)
+  Right r -> do
+    modify $ \nps -> nps { npsTrail = r }
+    return (Right a)
 
-modTrail :: (NTrail n -> NTrail n) -> Arr (NodeProc n w) a a
-modTrail f = mealyLift $ Kleisli $ \a -> lift (modify f) >> return a
-withTrail :: ZErr w -> NodeRef n -> NodeProc n w -> NodeProc n w
+modTrail :: Monoid (ZCoEpoch w)
+         => (NTrail n -> NTrail n)
+         -> Arr (NodeProc n w) a a
+modTrail f = mealyLift $ fromKleisli $ \a -> do
+  modify $ \nps -> nps { npsTrail = f $ npsTrail nps }
+  return a
+withTrail
+  :: Monoid (ZCoEpoch w) => ZErr w -> NodeRef n -> NodeProc n w -> NodeProc n w
 withTrail cycleErr ref m =
   modTrailE putRef >>> (arr BndErr ||| m) >>> modTrail (nsDelete ref)
   where
     putRef
       ns = if ref `nsMember` ns then Left cycleErr else Right $ nsInsert ref ns
 
+mkEpoch
+  :: Monoid (ExtCoEpoch (PlanParams n))
+  => NodeRef n
+  -> Bool
+  -> Arr (NodeProc n (SumTag (PlanParams n) v)) a a
+mkEpoch ref val = mealyLift $ fromKleisli $ \x -> do
+  modify $ \nps -> nps { npsEpoch = refInsert ref val $ npsEpoch nps }
+  return x
+
+data PlanParams n
+
+instance ExtParams (PlanParams n) where
+  type ExtError (PlanParams n) = Err
+  type ExtEpoch (PlanParams n) = RefMap n Bool
+  type ExtCoEpoch (PlanParams n) = RefMap n Bool
+
+
 -- Arrow choice
 
 -- TODO: methods to
 --
--- * Register the epoch.
+-- * Fix the trail (done)
 --
 -- * Check that the epoch meaningfully changed and return the old
---   result.
+--   result. Use the ZipperMonadExt implementation.
 --
 -- * Connect to the PlanT

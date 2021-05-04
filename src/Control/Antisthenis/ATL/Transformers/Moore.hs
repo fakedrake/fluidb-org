@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -5,6 +6,7 @@
 {-# LANGUAGE Arrows #-}
 module Control.Antisthenis.ATL.Transformers.Moore
   (MooreCat
+  ,hoistMoore
   ,mooreBatch
   ,mkMooreCat
   ,mealyBatchC
@@ -18,6 +20,7 @@ import Control.Antisthenis.ATL.Transformers.Mealy
 
 data MooreCat c a b = MooreMech b (MealyArrow c a b)
 
+-- |
 mealyBatchC
   :: forall a a' b b' c .
   (ArrowChoice c,ArrowApply c)
@@ -62,7 +65,8 @@ mooreBatch
 mooreBatch f = \case
   MooreMech b mealy -> mealyBatch b f mealy
 
--- | Moore batching is a techinique for repetition of the arrow.
+-- | Moore batching is a techinique for repetition of the arrow. See
+-- `mealyBatchC`
 mooreBatchC
   :: forall c a a' b b' .
   (ArrowChoice c,ArrowApply c,Profunctor c)
@@ -98,3 +102,12 @@ instance Profunctor c => Profunctor (MooreCat c) where
   dimap f g (MooreMech b m) = MooreMech (g b) $ dimap f g m
   lmap f (MooreMech b m) = MooreMech b $ lmap f m
   rmap f (MooreMech b m) = MooreMech (f b) $ rmap f m
+
+
+hoistMoore
+  :: Profunctor c'
+  => (b -> b')
+  -> (c a (MealyArrow c a b,b) -> c' a' (MealyArrow c a b,b'))
+  -> MooreCat c a b
+  -> MooreCat c' a' b'
+hoistMoore modb f (MooreMech x c) = MooreMech (modb x) $ hoistMealy f c

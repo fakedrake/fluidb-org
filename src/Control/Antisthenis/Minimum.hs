@@ -28,6 +28,8 @@
 module Control.Antisthenis.Minimum
   (minTest,MinTag) where
 
+import Control.Monad.Writer
+import Data.Proxy
 import Data.Utils.FixState
 import Control.Monad.Trans.Free
 import GHC.Generics
@@ -117,10 +119,6 @@ topMinAssocList mal = elemBnd
   where
     elemBnd = let x NEL.:| xs = fst <$> malElements mal in foldl' min x xs
 
-instance (Monad m,ZipperParams (MinTag p a),Ord (ExtEpoch p))
-  => ZipperMonad (MinTag p a) m where
-  zCmpEpoch _ a b = return $ a < b
-
 instance BndRParams (MinTag p a) where
   type ZErr (MinTag p a) = ExtError p
   type ZBnd (MinTag p a) = Min a
@@ -130,6 +128,8 @@ instance (AShow a,Eq a,Ord a,ExtParams p,NoArgError (ExtError p))
   => ZipperParams (MinTag p a) where
   type ZCap (MinTag p a) = Min a
   type ZEpoch (MinTag p a) = ExtEpoch p
+  type ZCoEpoch (MinTag p a) = ExtCoEpoch p
+  type ZCoEpoch (MinTag p a) = ExtCoEpoch p
   type ZPartialRes (MinTag p a) = ()
   type ZItAssoc (MinTag p a) =
     MinAssocList [] (MinTag p a)
@@ -162,14 +162,16 @@ instance (AShow a,Eq a,Ord a,ExtParams p,NoArgError (ExtError p))
   -- exceed the minimum bound established. If the minimum bound is
   -- concrete then we have finished the computatiuon. If there are
   -- still inits to be consumed do minimum work.
-  localizeConf conf z = case malConcrete $ bgsIts $ zBgState z of
-    Just (Left _e) -> conf { confCap = WasFinished }
-    Just (Right concreteBnd) -> case malBound $ bgsIts $ zBgState z of
-      Just (minBnd,_) -> conf { confCap = Cap $ concreteBnd <> minBnd }
-      Nothing -> conf { confCap = Cap concreteBnd }
-    Nothing -> case malBound $ bgsIts $ zBgState z of
-      Just (minBnd,_) -> conf { confCap = Cap minBnd }
-      Nothing -> conf { confCap = MinimumWork }
+  zLocalizeConf coepoch conf z =
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    $ case malConcrete $ bgsIts $ zBgState z of
+      Just (Left _e) -> conf { confCap = WasFinished }
+      Just (Right concreteBnd) -> case malBound $ bgsIts $ zBgState z of
+        Just (minBnd,_) -> conf { confCap = Cap $ concreteBnd <> minBnd }
+        Nothing -> conf { confCap = Cap concreteBnd }
+      Nothing -> case malBound $ bgsIts $ zBgState z of
+        Just (minBnd,_) -> conf { confCap = Cap minBnd }
+        Nothing -> conf { confCap = MinimumWork }
 
 
 -- | Given a solution and the configuration return a bound that
@@ -243,15 +245,22 @@ minStrategy fin = recur
         CmdFinished (ExZipper x) -> return
           (fin,fromMaybe (undefined) $ zFullResultMin x)
 
+
 minTest :: IO (BndR (MinTag TestParams Integer))
-minTest = fmap fst $ (`runReaderT` mempty) $ (`runFixStateT` def) $ do
-  putMech 1 $ incrTill "1" ((+ 1),id) $ Cap 3
-  putMech 2 $ incrTill "2" ((+ 1),id) $ Cap 1
-  putMech 3 $ incrTill "3" ((+ 1),id) $ Cap 2
-  let insTrail k tr =
-        if k `IS.member` tr
-        then Left $ ErrCycle k tr else Right $ IS.insert k tr
-  let getMech i = withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
-  res <- runMech (mkProc $ getMech <$> [1,2,3]) def
-  lift2 $ putStrLn $ "Result: " ++ ashow res
-  return res
+minTest =
+  fmap (fst . fst)
+  $ (`runReaderT` mempty)
+  $ (`runFixStateT` def)
+  $ runWriterT
+  $ do
+    putMech 1 $ incrTill "1" ((+ 1),id) 3
+    putMech 2 $ incrTill "2" ((+ 1),id) 1
+    putMech 3 $ incrTill "3" ((+ 1),id) 2
+    let insTrail k tr =
+          if k `IS.member` tr
+          then Left $ ErrCycle k tr else Right $ IS.insert k tr
+    let getMech i =
+          withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
+    res <- runMech (mkProc $ getMech <$> [1,2,3]) def
+    lift3 $ putStrLn $ "Result: " ++ ashow res
+    return res

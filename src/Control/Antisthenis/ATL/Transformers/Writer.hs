@@ -5,11 +5,13 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
-module Control.Antisthenis.ATL.Transformers.Writer (WriterArrow(..)) where
+module Control.Antisthenis.ATL.Transformers.Writer
+  (WriterArrow(..)) where
 
-import Control.Antisthenis.ATL.Transformers.Reader
-import Control.Antisthenis.ATL.Transformers.State
-import Control.Antisthenis.ATL.Class.Cont
+import Data.Utils.Tup
+import Control.Monad.Writer
+import Control.Antisthenis.ATL.Class.Functorial
+import Data.Profunctor
 import           Control.Arrow
 import           Control.Category
 import           Data.Functor.Identity
@@ -106,3 +108,15 @@ instance IsPair (l,r) where
   {-# INLINE toPair #-}
   fromPair = id
   {-# INLINE fromPair #-}
+
+
+instance Profunctor c => Profunctor (WriterArrow w c) where
+  dimap f g (WriterArrow c) =
+    WriterArrow $ dimap f (second g) c
+  {-# INLINE dimap #-}
+
+instance ArrowFunctor c => ArrowFunctor (WriterArrow w c) where
+  type ArrFunctor (WriterArrow w c) =
+    WriterT w (ArrFunctor c)
+  toKleisli (WriterArrow c) = WriterT . fmap swap . toKleisli c
+  fromKleisli c = WriterArrow $ fromKleisli $ fmap (fmap swap . runWriterT) c

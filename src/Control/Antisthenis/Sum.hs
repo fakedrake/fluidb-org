@@ -9,6 +9,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Control.Antisthenis.Sum (SumTag) where
 
+import Control.Monad.Writer hiding (Sum,Min)
 import Data.Utils.FixState
 import Data.Utils.Debug
 import Data.Proxy
@@ -39,12 +40,10 @@ instance ExtParams p => BndRParams (SumTag p v) where
   type ZBnd (SumTag p v) = Min v
   type ZRes (SumTag p v) = Sum v
 
-instance (Ord v,Num v,AShow v,Monad m,ExtParams p,Ord (ExtEpoch p))
-  => ZipperMonad (SumTag p v) m where
-  zCmpEpoch Proxy x y = return $ x < y
 
 instance (Ord v,Num v,ExtParams p) => ZipperParams (SumTag p v) where
   type ZEpoch (SumTag p v) = ExtEpoch p
+  type ZCoEpoch (SumTag p v) = ExtCoEpoch p
   type ZCap (SumTag p v) = Min v
   type ZPartialRes (SumTag p v) =
     Either (ZErr (SumTag p v)) (ZBnd (SumTag p v))
@@ -69,11 +68,15 @@ instance (Ord v,Num v,ExtParams p) => ZipperParams (SumTag p v) where
         BndErr e -> Left e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
     Just $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
-  localizeConf conf z = conf { confCap = case zRes z of
-    Left _ -> WasFinished
-    Right r -> case confCap conf of
-      Cap c -> Cap $ c - r
-      x -> x }
+  zLocalizeConf coepoch conf z =
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    $ conf { confCap = newCap }
+    where
+      newCap = case zRes z of
+        Left _ -> WasFinished
+        Right r -> case confCap conf of
+          Cap c -> Cap $ c - r
+          x -> x
 
 -- | Return the result expected or Nothing if there is more evolving
 -- that needs to happen. This can only return bounds.
@@ -116,13 +119,18 @@ minToSum :: Min v -> Sum v
 minToSum (Min v) = Sum v
 
 sumTest :: IO (BndR (SumTag TestParams Integer))
-sumTest = fmap fst $ (`runReaderT` mempty) $ (`runFixStateT` def) $ do
-  putMech 1 $ incrTill "1" ((+ 1),minToSum) $ Cap 3
-  putMech 2 $ incrTill "2" ((+ 1),minToSum) $ Cap 1
-  putMech 3 $ incrTill "3" ((+ 1),minToSum) $ Cap 2
-  res <- runMech (mkProc $ getMech <$> [1,2,3]) def
-  lift2 $ putStrLn $ "Result: " ++ ashow res
-  return res
+sumTest =
+  fmap (fst . fst)
+  $ (`runReaderT` mempty)
+  $ (`runFixStateT` def)
+  $ runWriterT
+  $ do
+    putMech 1 $ incrTill "1" ((+ 1),minToSum) 3
+    putMech 2 $ incrTill "2" ((+ 1),minToSum) 1
+    putMech 3 $ incrTill "3" ((+ 1),minToSum) 2
+    res <- runMech (mkProc $ getMech <$> [1,2,3]) def
+    lift3 $ putStrLn $ "Result: " ++ ashow res
+    return res
   where
     insTrail k tr =
       if k `IS.member` tr then Left $ ErrCycle k tr else Right $ IS.insert k tr

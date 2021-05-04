@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
-module Data.Utils.Monoid (Min(..),Mul(..),Sum(..)) where
+module Data.Utils.Monoid (Min(..),Mul(..),Sum(..),Max(..)) where
 
 import Data.Utils.AShow
 import GHC.Generics
@@ -33,6 +33,34 @@ instance Ord a => Monoid (Min a) where
   mempty = Min Nothing
 
 instance AShow v => AShow (Min v)
+
+newtype Max a = Max (Maybe a)
+  deriving stock (Show,Eq,Functor,Generic)
+  deriving Applicative via Maybe
+  deriving Default via Maybe a
+
+instance Num a => Num (Max a) where
+  signum (Max Nothing) = Max $ Just 1
+  signum (Max (Just a)) = Max $ Just $ signum a
+  abs (Max a) = Max $ abs <$> a
+  fromInteger x = Max $ Just $ fromInteger x
+  Max a + Max b = Max $ (+) <$> a <*> b
+  Max a - Max b = Max $ (-) <$> a <*> b
+  Max a * Max b = Max $ (*) <$> a <*> b
+
+instance Ord a => Ord (Max a) where
+  compare (Max Nothing) (Max Nothing) = EQ
+  compare (Max Nothing) (Max (Just _)) = LT
+  compare (Max (Just _)) (Max Nothing) = GT
+  compare (Max (Just a)) (Max (Just b)) = compare a b
+
+instance Ord a => Semigroup (Max a) where
+  a <> b = max a b
+instance Ord a => Monoid (Max a) where
+  mempty = Max Nothing
+
+instance AShow v => AShow (Max v)
+
 
 data Mul a = Mul Int a
   deriving (Show,Eq,Generic)

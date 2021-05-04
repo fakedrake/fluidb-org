@@ -22,6 +22,7 @@ module Data.NodeContainers
   , NodeRef(..)
   , NodeSet(..)
   , RefMap(..)
+  , refSingleton
   , refRestrictKeys
   , refIsSubmapOfBy
   , refIntersectionWithKey
@@ -222,6 +223,8 @@ refMapWithKey :: (NodeRef n -> v -> v') -> RefMap n v -> RefMap n v'
 refMapWithKey f = RefMap . IM.mapWithKey (f . NodeRef) . runRefMap
 refDelete :: NodeRef from -> RefMap n v -> RefMap n v
 refDelete (NodeRef k) = RefMap . IM.delete k . runRefMap
+refSingleton :: NodeRef n -> v -> RefMap n v
+refSingleton (NodeRef ref) val = RefMap $ IM.singleton ref val
 refAssocs :: RefMap n v -> [(NodeRef n,v)]
 refAssocs (RefMap m) = [(NodeRef k,v) | (k,v) <- IM.toAscList m]
 refRestrictKeys :: RefMap n a -> NodeSet n -> RefMap n a
@@ -314,7 +317,7 @@ nsFold f ns ini = foldr f ini $ toNodeList ns
 --                                -- type's 'parseFormat'.
 --                                -- Normally the empty string.
 --   fmtChar      :: Char              -- ^ The format character
---                                -- 'printf' was invoked
+--                                -- 'printf' was invokedref
 --                                -- with. 'formatArg' should
 --                                -- fail unless this character
 --                                -- matches the type. It is
