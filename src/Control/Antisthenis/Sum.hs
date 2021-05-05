@@ -9,13 +9,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Control.Antisthenis.Sum (SumTag) where
 
+import Data.Utils.AShow
 import Control.Monad.Writer hiding (Sum,Min)
 import Data.Utils.FixState
 import Data.Utils.Debug
 import Data.Proxy
 import Control.Monad.Reader
 import Data.Utils.Default
-import Data.Utils.AShow
 import Data.Utils.Functors
 import Control.Antisthenis.Test
 import Control.Antisthenis.VarMap
@@ -40,8 +40,8 @@ instance ExtParams p => BndRParams (SumTag p v) where
   type ZBnd (SumTag p v) = Min v
   type ZRes (SumTag p v) = Sum v
 
-
-instance (Ord v,Num v,ExtParams p) => ZipperParams (SumTag p v) where
+instance (Ord v,Num v,ExtParams p,AShow (ExtEpoch p),AShow (ExtCoEpoch p))
+  => ZipperParams (SumTag p v) where
   type ZEpoch (SumTag p v) = ExtEpoch p
   type ZCoEpoch (SumTag p v) = ExtCoEpoch p
   type ZCap (SumTag p v) = Min v

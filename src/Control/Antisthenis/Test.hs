@@ -111,7 +111,8 @@ withTrail insUniq = handleBndErr $ \handle -> asks insUniq >>= \case
 data TestParams
 instance ExtParams TestParams where
   type ExtEpoch TestParams = Int
-  type ExtCoEpoch TestParams = Max Int
+  type ExtCoEpoch TestParams = Min Int
   type ExtError TestParams = Err
+  -- | If we create
   extCombEpochs _ coe e a =
-    if coe < Max (Just e) then DontReset a else ShouldReset
+    if coe < Min (Just e) then ShouldReset else DontReset a

@@ -10,6 +10,7 @@
 module Data.QueryPlan.NodeProc
   (NodeProc) where
 
+import Data.NodeContainers
 import Control.Antisthenis.ATL.Class.Functorial
 import Control.Antisthenis.ATL.Common
 import Control.Monad.Identity
@@ -121,7 +122,12 @@ instance ExtParams (PlanParams n) where
   type ExtError (PlanParams n) = Err
   type ExtEpoch (PlanParams n) = RefMap n Bool
   type ExtCoEpoch (PlanParams n) = RefMap n Bool
-
+  -- | When the coepoch is older than the epoch we must reset and get
+  -- a fresh value for the process. Otherwise the progress made so far
+  -- towards a value is valid and we should continue from there.
+  extCombEpochs _ coepoch epoch a =
+    if and $ refIntersectionWithKey (const (==)) coepoch epoch
+    then ShouldReset else DontReset a
 
 -- Arrow choice
 
