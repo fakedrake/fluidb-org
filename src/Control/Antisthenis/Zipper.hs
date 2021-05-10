@@ -27,7 +27,6 @@
 
 module Control.Antisthenis.Zipper (zSize,mkZCat,mkMachine,mkProc,runMech) where
 
-import Data.Utils.Debug
 import Control.Antisthenis.ATL.Class.Functorial
 import Control.Monad.Writer
 import Control.Antisthenis.ATL.Common
@@ -80,17 +79,11 @@ mkZCat'
     (LConf w)
     (Zipper w (ArrProc w m))
 mkZCat' [] = error "mul needs at least one value."
-mkZCat' (a:as) =
-  mkMooreCat
-    (trace ("Zipper: " ++ show (length $ bgsInits $ zBgState zipper)) zipper)
-  $ mkZCat zipper
+mkZCat' (a:as) = mkMooreCat zipper $ mkZCat zipper
   where
     zipper =
       Zipper
-      { zCursor = Identity (Nothing,a,a)
-       ,zBgState = mkGgState as
-       ,zRes = def
-      }
+      { zCursor = Identity (Nothing,a,a),zBgState = mkGgState as,zRes = def }
 
 
 -- Make a ziper evolution.
@@ -235,7 +228,7 @@ mkMachine
 mkMachine getRes =
   handleLifetimes getRes
   . loopMooreCat -- feed the previous zipper to the next localizeConf
-  . dimap fst (\z -> trace ("mkMachine: " ++ ashow (ashowZ' z,zSize z)) (z,z))
+  . dimap fst (\z -> (z,z))
   . mkZCat'
 
 -- | Compare the previous and next configurations to see of anything
@@ -244,7 +237,7 @@ mkMachine getRes =
 -- lifespans more globally.
 handleLifetimes
   :: forall m w k .
-  (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w,HasCallStack)
+  (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w)
   => (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> Arr
     (ArrProc' w (FreeT (Cmds' (ExZipper w) (ZItAssoc w)) m))
@@ -270,16 +263,18 @@ handleLifetimes getRes =
          (Cmds' (ExZipper w) (ZItAssoc w))
          m
          (Either (LConf w) (ZCoEpoch w,k))
-    go (conf,(coepoch,z)) = trace "go" $ case zLocalizeConf coepoch conf z of
+    go (conf,(coepoch,z)) = case zLocalizeConf coepoch conf z of
       ShouldReset -> wrap
-        Cmds { cmdReset = DoReset $ trace "resetting!" $ go (conf,(coepoch,resetZ))
+        Cmds { cmdReset = DoReset $ go (conf,(coepoch,resetZ))
               ,cmdItCoit = ShouldReset
              }
       DontReset conf' -> return $ ret conf'
       where
         resetZ =
-          Zipper
-          { zBgState = bgsReset $ zBgState z,zRes = def :: ZPartialRes w,zCursor = zCursor z }
+          Zipper { zBgState = bgsReset $ zBgState z
+                  ,zRes = def :: ZPartialRes w
+                  ,zCursor = zCursor z
+                 }
         ret conf' =
           maybe (Left conf') (\x -> Right (coepoch,x)) $ getRes conf' z
 
@@ -318,7 +313,7 @@ mkProc
   ,AShowW w)
   => [ArrProc w m]
   -> ArrProc w m
-mkProc procs = trace "mkProc" $ evolution $ mkMachine evolutionControl procs
+mkProc procs = evolution $ mkMachine evolutionControl procs
   where
     ZProcEvolution {..} = zprocEvolution
     evolution

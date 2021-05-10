@@ -10,7 +10,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Control.Antisthenis.Sum (SumTag) where
 
-import Data.Utils.Debug
 import Data.Utils.AShow
 import Data.Proxy
 import Control.Monad.Trans.Free
@@ -61,8 +60,7 @@ instance (Ord v,Num v,ExtParams p,AShow (ExtEpoch p),AShow (ExtCoEpoch p))
   replaceRes oldBnd newBnd (oldRes,newZipper) =
     Just $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
   zLocalizeConf coepoch conf z =
-    trace "sum localize"
-    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
       newCap = case zRes z of

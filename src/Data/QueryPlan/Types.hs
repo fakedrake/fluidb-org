@@ -60,6 +60,7 @@ module Data.QueryPlan.Types
   ,mplusPlanT) where
 
 
+import Data.Proxy
 import Control.Antisthenis.Sum
 import Data.Utils.Monoid
 import Control.Antisthenis.Types
@@ -446,13 +447,14 @@ type NodeProc0 t n w0 w =
 data PlanParams n
 
 instance ExtParams (PlanParams n) where
-  type ExtError (PlanParams n) = IndexErr (NodeRef n)
+  type ExtError (PlanParams n) =
+    IndexErr (NodeRef n)
   type ExtEpoch (PlanParams n) = RefMap n Bool
   type ExtCoEpoch (PlanParams n) = RefMap n Bool
   -- | When the coepoch is older than the epoch we must reset and get
   -- a fresh value for the process. Otherwise the progress made so far
   -- towards a value is valid and we should continue from there.
-  extCombEpochs _ coepoch epoch a =
+  extCombEpochs Proxy coepoch epoch a =
     if and $ refIntersectionWithKey (const (==)) coepoch epoch
     then DontReset a else ShouldReset
 

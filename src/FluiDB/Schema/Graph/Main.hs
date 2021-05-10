@@ -16,6 +16,7 @@
 module FluiDB.Schema.Graph.Main
   (graphMain) where
 
+import System.Timeout
 import FluiDB.Classes
 import Data.Utils.Unsafe
 import Data.Cluster.Types.Clusters
@@ -135,4 +136,7 @@ defaultConfig = WorkloadConfig {
   }
 
 graphMain :: IO ()
-graphMain = actualMain defaultConfig
+graphMain =
+  timeout 3000000 (actualMain defaultConfig) >>= \case
+  Nothing -> putStrLn "TIMEOUT!!"
+  Just () -> putStrLn "Done!"

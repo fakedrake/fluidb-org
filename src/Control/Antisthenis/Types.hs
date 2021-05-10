@@ -27,6 +27,7 @@
 
 module Control.Antisthenis.Types
   (IndexErr(..)
+  ,ashowItInit
   ,runArrProc
   ,Err
   ,ArrProc'
@@ -114,6 +115,12 @@ data ItInit r f a
   | CmdInit (InitProc a)
   | CmdFinished r
 
+ashowItInit :: ItInit r f a -> SExp
+ashowItInit = \case
+  CmdItInit _ _ -> sexp "CmdItInit" [Sym "<proc>",Sym "<proc>"]
+  CmdIt _ -> sexp "CmdIt" [Sym "<proc>"]
+  CmdInit _ -> sexp "CmdInit" [Sym "<proc>"]
+  CmdFinished _ -> sexp "CmdFinished" [Sym "<res>"]
 instance Functor (ItInit r f) where
   fmap f = \case
     CmdItInit x y -> CmdItInit (\pop -> f $ x pop) $ f y

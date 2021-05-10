@@ -77,8 +77,8 @@ withTrail
 withTrail cycleErr ref m =
   modTrailE putRef >>> (arr BndErr ||| m) >>> modTrail (nsDelete ref)
   where
-    putRef
-      ns = if ref `nsMember` ns then Left $ cycleErr ns else Right $ nsInsert ref ns
+    putRef ns =
+      if ref `nsMember` ns then Left $ cycleErr ns else Right $ nsInsert ref ns
 
 type CostParams n = SumTag (PlanParams n) Cost
 -- | Transfer the value of the epoch to the coepoch
@@ -88,12 +88,13 @@ mkEpoch
   -> Arr
     (NodeProc t n (SumTag (PlanParams n) v))
     (Conf (CostParams n))
-    (Conf (CostParams n))
+    (Either (ZRes (CostParams n)) (Conf (CostParams n)))
 mkEpoch ref = mealyLift $ fromKleisli $ \conf -> do
-  let val = fromMaybe False $ ref `refLU` confEpoch conf
-  tell $ refFromAssocs [(ref,val)]
-  return conf
-
+  let isMater = fromMaybe False $ ref `refLU` confEpoch conf
+  tell $ refFromAssocs [(ref,isMater)]
+  return
+    $ if isMater then trace ("materialized: " ++ ashow ref) (Left 0)
+    else trace ("Continuing: " ++ ashow ref) Right conf
 
 squashMealy
   :: (ArrowFunctor c,Monad (ArrFunctor c))
@@ -107,18 +108,26 @@ squashMealy m = MealyArrow $ fromKleisli $ \a -> do
 mkNewMech :: NodeRef n -> NodeProc t n (CostParams n)
 mkNewMech ref = squashMealy $ do
   mops <- lift2 $ findCostedMetaOps ref
-  traceM $ "Mops: " ++ ashow (ref,mops)
+  -- Should never see the same val twice.
+  traceM $ "vals: " ++ ashow (ref,toNodeList . metaOpIn . fst <$> mops)
   let mechs =
         [DSetR { dsetConst = Sum $ Just cost
                 ,dsetNeigh = [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
                } | (mop,cost) <- mops]
-  return $ withTrail (ErrCycle ref) ref $ mkEpoch ref >>> makeCostProc mechs
+  let ret =
+        withTrail (ErrCycle ref) ref
+        $ arr (trace ("Evaluating: " ++ ashow ref))
+        >>> mkEpoch ref
+        >>> (arr BndRes) ||| makeCostProc mechs
+        >>> arr (\r -> trace ("Evaluated: " ++ ashow (ref,r)) r)
+  lift2 $ modify $ \gcs
+    -> gcs { gcMechMap = refInsert ref ret $ gcMechMap gcs }
+  return ret
 
 getOrMakeMech
   :: NodeRef n -> NodeProc t n (SumTag (PlanParams n) Cost)
 getOrMakeMech ref =
-  trace "getOrMakeMech"
-  $ squashMealy
+  squashMealy
   $ lift2
   $ gets
   $ fromMaybe (mkNewMech ref) . refLU ref . gcMechMap
@@ -135,17 +144,19 @@ planQuickRun m = do
 
 getCost :: Monad m => Cap (Min Cost) -> NodeRef n -> PlanT t n m (Maybe Cost)
 getCost cap ref = do
+  traceM $ "getCost starting: " ++ ashow ref
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   ((res,_coepoch),_trail) <- planQuickRun
     $ (`runStateT` def)
     $ runWriterT
     $ runMech (getOrMakeMech ref)
     $ Conf { confCap = cap,confEpoch = states }
+  traceM $ "getCost returning: " ++ ashow (ref,res)
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just 0
     BndBnd _bnd -> return Nothing
-    BndErr e -> throwPlan $ "error: " ++ ashow e
+    BndErr e -> throwPlan $ "antisthenis error: " ++ ashow e
 
 -- Arrow choice
 
