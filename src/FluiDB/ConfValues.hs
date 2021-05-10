@@ -118,25 +118,26 @@ mkFileCache :: forall e s .
               (s -> Maybe FileSet)
             -> SchemaAssoc e s
             -> QueryFileCache e s
-mkFileCache toFileSet schemaAssoc = go
-  $ HM.fromList
-  $ catMaybes
-  $ toAssoc <$> schemaAssoc
+mkFileCache toFileSet schemaAssoc =
+  go $ HM.fromList $ catMaybes $ toAssoc <$> schemaAssoc
   where
-    toAssoc :: (s, x) -> Maybe (Either (Query e s) (CNFQuery e s), FileSet)
-    toAssoc (fn, _) = (safeCnf $ Q0 fn,) <$> toFileSet fn
+    toAssoc :: (s,x) -> Maybe (Either (Query e s) (CNFQuery e s),FileSet)
+    toAssoc (fn,_) = (safeCnf $ Q0 fn,) <$> toFileSet fn
     safeCnf :: Query e s -> Either (Query e s) (CNFQuery e s)
-    safeCnf q = fmap (fst . fromJustErr)
-                $ first (const q)
-                $ (`evalStateT` def)
-                $ listTMaxCNF fst
-                $ toCNF (toTableColumns schemaAssoc) q
-    go :: HM.HashMap (Either (Query e s) (CNFQuery e s)) FileSet -> QueryFileCache e s
-    go hm = QueryFileCache{
-      showFileCache = Nothing, -- Just $ show hm,
-      getCachedFile = (`HM.lookup` hm) . Right,
-      putCachedFile = \q f -> go $ HM.insert (Right q) f hm,
-      delCachedFile = \q -> go $ HM.delete (Right q) hm
+    safeCnf q =
+      fmap (fst . fromJustErr)
+      $ first (const q)
+      $ (`evalStateT` def)
+      $ listTMaxCNF fst
+      $ toCNF (toTableColumns schemaAssoc) q
+    go :: HM.HashMap (Either (Query e s) (CNFQuery e s)) FileSet
+       -> QueryFileCache e s
+    go hm =
+      QueryFileCache
+      { showFileCache = Nothing  -- Just $ show hm,
+       ,getCachedFile = (`HM.lookup` hm) . Right
+       ,putCachedFile = \q f -> go $ HM.insert (Right q) f hm
+       ,delCachedFile = \q -> go $ HM.delete (Right q) hm
       }
 
 toTableColumns :: Eq s => SchemaAssoc e s -> s -> Maybe [e]
@@ -148,17 +149,19 @@ toTableColumns schemaAssoc = fmap2 snd . (`lookup` schemaAssoc)
 -- * The tables are inserted using insertQuery
 -- * As the table nodes are inserted, we are collecting the node
 --   references and using tpchTableSizes
-mkGlobalConf :: forall e e0 s t n .
-               (Hashables2 e s,
-                CodegenSymbol e, Ord s,
-                t ~ (), n ~ ()) =>
-               (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
-             -> (Int -> e -> Maybe e)
-             -> (s -> Maybe FileSet) -- Embedding of tables in filesets
-             -> [(s,[e])]          -- Primary keys of each table
-             -> SchemaAssoc e s     -- The schema of each table
-             -> [(s,TableSize)]          -- Size of each table in bytes
-             -> Maybe (GlobalConf e s t n)
+mkGlobalConf
+  :: forall e e0 s t n .
+  (Hashables2 e s,CodegenSymbol e,Ord s,t ~ (),n ~ ())
+  => (e
+      -> ExpTypeSym' e0
+     ,ExpTypeSym' e0
+      -> e)
+  -> (Int -> e -> Maybe e)
+  -> (s -> Maybe FileSet) -- Embedding of tables in filesets
+  -> [(s,[e])]          -- Primary keys of each table
+  -> SchemaAssoc e s     -- The schema of each table
+  -> [(s,TableSize)]          -- Size of each table in bytes
+  -> Maybe (GlobalConf e s t n)
 mkGlobalConf expIso toUniq toFileSet primKeyAssoc schemaAssoc tableSizeAssoc = do
   let gbState = mempty
   let (pair :: Either (ClusterError e s) (Bipartite t n,RefMap n s)
@@ -186,6 +189,7 @@ mkGlobalConf expIso toUniq toFileSet primKeyAssoc schemaAssoc tableSizeAssoc = d
      ,globalClusterConfig = clusterConfig
      ,globalGCConfig = GCConfig
         { propNet = propNetLocal
+         ,queryHistory = QueryHistory []
           -- historicalCosts = mempty,
           -- Note that sizes will be computed lazily.
          ,nodeSizes = refFromAssocs nodeSizes'

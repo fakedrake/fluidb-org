@@ -9,6 +9,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Data.QueryPlan.NodeProc (NodeProc,getCost) where
 
+import Data.Utils.Debug
 import Control.Monad.Reader
 import Control.Monad.Except
 import Data.Utils.Default
@@ -41,7 +42,7 @@ makeCostProc
   -> NodeProc t n (SumTag (PlanParams n) v)
 makeCostProc deps = convArrProc convMinSum $ procMin $ go <$> deps
   where
-    go DSet {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
+    go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
       where
         constArr = arr $ const $ BndRes dsetConst
     procMin :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
@@ -106,16 +107,18 @@ squashMealy m = MealyArrow $ fromKleisli $ \a -> do
 mkNewMech :: NodeRef n -> NodeProc t n (CostParams n)
 mkNewMech ref = squashMealy $ do
   mops <- lift2 $ findCostedMetaOps ref
+  traceM $ "Mops: " ++ ashow (ref,mops)
   let mechs =
-        [DSet { dsetConst = Sum $ Just cost
-               ,dsetNeigh = [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
-              } | (mop,cost) <- mops]
+        [DSetR { dsetConst = Sum $ Just cost
+                ,dsetNeigh = [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
+               } | (mop,cost) <- mops]
   return $ withTrail (ErrCycle ref) ref $ mkEpoch ref >>> makeCostProc mechs
 
 getOrMakeMech
   :: NodeRef n -> NodeProc t n (SumTag (PlanParams n) Cost)
 getOrMakeMech ref =
-  squashMealy
+  trace "getOrMakeMech"
+  $ squashMealy
   $ lift2
   $ gets
   $ fromMaybe (mkNewMech ref) . refLU ref . gcMechMap

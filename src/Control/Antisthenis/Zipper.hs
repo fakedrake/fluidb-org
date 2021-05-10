@@ -27,6 +27,7 @@
 
 module Control.Antisthenis.Zipper (zSize,mkZCat,mkMachine,mkProc,runMech) where
 
+import Data.Utils.Debug
 import Control.Antisthenis.ATL.Class.Functorial
 import Control.Monad.Writer
 import Control.Antisthenis.ATL.Common
@@ -34,7 +35,6 @@ import Control.Antisthenis.ATL.Transformers.Writer
 import Control.Monad.Trans.Free
 import Data.Utils.EmptyF
 import Control.Monad.Identity
-import Data.Utils.Debug
 import Data.Utils.Default
 import Data.Utils.Unsafe
 import Data.Foldable
@@ -244,7 +244,7 @@ mkMachine getRes =
 -- lifespans more globally.
 handleLifetimes
   :: forall m w k .
-  (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w)
+  (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w,HasCallStack)
   => (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> Arr
     (ArrProc' w (FreeT (Cmds' (ExZipper w) (ZItAssoc w)) m))
@@ -270,16 +270,16 @@ handleLifetimes getRes =
          (Cmds' (ExZipper w) (ZItAssoc w))
          m
          (Either (LConf w) (ZCoEpoch w,k))
-    go (conf,(coepoch,z)) = case zLocalizeConf coepoch conf z of
+    go (conf,(coepoch,z)) = trace "go" $ case zLocalizeConf coepoch conf z of
       ShouldReset -> wrap
-        Cmds { cmdReset = DoReset $ go (conf,(coepoch,resetZ))
+        Cmds { cmdReset = DoReset $ trace "resetting!" $ go (conf,(coepoch,resetZ))
               ,cmdItCoit = ShouldReset
              }
       DontReset conf' -> return $ ret conf'
       where
         resetZ =
           Zipper
-          { zBgState = bgsReset $ zBgState z,zRes = def,zCursor = zCursor z }
+          { zBgState = bgsReset $ zBgState z,zRes = def :: ZPartialRes w,zCursor = zCursor z }
         ret conf' =
           maybe (Left conf') (\x -> Right (coepoch,x)) $ getRes conf' z
 
@@ -318,7 +318,7 @@ mkProc
   ,AShowW w)
   => [ArrProc w m]
   -> ArrProc w m
-mkProc procs = evolution $ mkMachine evolutionControl procs
+mkProc procs = trace "mkProc" $ evolution $ mkMachine evolutionControl procs
   where
     ZProcEvolution {..} = zprocEvolution
     evolution
@@ -344,7 +344,6 @@ zSize z =
 
 runMech :: ArrowFunctor c => MealyArrow c a b -> a -> ArrFunctor c b
 runMech (MealyArrow c) ini = snd <$> toKleisli c ini
-
 
 -- updateMap
 --   :: MonadState s m

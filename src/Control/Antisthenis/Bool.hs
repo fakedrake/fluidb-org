@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -13,14 +14,11 @@
 module Control.Antisthenis.Bool
   (interpretBExp) where
 
-import Control.Monad.Writer
 import Control.Antisthenis.ATL.Class.Functorial
 import Data.Proxy
-import Data.Utils.FixState
 import qualified Data.IntSet as IS
 import Control.Antisthenis.Test
 import Data.Utils.Debug
-import Data.Utils.Functors
 import Control.Antisthenis.ATL.Transformers.Mealy
 import Control.Monad.State
 import qualified Data.IntMap as IM
@@ -392,6 +390,8 @@ interpretBExp = recur
     convAnd :: ArrProc (BoolTag And p) m -> ArrProc (BoolTag op p) m
     convAnd = convBool
 
+
+#if 0
 test :: BndR (BoolTag AnyOp TestParams)
 test =
   fst
@@ -405,7 +405,7 @@ test =
     vaexprs = VarMap (IM.fromList $ fmap2 interpretBExp exprs)
     vars = [(0,True),(1,True)]
     exprs = [(0,BLVar 1 :/\: BLVar 0),(1,BEVar 1 :\/: BEVar 0),(3,undefined)]
-
+#endif
 -- TOWRITE:
 -- AND and OR are both absorbing/identity groups
 -- Boolean expressions can be summarized as

@@ -7,7 +7,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module Data.Utils.Default (Default(..)) where
 
-import Data.Semigroup
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy     as HM
 import qualified Data.HashSet          as HS

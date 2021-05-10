@@ -11,10 +11,11 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module FluiDB.Schema.Graph.Main
   (graphMain) where
 
-import Data.QueryPlan.CostTypes
 import FluiDB.Classes
 import Data.Utils.Unsafe
 import Data.Cluster.Types.Clusters
@@ -27,12 +28,10 @@ import Data.NodeContainers
 import Data.Codegen.Build
 import Data.Utils.Tup
 import Data.Utils.AShow
-import           Control.Monad.Identity
 import           Data.Bifunctor
 import           Data.List
 import           Data.Maybe
 import           GHC.Generics
-import           System.Environment
 import           Text.Printf
 
 -- Workload stuff

@@ -124,8 +124,12 @@ instance BndRParams (MinTag p a) where
   type ZBnd (MinTag p a) = Min a
   type ZRes (MinTag p a) = Min a
 
-instance (AShow a,Eq a,Ord a,ExtParams p,NoArgError (ExtError p))
-  => ZipperParams (MinTag p a) where
+instance (AShow a
+         ,Eq a
+         ,Ord a
+         ,ExtParams p
+         ,NoArgError (ExtError p)
+         ,AShow (ExtError p)) => ZipperParams (MinTag p a) where
   type ZCap (MinTag p a) = Min a
   type ZEpoch (MinTag p a) = ExtEpoch p
   type ZCoEpoch (MinTag p a) = ExtCoEpoch p
@@ -163,9 +167,10 @@ instance (AShow a,Eq a,Ord a,ExtParams p,NoArgError (ExtError p))
   -- concrete then we have finished the computatiuon. If there are
   -- still inits to be consumed do minimum work.
   zLocalizeConf coepoch conf z =
-    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    trace "minimum localize"
+    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case malConcrete $ bgsIts $ zBgState z of
-      Just (Left _e) -> conf { confCap = WasFinished }
+      Just (Left _e) -> conf { confCap = trace "minimum finished" WasFinished }
       Just (Right concreteBnd) -> case malBound $ bgsIts $ zBgState z of
         Just (minBnd,_) -> conf { confCap = Cap $ concreteBnd <> minBnd }
         Nothing -> conf { confCap = Cap concreteBnd }
@@ -174,17 +179,23 @@ instance (AShow a,Eq a,Ord a,ExtParams p,NoArgError (ExtError p))
         Nothing -> conf { confCap = MinimumWork }
 
 
+ashowRes :: AShow (ZRes w) => BndR w -> String
+ashowRes = ashow . \case
+  BndRes r -> ashow' r
+  BndErr _ -> Sym "<error>"
+  BndBnd _ -> Sym "<bound>"
+
 -- | Given a solution and the configuration return a bound that
 -- matches the configuration or Nothing if the zipper should keep
 -- evolving to get to a proper resilt.
 deriveOrdSolution
   :: forall v p .
-  (Ord v,AShow v)
+  (Ord v,AShow v,AShow (ExtError p))
   => Conf (MinTag p v)
   -> BndR (MinTag p v)
   -> Maybe (BndR (MinTag p v))
 deriveOrdSolution conf res = case confCap conf of
-  WasFinished -> Just $ BndErr undefined
+  WasFinished -> Just $ trace ("reusing solution: " ++ ashowRes res) res
   DoNothing -> Just res
   MinimumWork -> Just res
   ForceResult -> case res of

@@ -1,2 +1,2 @@
 all:
-	stack run benchmark
+	stack run --profile benchmark

@@ -6,7 +6,7 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
-{-# OPTIONS_GHC -Wno-simplifiable-class-constraints -Wno-unused-top-binds #-}
+{-# OPTIONS_GHC -Wno-simplifiable-class-constraints -Wno-unused-top-binds -Wno-deprecations #-}
 
 module Data.CnfQuery.SanityCheck (sanityCheckRes) where
 

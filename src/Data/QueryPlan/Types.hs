@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
@@ -47,7 +50,8 @@ module Data.QueryPlan.Types
   ,SumTag
   ,NodeProc0
   ,NodeProcSt(..)
-  ,DSet(..)
+  ,DSetR(..)
+  ,DSet
   ,bot
   ,top
   ,runPlanT'
@@ -450,9 +454,10 @@ instance ExtParams (PlanParams n) where
   -- towards a value is valid and we should continue from there.
   extCombEpochs _ coepoch epoch a =
     if and $ refIntersectionWithKey (const (==)) coepoch epoch
-    then ShouldReset else DontReset a
+    then DontReset a else ShouldReset
 
 -- | depset has a constant part that is the cost of triggering and a
 -- variable part.
-data DSet t n p v =
-  DSet { dsetConst :: Sum v,dsetNeigh :: [NodeProc t n (SumTag p v)] }
+data DSetR v p = DSetR { dsetConst :: Sum v,dsetNeigh :: [p] }
+  deriving (Functor,Foldable,Traversable)
+type DSet t n p v = DSetR v (NodeProc t n (SumTag p v))

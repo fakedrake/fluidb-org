@@ -15,7 +15,6 @@ import           Control.Category                        hiding ((>>>))
 import           Control.Antisthenis.ATL.Class.Machine
 import           Control.Antisthenis.ATL.Class.Reader
 import           Control.Antisthenis.ATL.Class.State
-import           Control.Antisthenis.ATL.Class.Transformer
 import           Control.Antisthenis.ATL.Common
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Select

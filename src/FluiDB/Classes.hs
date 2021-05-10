@@ -22,6 +22,7 @@ module FluiDB.Classes
   ,MonadFakeIO(..)
   ,existing
   ,inDir
+  ,realIOOps
   ,IOOps(..)) where
 
 import Data.Utils.Debug
@@ -33,7 +34,6 @@ import Data.CppAst as CC
 import Data.String
 import Control.Monad.Writer
 import Control.Monad.Reader
-import           Control.Monad.Morph
 import           Control.Monad.State
 import           FluiDB.Types
 import           Control.Monad.Except
@@ -105,7 +105,11 @@ unsafeFakeIOOps =
    ,ioLiftIO = undefined
    ,ioDie = error
   }
-
+realCmd
+  :: (MonadError (GlobalError e s t n) m,MonadIO m)
+  => [Char]
+  -> [String]
+  -> m (String,String)
 realCmd cxx args = do
   prErr $ printf "$ %s %s" cxx $ unwords args
   (code,out,err) <- liftIO $ readProcessWithExitCode cxx args ""

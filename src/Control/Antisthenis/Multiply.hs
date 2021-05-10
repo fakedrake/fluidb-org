@@ -26,18 +26,12 @@
 
 module Control.Antisthenis.Multiply (MulTag) where
 
-import Control.Monad.Writer
 import Data.Proxy
-import Data.Utils.FixState
 import Control.Monad.Trans.Free
 import Data.Bifunctor
 import Control.Applicative
-import Control.Antisthenis.Test
 import Data.Utils.Monoid
 import Data.Utils.AShow
-import qualified Data.IntSet as IS
-import Control.Antisthenis.VarMap
-import Control.Monad.Reader
 import Data.Maybe
 import GHC.Generics
 import Data.Utils.Functors
@@ -46,7 +40,6 @@ import Data.Utils.Default
 import Control.Monad.Identity
 import Control.Antisthenis.AssocContainer
 import Control.Antisthenis.Types
-import Control.Antisthenis.Zipper
 
 
 data MulTag p v
@@ -128,7 +121,8 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
     where
       lackingResM = prModBnd' (`div` oldBnd) oldRes
   zLocalizeConf coepoch conf z =
-    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    trace "localize multiply"
+    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
       newCap = fromZ (prRes $ zRes z) $ case confCap conf of
@@ -244,6 +238,7 @@ mkMal [] (a:as) =
   MulAssocList { malHead = Just (Right a),malZ = [],malList = as }
 mkMal [] [] = MulAssocList { malHead = Nothing,malZ = [],malList = [] }
 
+#if 0
 assert :: MonadFail m => Bool -> m ()
 assert True = return ()
 assert False = fail "assertion failed"
@@ -271,3 +266,4 @@ mulTest =
       BndRes _ -> True
       _ -> False
     return res
+#endif

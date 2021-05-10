@@ -10,20 +10,12 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Control.Antisthenis.Sum (SumTag) where
 
+import Data.Utils.Debug
 import Data.Utils.AShow
-import Control.Monad.Writer hiding (Sum)
-import Data.Utils.FixState
 import Data.Proxy
-import Control.Monad.Reader
-import Data.Utils.Default
-import Data.Utils.Functors
-import Control.Antisthenis.Test
-import Control.Antisthenis.VarMap
-import qualified Data.IntSet as IS
 import Control.Monad.Trans.Free
 import Control.Antisthenis.Types
 import Data.Utils.Monoid
-import Control.Antisthenis.Zipper
 import Control.Antisthenis.AssocContainer
 
 data SumTag p v
@@ -69,7 +61,8 @@ instance (Ord v,Num v,ExtParams p,AShow (ExtEpoch p),AShow (ExtCoEpoch p))
   replaceRes oldBnd newBnd (oldRes,newZipper) =
     Just $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
   zLocalizeConf coepoch conf z =
-    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    trace "sum localize"
+    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
       newCap = case zRes z of

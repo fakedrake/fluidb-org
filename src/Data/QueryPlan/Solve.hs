@@ -14,6 +14,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Data.QueryPlan.Solve
   ( setNodeMaterialized

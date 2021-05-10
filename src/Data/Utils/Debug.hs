@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 module Data.Utils.Debug
   ( wrapTrace
+  , HasCallStack
   , wrapTraceShow
   , traceM
   , traceTM
@@ -17,6 +18,7 @@ module Data.Utils.Debug
   , ashow
   ) where
 
+import GHC.Stack
 import           Data.Utils.AShow
 import           Text.Printf
 #if ! defined(QUIET_MODE)

@@ -15,7 +15,6 @@ import Data.Utils.Functors
 import Data.Utils.Tup
 import Data.CppAst.CppType
 import Data.Utils.Hashable
-import Data.Utils.AShow
 import           Control.Applicative
 import           Control.Monad
 import           Data.Bifunctor
@@ -29,6 +28,7 @@ import           Data.CnfQuery.Types
 import           Data.CnfQuery.BuildUtils
 import           Data.NodeContainers
 import           Data.Query.QuerySchema
+
 
 -- | Create the T node and connect it to the inputs
 putBinCluster

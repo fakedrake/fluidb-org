@@ -16,7 +16,6 @@ import Data.List.Extra
 import Data.Utils.ListT
 import Data.Utils.Debug
 import Data.CnfQuery.BuildUtils
-import Data.Utils.Unsafe
 import Data.Utils.Functors
 import Data.Utils.Tup
 import Data.Utils.Hashable
@@ -24,7 +23,6 @@ import Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Query.Algebra
-import           Data.Utils.AShow
 import           Data.BipartiteGraph
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
@@ -65,15 +63,17 @@ mkJoinClustConfig
 mkJoinClustConfig p (lref,lncnfs,ql) (rref,rncnfs,qr) =
   fmap join
   $ (`evalStateT` (Nothing,Nothing,Nothing))
-  $ forM ((,) <$> lncnfs <*> rncnfs) $ \(lncnf,rncnf) ->
-  lift (ncnfJoinC p lncnf rncnf) >>= mapM (go lncnf rncnf)
+  $ forM ((,) <$> lncnfs <*> rncnfs)
+  $ \(lncnf,rncnf) -> lift (ncnfJoinC p lncnf rncnf)
+  >>= mapM (go lncnf rncnf)
   where
     go :: NCNFQueryI e s
        -> NCNFQueryI e s
-       -> NCNFResultI (Prop (Rel (Expr (CNFName e s, e)))) e s
-       -> StateT (Maybe (NodeRef n), Maybe (NodeRef n), Maybe (NodeRef n))
-       (CGraphBuilderT e s t n m)
-       (JoinClustConfig n e s)
+       -> NCNFResultI (Prop (Rel (Expr (CNFName e s,e)))) e s
+       -> StateT
+         (Maybe (NodeRef n),Maybe (NodeRef n),Maybe (NodeRef n))
+         (CGraphBuilderT e s t n m)
+         (JoinClustConfig n e s)
     go lncnf rncnf resO = do
       let p' = ncnfResOrig resO
           resLO = ncnfLeftAntijoin p' lncnf rncnf
@@ -94,21 +94,21 @@ mkJoinClustConfig p (lref,lncnfs,ql) (rref,rncnfs,qr) =
       refRO <- if ncnfToCnf ncnfLO == ncnfToCnf ncnfRO
         then modify (third3 $ const $ Just refLO) >> return refLO
         else cachedMkRef trd3 (third3 . const . Just) (ncnfToCnf ncnfRO)
-      return JoinClustConfig {
-        assocL=assocL,
-        assocR=assocR,
-        assocO=assocO,
-        jProp=fmap3 (uncurry mkPlanSym) p',
-        qrefLO=QRef refLO ncnfLO,
-        qrefO=QRef refO ncnfO,
-        qrefRO=QRef refRO ncnfRO,
-        qrefLI=QRef lref $ second (putIdentityCNFQ ql) lncnf,
-        qrefRI=QRef rref $ second (putIdentityCNFQ qr) rncnf
+      return
+        JoinClustConfig
+        { assocL = assocL
+         ,assocR = assocR
+         ,assocO = assocO
+         ,jProp = fmap3 (uncurry mkPlanSym) p'
+         ,qrefLO = QRef refLO ncnfLO
+         ,qrefO = QRef refO ncnfO
+         ,qrefRO = QRef refRO ncnfRO
+         ,qrefLI = QRef lref $ second (putIdentityCNFQ ql) lncnf
+         ,qrefRI = QRef rref $ second (putIdentityCNFQ qr) rncnf
         }
-    ncnfPutQ :: (Prop (Rel (Expr e)) -> BQOp e)
-                  -> NCNFQueryI e s
-                  -> NCNFQuery e s
-    ncnfPutQ cons = second $ putIdentityCNFQ $ Q2 (cons p) ql qr
+    ncnfPutQ
+      :: (Prop (Rel (Expr e)) -> BQOp e) -> NCNFQueryI e s -> NCNFQuery e s
+    ncnfPutQ constr = second $ putIdentityCNFQ $ Q2 (constr p) ql qr
     mkP :: (e,CNFCol e s) -> PlanSym e s
     mkP (e,col) = mkPlanSym (Column col 0) e
 

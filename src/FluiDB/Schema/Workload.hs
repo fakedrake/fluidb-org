@@ -240,7 +240,7 @@ forEachQuery modGCnf qios m =
 -- | Return the planned (not the actually run) cost and the nodes used
 -- for materialized
 runWorkloadCpp
-  :: forall e s t n m q a .
+  :: forall e s t n m q .
   (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
   => (GlobalConf e s t n -> GlobalConf e s t n)
   -> [q]
@@ -266,12 +266,12 @@ runWorkloadCpp modGCnf qios = forEachQuery modGCnf qios $ \i query -> do
   return (costTrigs,planFrontier trigs)
 
 runWorkloadEvals
-  :: forall e s t n m q a .
+  :: forall e s t n m q .
   (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
   => (GlobalConf e s t n -> GlobalConf e s t n)
   -> [q]
   -> m [[Evaluation e s t n [CNFQuery e s]]]
-runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \i query -> do
+runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query -> do
   sqlToSolution query (return . head)
     $ dropReader (lift2 askStates)
     $ getEvaluations

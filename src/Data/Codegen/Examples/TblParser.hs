@@ -14,7 +14,7 @@ module Data.Codegen.Examples.TblParser
 
 import Data.Query.QuerySchema.Types
 import qualified Data.ByteString.Lazy              as BS
-import qualified Data.ByteString.Lazy.Builder      as BSB
+import qualified Data.ByteString.Builder      as BSB
 import qualified Data.ByteString.Lazy.Char8        as BSC
 import           GHC.Int
 import           GHC.Word

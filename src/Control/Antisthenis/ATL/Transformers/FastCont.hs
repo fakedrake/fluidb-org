@@ -59,6 +59,7 @@ instance ArrowApply c => ArrowApply (ContArrow r c) where
   app = ContArrow $ \cr -> proc (ContArrow crbr,b) -> app -< (crbr cr,b)
   {-# INLINE app #-}
 
+#if 0
 arrCallCC'
   :: ArrowApply c => ContArrow r c (c (c a r) a) a
 arrCallCC' = ContArrow $ \exit -> proc body -> app -< (body >>> exit,exit)
@@ -67,6 +68,7 @@ arrCallCC0
   :: ArrowApply c => ContArrow r c (ContArrow r c (ContArrow r c a r) a) a
 arrCallCC0 = ContArrow $ \exit
   -> proc (ContArrow body) -> app -< (body exit,ContArrow $ \_ -> exit)
+#endif
 
 -- NO WRITER INSTANCE DUE TO arrListen
 

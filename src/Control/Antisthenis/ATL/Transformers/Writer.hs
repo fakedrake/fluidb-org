@@ -15,7 +15,6 @@ import Data.Profunctor
 import           Control.Arrow
 import           Control.Category
 import           Data.Functor.Identity
-import           Data.Monoid
 import           Control.Antisthenis.ATL.Class.Bind
 import           Control.Antisthenis.ATL.Class.Machine
 import           Control.Antisthenis.ATL.Class.State
@@ -95,20 +94,6 @@ instance (Monoid w,ArrowMachine c) => ArrowMachine (WriterArrow w c) where
   untelescope (WriterArrow c) = WriterArrow $ untelescope $ proc a -> do
     (w,(WriterArrow nxt,b)) <- c -< a
     returnA -< (nxt,(w,b))
-
-class IsPair x where
-  type PairL x :: *
-  type PairR x :: *
-  toPair :: x -> (PairL x,PairR x)
-  fromPair :: (PairL x,PairR x) -> x
-instance IsPair (l,r) where
-  type PairL (l,r) = l
-  type PairR (l,r) = r
-  toPair = id
-  {-# INLINE toPair #-}
-  fromPair = id
-  {-# INLINE fromPair #-}
-
 
 instance Profunctor c => Profunctor (WriterArrow w c) where
   dimap f g (WriterArrow c) =

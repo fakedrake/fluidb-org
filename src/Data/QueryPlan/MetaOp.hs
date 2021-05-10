@@ -15,7 +15,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# OPTIONS_GHC -Wno-name-shadowing -Wno-unused-top-binds #-}
+{-# OPTIONS_GHC -Wno-name-shadowing -Wno-unused-top-binds -Wno-deprecations #-}
 
 
 module Data.QueryPlan.MetaOp
