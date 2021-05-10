@@ -19,12 +19,9 @@
 
 module Control.Antisthenis.Evolve (Ev,runEv,mealyToEv,evToMealy) where
 
-import Control.Monad.Trans.Free
 import Control.Arrow
 import Control.Antisthenis.ATL.Transformers.Mealy
 import Control.Monad.Reader
-import Control.Antisthenis.Types
-import Control.Antisthenis.Zipper
 
 -- | [Ev] An evolving process that has multiple ways of progressing
 -- captured by cmd.

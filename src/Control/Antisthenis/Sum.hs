@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -10,9 +11,8 @@
 module Control.Antisthenis.Sum (SumTag) where
 
 import Data.Utils.AShow
-import Control.Monad.Writer hiding (Sum,Min)
+import Control.Monad.Writer hiding (Sum)
 import Data.Utils.FixState
-import Data.Utils.Debug
 import Data.Proxy
 import Control.Monad.Reader
 import Data.Utils.Default
@@ -113,6 +113,8 @@ sumEvolutionStrategy fin = recur
         CmdFinished (ExZipper z) -> return
           (fin,either BndErr (\(Min x) -> BndRes $ Sum x) $ zRes z)
 
+
+#if 0
 sumToMin :: Sum v -> Min v
 sumToMin (Sum v) = Min v
 minToSum :: Min v -> Sum v
@@ -135,3 +137,4 @@ sumTest =
     insTrail k tr =
       if k `IS.member` tr then Left $ ErrCycle k tr else Right $ IS.insert k tr
     getMech i = withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
+#endif

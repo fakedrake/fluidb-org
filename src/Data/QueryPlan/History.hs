@@ -1,10 +1,7 @@
-module Data.QueryPlan.History () where
+module Data.QueryPlan.History (futureCost,expectedCost) where
 
-import Data.Utils.FixState
-import Control.Antisthenis.Sum
 import Data.NodeContainers
 import Control.Monad.Reader
-import Control.Monad
 import Data.QueryPlan.Types
 
 -- | The expected cost of the next query.
@@ -18,4 +15,4 @@ futureCost = do
 -- | Incrementally compute the expected cost of a node. Lookup the
 -- arrow. If you can't find it, create and insert it. Then run it.
 expectedCost :: NodeRef n -> PlanT t n m Cost
-expectedCost ref = _
+expectedCost = undefined

@@ -23,9 +23,12 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 
 module Control.Antisthenis.Types
-  (Err(..)
+  (IndexErr(..)
+  ,runArrProc
+  ,Err
   ,ArrProc'
   ,NoArgError(..)
   ,ExtParams(..)
@@ -55,6 +58,7 @@ module Control.Antisthenis.Types
   ,AShowW
   ,ashowZ') where
 
+import Data.Utils.OptSet
 import Data.Proxy
 import Control.Antisthenis.ATL.Transformers.Moore
 import Control.Antisthenis.ATL.Transformers.Writer
@@ -65,7 +69,6 @@ import Control.Monad.Trans.Free
 import Control.Antisthenis.AssocContainer
 import Control.Arrow hiding (first,second)
 import Control.Antisthenis.ATL.Transformers.Mealy
-import qualified Data.IntSet as IS
 import GHC.Generics
 import Data.Utils.AShow
 import Data.Utils.Default
@@ -83,15 +86,15 @@ type InitProc a = a
 type ItProc a = a
 type CoitProc a = a
 
-data Err
-  = ErrMissing Int
-  | ErrCycle Int IS.IntSet
+-- | Error related to indexes
+data IndexErr i
+  = ErrMissing i
+  | ErrCycle i (OptSet i)
   | NoArguments
-  deriving (Generic,Show)
-instance AShow Err
-
-
-
+  deriving Generic
+instance (AShow i,AShow (OptSet i))
+  => AShow (IndexErr i)
+type Err = IndexErr Int
 
 -- | Either provide a meaningful reset command or delegate to a the
 -- previous reset branch.
@@ -196,15 +199,6 @@ class (KeyAC (ZItAssoc w) ~ ZBnd w
   -- | From the configuration that is global to the op make the local
   -- one to be propagated to the next argument process.β
   zLocalizeConf :: ZCoEpoch w -> GConf w -> Zipper w p -> MayReset (LConf w)
-  default zLocalizeConf
-    :: forall c p v .
-    (w ~ c p v,ZEpoch w ~ ExtEpoch p,ZCoEpoch (c p v) ~ ExtCoEpoch p)
-    => ZCoEpoch w
-    -> GConf w
-    -> Zipper w p
-    -> MayReset (LConf w)
-  zLocalizeConf = undefined
-
 
 data BndR w
   = BndErr (ZErr w)
@@ -222,7 +216,6 @@ type ArrProc w m =
   MealyArrow (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
 type ArrProc' w m =
   MooreCat (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
-pattern ArrProc c = MealyArrow (WriterArrow (Kleisli c))
 
 data Conf w = Conf { confCap :: Cap (ZCap w),confEpoch :: ZEpoch w }
   deriving Generic
@@ -298,5 +291,10 @@ class Monoid (ExtCoEpoch p) => ExtParams p where
 class NoArgError e where
   noArgumentsError :: e
 
-instance NoArgError Err where
+instance NoArgError (IndexErr i) where
   noArgumentsError = NoArguments
+
+pattern ArrProc c = MealyArrow (WriterArrow (Kleisli c))
+runArrProc :: ArrProc w m -> LConf w -> m (ZCoEpoch w,(ArrProc w m,BndR w))
+runArrProc (ArrProc p) conf = p conf
+runArrProc _ _ = error "unreachable"

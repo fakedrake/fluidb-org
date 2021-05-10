@@ -26,6 +26,8 @@
 
 module Control.Antisthenis.Multiply (MulTag) where
 
+import Control.Monad.Writer
+import Data.Proxy
 import Data.Utils.FixState
 import Control.Monad.Trans.Free
 import Data.Bifunctor
@@ -93,10 +95,6 @@ prSetResErr e pr@PartialResMul {prRes = Just (Right (Mul 0 _))} =
 prSetResErr _ pr@PartialResMul {prRes = Just (Right _)} = pr
 prSetResErr e pr = pr { prRes = Just $ Left e }
 
-instance (Integral a,Eq a,AShow a,Monad m,Ord (ExtEpoch p))
-  => ZipperMonad (MulTag p a) m where
-  zCmpEpoch _ a b = return $ a < b
-
 instance BndRParams (MulTag p a) where
   type ZBnd (MulTag p a) = Mul a
 
@@ -104,23 +102,21 @@ instance BndRParams (MulTag p a) where
 
   type ZErr (MulTag p a) = ExtError p
 
-instance (AShow a,Eq a,Num a,Integral a) => ZipperParams (MulTag p a) where
-
+instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
+  => ZipperParams (MulTag p a) where
   type ZEpoch (MulTag p a) = ExtEpoch p
-
   type ZCoEpoch (MulTag p a) = ExtCoEpoch p
-
   type ZCap (MulTag p a) = Mul a
-
-  type ZItAssoc (MulTag p a) = MulAssocList Maybe (Mul a)
-
-  type ZPartialRes (MulTag p a) = PartialResMul (MulTag p a)
-
+  type ZItAssoc (MulTag p a) =
+    MulAssocList Maybe (Mul a)
+  type ZPartialRes (MulTag p a) =
+    PartialResMul (MulTag p a)
   zprocEvolution =
-    ZProcEvolution { evolutionControl = mulSolution
-                   , evolutionStrategy = mulStrategy
-                   , evolutionEmptyErr = undefined}
-
+    ZProcEvolution
+    { evolutionControl = mulSolution
+     ,evolutionStrategy = mulStrategy
+     ,evolutionEmptyErr = undefined
+    }
   putRes newBnd (oldRes,newZipper) = newZipper <&> \() -> case newBnd of
     BndBnd x -> prModBnd (x,(* x)) oldRes
     BndRes x@(Mul 0 _) -> prModRes (x,(* x)) oldRes
@@ -131,7 +127,9 @@ instance (AShow a,Eq a,Num a,Integral a) => ZipperParams (MulTag p a) where
     return $ putRes newBnd (lackingRes,newZipper)
     where
       lackingResM = prModBnd' (`div` oldBnd) oldRes
-  zLocalizeConf conf z = conf { confCap = newCap, confEpoch = _ }
+  zLocalizeConf coepoch conf z =
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    $ conf { confCap = newCap }
     where
       newCap = fromZ (prRes $ zRes z) $ case confCap conf of
         Cap c -> case zRes z of
@@ -142,7 +140,7 @@ instance (AShow a,Eq a,Num a,Integral a) => ZipperParams (MulTag p a) where
           PartialResMul {prBnd = Just bnd,prRes = Nothing} -> Cap $ c `div` bnd
           _ -> MinimumWork
         x -> x
-      fromZ  r x = case r of
+      fromZ r x = case r of
         Just (Left _) -> MinimumWork
         Just (Right (Mul 0 _)) -> x
         Just (Right _is_zero) -> trace "Found zero" DoNothing -- HERE WE BLOCK ON ZERO
@@ -253,17 +251,23 @@ assert False = fail "assertion failed"
 -- | TESTING
 mulTest
   :: IO (BndR (MulTag TestParams Integer))
-mulTest = fmap fst $ (`runReaderT` mempty) $ (`runFixStateT` def) $ do
-  putMech 1 $ incrTill "1" ((+ 1),id) $ Cap 3
-  putMech 2 $ incrTill "B" ((+ 1),id) $ Cap 3
-  putMech 3 $ zeroAfter 4
-  let insTrail k tr =
-        if k `IS.member` tr
-        then Left $ ErrCycle k tr else Right $ IS.insert k tr
-  let getMech i = withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
-  res <- runMech (mkProc $ getMech <$> [1,2,3]) def
-  lift2 $ putStrLn $ "Result is: " ++ ashow res
-  assert $ case res of
-    BndRes _ -> True
-    _ -> False
-  return res
+mulTest =
+  fmap (fst . fst)
+  $ (`runReaderT` mempty)
+  $ (`runFixStateT` def)
+  $ runWriterT
+  $ do
+    putMech 1 $ incrTill "1" ((+ 1),id) 3
+    putMech 2 $ incrTill "B" ((+ 1),id) 3
+    putMech 3 $ zeroAfter 4
+    let insTrail k tr =
+          if k `IS.member` tr
+          then Left $ ErrCycle k tr else Right $ IS.insert k tr
+    let getMech i =
+          withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
+    res <- runMech (mkProc $ getMech <$> [1,2,3]) def
+    lift3 $ putStrLn $ "Result is: " ++ ashow res
+    assert $ case res of
+      BndRes _ -> True
+      _ -> False
+    return res

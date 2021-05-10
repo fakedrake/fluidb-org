@@ -25,11 +25,21 @@ import           Data.Utils.Hashable
 import           GHC.Generics
 
 
-data Cost =
-  Cost { costReads  :: Int
-        ,costWrites :: Int
-       }
+data Cost = Cost { costReads :: Int,costWrites :: Int }
   deriving (Show,Eq,Generic)
+
+-- XXX: Here we are INCONSISTENT in assuming that reads and writes
+-- cost the same.
+instance Ord Cost where
+  compare (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
+instance Num Cost where
+  signum (Cost a b) = Cost (signum a) (signum b)
+  abs (Cost a b) = Cost (abs a) (abs b)
+  fromInteger x = Cost (fromInteger x) (fromInteger x)
+  Cost a b + Cost a' b' = Cost (a + a') (b + b')
+  Cost a b - Cost a' b' = Cost (a - a') (b - b')
+  Cost a b * Cost a' b' = Cost (a * a') (b * b')
+
 instance AShow Cost
 instance Semigroup Cost where
   c1 <> c2 =
@@ -40,7 +50,6 @@ instance Monoid Cost where
   mempty = Cost  0 0
 costAsInt :: Cost -> Int
 costAsInt Cost{..} = costReads + costWrites * 10
-
 
 data GCCache mop t n =
   GCCache { materializedMachines  :: RefMap n ()

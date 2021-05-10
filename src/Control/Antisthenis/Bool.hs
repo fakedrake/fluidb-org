@@ -13,15 +13,15 @@
 module Control.Antisthenis.Bool
   (interpretBExp) where
 
+import Control.Monad.Writer
+import Control.Antisthenis.ATL.Class.Functorial
+import Data.Proxy
 import Data.Utils.FixState
-import Data.Char
 import qualified Data.IntSet as IS
 import Control.Antisthenis.Test
 import Data.Utils.Debug
 import Data.Utils.Functors
-import Control.Antisthenis.Test
 import Control.Antisthenis.ATL.Transformers.Mealy
-import Control.Arrow
 import Control.Monad.State
 import qualified Data.IntMap as IM
 import Control.Monad.Reader
@@ -122,7 +122,7 @@ elemType =
 -- non-absorbings  = sum the non-absorbing iterations
 -- absorbings  = min of the absorbing iterations
 zBound :: BoolOp op
-       => Zipper (BoolTag op) (ArrProc (BoolTag op) m)
+       => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
        -> Maybe (BoolBound op)
 zBound z = do
   absorb <- assocMinCost $ bgsIts bgs
@@ -138,7 +138,7 @@ zBound z = do
 
 -- | It is finished if the result is absorbing or if the inits and its
 -- are empty.
-zFinished :: BoolOp op => Zipper (BoolTag op) (ArrProc (BoolTag op) m) -> Bool
+zFinished :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
 zFinished z = case zRes z of
   Just (Right x) -> case elemType x of
     AbsorbingElem -> True
@@ -172,9 +172,9 @@ instance BoolOp And where
 -- never.
 combBoolBndR
   :: BoolOp op
-  => BndR (BoolTag op)
-  -> Either (ZErr (BoolTag op)) (ZRes (BoolTag op))
-  -> Either (ZErr (BoolTag op)) (ZRes (BoolTag op))
+  => BndR (BoolTag op p)
+  -> Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p))
+  -> Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p))
 combBoolBndR newRes oldRes = trace "combining" $ case (newRes,oldRes) of
   (BndRes r,Left e) -> case elemType r of
     AbsorbingElem -> Right r
@@ -211,7 +211,7 @@ instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
   type NonEmptyAC (CountingAssoc [] Maybe a) =
     CountingAssoc NEL.NonEmpty Identity a
   acInsert k v cass =
-    CountingAssoc`x`
+    CountingAssoc
     { assocMinKey = Identity $ maybe k (min k) $ assocMinKey cass
      ,assocSize = assocSize cass + 1
      ,assocData = acInsert k v $ assocData cass
@@ -234,23 +234,19 @@ instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
      ,assocData = acUnlift $ assocData cass
     }
 
-instance (Monad m,ZipperParams (BoolTag a))
-  => ZipperMonad (BoolTag a) m where
-  zCmpEpoch _ a b = return $ a < b
+data BoolTag op p
+instance BndRParams (BoolTag op p) where
+  type ZErr (BoolTag op p) = Err
+  type ZBnd (BoolTag op p) = BoolBound op
+  type ZRes (BoolTag op p) = BoolV op
 
-
-data BoolTag op
-instance BndRParams (BoolTag op) where
-  type ZErr (BoolTag op) = Err
-  type ZBnd (BoolTag op) = BoolBound op
-  type ZRes (BoolTag op) = BoolV op
-
-instance (BoolOp op) => ZipperParams (BoolTag op) where
-  type ZEpoch (BoolTag op) = Int
-  type ZCap (BoolTag op) = BoolBound op
-  type ZPartialRes (BoolTag op) =
-    Maybe (Either (ZErr (BoolTag op)) (ZRes (BoolTag op)))
-  type ZItAssoc (BoolTag op) =
+instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
+  type ZEpoch (BoolTag op p) = ExtEpoch p
+  type ZCoEpoch (BoolTag op p) = ExtCoEpoch p
+  type ZCap (BoolTag op p) = BoolBound op
+  type ZPartialRes (BoolTag op p) =
+    Maybe (Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p)))
+  type ZItAssoc (BoolTag op p) =
     CountingAssoc [] Maybe (BoolBound op)
   zprocEvolution =
     ZProcEvolution
@@ -272,9 +268,9 @@ instance (BoolOp op) => ZipperParams (BoolTag op) where
     oldRes' <- oldRes
     return $ (\() -> Just $ combBoolBndR newBnd oldRes') <$> newZipper
   -- | As a cap use the minimum bound.
-  -- XXX: revisit this
-  zLocalizeConf conf z =
-    conf { confEpoch = _,confCap = maybe (confCap conf) Cap $ do
+  zLocalizeConf coepoch conf z =
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    $ conf { confCap = maybe (confCap conf) Cap $ do
       bnd <- assocMinKey $ bgsIts $ zBgState z
       gcap <- case confCap conf of
         Cap cap -> Just cap
@@ -287,11 +283,11 @@ boolEvolutionStrategy
   => x
   -> FreeT
     (ItInit
-       (ExZipper (BoolTag op))
-       (CountingAssoc [] Maybe (ZBnd (BoolTag op))))
+       (ExZipper (BoolTag op p))
+       (CountingAssoc [] Maybe (ZBnd (BoolTag op p))))
     m
-    (x,BndR (BoolTag op))
-  -> m (x,BndR (BoolTag op))
+    (x,BndR (BoolTag op p))
+  -> m (x,BndR (BoolTag op p))
 boolEvolutionStrategy fin = recur
   where
     recur (FreeT m) = m >>= \case
@@ -307,11 +303,11 @@ boolEvolutionStrategy fin = recur
 -- | Return Just when we have a result the could be the restult of the
 -- poperator. This decides when to stop working.
 boolEvolutionControl
-  :: forall op m .
+  :: forall op m p .
   (Ord (BoolBound op),Monad m,BoolOp op)
-  => GConf (BoolTag op)
-  -> Zipper (BoolTag op) (ArrProc (BoolTag op) m)
-  -> Maybe (BndR (BoolTag op))
+  => GConf (BoolTag op p)
+  -> Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
+  -> Maybe (BndR (BoolTag op p))
 boolEvolutionControl conf z = case confCap conf of
   WasFinished -> return $ BndErr undefined
   DoNothing -> localRes
@@ -328,14 +324,14 @@ boolEvolutionControl conf z = case confCap conf of
         z then either BndErr BndRes <$> zRes z else BndBnd <$> zBound z
 
 zLocalIsFinal
-  :: BoolOp op => Zipper (BoolTag op) (ArrProc (BoolTag op) m) -> Bool
+  :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
 zLocalIsFinal z = zIsAbsorbing z || (zEmptyInits z && zEmptyIts z)
-zEmptyInits :: Zipper (BoolTag op) (ArrProc (BoolTag op) m) -> Bool
+zEmptyInits :: Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
 zEmptyInits = null . bgsInits . zBgState
-zEmptyIts :: Zipper (BoolTag op) (ArrProc (BoolTag op) m) -> Bool
+zEmptyIts :: Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
 zEmptyIts = isNothing . acNonEmpty . bgsIts . zBgState
 zIsAbsorbing
-  :: BoolOp op => Zipper (BoolTag op) (ArrProc (BoolTag op) m) -> Bool
+  :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
 zIsAbsorbing z = case zRes z of
   Just (Right r) -> case elemType r of
     AbsorbingElem -> True
@@ -345,9 +341,9 @@ zIsAbsorbing z = case zRes z of
 -- | The problem is that there is no w type in Conf w, just ZCap w so
 -- we need to translate Conf w into a functor of ZCap w. This can be
 -- done via generics. Then we can coerce without any problems.
-convBool :: Monad m => ArrProc (BoolTag op) m -> ArrProc (BoolTag op') m
+convBool :: Monad m => ArrProc (BoolTag op p) m -> ArrProc (BoolTag op' p) m
 convBool = dimap (to . coerce . from) (to . coerce . from)
-notBool :: Monad m => ArrProc (BoolTag op) m -> ArrProc (BoolTag op) m
+notBool :: Monad m => ArrProc (BoolTag op p) m -> ArrProc (BoolTag op p) m
 notBool = rmap $ \case
   BndRes r -> BndRes $ flipB r
   BndBnd r -> BndBnd $ flipB r
@@ -367,19 +363,20 @@ data BExp
 -- | Each constructor is a mech except for Let. Closures are not
 -- trivial to implement here
 interpretBExp
-  :: forall m .
-  (MonadState (ProcMap (BoolTag AnyOp) m) m
-  ,MonadReader (IS.IntSet,IM.IntMap Bool) m)
+  :: forall m p .
+  (MonadState (ProcMap (BoolTag AnyOp p) m) m
+  ,MonadReader (IS.IntSet,IM.IntMap Bool) m
+  ,ExtParams p)
   => BExp
-  -> ArrProc (BoolTag AnyOp) m
+  -> ArrProc (BoolTag AnyOp p) m
 interpretBExp = recur
   where
-    recur :: BExp -> ArrProc (BoolTag AnyOp) m
+    recur :: BExp -> ArrProc (BoolTag AnyOp p) m
     recur = \case
       e :/\: e' -> convAnd $ mkProc $ convBool . recur <$> [e,e']
       e :\/: e' -> convOr $ mkProc $ convBool . recur <$> [e,e']
       BNot e -> notBool $ recur e
-      BLVar k -> mealyLift $ Kleisli $ const $ asks $ \(_trail,m) -> maybe
+      BLVar k -> mealyLift $ fromKleisli $ const $ asks $ \(_trail,m) -> maybe
         (BndErr $ error $ "Failed to dereference value key: " ++ ashow (k,m))
         (BndRes . fromBool)
         $ IM.lookup k m
@@ -390,16 +387,19 @@ interpretBExp = recur
     handleCycles k = withTrail $ \(trail,vals) -> if k `IS.member` trail
       then Left $ ErrCycle k trail else Right (IS.insert k trail,vals)
     fromBool c = GBool { gbTrue = Exists c,gbFalse = Exists $ not c }
-    convOr :: ArrProc (BoolTag Or) m -> ArrProc (BoolTag op) m
+    convOr :: ArrProc (BoolTag Or p) m -> ArrProc (BoolTag op p) m
     convOr = convBool
-    convAnd :: ArrProc (BoolTag And) m -> ArrProc (BoolTag op) m
+    convAnd :: ArrProc (BoolTag And p) m -> ArrProc (BoolTag op p) m
     convAnd = convBool
 
--- OOPS: trrue && error should be error. The problem is that the
--- zipper is loosing a result elements.
-test :: BndR (BoolTag AnyOp)
+test :: BndR (BoolTag AnyOp TestParams)
 test =
-  fst $ (`runReader` (mempty,IM.fromList vars)) $ (`runFixStateT` vaexprs) $ do
+  fst
+  $ fst
+  $ (`runReader` (mempty,IM.fromList vars))
+  $ (`runFixStateT` vaexprs)
+  $ runWriterT
+  $ do
     runMech (interpretBExp $ BEVar 1) def
   where
     vaexprs = VarMap (IM.fromList $ fmap2 interpretBExp exprs)

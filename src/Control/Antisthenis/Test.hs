@@ -58,7 +58,7 @@ incrTill name (step,asRes) cap = mkMealy $ recur $ BndBnd 0
         else recurGuarded (incr cntr) conf'
     recurGuarded res conf = case confCap conf of
       WasFinished -> error "We should have finished"
-      Cap c -> error "The cap is static.."
+      Cap _c -> error "The cap is static.."
       MinimumWork -> recur res conf
       ForceResult -> finishMB $ BndRes $ asRes $ finalRes
       DoNothing -> do
@@ -77,7 +77,7 @@ zeroAfter
   => Int
   -> ArrProc w m
 zeroAfter i = mkMealy $ const $ do
-  forM_ [1 :: Int .. 4] $ \x -> do
+  forM_ [1 :: Int .. i] $ \x -> do
     let bnd = BndBnd 0 :: BndR w
     traceM $ "[Zero] Yielding(" ++ show x ++ "): " ++ ashow bnd
     yieldMB bnd
@@ -112,7 +112,7 @@ data TestParams
 instance ExtParams TestParams where
   type ExtEpoch TestParams = Int
   type ExtCoEpoch TestParams = Min Int
-  type ExtError TestParams = Err
+  type ExtError TestParams = IndexErr Int
   -- | If we create
   extCombEpochs _ coe e a =
     if coe < Min (Just e) then ShouldReset else DontReset a

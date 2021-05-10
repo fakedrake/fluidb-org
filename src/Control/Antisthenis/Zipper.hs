@@ -65,9 +65,6 @@ type ZCat w m =
     (Zipper w (ArrProc w m))
 
 
-runArrProc :: ArrProc w m -> LConf w -> m (ZCoEpoch w,(ArrProc w m,BndR w))
-runArrProc (ArrProc p) conf = p conf
-
 -- | Build an evolving zipper. Provided a local conf this zipper may
 -- rotated towards any (allowed) direction. After each rotation the
 -- allowed directions are encapsulated in the return type. It is in

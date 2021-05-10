@@ -70,6 +70,7 @@ module Data.NodeContainers
   , nsFold
   ) where
 
+import Data.Utils.OptSet
 import           Control.Arrow            (first, (***))
 import           Control.Monad.Identity
 import           Data.Char
@@ -334,3 +335,4 @@ formatStringC fmtC x ufmt =
 
 instance PrintfArg (NodeRef a) where
   formatArg x = formatStringC 'n' $ show x
+type instance OptSet (NodeRef n) = NodeSet n

@@ -170,10 +170,10 @@ findMetaOps' ref = do
     $ forM mops $ (\op -> (op,) <$> metaOpNeededPages op)
 
 findCostedMetaOps :: Monad m => NodeRef n -> PlanT t n m [(MetaOp t n,Cost)]
-findCostedMetaOps = memM (getMetaOpCache,putMetaOpCache)
-  $ \ref -> findMetaOps' ref
-           >>= fmap (sortOn (costAsInt . snd))
-           . mapM (\mop -> (mop,) <$> metaOpCost [ref] mop)
+findCostedMetaOps = memM (getMetaOpCache,putMetaOpCache) $ \ref -> do
+  mops <- findMetaOps' ref
+  costedMops <- mapM (\mop -> (mop,) <$> metaOpCost [ref] mop) mops
+  return $ sortOn (costAsInt . snd) costedMops
 
 memM :: Monad m => (a -> m (Maybe b),a -> b -> m ()) -> (a -> m b) -> a -> m b
 memM (get',put') fn a = get' a >>= \case
@@ -219,8 +219,8 @@ findOnOut :: Monad m =>
           -> PlanT t n m [(InSet n, OutSet n, NodeRef t)]
 findOnOut = findOnSide (fullRange, fullRange) . getNodeLinksR' Inp fullRange
 
-findTriggerableMetaOps :: forall n t m . MonadLogic m =>
-                         NodeRef n -> PlanT t n m [MetaOp t n]
+findTriggerableMetaOps
+  :: forall n t m . MonadLogic m => NodeRef n -> PlanT t n m [MetaOp t n]
 findTriggerableMetaOps n = do
   hbM <- getHardBudget
   filterM (canTrigger hbM) =<< findMetaOps n

@@ -41,6 +41,13 @@ module Data.QueryPlan.Types
   ,hoistPlanT
   ,costAsInt
   ,Count
+  ,NodeProc
+  ,NTrail
+  ,PlanParams
+  ,SumTag
+  ,NodeProc0
+  ,NodeProcSt(..)
+  ,DSet(..)
   ,bot
   ,top
   ,runPlanT'
@@ -49,16 +56,14 @@ module Data.QueryPlan.Types
   ,mplusPlanT) where
 
 
-import Control.Arrow
-import Control.Antisthenis.ATL.Transformers.Mealy
-import Data.Utils.Compose
-import Control.Monad.Writer
+import Control.Antisthenis.Sum
+import Data.Utils.Monoid
 import Control.Antisthenis.Types
-import Data.Utils.FixState
+import Control.Monad.Identity
+import Data.NodeContainers
+import Control.Monad.Writer hiding (Sum)
 import           Control.Applicative
-import           Control.Monad.Cont
 import           Control.Monad.Except
-import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
@@ -70,8 +75,6 @@ import           Data.IntMap               (Key)
 import           Data.List
 import qualified Data.List.NonEmpty        as NEL
 import           Data.Maybe
-import           Data.Monoid
-import           Data.NodeContainers
 import           Data.Query.QuerySize
 import           Data.QueryPlan.CostTypes
 import           Data.String
@@ -136,6 +139,7 @@ provenanceAsBool = \case
 
 data GCState t n = GCState {
   frontier          :: NodeSet n,
+  gcMechMap         :: RefMap n (NodeProc t n (SumTag (PlanParams n) Cost)),
   gcCache           :: GCCache (MetaOp t n) t n,
   epochs            :: NEL.NonEmpty (GCEpoch t n),
 #ifdef GHCI
@@ -417,3 +421,38 @@ instance Hashable (MetaOp t n) where
 instance Eq (MetaOp t n) where
   a == b = mopTriple a == mopTriple b
   {-# INLINE (==) #-}
+
+
+-- Node procs
+-- | A map containing all the proc maps. Mutually recursive with the
+-- proc itself.
+data NodeProcSt n w =
+  NodeProcSt
+  { -- npsProcs :: RefMap n (ArrProc w m)
+   npsTrail :: NTrail n
+  } deriving Generic
+instance Default (NodeProcSt n w)
+
+type NTrail = NodeSet
+-- for example ZEpoch v == RefMap n IsMat
+type NodeProc t n w = NodeProc0 t n w w
+type NodeProc0 t n w0 w =
+  ArrProc w (StateT (NodeProcSt n w0) (PlanT t n Identity))
+
+data PlanParams n
+
+instance ExtParams (PlanParams n) where
+  type ExtError (PlanParams n) = IndexErr (NodeRef n)
+  type ExtEpoch (PlanParams n) = RefMap n Bool
+  type ExtCoEpoch (PlanParams n) = RefMap n Bool
+  -- | When the coepoch is older than the epoch we must reset and get
+  -- a fresh value for the process. Otherwise the progress made so far
+  -- towards a value is valid and we should continue from there.
+  extCombEpochs _ coepoch epoch a =
+    if and $ refIntersectionWithKey (const (==)) coepoch epoch
+    then ShouldReset else DontReset a
+
+-- | depset has a constant part that is the cost of triggering and a
+-- variable part.
+data DSet t n p v =
+  DSet { dsetConst :: Sum v,dsetNeigh :: [NodeProc t n (SumTag p v)] }

@@ -32,6 +32,8 @@ module Data.QueryPlan.Solve
   , isDeletable
   ) where
 
+import Control.Antisthenis.Types
+import Data.QueryPlan.NodeProc
 import           Control.Monad.Cont
 import           Control.Monad.Except
 import           Control.Monad.Extra
@@ -114,17 +116,19 @@ haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
   modify $ \gcs -> gcs{
     frontier=nsDelete matRef (frontier gcs) <> metaOpIn mop}
-  cost <- metaOpCost [matRef] mop
-  haltPlanCost $ fromIntegral $ costAsInt cost
+  extraCost <- metaOpCost [matRef] mop
+  haltPlanCost $ fromIntegral $ costAsInt extraCost
 
 haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
-haltPlanCost cost = do
+haltPlanCost concreteCost = do
   frefs <- toNodeList . frontier <$> get
-  star :: Double <- sum <$> mapM getAStar frefs
-  histCost <- sum <$> expectedHistoricalCosts
-  -- let histCost = 0
-  trM $ printf "Halt%s: %s" (show frefs) $ show (cost,star,histCost)
-  halt $ PlanSearchScore cost (Just $ star + histCost)
+  -- star :: Double <- sum <$> mapM getAStar frefs
+  star :: Double <- sum . fmap (maybe 0 (fromIntegral . costAsInt))
+    <$> mapM (getCost ForceResult) frefs
+  -- histCost <- sum <$> expectedHistoricalCosts
+  let histCost = 0
+  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCost)
+  halt $ PlanSearchScore concreteCost (Just $ star + histCost)
   trM "Resume!"
 
 -- | Make a plan for a node to be concrete.

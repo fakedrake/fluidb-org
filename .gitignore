@@ -1,4 +1,5 @@
 .stack-work/
 fluidb.cabal
 stack.yaml.lock
+.dir-locals.el
 tags
