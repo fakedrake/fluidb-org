@@ -72,7 +72,10 @@ convArrProc conv = dimap (convConf conv) (convBndR conv)
 
 convConf :: Conv w w' -> Conf w' -> Conf w
 convConf Conv {..} Conf {..} =
-  Conf { confEpoch = convEpoch confEpoch,confCap = convCap <$> confCap }
+  Conf { confEpoch = convEpoch confEpoch
+        ,confCap = convCap <$> confCap
+        ,confTrPref = confTrPref
+       }
 
 convBndR :: Conv w w' -> BndR w -> BndR w'
 convBndR Conv{..} = \case

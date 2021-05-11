@@ -205,13 +205,6 @@ instance (AShow a
         Just (minBnd,_) -> conf { confCap = Cap minBnd }
         Nothing -> conf { confCap = MinimumWork }
 
-
-ashowRes :: AShow (ZRes w) => BndR w -> String
-ashowRes = ashow . \case
-  BndRes r -> ashow' r
-  BndErr _ -> Sym "<error>"
-  BndBnd _ -> Sym "<bound>"
-
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
 -- the zipper should keep evolving to get to a proper resilt.
@@ -222,7 +215,7 @@ deriveOrdSolution
   -> BndR (MinTag p v)
   -> Maybe (BndR (MinTag p v))
 deriveOrdSolution conf res = case confCap conf of
-  WasFinished -> Just $ trace ("reusing solution: " ++ ashowRes res) res
+  WasFinished -> Just $ trace ("reusing solution: " ++ ashowRes ashow' res) res
   DoNothing -> Just res
   MinimumWork -> Just res
   ForceResult -> case res of
@@ -278,14 +271,14 @@ minStrategy
 minStrategy fin = recur
   where
     recur (FreeT m) = m >>= \case
-      Pure a -> return $ trace "Found value" a
-      Free
-        f -> trace ("Strategic options: " ++ ashow (ashowItInit f)) $ case f of
-        CmdItInit _it ini -> recur ini
-        CmdIt it -> recur $ it $ popMinAssocList
-        CmdInit ini -> recur ini
-        CmdFinished (ExZipper x) -> return
-          (fin,fromMaybe (undefined) $ zFullResultMin x)
+      Pure a -> trace "Min:Found value" $ return a
+      Free f -> trace ("Min:Strategic options: " ++ ashow (ashowItInit f))
+        $ case f of
+          CmdItInit _it ini -> recur ini
+          CmdIt it -> recur $ it $ popMinAssocList
+          CmdInit ini -> recur ini
+          CmdFinished (ExZipper x) -> return
+            (fin,fromMaybe (undefined) $ zFullResultMin x)
 
 
 minTest :: IO (BndR (MinTag TestParams Integer))

@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveFoldable #-}
@@ -23,13 +24,14 @@ module Control.Antisthenis.AssocContainer
   ,simpleAssocPopNEL
   ,SimpleAssoc(..)) where
 
+import Data.Bifunctor
 import GHC.Generics
 import Data.Utils.AShow
 import Data.List.NonEmpty as NEL
 import Data.Utils.Functors
 import Control.Monad.Identity
 
-class Foldable f => AssocContainer f where
+class (Functor f,Foldable f) => AssocContainer f where
   type KeyAC f :: *
 
   type NonEmptyAC f :: * -> *
@@ -48,8 +50,16 @@ class Foldable f => AssocContainer f where
 -- | An AssocContainer that has a nonempty version that has zero key
 -- at the head if there is one.
 data ZeroAssocList f v a =
-  ZeroAssocList { malHead :: f (Either a (v,a)),malZ :: [a],malList :: [(v,a)] }
+  ZeroAssocList
+  { malHead :: f (Either a (v,a)),malZ :: [a],malList :: [(v,a)] }
 
+instance Functor f => Functor (ZeroAssocList f v) where
+  fmap f ZeroAssocList {..} =
+    ZeroAssocList
+    { malHead = fmap (bimap f (fmap f)) malHead
+     ,malZ = fmap f malZ
+     ,malList = fmap2 f malList
+    }
 instance Foldable f => Foldable (ZeroAssocList f v) where
   foldr f i mal =
     foldr (f . either id snd) (foldr f (foldr2 f i $ malList mal) $ malZ mal)

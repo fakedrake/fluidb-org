@@ -38,19 +38,20 @@ import Control.Arrow hiding ((>>>))
 makeCostProc
   :: forall v t n .
   (Num v,Ord v,AShow v)
-  => [DSet t n (PlanParams n) v]
+  => NodeRef n
+  -> [DSet t n (PlanParams n) v]
   -> NodeProc t n (SumTag (PlanParams n) v)
-makeCostProc deps = convArrProc convMinSum $ procMin $ go <$> deps
+makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
   where
     go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
       where
         constArr = arr $ const $ BndRes dsetConst
     procMin :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
             -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
-    procMin = mkProc
+    procMin = mkProcId (ashow ref)
     procSum :: [NodeProc t n (SumTag (PlanParams n) v)]
             -> NodeProc t n (SumTag (PlanParams n) v)
-    procSum = mkProc
+    procSum = mkProcId (ashow ref)
 
 modTrailE
   :: Monoid (ZCoEpoch w)
@@ -94,7 +95,8 @@ mkEpoch ref = mealyLift $ fromKleisli $ \conf -> do
   tell $ refFromAssocs [(ref,isMater)]
   return
     $ if isMater then trace ("materialized: " ++ ashow ref) (Left 0)
-    else trace ("Continuing: " ++ ashow ref) Right conf
+    else trace ("Continuing: " ++ ashow ref)
+      $ Right conf { confTrPref = ashow ref }
 
 squashMealy
   :: (ArrowFunctor c,Monad (ArrFunctor c))
@@ -118,7 +120,7 @@ mkNewMech ref = squashMealy $ do
         withTrail (ErrCycle ref) ref
         $ arr (trace ("Evaluating: " ++ ashow ref))
         >>> mkEpoch ref
-        >>> (arr BndRes) ||| makeCostProc mechs
+        >>> (arr BndRes) ||| makeCostProc ref mechs
         >>> arr (\r -> trace ("Evaluated: " ++ ashow (ref,r)) r)
   lift2 $ modify $ \gcs
     -> gcs { gcMechMap = refInsert ref ret $ gcMechMap gcs }
@@ -150,7 +152,7 @@ getCost cap ref = do
     $ (`runStateT` def)
     $ runWriterT
     $ runMech (getOrMakeMech ref)
-    $ Conf { confCap = cap,confEpoch = states }
+    $ Conf { confCap = cap,confEpoch = states,confTrPref = ashow ref }
   traceM $ "getCost returning: " ++ ashow (ref,res)
   case res of
     BndRes (Sum (Just r)) -> return $ Just r

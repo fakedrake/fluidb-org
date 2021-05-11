@@ -29,6 +29,8 @@ module Control.Antisthenis.Types
   (IndexErr(..)
   ,ashowItInit
   ,runArrProc
+  ,ashowRes
+  ,lengthZ
   ,Err
   ,ArrProc'
   ,NoArgError(..)
@@ -56,8 +58,7 @@ module Control.Antisthenis.Types
   ,InitProc
   ,ItProc
   ,CoitProc
-  ,AShowW
-  ,ashowZ') where
+  ,AShowW) where
 
 import Data.Utils.OptSet
 import Data.Proxy
@@ -224,10 +225,14 @@ type ArrProc w m =
 type ArrProc' w m =
   MooreCat (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
 
-data Conf w = Conf { confCap :: Cap (ZCap w),confEpoch :: ZEpoch w }
+data Conf w =
+  Conf { confCap :: Cap (ZCap w)
+        ,confEpoch :: ZEpoch w
+        ,confTrPref :: String
+       }
   deriving Generic
 instance Default (ZEpoch w) => Default (Conf w) where
-  def = Conf { confCap = ForceResult,confEpoch = def }
+  def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = "no-pref" }
 type GConf w = Conf w
 type LConf w = Conf w
 
@@ -257,21 +262,39 @@ data Zipper' w cursf (p :: *) pr =
     -- element to be ran. The bound provided is for the case that.
    ,zCursor :: cursf (Maybe (ZBnd w),InitProc p,p)
    ,zRes :: pr -- The result without the cursor.
+   ,zId :: String
   }
   deriving Generic
 instance Functor (Zipper' w cursf p) where
   fmap f Zipper {..} =
-    Zipper { zCursor = zCursor,zBgState = zBgState,zRes = f zRes }
+    Zipper { zCursor = zCursor,zBgState = zBgState,zRes = f zRes,zId = zId }
 
-ashowZ'
-  :: (AShowBndR w
-     ,Functor (ZItAssoc w)
-     ,BndRParams w
-     ,AShow x
-     ,AShow (ZItAssoc w ((),())))
-  => Zipper' w Identity p x
-  -> SExp
-ashowZ' = ashow' . first (const ())
+lengthZBgState :: Foldable (ZItAssoc w) => ZipState w p -> (Int,Int,Int)
+lengthZBgState ZipState {..} = (length bgsInits,length bgsIts,length bgsCoits)
+
+data ZLen =
+  ZLen
+  { zLenInits :: Int
+   ,zLenIts :: Int
+   ,zLenCoits :: Int
+   ,zLenCurs :: Int
+   ,zLenId :: String
+  }
+  deriving Generic
+
+instance AShow ZLen
+
+lengthZ :: (Foldable (ZItAssoc w),Foldable cursf) => Zipper' w cursf p pr -> ZLen
+lengthZ z =
+  ZLen
+  { zLenInits = ini
+   ,zLenIts = it
+   ,zLenCoits = coit
+   ,zLenCurs = length (zCursor z)
+   ,zLenId = zId z
+  }
+  where
+    (ini,it,coit) = lengthZBgState (zBgState z)
 
 instance (AShow (ZItAssoc w (p,p)),AShowBndR w,AShowV p,AShow pr)
   => AShow (Zipper' w Identity p pr)
@@ -285,6 +308,7 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
     { zBgState = fmap f zBgState
      ,zCursor = (\(a,b,c) -> (a,f b,f c)) <$> zCursor
      ,zRes = g zRes
+     ,zId = zId
     }
 class Monoid (ExtCoEpoch p) => ExtParams p where
   type ExtEpoch p :: *
@@ -293,7 +317,8 @@ class Monoid (ExtCoEpoch p) => ExtParams p where
 
   type ExtError p :: *
 
-  extCombEpochs :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> a -> MayReset a
+  extCombEpochs
+    :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> Conf w -> MayReset (Conf w)
 
 class NoArgError e where
   noArgumentsError :: e
@@ -305,3 +330,8 @@ pattern ArrProc c = MealyArrow (WriterArrow (Kleisli c))
 runArrProc :: ArrProc w m -> LConf w -> m (ZCoEpoch w,(ArrProc w m,BndR w))
 runArrProc (ArrProc p) conf = p conf
 runArrProc _ _ = error "unreachable"
+ashowRes :: (ZRes w -> SExp) -> BndR w -> String
+ashowRes ashow'' = ashow . \case
+  BndRes r ->  ashow'' r
+  BndErr _ -> Sym "<error>"
+  BndBnd _ -> Sym "<bound>"

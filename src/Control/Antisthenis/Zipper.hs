@@ -25,8 +25,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-module Control.Antisthenis.Zipper (zSize,mkZCat,mkMachine,mkProc,runMech) where
+module Control.Antisthenis.Zipper
+  (zSize
+  ,mkZCat
+  ,mkMachine
+  ,mkProc
+  ,mkProcId
+  ,runMech) where
 
+import Data.Utils.AShow
+import Data.Utils.Debug
 import Control.Antisthenis.ATL.Class.Functorial
 import Control.Monad.Writer
 import Control.Antisthenis.ATL.Common
@@ -65,7 +73,7 @@ type ZCat w m =
 
 
 -- | Build an evolving zipper. Provided a local conf this zipper may
--- rotated towards any (allowed) direction. After each rotation the
+-- rotate towards any (allowed) direction. After each rotation the
 -- allowed directions are encapsulated in the return type. It is in
 -- theory allowed that more than one steps are required (see Free
 -- monad) but this one requests the local conf which can always be
@@ -73,18 +81,25 @@ type ZCat w m =
 mkZCat'
   :: forall w m .
   (ZipperParams w,Monad m)
-  => [ArrProc w m]
+  => String
+  -> [ArrProc w m]
   -> MooreCat
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
     (LConf w)
     (Zipper w (ArrProc w m))
-mkZCat' [] = error "mul needs at least one value."
-mkZCat' (a:as) = mkMooreCat zipper $ mkZCat zipper
+mkZCat' zid [] = error $ "mul needs at least one value: " ++ zid
+mkZCat' zipId (a:as) = mkMooreCat zipper $ mkZCat zipper
   where
     zipper =
       Zipper
-      { zCursor = Identity (Nothing,a,a),zBgState = mkGgState as,zRes = def }
+      { zCursor = Identity (Nothing,a,a)
+       ,zBgState = mkGgState as
+       ,zRes = def
+       ,zId = zipId
+      }
 
+confTrM :: Monad m => Conf w -> String -> m ()
+confTrM conf msg = traceM $ "[" ++ confTrPref conf ++ "] " ++ msg
 
 -- Make a ziper evolution.
 mkZCat
@@ -94,14 +109,17 @@ mkZCat
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
     (LConf w)
     (Zipper w (ArrProc w m))
-mkZCat
-  prevz = MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
-  let (_bnd,inip,p) = runIdentity $ zCursor prevz
-  (coepoch',(p',val)) <- runArrProc p lconf
-  runFreeT $ fmap (coepoch',) $ case val of
-    BndBnd bnd -> pushIt (bnd,inip,p') (zRes prevz) $ zBgState prevz
-    BndRes res -> pushCoit (Right res,p') (zRes prevz) $ zBgState prevz
-    BndErr err -> pushCoit (Left err,p') (zRes prevz) $ zBgState prevz
+mkZCat prevz = MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
+  let Identity (_bnd,inip,cursProc) = zCursor prevz
+  (coepoch',(p',val)) <- runArrProc cursProc lconf
+  confTrM lconf $ "Cursor evaluated! " ++ ashowRes (const $ Sym "<res>") val
+  runFreeT $ (coepoch',) <$> case val of
+    BndBnd bnd -> pushIt (zId prevz) (bnd,inip,p') (zRes prevz)
+      $ zBgState prevz
+    BndRes res -> pushCoit (zId prevz) (Right res,p') (zRes prevz)
+      $ zBgState prevz
+    BndErr err -> pushCoit (zId prevz) (Left err,p') (zRes prevz)
+      $ zBgState prevz
 
 type New v = v
 type Old v = v
@@ -112,11 +130,12 @@ type Old v = v
 pushIt
   :: forall w m p .
   (Monad m,p ~ ArrProc w m,ZipperParams w)
-  => New (ZBnd w,InitProc p,p)
+  => String
+  -> New (ZBnd w,InitProc p,p)
   -> Old (ZPartialRes w)
   -> Old (ZipState w p)
   -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
-pushIt (bnd,inip,itp) oldRes bgs =
+pushIt zid (bnd,inip,itp) oldRes bgs =
   wrap
   $ Cmds { cmdItCoit = cmdItCoit'
           ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
@@ -127,11 +146,12 @@ pushIt (bnd,inip,itp) oldRes bgs =
       { zCursor = Identity (Nothing,inip,inip)
        ,zBgState = bgsReset bgs
        ,zRes = def
+       ,zId = zid
       }
     cmdItCoit' = DontReset $ case bgsInits bgs of
       [] -> CmdIt itEvolve
       ini:inis -> CmdItInit itEvolve $ iniEvolve ini inis
-    iniEvolve ini inis = return (mkZCat zipper,zipper)
+    iniEvolve ini inis = return $ trace "init returned!" (mkZCat zipper,zipper)
       where
         zipper :: Zipper w p
         zipper =
@@ -145,6 +165,7 @@ pushIt (bnd,inip,itp) oldRes bgs =
                   ,bgsInits = inis
                  }
               ,zRes = ()
+              ,zId = zid
              })
     -- Evolve by poping an it
     itEvolve pop = return (mkZCat zipper,zipper)
@@ -154,6 +175,7 @@ pushIt (bnd,inip,itp) oldRes bgs =
           { zCursor = Identity (Just bnd',inip',itp')
            ,zBgState = bgs { bgsIts = its' }
            ,zRes = oldRes
+           ,zId = zid
           }
         (bnd' :: ZBnd w,(inip',itp'),its') =
           pop $ acInsert bnd (inip,itp) $ (bgsIts bgs)
@@ -161,11 +183,12 @@ pushIt (bnd,inip,itp) oldRes bgs =
 pushCoit
   :: forall w m p .
   (Monad m,p ~ ArrProc w m,ZipperParams w)
-  => New (Either (ZErr w) (ZRes w),CoitProc p)
+  => String
+  -> New (Either (ZErr w) (ZRes w),CoitProc p)
   -> ZPartialRes w
   -> ZipState w p
   -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
-pushCoit newCoit oldRes bgs =
+pushCoit zid newCoit oldRes bgs =
   wrap
   $ Cmds { cmdItCoit = cmdItCoit'
           ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
@@ -178,21 +201,32 @@ pushCoit newCoit oldRes bgs =
       { zCursor = EmptyF
        ,zBgState = bgs { bgsCoits = newCoit : bgsCoits bgs }
        ,zRes = ()
+       ,zId = zid
       }
     rzipper =
-      Zipper { zCursor = resetCursor,zBgState = bgsReset bgs,zRes = def }
+      Zipper
+      { zCursor = resetCursor,zBgState = bgsReset bgs,zRes = def,zId = zid }
     cmdItCoit' = DontReset $ case (bgsInits bgs,acNonEmpty $ bgsIts bgs) of
-      ([],Nothing)
-        -> CmdFinished $ ExZipper $ putRes newRes (oldRes,void finZipper)
-      (ini:inis,Nothing) -> CmdInit $ evolve $ mkIniZ ini inis
+      ([],Nothing) -> trace ("[" ++ zid ++ "]finished")
+        $ CmdFinished
+        $ ExZipper
+        $ putRes newRes (oldRes,void finZipper)
+      (ini:inis,Nothing) -> trace
+        ("next:init -> zlen: " ++ ashow (lengthZ $ mkIniZ ini inis))
+        $ CmdInit
+        $ evolve
+        $ mkIniZ ini inis
       ([],Just nonempty) -> CmdIt $ \pop -> evolve
         $ let (k,(ini,it),its) = pop nonempty
-        in fromJustErr $ mkItZ (k,ini,it) its
-      (ini:inis,Just nonempty) -> CmdItInit
-        (\pop -> evolve
-         $ let (k,(ini',it),its) = pop nonempty
-         in fromJustErr $ mkItZ (k,ini',it) its)
-        (evolve $ mkIniZ ini inis)
+              z = fromJustErr $ mkItZ (k,ini,it) its in trace
+          ("next:it -> zlen:" ++ ashow (lengthZ z))
+          z
+      (ini:inis,Just nonempty) -> trace "next:it|initt"
+        $ CmdItInit
+          (\pop -> evolve
+           $ let (k,(ini',it),its) = pop nonempty
+           in fromJustErr $ mkItZ (k,ini',it) its)
+          (evolve $ mkIniZ ini inis)
     -- Just return the zipper
     evolve zipper = return (mkZCat zipper,zipper)
     mkIniBgs inis = bgs { bgsCoits = newCoit : bgsCoits bgs,bgsInits = inis }
@@ -200,20 +234,24 @@ pushCoit newCoit oldRes bgs =
       putRes
         newRes
         (oldRes
-        ,Zipper { zCursor = Identity (Nothing,ini,ini)
-                 ,zBgState = mkIniBgs inis
-                 ,zRes = ()
-                })
+        ,Zipper
+         { zCursor = Identity (Nothing,ini,ini)
+          ,zBgState = mkIniBgs inis
+          ,zRes = ()
+          ,zId = zid
+         })
     mkItBgs its = bgs { bgsCoits = newCoit : bgsCoits bgs,bgsIts = its }
     mkItZ (bnd,ini,it) its =
       replaceRes
         bnd
         newRes
         (oldRes
-        ,Zipper { zCursor = Identity (Just bnd,ini,it)
-                 ,zBgState = mkItBgs its
-                 ,zRes = ()
-                })
+        ,Zipper
+         { zCursor = Identity (Just bnd,ini,it)
+          ,zBgState = mkItBgs its
+          ,zRes = ()
+          ,zId = zid
+         })
 
 -- | Apply the cap until finished. In the unPartialize function
 -- Nothing means the cap was not reached so an final result does not
@@ -222,14 +260,15 @@ pushCoit newCoit oldRes bgs =
 mkMachine
   :: forall m w k .
   (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w,AShowW w)
-  => (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
+  => String
+  -> (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> [ArrProc w m]
   -> Arr (ArrProc w (FreeT (ItInit (ExZipper w) (ZItAssoc w)) m)) (GConf w) k
-mkMachine getRes =
-  handleLifetimes getRes
+mkMachine zid getRes =
+  handleLifetimes zid getRes
   . loopMooreCat -- feed the previous zipper to the next localizeConf
-  . dimap fst (\z -> (z,z))
-  . mkZCat'
+  . dimap fst (\z -> trace ("ZLen: " ++ ashow (lengthZ z)) (z,z))
+  . mkZCat' zid
 
 -- | Compare the previous and next configurations to see of anything
 -- changed. The problem with this approach is that the monad could
@@ -238,13 +277,14 @@ mkMachine getRes =
 handleLifetimes
   :: forall m w k .
   (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w)
-  => (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
+  => String
+  -> (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> Arr
     (ArrProc' w (FreeT (Cmds' (ExZipper w) (ZItAssoc w)) m))
     (LConf w)
     (Zipper w (ArrProc w m))
   -> Arr (ArrProc w (FreeT (ItInit (ExZipper w) (ZItAssoc w)) m)) (GConf w) k
-handleLifetimes getRes =
+handleLifetimes zid getRes =
   evalResetsArr
   . hoistMealy (WriterArrow . rmap (\(b,(a,c)) -> (a,(b,c))))
   . mooreBatchC (Kleisli $ go)
@@ -271,10 +311,12 @@ handleLifetimes getRes =
       DontReset conf' -> return $ ret conf'
       where
         resetZ =
-          Zipper { zBgState = bgsReset $ zBgState z
-                  ,zRes = def :: ZPartialRes w
-                  ,zCursor = zCursor z
-                 }
+          Zipper
+          { zBgState = bgsReset $ zBgState z
+           ,zRes = def :: ZPartialRes w
+           ,zCursor = zCursor z
+           ,zId = zid
+          }
         ret conf' =
           maybe (Left conf') (\x -> Right (coepoch,x)) $ getRes conf' z
 
@@ -303,17 +345,19 @@ evalResetsArr (MealyArrow (WriterArrow (Kleisli c0))) =
         -> runFreeT $ go rst
       Free Cmds {cmdItCoit = DontReset x} -> runFreeT $ wrap $ go <$> x
 
+mkProc :: forall m w .
+       (Semigroup (ZRes w),Monad m,Ord (ZBnd w),ZipperParams w,AShowW w)
+       => [ArrProc w m]
+       -> ArrProc w m
+mkProc = mkProcId "no-id"
 
-mkProc
+mkProcId
   :: forall m w .
-  (Semigroup (ZRes w)
-  ,Monad m
-  ,Ord (ZBnd w)
-  ,ZipperParams w
-  ,AShowW w)
-  => [ArrProc w m]
+  (Semigroup (ZRes w),Monad m,Ord (ZBnd w),ZipperParams w,AShowW w)
+  => String
+  -> [ArrProc w m]
   -> ArrProc w m
-mkProc procs = evolution $ mkMachine evolutionControl procs
+mkProcId zid procs = evolution $ mkMachine zid evolutionControl procs
   where
     ZProcEvolution {..} = zprocEvolution
     evolution
