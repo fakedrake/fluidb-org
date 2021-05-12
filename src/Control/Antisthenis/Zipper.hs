@@ -308,9 +308,9 @@ handleLifetimes zid getRes =
          (Cmds' (ExZipper w) (ZItAssoc w))
          m
          (Either (LConf w) (ZCoEpoch w,k))
-    go (conf,(coepoch,z)) = case zLocalizeConf coepoch conf z of
+    go (globConf,(coepoch,z)) = case zLocalizeConf coepoch globConf z of
       ShouldReset -> wrap
-        Cmds { cmdReset = DoReset $ go (conf,(coepoch,resetZ))
+        Cmds { cmdReset = DoReset $ go (globConf,(coepoch,resetZ))
               ,cmdItCoit = ShouldReset
              }
       DontReset conf' -> return $ ret conf'
@@ -323,7 +323,7 @@ handleLifetimes zid getRes =
            ,zId = zid
           }
         ret conf' =
-          maybe (Left conf') (\x -> Right (coepoch,x)) $ getRes conf' z
+          maybe (Left conf') (\x -> Right (coepoch,x)) $ getRes globConf z
 
 evalResetsArr
   :: forall conf m f r k s .

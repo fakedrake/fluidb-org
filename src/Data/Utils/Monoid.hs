@@ -1,11 +1,33 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
-module Data.Utils.Monoid (Min(..),Mul(..),Sum(..),Max(..)) where
+module Data.Utils.Monoid (Min'(..),Min(..),Mul(..),Sum(..),Max(..)) where
 
 import Data.Utils.AShow
 import GHC.Generics
 import Data.Utils.Default
+
+newtype Min' a = Min' a
+  deriving stock (Show,Eq,Functor,Generic)
+
+instance Num a => Num (Min' a) where
+  signum (Min' a) = Min' $ signum a
+  abs (Min' a) = Min' $ abs a
+  fromInteger x = Min' $ fromInteger x
+  Min' a + Min' b = Min' $ a + b
+  Min' a - Min' b = Min' $ a - b
+  Min' a * Min' b = Min' $ a * b
+
+instance Ord a => Ord (Min' a) where
+  compare (Min' a) (Min' b) = compare a b
+  {-# INLINE compare #-}
+
+instance Ord a => Semigroup (Min' a) where
+  Min' a <> Min' b = Min' $ min a b
+  {-# INLINE (<>) #-}
+
+instance AShow v => AShow (Min' v)
+
 
 newtype Min a = Min (Maybe a)
   deriving stock (Show,Eq,Functor,Generic)
@@ -26,11 +48,14 @@ instance Ord a => Ord (Min a) where
   compare (Min Nothing) (Min (Just _)) = GT
   compare (Min (Just _)) (Min Nothing) = LT
   compare (Min (Just a)) (Min (Just b)) = compare a b
+  {-# INLINE compare #-}
 
 instance Ord a => Semigroup (Min a) where
   a <> b = min a b
+  {-# INLINE (<>) #-}
 instance Ord a => Monoid (Min a) where
   mempty = Min Nothing
+  {-# INLINE mempty #-}
 
 instance AShow v => AShow (Min v)
 

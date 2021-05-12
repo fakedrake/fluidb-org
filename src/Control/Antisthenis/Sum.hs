@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeApplications #-}
@@ -10,6 +11,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Control.Antisthenis.Sum (SumTag) where
 
+import Data.Utils.Unsafe
 import Data.Utils.AShow
 import Data.Proxy
 import Control.Monad.Trans.Free
@@ -55,7 +57,8 @@ instance (Ord v,Num v,ExtParams p,AShow (ExtEpoch p),AShow (ExtCoEpoch p))
         (x,y) -> x + y
       toEither = \case
         BndBnd v -> Right v
-        BndRes (Sum v) -> Right (Min v)
+        BndRes (Sum Nothing) -> Right 0
+        BndRes (Sum (Just i)) -> Right (Min $ Just i)
         BndErr e -> Left e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
     Just $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
@@ -64,10 +67,11 @@ instance (Ord v,Num v,ExtParams p,AShow (ExtEpoch p),AShow (ExtCoEpoch p))
     $ conf { confCap = newCap }
     where
       newCap = case zRes z of
-        Left _ -> WasFinished
+        Left _ -> CapStruct (-1)
         Right r -> case confCap conf of
-          Cap c -> Cap $ c - r
-          x -> x
+          CapVal c -> CapVal $ c - r
+          CapStruct s -> CapStruct $ s - 1
+          ForceResult -> ForceResult
 
 -- | Return the result expected or Nothing if there is more evolving
 -- that needs to happen. This can only return bounds.
@@ -79,10 +83,11 @@ sumEvolutionControl
 sumEvolutionControl conf z = case zRes z of
   Left e -> Just $ BndErr e
   Right bound -> case confCap conf of
-    Cap cap -> if cap < bound then Just $ BndBnd bound else Nothing
-    MinimumWork -> Just $ BndBnd bound
-    DoNothing -> Just $ BndBnd bound
-    WasFinished -> error "unreachable"
+    CapVal cap -> if cap < bound then Just $ BndBnd bound else Nothing
+    CapStruct i -> if
+      | i > 0 -> Nothing
+      | i == 0 -> Just $ BndBnd bound
+      | otherwise -> error "unreachable"
     ForceResult -> Nothing
 
 sumEvolutionStrategy
@@ -102,8 +107,9 @@ sumEvolutionStrategy fin = recur
         CmdIt it -> recur $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
         CmdInit ini -> recur ini
         CmdFinished (ExZipper z) -> return
-          (fin,either BndErr (\(Min x) -> BndRes $ Sum x) $ zRes z)
-
+          (fin
+          ,either BndErr (\(Min x) -> BndRes $ Sum $ Just $ fromJustErr x)
+           $ zRes z)
 
 #if 0
 sumToMin :: Sum v -> Min v

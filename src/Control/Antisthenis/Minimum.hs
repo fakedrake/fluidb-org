@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -28,6 +29,7 @@
 module Control.Antisthenis.Minimum
   (minTest,MinTag) where
 
+import Control.Monad.Identity
 import Control.Monad.Writer
 import Data.Proxy
 import Data.Utils.FixState
@@ -77,12 +79,31 @@ instance (AShow (f (ZBnd w,a)),AShowBndR w,AShow a,AShowV [ZErr w])
   => AShow (MinAssocList f w a)
 
 
--- | The minimum bound
-malMinBound :: (Ord (ZBnd w),Foldable f) => MinAssocList f w a -> Maybe (ZBnd w,a)
-malMinBound = foldl' findMin Nothing . malElements
+-- | The minimum bound.
+data SecondaryBound w
+  = SecConcrete (ZRes w)
+  | SecSoft (ZBnd w)
+  | NoSec
+malMinBound
+  :: forall f w a .
+  (Ord (ZBnd w),Foldable f,Functor f,Num (ZBnd w))
+  => (ZRes w -> ZBnd w -> Bool)
+  -> MinAssocList f w a
+  -> SecondaryBound w
+malMinBound lessThan mal = case malConcrete mal of
+  OnlyErrors _ -> case elemBnd of
+    Nothing -> NoSec
+    Just bnd -> SecSoft bnd
+  FoundResult r -> case (\b -> (b,lessThan r b)) <$> elemBnd of
+    Just (_bnd,True) -> SecConcrete r
+    Just (bnd,False) -> SecSoft bnd
+    Nothing -> SecConcrete r
   where
-    findMin Nothing x = Just x
-    findMin (Just a'@(v',_)) (a@(v,_)) = Just $ if v < v' then a else a'
+    elemBnd = foldl' go Nothing $ fmap fst $ malElements mal
+      where
+        go :: Maybe (ZBnd w) -> ZBnd w -> Maybe (ZBnd w)
+        go Nothing r = Just r
+        go (Just r0) r = Just $ min r0 r
 
 zModConcrete
   :: (ZItAssoc w ~ MinAssocList [] w)
@@ -136,12 +157,13 @@ topMinAssocList mal = elemBnd
 
 instance BndRParams (MinTag p a) where
   type ZErr (MinTag p a) = ExtError p
-  type ZBnd (MinTag p a) = Min a
-  type ZRes (MinTag p a) = Min a
+  type ZBnd (MinTag p a) = Min' a
+  type ZRes (MinTag p a) = Min' a
 
 instance (AShow a
          ,Eq a
          ,Ord a
+         ,Num a
          ,ExtParams p
          ,NoArgError (ExtError p)
          ,AShow (ExtError p)) => ZipperParams (MinTag p a) where
@@ -154,7 +176,7 @@ instance (AShow a
     MinAssocList [] (MinTag p a)
   zprocEvolution =
     ZProcEvolution
-    { evolutionControl = (\conf z -> deriveOrdSolution conf $ zFullResultMin z)
+    { evolutionControl = minEvolutionControl
      ,evolutionStrategy = minStrategy
      ,evolutionEmptyErr = noArgumentsError
     }
@@ -188,45 +210,57 @@ instance (AShow a
   -- succeed.
   replaceRes _oldBnd newBnd (oldRes,newZipper) =
     Just $ putRes newBnd (oldRes,newZipper)
-  -- The localized configuration asserts that the computation does not
-  -- exceed the minimum bound established. If the minimum bound is
-  -- concrete then we have finished the computatiuon. If there are
-  -- still inits to be consumed do minimum work.
+  -- | The secondary bound becomes the cap when it is smaller than the
+  -- global cap.
   --
-  -- When the concrete result is an error, it is to be disregarded.
-  --
-  -- This must also localize the MinimumWork variable.
+  -- Also handles the combination of epoch and coepoch that dictates
+  -- whether we must reset.
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
-    $ case (confCap conf,malConcrete $ bgsIts $ zBgState z) of
-      (DoNothing,_) -> conf
-      (MinimumWork,_) -> conf { confCap = DoNothing }
-      (_,FoundResult concreteBnd) -> case malMinBound $ bgsIts $ zBgState z of
-        Just (minBnd,_) -> conf { confCap = Cap $ concreteBnd <> minBnd }
-        Nothing -> conf { confCap = Cap concreteBnd }
-      (_,OnlyErrors _) -> case malMinBound $ bgsIts $ zBgState z of
-        Just (minBnd,_) -> conf { confCap = Cap minBnd }
-        Nothing -> conf { confCap = MinimumWork }
+    $ case (secondaryBound,confCap conf) of
+      (NoSec,_) -> trace
+        ("nosec: " ++ ashow (confCap conf))
+        conf { confCap = CapVal 0 }
+      (_,CapStruct i) -> conf { confCap = CapStruct $ i - 1 }
+      (SecConcrete res,CapVal c) -> conf { confCap = CapVal $ min res c }
+      (SecSoft bnd,CapVal c) -> conf { confCap = CapVal $ min bnd c }
+      (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
+      (SecSoft bnd,ForceResult) -> conf { confCap = CapVal bnd }
+    where
+      secondaryBound = malMinBound (<) $ bgsIts $ zBgState z
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
 -- the zipper should keep evolving to get to a proper resilt.
-deriveOrdSolution
-  :: forall v p .
-  (Ord v,AShow v,AShow (ExtError p))
+minEvolutionControl
+  :: forall v p r x .
+  (Ord v,AShow v,AShow (ExtError p),Num v)
   => Conf (MinTag p v)
-  -> Maybe (BndR (MinTag p v)) -- bnd derived from the zipper.
+  -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
-deriveOrdSolution conf res = case confCap conf of
-  WasFinished -> res
-  DoNothing -> maybe (Just $ BndBnd mempty) Just res
-  MinimumWork -> res -- Will be turned into DoNothing
+minEvolutionControl
+  conf
+  z = trace ("cap: " ++ ashow (confCap conf,res)) $ case confCap conf of
+  CapStruct i -> if
+    | i > 0 -> res
+    | i == 0 -> maybe (Just $ BndBnd 0) Just res -- Will be turned into DoNothing
+    | otherwise -> error "Was finished"
   ForceResult -> res >>= \case
     BndBnd _bnd -> Nothing
     x -> return x
-  Cap cap -> res >>= \case
+  CapVal cap -> res >>= \case
     BndBnd bnd -> if bnd <= cap then Nothing else Just $ BndBnd bnd
     x -> return x
+  where
+    -- The result so far. The cursor is assumed to always be either an
+    -- init or the most promising.
+    res = case fst3 (runIdentity $ zCursor z) of
+      Just r -> Just $ BndBnd r
+      Nothing -> case malMinBound (<) $ bgsIts $ zBgState z of
+        NoSec -> Nothing
+        SecConcrete _r
+          -> error "How is there a concrete minimum and we haven't returned?"
+        SecSoft b -> Just $ BndBnd b
 
 minBndR :: Ord v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
 minBndR = curry $ \case
