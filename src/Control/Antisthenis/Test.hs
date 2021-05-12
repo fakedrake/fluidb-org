@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingVia #-}
@@ -57,13 +58,12 @@ incrTill name (step,asRes) cap = mkMealy $ recur $ BndBnd 0
       if confEpoch conf' > confEpoch conf then recurGuarded (BndBnd 0) conf'
         else recurGuarded (incr cntr) conf'
     recurGuarded res conf = case confCap conf of
-      WasFinished -> error "We should have finished"
-      Cap _c -> error "The cap is static.."
-      MinimumWork -> recur res conf
+      CapVal _c -> error "The cap is static.."
+      CapStruct i -> if
+        | i > 0 -> recur res conf
+        | i == 0 -> yieldMB res >>= recurGuarded res
+        | otherwise -> error "We should have finished"
       ForceResult -> finishMB $ BndRes $ asRes $ finalRes
-      DoNothing -> do
-        conf' <- yieldMB res
-        recurGuarded res conf'
     finalRes = head $ dropWhile (< cap) $ iterate step 0
     incr :: BndR w -> BndR w
     incr = \case

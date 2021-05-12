@@ -154,8 +154,7 @@ instance (AShow a
     MinAssocList [] (MinTag p a)
   zprocEvolution =
     ZProcEvolution
-    { evolutionControl =
-        (\conf z -> deriveOrdSolution conf =<< zFullResultMin z)
+    { evolutionControl = (\conf z -> deriveOrdSolution conf $ zFullResultMin z)
      ,evolutionStrategy = minStrategy
      ,evolutionEmptyErr = noArgumentsError
     }
@@ -195,13 +194,17 @@ instance (AShow a
   -- still inits to be consumed do minimum work.
   --
   -- When the concrete result is an error, it is to be disregarded.
+  --
+  -- This must also localize the MinimumWork variable.
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
-    $ case (malConcrete $ bgsIts $ zBgState z) of
-      FoundResult concreteBnd -> case malMinBound $ bgsIts $ zBgState z of
+    $ case (confCap conf,malConcrete $ bgsIts $ zBgState z) of
+      (DoNothing,_) -> conf
+      (MinimumWork,_) -> conf { confCap = DoNothing }
+      (_,FoundResult concreteBnd) -> case malMinBound $ bgsIts $ zBgState z of
         Just (minBnd,_) -> conf { confCap = Cap $ concreteBnd <> minBnd }
         Nothing -> conf { confCap = Cap concreteBnd }
-      OnlyErrors _ -> case malMinBound $ bgsIts $ zBgState z of
+      (_,OnlyErrors _) -> case malMinBound $ bgsIts $ zBgState z of
         Just (minBnd,_) -> conf { confCap = Cap minBnd }
         Nothing -> conf { confCap = MinimumWork }
 
@@ -212,16 +215,16 @@ deriveOrdSolution
   :: forall v p .
   (Ord v,AShow v,AShow (ExtError p))
   => Conf (MinTag p v)
-  -> BndR (MinTag p v)
+  -> Maybe (BndR (MinTag p v)) -- bnd derived from the zipper.
   -> Maybe (BndR (MinTag p v))
 deriveOrdSolution conf res = case confCap conf of
-  WasFinished -> Just $ trace ("reusing solution: " ++ ashowRes ashow' res) res
-  DoNothing -> Just res
-  MinimumWork -> Just res
-  ForceResult -> case res of
+  WasFinished -> res
+  DoNothing -> maybe (Just $ BndBnd mempty) Just res
+  MinimumWork -> res -- Will be turned into DoNothing
+  ForceResult -> res >>= \case
     BndBnd _bnd -> Nothing
     x -> return x
-  Cap cap -> case res of
+  Cap cap -> res >>= \case
     BndBnd bnd -> if bnd <= cap then Nothing else Just $ BndBnd bnd
     x -> return x
 
@@ -241,6 +244,9 @@ zIsFinished z =
   && isNothing (acNonEmpty $ bgsIts $ zBgState z)
 
 -- | Turn the zipper into a value.
+--
+-- XXX: if the cap is DoNothing we shoudl return the minimum
+-- bound. even if Nothing is encountered.
 zFullResultMin
   :: (Foldable f,AShow v,Ord v)
   => Zipper' (MinTag p v) f r x

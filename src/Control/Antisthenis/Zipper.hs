@@ -33,6 +33,7 @@ module Control.Antisthenis.Zipper
   ,mkProcId
   ,runMech) where
 
+import Data.Utils.Const
 import Data.Utils.AShow
 import Data.Utils.Debug
 import Control.Antisthenis.ATL.Class.Functorial
@@ -88,7 +89,10 @@ mkZCat'
     (LConf w)
     (Zipper w (ArrProc w m))
 mkZCat' zid [] = error $ "mul needs at least one value: " ++ zid
-mkZCat' zipId (a:as) = mkMooreCat zipper $ mkZCat zipper
+mkZCat' zipId (a:as) =
+  trace ("[ZLen:" ++ show (1 + length as) ++ "] " ++ ashow (lengthZ zipper))
+  $ mkMooreCat zipper
+  $ mkZCat zipper
   where
     zipper =
       Zipper
@@ -114,28 +118,25 @@ mkZCat prevz = MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
   (coepoch',(p',val)) <- runArrProc cursProc lconf
   confTrM lconf $ "Cursor evaluated! " ++ ashowRes (const $ Sym "<res>") val
   runFreeT $ (coepoch',) <$> case val of
-    BndBnd bnd -> pushIt (zId prevz) (bnd,inip,p') (zRes prevz)
-      $ zBgState prevz
-    BndRes res -> pushCoit (zId prevz) (Right res,p') (zRes prevz)
-      $ zBgState prevz
-    BndErr err -> pushCoit (zId prevz) (Left err,p') (zRes prevz)
-      $ zBgState prevz
+    BndBnd bnd -> pushIt $ mapCursor (const $ Const (bnd,inip,p')) prevz
+    BndRes res -> pushCoit $ mapCursor (const $ Const (Right res,p')) prevz
+    BndErr err -> pushCoit $ mapCursor (const $ Const (Left err,p')) prevz
 
-type New v = v
-type Old v = v
+-- | The cursor is already evaluated.
+type EvaledZipper w p v =
+  Zipper' w (Const v) p (ZPartialRes w)
 -- | This is almost a Mealy (Kleisly) arrow. From a gutted zipper (the
 -- previous step was setting the cursor on an it) there are a couple
 -- of ways to put the zipper together (either pull it or ini or reset
 -- etc). Create the commands for that.
+pushIt :: forall w m p .
+       (Monad m,p ~ ArrProc w m,ZipperParams w)
+       => EvaledZipper w p (ZBnd w,InitProc p,p)
+       -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
 pushIt
-  :: forall w m p .
-  (Monad m,p ~ ArrProc w m,ZipperParams w)
-  => String
-  -> New (ZBnd w,InitProc p,p)
-  -> Old (ZPartialRes w)
-  -> Old (ZipState w p)
-  -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
-pushIt zid (bnd,inip,itp) oldRes bgs =
+  Zipper
+  {zCursor = Const (bnd,inip,itp),..}   -- zid (bnd,inip,itp) oldRes bgs =
+  =
   wrap
   $ Cmds { cmdItCoit = cmdItCoit'
           ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
@@ -144,11 +145,11 @@ pushIt zid (bnd,inip,itp) oldRes bgs =
     rzipper =
       Zipper
       { zCursor = Identity (Nothing,inip,inip)
-       ,zBgState = bgsReset bgs
+       ,zBgState = bgsReset zBgState
        ,zRes = def
-       ,zId = zid
+       ,zId = zId
       }
-    cmdItCoit' = DontReset $ case bgsInits bgs of
+    cmdItCoit' = DontReset $ case bgsInits zBgState of
       [] -> CmdIt itEvolve
       ini:inis -> CmdItInit itEvolve $ iniEvolve ini inis
     iniEvolve ini inis = return $ trace "init returned!" (mkZCat zipper,zipper)
@@ -157,15 +158,16 @@ pushIt zid (bnd,inip,itp) oldRes bgs =
         zipper =
           putRes
             (BndBnd bnd)
-            (oldRes
+            (zRes
             ,Zipper
              { zCursor = Identity (Nothing,ini,ini)
-              ,zBgState = bgs
-                 { bgsIts = acUnlift $ acInsert bnd (inip,itp) $ bgsIts bgs
+              ,zBgState = zBgState
+                 { bgsIts =
+                     acUnlift $ acInsert bnd (inip,itp) $ bgsIts zBgState
                   ,bgsInits = inis
                  }
               ,zRes = ()
-              ,zId = zid
+              ,zId = zId
              })
     -- Evolve by poping an it
     itEvolve pop = return (mkZCat zipper,zipper)
@@ -173,22 +175,18 @@ pushIt zid (bnd,inip,itp) oldRes bgs =
         zipper =
           Zipper
           { zCursor = Identity (Just bnd',inip',itp')
-           ,zBgState = bgs { bgsIts = its' }
-           ,zRes = oldRes
-           ,zId = zid
+           ,zBgState = zBgState { bgsIts = its' }
+           ,zRes = zRes
+           ,zId = zId
           }
         (bnd' :: ZBnd w,(inip',itp'),its') =
-          pop $ acInsert bnd (inip,itp) $ (bgsIts bgs)
+          pop $ acInsert bnd (inip,itp) $ (bgsIts zBgState)
 
-pushCoit
-  :: forall w m p .
-  (Monad m,p ~ ArrProc w m,ZipperParams w)
-  => String
-  -> New (Either (ZErr w) (ZRes w),CoitProc p)
-  -> ZPartialRes w
-  -> ZipState w p
-  -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
-pushCoit zid newCoit oldRes bgs =
+pushCoit :: forall w m p .
+         (Monad m,p ~ ArrProc w m,ZipperParams w)
+         => EvaledZipper w p (Either (ZErr w) (ZRes w),CoitProc p)
+         -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
+pushCoit Zipper {zCursor = Const newCoit,..} =
   wrap
   $ Cmds { cmdItCoit = cmdItCoit'
           ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
@@ -199,58 +197,65 @@ pushCoit zid newCoit oldRes bgs =
     finZipper =
       Zipper
       { zCursor = EmptyF
-       ,zBgState = bgs { bgsCoits = newCoit : bgsCoits bgs }
+       ,zBgState = zBgState { bgsCoits = newCoit : bgsCoits zBgState }
        ,zRes = ()
-       ,zId = zid
+       ,zId = zId
       }
     rzipper =
       Zipper
-      { zCursor = resetCursor,zBgState = bgsReset bgs,zRes = def,zId = zid }
-    cmdItCoit' = DontReset $ case (bgsInits bgs,acNonEmpty $ bgsIts bgs) of
-      ([],Nothing) -> trace ("[" ++ zid ++ "]finished")
-        $ CmdFinished
-        $ ExZipper
-        $ putRes newRes (oldRes,void finZipper)
-      (ini:inis,Nothing) -> trace
-        ("next:init -> zlen: " ++ ashow (lengthZ $ mkIniZ ini inis))
-        $ CmdInit
-        $ evolve
-        $ mkIniZ ini inis
-      ([],Just nonempty) -> CmdIt $ \pop -> evolve
-        $ let (k,(ini,it),its) = pop nonempty
-              z = fromJustErr $ mkItZ (k,ini,it) its in trace
-          ("next:it -> zlen:" ++ ashow (lengthZ z))
-          z
-      (ini:inis,Just nonempty) -> trace "next:it|initt"
-        $ CmdItInit
-          (\pop -> evolve
-           $ let (k,(ini',it),its) = pop nonempty
-           in fromJustErr $ mkItZ (k,ini',it) its)
-          (evolve $ mkIniZ ini inis)
+      { zCursor = resetCursor
+       ,zBgState = bgsReset zBgState
+       ,zRes = def
+       ,zId = zId
+      }
+    cmdItCoit' =
+      DontReset $ case (bgsInits zBgState,acNonEmpty $ bgsIts zBgState) of
+        ([],Nothing) -> trace ("[" ++ zId ++ "]finished")
+          $ CmdFinished
+          $ ExZipper
+          $ putRes newRes (zRes,void finZipper)
+        (ini:inis,Nothing) -> trace
+          ("next:init -> zlen: " ++ ashow (lengthZ $ mkIniZ ini inis))
+          $ CmdInit
+          $ evolve
+          $ mkIniZ ini inis
+        ([],Just nonempty) -> CmdIt $ \pop -> evolve
+          $ let (k,(ini,it),its) = pop nonempty
+                z = fromJustErr $ mkItZ (k,ini,it) its in trace
+            ("next:it -> zlen:" ++ ashow (lengthZ z))
+            z
+        (ini:inis,Just nonempty) -> trace "next:it|initt"
+          $ CmdItInit
+            (\pop -> evolve
+             $ let (k,(ini',it),its) = pop nonempty
+             in fromJustErr $ mkItZ (k,ini',it) its)
+            (evolve $ mkIniZ ini inis)
     -- Just return the zipper
     evolve zipper = return (mkZCat zipper,zipper)
-    mkIniBgs inis = bgs { bgsCoits = newCoit : bgsCoits bgs,bgsInits = inis }
+    mkIniBgs inis =
+      zBgState { bgsCoits = newCoit : bgsCoits zBgState,bgsInits = inis }
     mkIniZ ini inis =
       putRes
         newRes
-        (oldRes
+        (zRes
         ,Zipper
          { zCursor = Identity (Nothing,ini,ini)
           ,zBgState = mkIniBgs inis
           ,zRes = ()
-          ,zId = zid
+          ,zId = zId
          })
-    mkItBgs its = bgs { bgsCoits = newCoit : bgsCoits bgs,bgsIts = its }
+    mkItBgs
+      its = zBgState { bgsCoits = newCoit : bgsCoits zBgState,bgsIts = its }
     mkItZ (bnd,ini,it) its =
       replaceRes
         bnd
         newRes
-        (oldRes
+        (zRes
         ,Zipper
          { zCursor = Identity (Just bnd,ini,it)
           ,zBgState = mkItBgs its
           ,zRes = ()
-          ,zId = zid
+          ,zId = zId
          })
 
 -- | Apply the cap until finished. In the unPartialize function
@@ -267,7 +272,7 @@ mkMachine
 mkMachine zid getRes =
   handleLifetimes zid getRes
   . loopMooreCat -- feed the previous zipper to the next localizeConf
-  . dimap fst (\z -> trace ("ZLen: " ++ ashow (lengthZ z)) (z,z))
+  . dimap fst (\z -> (z,z))
   . mkZCat' zid
 
 -- | Compare the previous and next configurations to see of anything

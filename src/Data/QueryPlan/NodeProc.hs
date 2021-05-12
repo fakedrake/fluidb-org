@@ -46,12 +46,13 @@ makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
     go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
       where
         constArr = arr $ const $ BndRes dsetConst
-    procMin :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
-            -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
-    procMin = mkProcId (ashow ref)
+    procMin
+      :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
+      -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
+    procMin = mkProcId ("min:" ++ ashow ref)
     procSum :: [NodeProc t n (SumTag (PlanParams n) v)]
             -> NodeProc t n (SumTag (PlanParams n) v)
-    procSum = mkProcId (ashow ref)
+    procSum = mkProcId ("sum:" ++ ashow ref)
 
 modTrailE
   :: Monoid (ZCoEpoch w)

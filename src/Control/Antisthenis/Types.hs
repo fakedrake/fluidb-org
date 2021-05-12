@@ -31,6 +31,7 @@ module Control.Antisthenis.Types
   ,runArrProc
   ,ashowRes
   ,lengthZ
+  ,mapCursor
   ,Err
   ,ArrProc'
   ,NoArgError(..)
@@ -58,6 +59,7 @@ module Control.Antisthenis.Types
   ,InitProc
   ,ItProc
   ,CoitProc
+  ,capWasFinished
   ,AShowW) where
 
 import Data.Utils.OptSet
@@ -76,13 +78,14 @@ import Data.Utils.AShow
 import Data.Utils.Default
 
 data Cap b
-  = MinimumWork
-  | WasFinished
+  = CapStruct Int -- Maximum depth NOT max steps
+  | CapVal b -- Cap val
   | ForceResult
-  | DoNothing
-  | Cap b
   deriving (Show,Functor,Generic)
 instance AShow b => AShow (Cap b)
+capWasFinished :: Cap b -> Bool
+capWasFinished (CapStruct i) = i < 0
+capWasFinished _ = False
 
 type InitProc a = a
 type ItProc a = a
@@ -335,3 +338,7 @@ ashowRes ashow'' = ashow . \case
   BndRes r ->  ashow'' r
   BndErr _ -> Sym "<error>"
   BndBnd _ -> Sym "<bound>"
+
+mapCursor :: (forall a . f a -> g a) -> Zipper' w f p r -> Zipper' w g p r
+mapCursor f Zipper {..} =
+  Zipper { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
