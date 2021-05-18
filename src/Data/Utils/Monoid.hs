@@ -9,7 +9,6 @@ import Data.Utils.Default
 
 newtype Min' a = Min' a
   deriving stock (Show,Eq,Functor,Generic)
-
 instance Num a => Num (Min' a) where
   signum (Min' a) = Min' $ signum a
   abs (Min' a) = Min' $ abs a

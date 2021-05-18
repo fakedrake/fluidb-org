@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RoleAnnotations #-}
@@ -268,10 +269,10 @@ instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
   -- | As a cap use the minimum bound.
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
-    $ conf { confCap = maybe (confCap conf) Cap $ do
+    $ conf { confCap = maybe (confCap conf) CapVal $ do
       bnd <- assocMinKey $ bgsIts $ zBgState z
       gcap <- case confCap conf of
-        Cap cap -> Just cap
+        CapVal cap -> Just cap
         _ -> Nothing
       return $ min bnd gcap }
 
@@ -307,13 +308,14 @@ boolEvolutionControl
   -> Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
   -> Maybe (BndR (BoolTag op p))
 boolEvolutionControl conf z = case confCap conf of
-  WasFinished -> return $ BndErr undefined
-  DoNothing -> localRes
-  MinimumWork -> either BndErr BndRes <$> zRes z
+  CapStruct i -> if
+    | i < 0 -> return $ BndErr undefined
+    | i == 0 -> localRes
+    | otherwise -> either BndErr BndRes <$> zRes z
   ForceResult -> zRes z >>= \case
     Left _e -> trace "error actually found" Nothing -- xxx: should check if zero is even possible.
     Right x -> if zFinished z then Just $ BndRes x else Nothing
-  Cap cap -> do
+  CapVal cap -> do
     localBnd <- zBound z
     if cap < localBnd then return $ BndBnd localBnd else Nothing
   where

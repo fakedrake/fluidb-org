@@ -126,18 +126,19 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
     $ conf { confCap = newCap }
     where
       newCap = fromZ (prRes $ zRes z) $ case confCap conf of
-        Cap c -> case zRes z of
-          PartialResMul {prBnd = Just bnd,prRes = Just (Right res)} -> Cap
+        CapStruct _i -> undefined
+        CapVal c -> case zRes z of
+          PartialResMul {prBnd = Just bnd,prRes = Just (Right res)} -> CapVal
             $ c `div` (bnd * res)
           PartialResMul {prBnd = Nothing,prRes = Just (Right res)}
-            -> Cap $ c `div` res
-          PartialResMul {prBnd = Just bnd,prRes = Nothing} -> Cap $ c `div` bnd
-          _ -> MinimumWork
+            -> CapVal $ c `div` res
+          PartialResMul {prBnd = Just bnd,prRes = Nothing} -> CapVal $ c `div` bnd
+          _ -> CapStruct 1
         x -> x
       fromZ r x = case r of
-        Just (Left _) -> MinimumWork
+        Just (Left _) -> CapStruct 1
         Just (Right (Mul 0 _)) -> x
-        Just (Right _is_zero) -> trace "Found zero" DoNothing -- HERE WE BLOCK ON ZERO
+        Just (Right _is_zero) -> trace "Found zero" CapStruct (-1) -- HERE WE BLOCK ON ZERO
         _ -> x
 
 -- | Keep zeroes separate so they are easily accessible and have an
@@ -193,14 +194,12 @@ mulSolution conf z = zeroRes <|> ret
       Just (Right m@(Mul zs _)) -> if zs > 0 then Just $ BndRes m else Nothing
       _ -> Nothing
     ret = case (prRes $ zRes z,confCap conf) of
-      (_,WasFinished) -> return $ BndErr undefined
-      (_,DoNothing) -> resM
-      (_,MinimumWork) -> resM
+      (_,CapStruct i) -> if i < 0 then return $ BndErr undefined else resM
       (_,ForceResult) -> resM >>= \case
         BndBnd _bnd -> Nothing
         BndErr _e -> Nothing -- xxx: should check if zero is even possible.
         x -> Just x
-      (_,Cap cap) -> resM >>= \case
+      (_,CapVal cap) -> resM >>= \case
         BndBnd bnd -> if bnd <= cap then Nothing else Just $ BndBnd bnd
         x -> Just x
       where

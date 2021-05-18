@@ -89,10 +89,7 @@ mkZCat'
     (LConf w)
     (Zipper w (ArrProc w m))
 mkZCat' zid [] = error $ "mul needs at least one value: " ++ zid
-mkZCat' zipId (a:as) =
-  trace ("[ZLen:" ++ show (1 + length as) ++ "] " ++ ashow (lengthZ zipper))
-  $ mkMooreCat zipper
-  $ mkZCat zipper
+mkZCat' zipId (a:as) = mkMooreCat zipper $ mkZCat zipper
   where
     zipper =
       Zipper
@@ -116,7 +113,7 @@ mkZCat
 mkZCat prevz = MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
   let Identity (_bnd,inip,cursProc) = zCursor prevz
   (coepoch',(p',val)) <- runArrProc cursProc lconf
-  confTrM lconf $ "Cursor evaluated! " ++ ashowRes (const $ Sym "<res>") val
+  -- confTrM lconf $ "Cursor evaluated! " ++ ashowRes (const $ Sym "<res>") val
   runFreeT $ (coepoch',) <$> case val of
     BndBnd bnd -> pushIt $ mapCursor (const $ Const (bnd,inip,p')) prevz
     BndRes res -> pushCoit $ mapCursor (const $ Const (Right res,p')) prevz
@@ -152,7 +149,7 @@ pushIt
     cmdItCoit' = DontReset $ case bgsInits zBgState of
       [] -> CmdIt itEvolve
       ini:inis -> CmdItInit itEvolve $ iniEvolve ini inis
-    iniEvolve ini inis = return $ trace "init returned!" (mkZCat zipper,zipper)
+    iniEvolve ini inis = return (mkZCat zipper,zipper)
       where
         zipper :: Zipper w p
         zipper =
@@ -210,26 +207,17 @@ pushCoit Zipper {zCursor = Const newCoit,..} =
       }
     cmdItCoit' =
       DontReset $ case (bgsInits zBgState,acNonEmpty $ bgsIts zBgState) of
-        ([],Nothing) -> trace ("[" ++ zId ++ "]finished")
-          $ CmdFinished
-          $ ExZipper
-          $ putRes newRes (zRes,void finZipper)
-        (ini:inis,Nothing) -> trace
-          ("next:init -> zlen: " ++ ashow (lengthZ $ mkIniZ ini inis))
-          $ CmdInit
-          $ evolve
-          $ mkIniZ ini inis
+        ([],Nothing)
+          -> CmdFinished $ ExZipper $ putRes newRes (zRes,void finZipper)
+        (ini:inis,Nothing) -> CmdInit $ evolve $ mkIniZ ini inis
         ([],Just nonempty) -> CmdIt $ \pop -> evolve
           $ let (k,(ini,it),its) = pop nonempty
-                z = fromJustErr $ mkItZ (k,ini,it) its in trace
-            ("next:it -> zlen:" ++ ashow (lengthZ z))
-            z
-        (ini:inis,Just nonempty) -> trace "next:it|initt"
-          $ CmdItInit
-            (\pop -> evolve
-             $ let (k,(ini',it),its) = pop nonempty
-             in fromJustErr $ mkItZ (k,ini',it) its)
-            (evolve $ mkIniZ ini inis)
+                z = fromJustErr $ mkItZ (k,ini,it) its in z
+        (ini:inis,Just nonempty) -> CmdItInit
+          (\pop -> evolve
+           $ let (k,(ini',it),its) = pop nonempty
+           in fromJustErr $ mkItZ (k,ini',it) its)
+          (evolve $ mkIniZ ini inis)
     -- Just return the zipper
     evolve zipper = return (mkZCat zipper,zipper)
     mkIniBgs inis =

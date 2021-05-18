@@ -82,12 +82,12 @@ convBndR Conv{..} = \case
   BndRes r -> BndRes $ convRes r
   BndBnd b -> BndBnd $ convBnd b
   BndErr e -> BndErr $ convErr e
-convSumMin :: Conv (SumTag p v) (MinTag p v)
+convSumMin :: Num v => Conv (SumTag p v) (MinTag p v)
 convSumMin =
   Conv
   { convEpoch = id
    ,convCap = coerce
-   ,convRes = coerce
+   ,convRes = \case {Sum Nothing -> Min' 0; Sum (Just x) -> Min' x}
    ,convBnd = coerce
    ,convErr = coerce
   }
@@ -97,7 +97,7 @@ convMinSum =
   Conv
   { convEpoch = id
    ,convCap = coerce
-   ,convRes = coerce
+   ,convRes = \(Min' x) -> Sum (Just x)
    ,convBnd = coerce
    ,convErr = coerce
   }

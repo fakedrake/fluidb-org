@@ -94,10 +94,11 @@ malMinBound lessThan mal = case malConcrete mal of
   OnlyErrors _ -> case elemBnd of
     Nothing -> NoSec
     Just bnd -> SecSoft bnd
-  FoundResult r -> case (\b -> (b,lessThan r b)) <$> elemBnd of
-    Just (_bnd,True) -> SecConcrete r
+  FoundResult firstRes -> case (\b -> (b,lessThan firstRes b)) <$> elemBnd of
+    Just (_bnd,True) -> SecConcrete firstRes -- the first result is better than the best case of
+                                           -- the next.
     Just (bnd,False) -> SecSoft bnd
-    Nothing -> SecConcrete r
+    Nothing -> SecConcrete firstRes -- there are no other results.
   where
     elemBnd = foldl' go Nothing $ fmap fst $ malElements mal
       where
@@ -167,7 +168,7 @@ instance (AShow a
          ,ExtParams p
          ,NoArgError (ExtError p)
          ,AShow (ExtError p)) => ZipperParams (MinTag p a) where
-  type ZCap (MinTag p a) = Min a
+  type ZCap (MinTag p a) = Min' a
   type ZEpoch (MinTag p a) = ExtEpoch p
   type ZCoEpoch (MinTag p a) = ExtCoEpoch p
   type ZCoEpoch (MinTag p a) = ExtCoEpoch p
@@ -218,9 +219,7 @@ instance (AShow a
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (secondaryBound,confCap conf) of
-      (NoSec,_) -> trace
-        ("nosec: " ++ ashow (confCap conf))
-        conf { confCap = CapVal 0 }
+      (NoSec,_) -> conf { confCap = CapVal 0 }
       (_,CapStruct i) -> conf { confCap = CapStruct $ i - 1 }
       (SecConcrete res,CapVal c) -> conf { confCap = CapVal $ min res c }
       (SecSoft bnd,CapVal c) -> conf { confCap = CapVal $ min bnd c }
@@ -238,9 +237,7 @@ minEvolutionControl
   => Conf (MinTag p v)
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
-minEvolutionControl
-  conf
-  z = trace ("cap: " ++ ashow (confCap conf,res)) $ case confCap conf of
+minEvolutionControl conf z = case confCap conf of
   CapStruct i -> if
     | i > 0 -> res
     | i == 0 -> maybe (Just $ BndBnd 0) Just res -- Will be turned into DoNothing
@@ -258,8 +255,7 @@ minEvolutionControl
       Just r -> Just $ BndBnd r
       Nothing -> case malMinBound (<) $ bgsIts $ zBgState z of
         NoSec -> Nothing
-        SecConcrete _r
-          -> error "How is there a concrete minimum and we haven't returned?"
+        SecConcrete r -> Just $ BndRes r
         SecSoft b -> Just $ BndBnd b
 
 minBndR :: Ord v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
@@ -311,14 +307,13 @@ minStrategy
 minStrategy fin = recur
   where
     recur (FreeT m) = m >>= \case
-      Pure a -> trace "Min:Found value" $ return a
-      Free f -> trace ("Min:Strategic options: " ++ ashow (ashowItInit f))
-        $ case f of
-          CmdItInit _it ini -> recur ini
-          CmdIt it -> recur $ it $ popMinAssocList
-          CmdInit ini -> recur ini
-          CmdFinished (ExZipper x) -> return
-            (fin,fromMaybe (undefined) $ zFullResultMin x)
+      Pure a -> return a
+      Free f -> case f of
+        CmdItInit _it ini -> recur ini
+        CmdIt it -> recur $ it $ popMinAssocList
+        CmdInit ini -> recur ini
+        CmdFinished (ExZipper x) -> return
+          (fin,fromMaybe (undefined) $ zFullResultMin x)
 
 
 minTest :: IO (BndR (MinTag TestParams Integer))

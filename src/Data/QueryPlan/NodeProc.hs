@@ -45,7 +45,8 @@ makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
   where
     go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
       where
-        constArr = arr $ const $ BndRes dsetConst
+        constArr =
+          arr $ const $ trace ("cost: " ++ ashow dsetConst) $ BndRes dsetConst
     procMin
       :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
       -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
@@ -96,7 +97,7 @@ mkEpoch ref = mealyLift $ fromKleisli $ \conf -> do
   tell $ refFromAssocs [(ref,isMater)]
   return
     $ if isMater then trace ("materialized: " ++ ashow ref) (Left 0)
-    else trace ("Continuing: " ++ ashow ref)
+    else trace ("Not mat. Evaluating: " ++ ashow ref)
       $ Right conf { confTrPref = ashow ref }
 
 squashMealy
@@ -112,17 +113,14 @@ mkNewMech :: NodeRef n -> NodeProc t n (CostParams n)
 mkNewMech ref = squashMealy $ do
   mops <- lift2 $ findCostedMetaOps ref
   -- Should never see the same val twice.
-  traceM $ "vals: " ++ ashow (ref,toNodeList . metaOpIn . fst <$> mops)
+  traceM $ "Neighbors: " ++ ashow (ref,toNodeList . metaOpIn . fst <$> mops)
   let mechs =
         [DSetR { dsetConst = Sum $ Just cost
                 ,dsetNeigh = [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
                } | (mop,cost) <- mops]
   let ret =
         withTrail (ErrCycle ref) ref
-        $ arr (trace ("Evaluating: " ++ ashow ref))
-        >>> mkEpoch ref
-        >>> (arr BndRes) ||| makeCostProc ref mechs
-        >>> arr (\r -> trace ("Evaluated: " ++ ashow (ref,r)) r)
+        $ mkEpoch ref >>> (arr BndRes) ||| makeCostProc ref mechs
   lift2 $ modify $ \gcs
     -> gcs { gcMechMap = refInsert ref ret $ gcMechMap gcs }
   return ret
@@ -145,16 +143,16 @@ planQuickRun m = do
     Left e -> throwError e
     Right (a,st) -> put st >> return a
 
-getCost :: Monad m => Cap (Min Cost) -> NodeRef n -> PlanT t n m (Maybe Cost)
+getCost :: Monad m => Cap (Min' Cost) -> NodeRef n -> PlanT t n m (Maybe Cost)
 getCost cap ref = do
-  traceM $ "getCost starting: " ++ ashow ref
+  traceM $ "getCost_begin: " ++ ashow ref
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   ((res,_coepoch),_trail) <- planQuickRun
     $ (`runStateT` def)
     $ runWriterT
     $ runMech (getOrMakeMech ref)
     $ Conf { confCap = cap,confEpoch = states,confTrPref = ashow ref }
-  traceM $ "getCost returning: " ++ ashow (ref,res)
+  traceM $ "getCost_end: " ++ ashow (ref,res)
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just 0
