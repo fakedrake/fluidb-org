@@ -234,6 +234,8 @@ data Conf w =
         ,confTrPref :: String
        }
   deriving Generic
+instance (AShow (ZEpoch w),AShow (ZCap w))
+  => AShow (Conf w)
 instance Default (ZEpoch w) => Default (Conf w) where
   def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = "no-pref" }
 type GConf w = Conf w

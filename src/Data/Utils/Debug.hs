@@ -16,6 +16,8 @@ module Data.Utils.Debug
   , assertM
   , printf
   , ashow
+  , traceV
+  , assert
   ) where
 
 import GHC.Stack
@@ -68,6 +70,9 @@ wrapTraceT msg x = do
   traceTM $ "[After] " ++ msg
   return ret
 
+
+traceV :: AShow v => String -> v -> a -> a
+traceV msg val = trace (msg ++ ": " ++ ashow val)
 #else
 trace :: String -> a -> a
 trace = const id

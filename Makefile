@@ -1,6 +1,11 @@
 HASKELL_FILES=$(shell find . -name "*.hs")
 
-all: benchmark.profiterole.txt
+.PHONY:
+run:
+	stack run benchmark
+
+.PHONY:
+profile: benchmark.profiterole.txt
 
 benchmark.prof: $(HASKELL_FILES)
 	stack run --profile benchmark --rts-options -p

@@ -13,7 +13,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Control.Antisthenis.Sum (SumTag) where
 
-import Data.Utils.Debug
+import Data.Utils.Tup
+import Control.Monad.Identity
 import GHC.Generics
 import Data.Utils.Default
 import Data.Utils.AShow
@@ -75,8 +76,7 @@ instance (AShow v
      ,evolutionEmptyErr = error "No arguments provided"
     }
   putRes newBnd (partialRes,newZipper) =
-    trace (printf "putRes %s %s" (ashow newBnd) (ashow partialRes))
-    $ (\() -> add partialRes newBnd) <$> newZipper
+    (\() -> add partialRes newBnd) <$> newZipper
     where
       add SumPartInit bnd = toPartial bnd
       add e@(SumPartErr _) _ = e
@@ -102,30 +102,34 @@ instance (AShow v
           CapStruct s -> CapStruct $ s - 1
           x -> x
         SumPart r -> case confCap conf of
-          CapVal c -> CapVal $ c - r
+          CapVal c -> CapVal cap'
+            where
+              cap' =
+                maybe
+                  (c - r)
+                  (\b0 -> c - r + b0)
+                  (fst3 $ runIdentity $ zCursor z)
           CapStruct s -> CapStruct $ s - 1
           ForceResult -> ForceResult
 
 -- | Return the result expected or Nothing if there is more evolving
 -- that needs to happen. This can only return bounds.
 sumEvolutionControl
-  :: (Num v,Ord v)
+  :: (Num v,Ord v,AShow v,AShow (ExtError p))
   => GConf (SumTag p v)
   -> Zipper (SumTag p v) (ArrProc (SumTag p v) m)
   -> Maybe (BndR (SumTag p v))
 sumEvolutionControl conf z = case zRes z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
-    CapStruct i -> if i <= 0 then Nothing else Just $ BndBnd 0
-    CapVal bnd -> if bnd < 0 then trace "stopping!" $ Just $ BndBnd 0 else Nothing
+    CapStruct i -> if i < 0 then Nothing else Just $ BndBnd 0
+    CapVal bnd -> if bnd < 0 then Just $ BndBnd 0 else Nothing
     _ -> Nothing
   SumPart bound -> case confCap conf of
-    CapVal cap
-      -> if cap < bound then Just $ BndBnd bound else Nothing
+    CapVal cap -> if cap < bound then Just $ BndBnd bound else Nothing
     CapStruct i -> if
-      | i > 0 -> Nothing
-      | i == 0 -> Just $ BndBnd bound
-      | otherwise -> error "unreachable"
+      | i >= 0 -> Nothing
+      | otherwise -> Just $ BndBnd bound
     ForceResult -> Nothing
 
 sumEvolutionStrategy

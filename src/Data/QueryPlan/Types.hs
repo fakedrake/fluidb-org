@@ -454,6 +454,8 @@ instance ExtParams (PlanParams n) where
   -- | When the coepoch is older than the epoch we must reset and get
   -- a fresh value for the process. Otherwise the progress made so far
   -- towards a value is valid and we should continue from there.
+  --
+  -- XXX: The cap may have changed though
   extCombEpochs Proxy coepoch epoch a =
     if and $ refIntersectionWithKey (const (==)) coepoch epoch
     then DontReset a else ShouldReset

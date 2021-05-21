@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -35,7 +36,6 @@ import Data.Proxy
 import Data.Utils.FixState
 import Control.Monad.Trans.Free
 import GHC.Generics
-import Data.Utils.Debug
 import Data.Utils.Functors
 import Data.Utils.Monoid
 import Control.Antisthenis.Test
@@ -74,16 +74,18 @@ data MinAssocList f w a =
     -- * We have encountered NO results
    ,malConcrete :: ConcreteVal w
   }
-  deriving (Generic,Functor)
+  deriving (Generic,Functor,Foldable)
 instance (AShow (f (ZBnd w,a)),AShowBndR w,AShow a,AShowV [ZErr w])
   => AShow (MinAssocList f w a)
-
 
 -- | The minimum bound.
 data SecondaryBound w
   = SecConcrete (ZRes w)
   | SecSoft (ZBnd w)
   | NoSec
+  deriving Generic
+instance (AShow (ZRes w),AShow (ZBnd w))
+  => AShow (SecondaryBound w)
 malMinBound
   :: forall f w a .
   (Ord (ZBnd w),Foldable f,Functor f,Num (ZBnd w))
@@ -116,9 +118,6 @@ zModConcrete f z = z { zBgState = zsModIts $ zBgState z }
     zsModIts zst = zst { bgsIts = malModIts $ bgsIts zst } where
       malModIts m = m{malConcrete=f $ malConcrete m}
 
-instance Foldable f => Foldable (MinAssocList f w) where
-  foldr f v mal = foldr2 f v $ malElements mal
-
 instance AssocContainer (MinAssocList [] w) where
   type KeyAC (MinAssocList [] w) = ZBnd w
   type NonEmptyAC (MinAssocList [] w) = MinAssocList NEL.NonEmpty w
@@ -144,7 +143,7 @@ minimumOn ((b,a) NEL.:| as) =
 
 -- | Return the minimum of the list.
 popMinAssocList
-  :: Ord (ZBnd w)
+  :: (Ord (ZBnd w),AShowV (ZBnd w))
   => MinAssocList NEL.NonEmpty w a
   -> (ZBnd w,a,MinAssocList [] w a)
 popMinAssocList (MinAssocList m c) = (v,a,MinAssocList vs c)
@@ -187,10 +186,8 @@ instance (AShow a
   -- updated. Bounded results are already stored in the associative
   -- structure.
   putRes newBnd ((),newZipper) = case newBnd of
-    BndRes r -> trace ("putRes: " ++ ashow r)
-      $ zModConcrete (putResult r) newZipper
-    BndErr e -> trace ("putErr: " ++ ashow e)
-      $ zModConcrete (putError e) newZipper
+    BndRes r -> zModConcrete (putResult r) newZipper
+    BndErr e -> zModConcrete (putError e) newZipper
     BndBnd _ -> newZipper -- already taken care of implicitly
     where
       -- Only put error if there is no concrete solution.
@@ -219,11 +216,14 @@ instance (AShow a
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (secondaryBound,confCap conf) of
-      (NoSec,_) -> conf { confCap = CapVal 0 }
+      (NoSec,_) -> conf
       (_,CapStruct i) -> conf { confCap = CapStruct $ i - 1 }
-      (SecConcrete res,CapVal c) -> conf { confCap = CapVal $ min res c }
-      (SecSoft bnd,CapVal c) -> conf { confCap = CapVal $ min bnd c }
-      (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
+      (SecConcrete res,CapVal c) -> if res
+        <= c then undefined else conf { confCap = CapVal $ min res c }
+      (SecSoft bnd
+        ,CapVal c) -> conf { confCap = CapVal $ min bnd c }
+      (SecConcrete res
+        ,ForceResult) -> conf { confCap = CapVal res }
       (SecSoft bnd,ForceResult) -> conf { confCap = CapVal bnd }
     where
       secondaryBound = malMinBound (<) $ bgsIts $ zBgState z
@@ -239,14 +239,13 @@ minEvolutionControl
   -> Maybe (BndR (MinTag p v))
 minEvolutionControl conf z = case confCap conf of
   CapStruct i -> if
-    | i > 0 -> res
-    | i == 0 -> maybe (Just $ BndBnd 0) Just res -- Will be turned into DoNothing
-    | otherwise -> error "Was finished"
+    | i >= 0 -> res
+    | otherwise -> maybe (Just $ BndBnd 0) Just res
   ForceResult -> res >>= \case
     BndBnd _bnd -> Nothing
     x -> return x
   CapVal cap -> res >>= \case
-    BndBnd bnd -> if bnd <= cap then Nothing else Just $ BndBnd bnd
+    BndBnd bnd -> if cap < bnd then Just $ BndBnd bnd else Nothing
     x -> return x
   where
     -- The result so far. The cursor is assumed to always be either an
@@ -297,7 +296,7 @@ zFullResultMin z = case curs `minBndR'` softBound `minBndR'` hardBound of
       FoundResult r -> Just $ BndRes r
 
 minStrategy
-  :: (AShow v,Ord v,Monad m)
+  :: (AShow v,Ord v,Monad m,AShow (ExtError p))
   => k
   -> FreeT
     (ItInit (ExZipper (MinTag p v)) (ZItAssoc (MinTag p v)))
@@ -314,7 +313,6 @@ minStrategy fin = recur
         CmdInit ini -> recur ini
         CmdFinished (ExZipper x) -> return
           (fin,fromMaybe (undefined) $ zFullResultMin x)
-
 
 minTest :: IO (BndR (MinTag TestParams Integer))
 minTest =

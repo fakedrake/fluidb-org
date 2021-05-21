@@ -3,3 +3,6 @@ fluidb.cabal
 stack.yaml.lock
 .dir-locals.el
 tags
+*.prof
+*.profiterole.txt
+*.profiterole.html

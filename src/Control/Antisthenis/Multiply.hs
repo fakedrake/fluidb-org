@@ -35,7 +35,6 @@ import Data.Utils.AShow
 import Data.Maybe
 import GHC.Generics
 import Data.Utils.Functors
-import Data.Utils.Debug
 import Data.Utils.Default
 import Control.Monad.Identity
 import Control.Antisthenis.AssocContainer
@@ -121,8 +120,7 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
     where
       lackingResM = prModBnd' (`div` oldBnd) oldRes
   zLocalizeConf coepoch conf z =
-    trace "localize multiply"
-    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
       newCap = fromZ (prRes $ zRes z) $ case confCap conf of
@@ -138,7 +136,7 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
       fromZ r x = case r of
         Just (Left _) -> CapStruct 1
         Just (Right (Mul 0 _)) -> x
-        Just (Right _is_zero) -> trace "Found zero" CapStruct (-1) -- HERE WE BLOCK ON ZERO
+        Just (Right _is_zero) -> CapStruct (-1) -- HERE WE BLOCK ON ZERO
         _ -> x
 
 -- | Keep zeroes separate so they are easily accessible and have an

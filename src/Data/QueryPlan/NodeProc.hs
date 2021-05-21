@@ -9,7 +9,6 @@
 {-# LANGUAGE LambdaCase #-}
 module Data.QueryPlan.NodeProc (NodeProc,getCost) where
 
-import Data.Utils.Debug
 import Control.Monad.Reader
 import Control.Monad.Except
 import Data.Utils.Default
@@ -45,15 +44,18 @@ makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
   where
     go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
       where
-        constArr =
-          arr $ const $ trace ("cost: " ++ ashow dsetConst) $ BndRes dsetConst
+        constArr = arr $ const $ BndRes dsetConst
     procMin
       :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
       -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
-    procMin = mkProcId ("min:" ++ ashow ref)
+    procMin ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+      where
+        mid = "min:" ++ ashow ref
     procSum :: [NodeProc t n (SumTag (PlanParams n) v)]
             -> NodeProc t n (SumTag (PlanParams n) v)
-    procSum = mkProcId ("sum:" ++ ashow ref)
+    procSum ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+      where
+        mid = ("sum:" ++ ashow ref)
 
 modTrailE
   :: Monoid (ZCoEpoch w)
@@ -95,10 +97,7 @@ mkEpoch
 mkEpoch ref = mealyLift $ fromKleisli $ \conf -> do
   let isMater = fromMaybe False $ ref `refLU` confEpoch conf
   tell $ refFromAssocs [(ref,isMater)]
-  return
-    $ if isMater then trace ("materialized: " ++ ashow ref) (Left 0)
-    else trace ("Not mat. Evaluating: " ++ ashow ref)
-      $ Right conf { confTrPref = ashow ref }
+  return $ if isMater then Left 0 else Right conf
 
 squashMealy
   :: (ArrowFunctor c,Monad (ArrFunctor c))
@@ -113,7 +112,6 @@ mkNewMech :: NodeRef n -> NodeProc t n (CostParams n)
 mkNewMech ref = squashMealy $ do
   mops <- lift2 $ findCostedMetaOps ref
   -- Should never see the same val twice.
-  traceM $ "Neighbors: " ++ ashow (ref,toNodeList . metaOpIn . fst <$> mops)
   let mechs =
         [DSetR { dsetConst = Sum $ Just cost
                 ,dsetNeigh = [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
@@ -145,14 +143,13 @@ planQuickRun m = do
 
 getCost :: Monad m => Cap (Min' Cost) -> NodeRef n -> PlanT t n m (Maybe Cost)
 getCost cap ref = do
-  traceM $ "getCost_begin: " ++ ashow ref
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   ((res,_coepoch),_trail) <- planQuickRun
     $ (`runStateT` def)
     $ runWriterT
     $ runMech (getOrMakeMech ref)
-    $ Conf { confCap = cap,confEpoch = states,confTrPref = ashow ref }
-  traceM $ "getCost_end: " ++ ashow (ref,res)
+    $ Conf
+    { confCap = cap,confEpoch = states,confTrPref = "topLevel:" ++ ashow ref }
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just 0

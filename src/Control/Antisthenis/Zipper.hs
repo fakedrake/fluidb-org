@@ -33,9 +33,8 @@ module Control.Antisthenis.Zipper
   ,mkProcId
   ,runMech) where
 
-import Data.Utils.Const
 import Data.Utils.AShow
-import Data.Utils.Debug
+import Data.Utils.Const
 import Control.Antisthenis.ATL.Class.Functorial
 import Control.Monad.Writer
 import Control.Antisthenis.ATL.Common
@@ -81,7 +80,7 @@ type ZCat w m =
 -- resolved in one step.
 mkZCat'
   :: forall w m .
-  (ZipperParams w,Monad m)
+  (ZipperParams w,Monad m,AShow (ZBnd w))
   => String
   -> [ArrProc w m]
   -> MooreCat
@@ -99,12 +98,9 @@ mkZCat' zipId (a:as) = mkMooreCat zipper $ mkZCat zipper
        ,zId = zipId
       }
 
-confTrM :: Monad m => Conf w -> String -> m ()
-confTrM conf msg = traceM $ "[" ++ confTrPref conf ++ "] " ++ msg
-
 -- Make a ziper evolution.
 mkZCat
-  :: (ZipperParams w,Monad m)
+  :: (ZipperParams w,Monad m,AShow (ZBnd w))
   => Zipper w (ArrProc w m)
   -> MealyArrow
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
@@ -127,7 +123,7 @@ type EvaledZipper w p v =
 -- of ways to put the zipper together (either pull it or ini or reset
 -- etc). Create the commands for that.
 pushIt :: forall w m p .
-       (Monad m,p ~ ArrProc w m,ZipperParams w)
+       (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
        => EvaledZipper w p (ZBnd w,InitProc p,p)
        -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
 pushIt
@@ -180,7 +176,7 @@ pushIt
           pop $ acInsert bnd (inip,itp) $ (bgsIts zBgState)
 
 pushCoit :: forall w m p .
-         (Monad m,p ~ ArrProc w m,ZipperParams w)
+         (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
          => EvaledZipper w p (Either (ZErr w) (ZRes w),CoitProc p)
          -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
 pushCoit Zipper {zCursor = Const newCoit,..} =

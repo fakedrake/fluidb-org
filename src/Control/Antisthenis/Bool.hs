@@ -19,7 +19,6 @@ import Control.Antisthenis.ATL.Class.Functorial
 import Data.Proxy
 import qualified Data.IntSet as IS
 import Control.Antisthenis.Test
-import Data.Utils.Debug
 import Control.Antisthenis.ATL.Transformers.Mealy
 import Control.Monad.State
 import qualified Data.IntMap as IM
@@ -174,12 +173,12 @@ combBoolBndR
   => BndR (BoolTag op p)
   -> Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p))
   -> Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p))
-combBoolBndR newRes oldRes = trace "combining" $ case (newRes,oldRes) of
+combBoolBndR newRes oldRes = case (newRes,oldRes) of
   (BndRes r,Left e) -> case elemType r of
     AbsorbingElem -> Right r
     NormalElem -> Left e
-  (BndRes r,Right r') -> trace "res detected" $ Right $ r <> r'
-  (BndErr e,Right r) -> trace "error detected" $ case elemType r of
+  (BndRes r,Right r') -> Right $ r <> r'
+  (BndErr e,Right r) -> case elemType r of
     AbsorbingElem -> Right r
     NormalElem -> Left e
   (BndErr e,Left _) -> Left e
@@ -254,8 +253,7 @@ instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
      ,evolutionEmptyErr = error "No arguments provided"
     }
   putRes newBnd (partialRes,newZipper) =
-    trace ("putRes " ++ ashow (zSize newZipper,newBnd))
-    $ (\() -> maybe newBnd' (Just . combBoolBndR newBnd) partialRes)
+    (\() -> maybe newBnd' (Just . combBoolBndR newBnd) partialRes)
     <$> newZipper
     where
       newBnd' = case newBnd of
@@ -313,7 +311,7 @@ boolEvolutionControl conf z = case confCap conf of
     | i == 0 -> localRes
     | otherwise -> either BndErr BndRes <$> zRes z
   ForceResult -> zRes z >>= \case
-    Left _e -> trace "error actually found" Nothing -- xxx: should check if zero is even possible.
+    Left _e -> Nothing -- xxx: should check if zero is even possible.
     Right x -> if zFinished z then Just $ BndRes x else Nothing
   CapVal cap -> do
     localBnd <- zBound z
