@@ -118,20 +118,22 @@ mkWorkload WorkloadConfig{..} =
 type Length = Int
 type QuerySize = Integer
 type Workload = [[(Integer,Integer)]]
-data WorkloadConfig = WorkloadConfig {
-  workloadName          :: String
-  , workloadTableOffset :: Integer
-  , workloadQuerySize   :: QuerySize
-  , workloadSize        :: Length
-  , workloadBudget      :: Int
-  } deriving Show
+data WorkloadConfig =
+  WorkloadConfig
+  { workloadName :: String
+   ,workloadTableOffset :: Integer
+   ,workloadQuerySize :: QuerySize
+   ,workloadSize :: Length
+   ,workloadBudget :: Int
+  }
+  deriving Show
 
 defaultConfig :: WorkloadConfig
 defaultConfig = WorkloadConfig {
   workloadName="simple-star",
   workloadTableOffset=0,
   workloadQuerySize=3,
-  workloadSize=20,
+  workloadSize=5,
   workloadBudget=20
   }
 

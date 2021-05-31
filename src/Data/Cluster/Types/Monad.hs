@@ -136,16 +136,16 @@ data ClustBuildCache e s t n = ClustBuildCache {
   } deriving Generic
 instance Default (ClustBuildCache e s t n)
 clearClustBuildCache :: MonadState (ClusterConfig e s t n) m => m ()
-clearClustBuildCache = do
-  showRegCall
-  modify $ \cc -> cc{clustBuildCache=def}
+clearClustBuildCache = modify $ \cc -> cc{clustBuildCache=def}
+
+-- | Count function calls
 showRegCall :: MonadState (ClusterConfig e s t n) m => m ()
 showRegCall = do
   ls <- sortOn snd . HM.toList . callCount . clustBuildCache <$> get
   traceM "Functions called:"
   case ls of
     [] -> traceM "<No functions called to show>"
-    _  -> forM_ ls $ \(n,c) -> traceM $ printf "\t%s -> %d" n c
+    _ -> forM_ ls $ \(n,c) -> traceM $ printf "\t%s -> %d" n c
 
 regCall :: MonadState (ClusterConfig e s t n) m => String -> m ()
 regCall call = modify $ \cc -> cc{

@@ -176,7 +176,7 @@ insertAndRun queries postSolution = do
         matNodes <- lift materializedNodes
         traceM $ "Mat nodes: " ++ ashow matNodes
         when (null matNodes) $ throwAStr "No ground truth"
-      nOptqRef :: NodeRef n <- wrapTrace "inserting plans"
+      nOptqRef :: NodeRef n <- wrapTraceT "inserting plans"
         $ lift3
         $ insertQueryPlan literalType queries
       lift4 clearClustBuildCache

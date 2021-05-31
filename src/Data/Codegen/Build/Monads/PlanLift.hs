@@ -94,13 +94,14 @@ updateAll graph cConf =
 updateGraph :: Bipartite t n -> GCConfig t n -> GCConfig t n
 updateGraph graph gcConf = gcConf{propNet=graph}
 
-updateSizes :: forall e s t n .
-              Hashables2 e s =>
-              ClusterConfig e s t n
-            -> GCConfig t n
-            -> Either
-            (Either (SizeInferenceError e s t n) (PlanningError t n))
-            (GCConfig t n)
+updateSizes
+  :: forall e s t n .
+  Hashables2 e s
+  => ClusterConfig e s t n
+  -> GCConfig t n
+  -> Either
+    (Either (SizeInferenceError e s t n) (PlanningError t n))
+    (GCConfig t n)
 updateSizes cConf =
   updateConf (\gcConf s -> gcConf{nodeSizes=s}) $ do
     unsizedNodes <- lift missingSizes

@@ -164,10 +164,11 @@ findMetaOps :: Monad m => NodeRef n -> PlanT t n m [MetaOp t n]
 findMetaOps = fmap2 fst . findCostedMetaOps
 findMetaOps' :: Monad m => NodeRef n -> PlanT t n m [MetaOp t n]
 findMetaOps' ref = do
-  mops <- runListT
-         $ followUnsafe followIns ref <|> followUnsafe followOuts ref
+  mops <- runListT $ followUnsafe followIns ref <|> followUnsafe followOuts ref
   fmap (map fst . sortOn snd)
-    $ forM mops $ (\op -> (op,) <$> metaOpNeededPages op)
+    $ forM mops
+    $ (\op -> (op,) <$> metaOpNeededPages op)
+{-# INLINE findMetaOps' #-}
 
 findCostedMetaOps :: Monad m => NodeRef n -> PlanT t n m [(MetaOp t n,Cost)]
 findCostedMetaOps = memM (getMetaOpCache,putMetaOpCache) $ \ref -> do

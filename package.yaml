@@ -87,9 +87,16 @@ library:
     - FluiDB.Schema.TPCH.Main
     - FluiDB.Schema.Graph.Main
 executables:
-  benchmark: &benchmark
-      main: Main.hs
-      source-dirs: tools/Benchmark
-      ghc-options: -rtsopts
-      dependencies:
-        - fluidb
+  benchmark: &exe
+    main: Main.hs
+    source-dirs: tools/Benchmark
+    ghc-options: -rtsopts
+    dependencies:
+      - fluidb
+  readdump:
+    main: Main.hs
+    source-dirs: tools/ReadDump
+    dependencies:
+      - bifunctors
+      - mtl
+      - bytestring
