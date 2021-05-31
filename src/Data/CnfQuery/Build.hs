@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE LambdaCase                #-}

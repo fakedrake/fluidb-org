@@ -1,4 +1,4 @@
-SHELL := /bin/bash
+SHELL := /usr/bin/env bash
 SOURCES := $(shell find "$(PWD)/src/*" -type f -name "*.hs" -print)
 READDUMP_EXE := /tmp/readdump
 LOG_DUMP := /tmp/benchmark.out

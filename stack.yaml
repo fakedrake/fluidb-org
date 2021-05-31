@@ -2,8 +2,11 @@ flags: {}
 extra-package-dbs: []
 packages:
 - '.'
-resolver: lts-17.9
+resolver: lts-17.14
 allow-newer: true
 ghc-options:
   hashable: -fno-prof-auto
   unordered-containers: -fno-prof-auto
+nix:
+  enable: true
+  shell-file: shell.nix
