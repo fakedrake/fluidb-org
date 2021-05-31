@@ -3,19 +3,17 @@ import Development.Shake.Rule
 import Development.Shake.Command
 import Development.Shake.FilePath
 import Development.Shake.Util
--- Shake extensions
-
-root :: String -> (FilePath -> Bool) -> (FilePath -> Action ()) -> Rules ()
-root help test act = addUserRule $ FileRule help $ \x -> if not
-  $ test x then Nothing else Just $ ModeDirect $ do
-  liftIO $ createDirectoryRecursive $ takeDirectory x
-  act x
--- /Shake extension
+import Control.Monad.Except
 
 data BuildConf = BuildConf {
   bcBuildArgs :: [String],
   bcExe :: String
   }
+
+splitOn :: Eq a => a -> [a] -> Maybe ([a], [a])
+splitOn v = go [] where
+  go prev (x:xs) = if x == v then Just (reverse prev, xs) else go (x:prev) xs
+  go prev [] = Nothing
 
 branchesBuildConf :: BuildConf
 branchesBuildConf =
@@ -29,18 +27,30 @@ sb cnf = do
   cmd_ $ "stack build -j " ++ unwords (bcBuildArgs cnf)
 
 logDump = "/tmp/benchmark.out"
+pathsFile = "_build/paths.txt"
 
 localInstallRoot :: Action FilePath
 localInstallRoot = do
-    need [ "_build/paths.txt" ]
-    filter _ . lines <$> readFile "_build/paths.txt"
-
+  need [pathsFile]
+  ls <- liftIO
+    $ filter (maybe False ((== "local-install-root") . fst) . splitOn ':')
+    . lines
+    <$> readFile "_build/paths.txt"
+  case ls of
+    [] -> fail "Couldn't find 'local-install-root' in '_build/paths.txt'"
+    [a] -> return a
+    _:_ -> fail
+      "More than one instances of 'local-install-root' in '_build/paths.txt'"
 
 main :: IO ()
-main = shakeArgs shakeOptions{shakeFiles="_build"} $ do
-
+main = shakeArgs shakeOptions { shakeFiles = "_build" } $ do
+  want [logDump]
   phony "branches" $ do
     sb branchesBuildConf
-  logDump %> \path -> do
-    need [ benchmarkExe ]
-    cmd_ $ "stack run benchmark > " ++ path
+  pathsFile %> \out -> do
+    Stdout contents <- cmd $ "stack path"
+    liftIO $ writeFile out contents
+  logDump %> \out -> do
+    benchmarkExe <- (</> "bin/benchmark") <$> localInstallRoot
+    need [benchmarkExe]
+    cmd_ $ "stack run benchmark > " ++ out
