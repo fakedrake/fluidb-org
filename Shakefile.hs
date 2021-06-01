@@ -4,27 +4,18 @@ import Development.Shake.Command
 import Development.Shake.FilePath
 import Development.Shake.Util
 import Control.Monad.Except
+import Data.List.Extra
+import Text.Printf
 
-data BuildConf = BuildConf {
-  bcBuildArgs :: [String],
-  bcExe :: String
-  }
+haskellFiles :: Action [FilePath]
+haskellFiles = do
+  Stdout files <- cmd "find src -name '*.hs'"
+  return $ lines files
 
-splitOn :: Eq a => a -> [a] -> Maybe ([a], [a])
-splitOn v = go [] where
-  go prev (x:xs) = if x == v then Just (reverse prev, xs) else go (x:prev) xs
-  go prev [] = Nothing
-
-branchesBuildConf :: BuildConf
-branchesBuildConf =
-  BuildConf
-  { bcBuildArgs = ["--ghc-options=-DVERBOSE_SOLVING"]
-   ,bcExe = "benchmark"
-  }
-
-sb :: BuildConf -> Action ()
-sb cnf = do
-  cmd_ $ "stack build -j " ++ unwords (bcBuildArgs cnf)
+srcDeps :: Action ()
+srcDeps = do
+  fs <- haskellFiles
+  need $ "Shakefile.hs":"package.yaml":fs
 
 logDump = "/tmp/benchmark.out"
 pathsFile = "_build/paths.txt"
@@ -32,25 +23,36 @@ pathsFile = "_build/paths.txt"
 localInstallRoot :: Action FilePath
 localInstallRoot = do
   need [pathsFile]
-  ls <- liftIO
-    $ filter (maybe False ((== "local-install-root") . fst) . splitOn ':')
-    . lines
-    <$> readFile "_build/paths.txt"
-  case ls of
-    [] -> fail "Couldn't find 'local-install-root' in '_build/paths.txt'"
-    [a] -> return a
-    _:_ -> fail
-      "More than one instances of 'local-install-root' in '_build/paths.txt'"
+  v <- liftIO
+    $ firstJust (getVal . splitOn ": ") . lines <$> readFile pathsFile
+  case v of
+    Nothing -> fail "oops"
+    Just a -> return a
+  where
+    getVal ["local-install-root",v] = Just v
+    getVal _ = Nothing
+
+haskellExec :: String -> Action FilePath
+haskellExec exeName = do
+  root <- localInstallRoot
+  return $ root </> "bin" </> exeName
+
+execRule :: [String] -> String -> Rules FilePath
+execRule args execName  = do
+  let execPath = "_build/bin" </> execName
+  execPath %> \out -> do
+    srcDeps
+    intermPath <- haskellExec execName
+    cmd_ $ "stack build fluidb:exe:" ++ execName ++ " " ++ unwords args
+    cmd_ (printf "ln -s %s %s" intermPath out :: String)
+  return $ execPath
 
 main :: IO ()
 main = shakeArgs shakeOptions { shakeFiles = "_build" } $ do
   want [logDump]
-  phony "branches" $ do
-    sb branchesBuildConf
-  pathsFile %> \out -> do
-    Stdout contents <- cmd $ "stack path"
-    liftIO $ writeFile out contents
+  benchmarkExec <- execRule ["--ghc-options=-DVERBOSE_SOLVING"] "benchmark"
+  readdumpExec <- execRule [] "readdump"
+  pathsFile %> \out -> cmd (FileStdout out) "stack path"
   logDump %> \out -> do
-    benchmarkExe <- (</> "bin/benchmark") <$> localInstallRoot
-    need [benchmarkExe]
-    cmd_ $ "stack run benchmark > " ++ out
+    need [benchmarkExec]
+    cmd (Timeout 10) (EchoStderr False) (FileStderr out) "stack run benchmark"
