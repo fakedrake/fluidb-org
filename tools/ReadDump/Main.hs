@@ -18,6 +18,7 @@
 
 module Main where
 
+import GHC.Stack
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Bifunctor
@@ -39,7 +40,7 @@ data Node = NewPlan Int | Node Linum [Bool] StringType deriving Show
 
 show' :: Show a => a -> StringType
 show' = C8.pack . show
-read' :: Read a => StringType -> a
+read' :: (HasCallStack,Read a) => StringType -> a
 read' (dropWhile isSpace . C8.unpack -> x) =
   fromMaybe (error $ printf "Unreadable: '%s'" x) $ readMaybe x
 
@@ -314,9 +315,9 @@ stripTime :: StringType -> (Maybe Double,StringType)
 stripTime str = maybe (Nothing,str) (first Just) $ do
   rest <- C8.stripPrefix "[" str
   let (intPart,rest) = C8.span isDigit rest
-  rest <- C8.stripPrefix "." rest
-  let (decPart,rest) = C8.span isDigit rest
-  rest <- C8.stripPrefix "s] " rest
+  _rest <- C8.stripPrefix "." rest
+  let (decPart,_rest) = C8.span isDigit rest
+  _rest <- C8.stripPrefix "s] " rest
   guard $ not $ C8.null intPart || C8.null decPart
   return (read $ C8.unpack $ intPart <> "." <> decPart,rest)
 
@@ -349,18 +350,23 @@ indentLines = go [] where
 enumerate :: [a] -> [(Int, a)]
 enumerate = zip [0..]
 
-data BranchResult = BranchFailure | BranchSuccess (Sum Int) | BranchResultUnknown
+data BranchResult = BranchFailure | BranchSuccess | BranchResultUnknown
   deriving (Show, Eq)
 lastLineToResult :: C8.ByteString -> BranchResult
-lastLineToResult x | "BOT" `B.isPrefixOf` x = BranchFailure
-                   | "Successfully materialized" `B.isPrefixOf` x =
-                     BranchSuccess $ Sum $ finalNum x
-                   | otherwise = BranchResultUnknown
+lastLineToResult x
+  | "BOT" `B.isPrefixOf` x = BranchFailure
+  | "Successfully materialized" `B.isPrefixOf` x = BranchSuccess
+  | otherwise = BranchResultUnknown
 
 finalNum :: StringType -> Int
 finalNum = read' . go where
   go x = if C8.null res then x else go res where
     res = C8.dropWhile (not . isNumber) $ C8.dropWhile isNumber x
+
+unsafeLast :: [a] -> a
+unsafeLast [x] = x
+unsafeLast (_:xs) = unsafeLast xs
+unsafeLast [] = error "Unsafe last on empty list"
 
 main :: IO ()
 main = (`evalStateT` []) $ do
@@ -372,54 +378,58 @@ main = (`evalStateT` []) $ do
   when True $ do
     plans <- readBranches dumpFile
     lift $ putStrLn $ printf "Will write %d plans" (length plans)
-    lift $ forM_ (enumerate plans) $ \(i, (nodeSolved, branches)) -> do
-      putStrLn $ printf "\tWriting plan %d (%d branches, node: %d)"
-        i (length branches) nodeSolved
+    lift $ forM_ (enumerate plans) $ \(i,(nodeSolved,branches)) -> do
+      putStrLn
+        $ printf
+          "\tWriting plan %d (%d branches, node: %d)"
+          i
+          (length branches)
+          nodeSolved
       let branchDir = branchDirf i
       createDirectoryIfMissing True branchDir
-      forM_ (enumerate $ zip branches ([]:branches)) $ \(ib, (b,_oldBranch)) -> do
+      forM_ (enumerate $ zip branches ([] : branches)) $ \(ib,(b,_oldBranch)) -> do
         let fname = printf "%s/branch%04d.txt" branchDir (ib :: Int)
         -- let (old, new) = splitWhen1 (uncurry (/=)) $ zip b $ oldBranch ++ repeat ""
         -- let curatedBranch = fmap fst old ++ ["[NEW STUFF]"] ++ fmap fst new
         let curatedBranch = b
-        let (off, outLines) = indentLines 0 curatedBranch
-        let result = lastLineToResult $ last curatedBranch
-        when (case result of {BranchSuccess _ -> True; _ -> False} || ib `mod` 100 == 0) $
-          putStrLn
-          $ printf "\t\tWrinting branch #%d (%d entries, %s)"
-          ib
-          (length outLines)
-          (show result)
+        let (off,outLines) = indentLines 0 curatedBranch
+        let result = lastLineToResult $ unsafeLast curatedBranch
+        when (case result of
+                BranchSuccess -> True
+                _ -> False || ib `mod` 100 == 0)
+          $ putStrLn
+          $ printf
+            "\t\tWrinting branch #%d (%d entries, %s)"
+            ib
+            (length outLines)
+            (show result)
         B.writeFile fname $ B.intercalate "\n" outLines <> "\n"
         -- It doesn't matter of offset is >0.
         when (off < 0) $ fail $ "Bad indent in: " ++ fname
         return $ length outLines
-
   -- Graphs
   when False $ do
     graphs <- readGraphs dumpFile
     lift $ putStrLn $ printf "Will write %d graphs" (length graphs)
-    lift $ forM_ (enumerate graphs) $ \(i, graph) -> do
+    lift $ forM_ (enumerate graphs) $ \(i,graph) -> do
       putStrLn $ printf "Will write graph #%d" i
       let branchDir = branchDirf i
       createDirectoryIfMissing True branchDir
       B.writeFile (branchDir ++ "/graph.txt") $ B.intercalate "\n" graph
-
   -- States
   when False $ do
     statess <- readStates dumpFile
     lift $ putStrLn $ printf "Will write %d state sets" (length statess)
-    lift $ forM_ (enumerate statess) $ \(i, states) -> do
+    lift $ forM_ (enumerate statess) $ \(i,states) -> do
       putStrLn $ printf "Will write state set #%d" i
       let branchDir = branchDirf i
       createDirectoryIfMissing True branchDir
       B.writeFile (branchDir ++ "/states.txt") $ B.intercalate "\n" states
-
   -- Clusters
   when False $ do
     clusterss <- readClusters dumpFile
     lift $ putStrLn $ printf "Will write %d cluster sets" (length clusterss)
-    lift $ forM_ (enumerate clusterss) $ \(i, clusters) -> do
+    lift $ forM_ (enumerate clusterss) $ \(i,clusters) -> do
       putStrLn $ printf "Will write cluster set #%d" i
       let branchDir = branchDirf i
       createDirectoryIfMissing True branchDir
