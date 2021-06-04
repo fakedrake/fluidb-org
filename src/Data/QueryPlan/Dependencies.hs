@@ -108,7 +108,8 @@ getDependencies ref0 = do
       ret@(_,newS) <- fmap2 (refMapMaybe id) $ runStateT m $ Just . (,[]) <$> s
       modify $ \gcState -> gcState
         { gcCache = (gcCache gcState)
-            { isMaterializableCache = toMatCache $ fst <$> newS }
+            { isMaterializableCache = toMatCache $ fst <$> newS
+            }
         }
       return $ fmap2 fst ret
 {-# SPECIALISE getDependencies :: NodeRef n

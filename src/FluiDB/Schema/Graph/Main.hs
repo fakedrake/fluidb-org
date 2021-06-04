@@ -16,6 +16,8 @@
 module FluiDB.Schema.Graph.Main
   (graphMain) where
 
+import Data.QueryPlan.Types
+import FluiDB.Types
 import System.Timeout
 import FluiDB.Classes
 import Data.Utils.Unsafe
@@ -92,12 +94,16 @@ actualMain wlConf = do
       zip (nub <$> fmap (toInts =<<) queryVariations)
       $ fmap3 (showQ . cnfOrigDEBUG . head)
       $ fromRight
-      $ runWorkloadEvals id queryVariations
+      $ runWorkloadEvals
+        (\conf -> conf
+         { globalGCConfig =
+             (globalGCConfig conf) { budget = Just $ workloadBudget wlConf }
+         })
+        queryVariations
       where
         fromRight = \case
           Left e -> error e
           Right r -> r
-        -- budget=Just $ maybe 50 workloadBudget $ listToMaybe wlConfs
         queryVariations :: Workload
         queryVariations = mkWorkload wlConf
         showQ :: Query e s -> SExp
@@ -134,7 +140,7 @@ defaultConfig = WorkloadConfig {
   workloadTableOffset=0,
   workloadQuerySize=3,
   workloadSize=5,
-  workloadBudget=20
+  workloadBudget=100
   }
 
 graphMain :: IO ()

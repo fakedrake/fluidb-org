@@ -24,7 +24,7 @@ type FDBAction = ReaderT Config Action
 
 needSrcFiles :: Action ()
 needSrcFiles = do
-  Stdout files <- cmd "find src -name '*.hs'"
+  Stdout files <- cmd Shell "find src/ -name '*.hs'"
   let fs = lines files
   need $ "Shakefile.hs" : "package.yaml" : fs
 

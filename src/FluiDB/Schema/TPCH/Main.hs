@@ -31,14 +31,12 @@ workloadTpch :: [Int]
 workloadTpch = [7,8,7,8,7,8,7,8]
 
 runWorkload'
-  :: (Int -> Int)
+  :: Maybe Int
   -> [Int]
   -> IO (Either String [([(Transition () (),Cost)],[NodeRef ()])])
-runWorkload' f wl = do
+runWorkload' budget wl = do
   let modBudget gc =
-        gc { globalGCConfig = (globalGCConfig gc)
-               { budget = fmap f $ budget $ globalGCConfig gc }
-           }
+        gc { globalGCConfig = (globalGCConfig gc) { budget = budget } }
   let log = ioLogMsg ioOps
   log "Schema:"
   log $ ashow $ globalSchemaAssoc $ defGlobalConf (Proxy :: Proxy IO) wl
@@ -48,7 +46,7 @@ runWorkload' f wl = do
 tpchMain :: IO ()
 tpchMain = timeoutSecs 15 $ do
   let workload = workloadTpch
-  runWorkload' id workload >>= \case
+  runWorkload' (Just 100) workload >>= \case
     Left e -> die e
     Right results -> do
       putStrLn "Results:"

@@ -265,6 +265,7 @@ runWorkloadCpp modGCnf qios = forEachQuery modGCnf qios $ \i query -> do
   ioLogMsg ioOps $ "NOT: " ++ unwords ("c++" : command)
   return (costTrigs,planFrontier trigs)
 
+-- | Run a workload turning it into evals.
 runWorkloadEvals
   :: forall e s t n m q .
   (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
@@ -272,7 +273,7 @@ runWorkloadEvals
   -> [q]
   -> m [[Evaluation e s t n [CNFQuery e s]]]
 runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query -> do
-  sqlToSolution query (return . head)
+  sqlToSolution query (return . headErr)
     $ dropReader (lift2 askStates)
     $ getEvaluations
   where

@@ -95,24 +95,26 @@ setNodeMaterialized node = wrapTraceT "setNodeMaterialized" $ do
 
 -- | Concretify materializability
 makeMaterializable :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
-makeMaterializable ref = wrapTrM ("makeMaterializable " ++ show ref)
-  $ checkCache $ withNoMat ref $ do
-    (deps,_star) <- foldrListT1 (eitherl . return)
+makeMaterializable ref =
+  wrapTrM ("makeMaterializable " ++ show ref) $ checkCache $ withNoMat ref $ do
+    (deps,_star) <- foldrListT1
+      (eitherl . return)
       (bot $ "no dependencies for " ++ show ref)
       $ getDependencies ref
     trM $ printf "Deps of %s: %s" (show ref) (show $ toNodeList deps)
     forM_ (toNodeList deps) $ \dep -> getNodeState dep >>= \case
       Initial Mat -> setNodeStateUnsafe dep $ Concrete Mat Mat
       Concrete _ Mat -> top
-      s -> throwPlan
-        $ "getDependencies returned node in state: " ++ show s
+      s -> throwPlan $ "getDependencies returned node in state: " ++ show s
   where
     checkCache m = luMatCache ref >>= \case
       Nothing -> m
-      Just (frontierStar -> (deps,_star)) ->
-        unlessM (allM isConcreteMat $ toNodeList deps) m
-    isConcreteMat = fmap (\case {Concrete _ Mat -> True; _ -> False})
-                    . getNodeState
+      Just (frontierStar -> (deps,_star))
+        -> unlessM (allM isConcreteMat $ toNodeList deps) m
+    isConcreteMat =
+      fmap (\case
+              Concrete _ Mat -> True
+              _ -> False) . getNodeState
 
 haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
