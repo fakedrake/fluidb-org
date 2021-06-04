@@ -80,7 +80,7 @@ execRule conf execName = do
     needSrcFiles
     intermPath <- runReaderT (haskellExec execName) conf
     cmd_ (RemEnv "STACK_IN_NIX_SHELL")
-      $ stackCmd conf StackBuild ["fluidb:lib","fluidb:exe:" ++ execName]
+      $ stackCmd conf StackBuild ["fluidb:exe:" ++ execName]
     exists <- doesFileExist out
     if exists then cmd_ ["touch",out] else cmd_
       (printf "ln -s %s %s" intermPath out

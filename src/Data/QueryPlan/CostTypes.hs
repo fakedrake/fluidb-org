@@ -55,16 +55,15 @@ data GCCache mop t n =
   GCCache { materializedMachines  :: RefMap n ()
           , isMaterializableCache :: MatCache mop t n
           , metaOpCache           :: RefMap n [(mop, Cost)]
-          , expectedCosts         :: [Int]
           }
   deriving Generic
 instance Default (GCCache mop t n)
 data StarScore mop t n =
-  StarScore { -- Total cost
-              starToDouble :: Double
-              -- The metaops and their cost.
-            , starMetaOps  :: HS.HashSet (mop, Double)
-            }
+  StarScore   -- Total cost
+  { starToDouble :: Double
+    -- The metaops and their cost.
+   ,starMetaOps :: HS.HashSet (mop,Double)
+  }
   deriving (Generic,Eq)
 instance AShow mop => AShow (StarScore mop t n)
 instance Hashables1 mop => Semigroup (StarScore mop t n) where

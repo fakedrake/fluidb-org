@@ -1,18 +1,17 @@
-module Data.QueryPlan.History (futureCost,expectedCost) where
+module Data.QueryPlan.History
+  (pastCosts) where
 
-import Data.NodeContainers
+import Data.Utils.AShow
+import Data.Utils.ListT
+import Control.Antisthenis.Types
+import Data.QueryPlan.NodeProc
 import Control.Monad.Reader
 import Data.QueryPlan.Types
 
 -- | The expected cost of the next query.
-futureCost :: Monad m => PlanT t n m Cost
-futureCost = do
+pastCosts :: Monad m => ListT (PlanT t n m) (Maybe Cost)
+pastCosts = do
   QueryHistory qs <- asks queryHistory
-  fmap mconcat $ forM qs $ \q -> do
-    expectedCost q
-
-
--- | Incrementally compute the expected cost of a node. Lookup the
--- arrow. If you can't find it, create and insert it. Then run it.
-expectedCost :: NodeRef n -> PlanT t n m Cost
-expectedCost = undefined
+  lift $ trM $ "History size: " ++ ashow (length qs)
+  q <- mkListT $ return qs
+  lift $ getCost ForceResult q

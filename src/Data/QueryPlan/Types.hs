@@ -27,6 +27,7 @@ module Data.QueryPlan.Types
   ,PlanSearchScore(..)
   ,MonadHaltD
   ,MetaOp(..)
+  ,pushHistory
   ,showMetaOp
   ,throwPlan
   ,halt
@@ -175,6 +176,11 @@ data GCConfig t n =
    ,maxTreeDepth :: Maybe Count
   }
   deriving Generic
+pushHistory :: NodeRef n -> GCConfig t n -> GCConfig t n
+pushHistory n conf =
+  conf
+  { queryHistory = QueryHistory $ (n :) $ unQueryHistory $ queryHistory conf
+  }
 instance Default (GCConfig t n)
 instance Default (GCEpoch t n)
 instance Default (GCState t n)

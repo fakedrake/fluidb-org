@@ -190,7 +190,7 @@ insertAndRun queries postSolution = do
           ios <- fmap mconcat
             $ mapM transitionCost =<< dropReader get getTransitions
           return ios
-      (,conf) <$> lift (local (const conf) $ postSolution)
+      (,pushHistory nOptqRef conf) <$> lift (local (const conf) $ postSolution)
 
 
 planFrontier :: [Transition t n] -> [NodeRef n]

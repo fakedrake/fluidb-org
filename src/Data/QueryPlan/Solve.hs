@@ -33,6 +33,7 @@ module Data.QueryPlan.Solve
   , isDeletable
   ) where
 
+import Data.QueryPlan.History
 import Control.Antisthenis.Types
 import Data.QueryPlan.NodeProc
 import           Control.Monad.Cont
@@ -126,10 +127,9 @@ haltPlanCost concreteCost = do
   -- star :: Double <- sum <$> mapM getAStar frefs
   star :: Double <- sum . fmap (maybe 0 (fromIntegral . costAsInt))
     <$> mapM (getCost ForceResult) frefs
-  -- histCost <- sum <$> expectedHistoricalCosts
-  let histCost = 0
-  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCost)
-  halt $ PlanSearchScore concreteCost (Just $ star + histCost)
+  histCosts <- takeListT 5 pastCosts
+  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
+  halt $ PlanSearchScore concreteCost (Just $ star)
   trM "Resume!"
 
 -- | Make a plan for a node to be concrete.
