@@ -24,6 +24,7 @@ module Data.QueryPlan.Types
   (Transition(..)
   ,QueryHistory(..)
   ,PlanT
+  ,IsMatable
   ,PlanSearchScore(..)
   ,MonadHaltD
   ,MetaOp(..)
@@ -51,8 +52,6 @@ module Data.QueryPlan.Types
   ,SumTag
   ,NodeProc0
   ,NodeProcSt(..)
-  ,DSetR(..)
-  ,DSet
   ,bot
   ,top
   ,runPlanT'
@@ -61,6 +60,7 @@ module Data.QueryPlan.Types
   ,mplusPlanT) where
 
 
+import Control.Antisthenis.Bool
 import Data.Proxy
 import Control.Antisthenis.Sum
 import Data.Utils.Monoid
@@ -143,9 +143,11 @@ provenanceAsBool = \case
   SplitRight -> True
 
 
+type IsMatable = Bool
 data GCState t n = GCState {
   frontier          :: NodeSet n,
   gcMechMap         :: RefMap n (NodeProc t n (SumTag (PlanParams n) Cost)),
+  matableMechMap    :: RefMap n (NodeProc t n (BoolTag Or (PlanParams n))),
   gcCache           :: GCCache (MetaOp t n) t n,
   epochs            :: NEL.NonEmpty (GCEpoch t n),
 #ifdef GHCI
@@ -444,8 +446,8 @@ data NodeProcSt n w =
   } deriving Generic
 instance Default (NodeProcSt n w)
 
-type NTrail = NodeSet
--- for example ZEpoch v == RefMap n IsMat
+
+-- | NodeProc t n ()
 type NodeProc t n w = NodeProc0 t n w w
 type NodeProc0 t n w0 w =
   ArrProc w (StateT (NodeProcSt n w0) (PlanT t n Identity))
@@ -465,9 +467,3 @@ instance ExtParams (PlanParams n) where
   extCombEpochs Proxy coepoch epoch a =
     if and $ refIntersectionWithKey (const (==)) coepoch epoch
     then DontReset a else ShouldReset
-
--- | depset has a constant part that is the cost of triggering and a
--- variable part.
-data DSetR v p = DSetR { dsetConst :: Sum v,dsetNeigh :: [p] }
-  deriving (Functor,Foldable,Traversable)
-type DSet t n p v = DSetR v (NodeProc t n (SumTag p v))

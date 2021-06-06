@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -9,6 +12,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Data.QueryPlan.NodeProc (NodeProc,getCost) where
 
+import Data.QueryPlan.ProcCommon
 import Control.Monad.Reader
 import Control.Monad.Except
 import Data.Utils.Default
@@ -34,6 +38,15 @@ import Control.Antisthenis.Types
 import Control.Arrow hiding ((>>>))
 
 
+
+-- | depset has a constant part that is the cost of triggering and a
+-- variable part.
+data DSetR v p = DSetR { dsetConst :: Sum v,dsetNeigh :: [p] }
+  deriving (Functor,Foldable,Traversable)
+
+-- | The dependency set in terms of processes.
+type DSet t n p v = DSetR v (NodeProc t n (SumTag p v))
+
 makeCostProc
   :: forall v t n .
   (Num v,Ord v,AShow v)
@@ -57,34 +70,6 @@ makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
       where
         mid = ("sum:" ++ ashow ref)
 
-modTrailE
-  :: Monoid (ZCoEpoch w)
-  => (NTrail n -> Either (ZErr w) (NTrail n))
-  -> Arr (NodeProc t n w) a (Either (ZErr w) a)
-modTrailE f = mealyLift $ fromKleisli $ \a -> gets (f . npsTrail) >>= \case
-  Left e -> return $ Left e
-  Right r -> do
-    modify $ \nps -> nps { npsTrail = r }
-    return (Right a)
-
-modTrail :: Monoid (ZCoEpoch w)
-         => (NTrail n -> NTrail n)
-         -> Arr (NodeProc t n w) a a
-modTrail f = mealyLift $ fromKleisli $ \a -> do
-  modify $ \nps -> nps { npsTrail = f $ npsTrail nps }
-  return a
-withTrail
-  :: Monoid (ZCoEpoch w)
-  => (NTrail n -> ZErr w)
-  -> NodeRef n
-  -> NodeProc t n w
-  -> NodeProc t n w
-withTrail cycleErr ref m =
-  modTrailE putRef >>> (arr BndErr ||| m) >>> modTrail (nsDelete ref)
-  where
-    putRef ns =
-      if ref `nsMember` ns then Left $ cycleErr ns else Right $ nsInsert ref ns
-
 type CostParams n = SumTag (PlanParams n) Cost
 -- | Transfer the value of the epoch to the coepoch
 mkEpoch
@@ -99,13 +84,6 @@ mkEpoch ref = mealyLift $ fromKleisli $ \conf -> do
   tell $ refFromAssocs [(ref,isMater)]
   return $ if isMater then Left 0 else Right conf
 
-squashMealy
-  :: (ArrowFunctor c,Monad (ArrFunctor c))
-  => ArrFunctor c (MealyArrow c a b)
-  -> MealyArrow c a b
-squashMealy m = MealyArrow $ fromKleisli $ \a -> do
-  MealyArrow m' <- m
-  toKleisli m' a
 
 -- | Build AND INSERT a new mech in the mech directory.
 mkNewMech :: NodeRef n -> NodeProc t n (CostParams n)

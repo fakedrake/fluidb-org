@@ -12,8 +12,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
-module Control.Antisthenis.Bool
-  (interpretBExp) where
+module Control.Antisthenis.Bool (interpretBExp,BoolOp(..),And,Or,BoolTag) where
 
 import Control.Antisthenis.ATL.Class.Functorial
 import Data.Proxy

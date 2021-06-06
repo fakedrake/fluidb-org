@@ -12,6 +12,7 @@
 module Control.Antisthenis.ATL.Transformers.Mealy
   (MealyArrow(..)
   ,MB
+  ,squashMealy
   ,hoistMealy
   ,mkMealy
   ,mealyScan
@@ -209,3 +210,12 @@ mealyLift :: Profunctor c => c a b -> MealyArrow c a b
 mealyLift c = res
   where
     res = MealyArrow $ rmap (res,) c
+
+-- | A mealy wrapped in a functor could become a mealy.
+squashMealy
+  :: (ArrowFunctor c,Monad (ArrFunctor c))
+  => ArrFunctor c (MealyArrow c a b)
+  -> MealyArrow c a b
+squashMealy m = MealyArrow $ fromKleisli $ \a -> do
+  MealyArrow m' <- m
+  toKleisli m' a
