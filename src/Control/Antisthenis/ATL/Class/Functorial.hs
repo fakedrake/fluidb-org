@@ -5,7 +5,7 @@ module Control.Antisthenis.ATL.Class.Functorial
 
 import Control.Arrow
 
--- | A functor corresponding to an arrow.x
+-- | A functor corresponding to an arrow.
 class Functor (ArrFunctor c) => ArrowFunctor c where
   type ArrFunctor c :: * -> *
 

@@ -12,7 +12,8 @@
 {-# LANGUAGE LambdaCase #-}
 module Data.QueryPlan.NodeProc (NodeProc,getCost) where
 
-import Data.QueryPlan.ProcCommon
+import qualified Control.Category as C
+import Data.QueryPlan.ProcTrail
 import Control.Monad.Reader
 import Control.Monad.Except
 import Data.Utils.Default
@@ -71,18 +72,6 @@ makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
         mid = ("sum:" ++ ashow ref)
 
 type CostParams n = SumTag (PlanParams n) Cost
--- | Transfer the value of the epoch to the coepoch
-mkEpoch
-  :: Monoid (ExtCoEpoch (PlanParams n))
-  => NodeRef n
-  -> Arr
-    (NodeProc t n (SumTag (PlanParams n) v))
-    (Conf (CostParams n))
-    (Either (ZRes (CostParams n)) (Conf (CostParams n)))
-mkEpoch ref = mealyLift $ fromKleisli $ \conf -> do
-  let isMater = fromMaybe False $ ref `refLU` confEpoch conf
-  tell $ refFromAssocs [(ref,isMater)]
-  return $ if isMater then Left 0 else Right conf
 
 
 -- | Build AND INSERT a new mech in the mech directory.
@@ -96,7 +85,7 @@ mkNewMech ref = squashMealy $ do
                } | (mop,cost) <- mops]
   let ret =
         withTrail (ErrCycle ref) ref
-        $ mkEpoch ref >>> (arr BndRes) ||| makeCostProc ref mechs
+        $ mkEpoch (BndRes 0) ref >>> C.id ||| makeCostProc ref mechs
   lift2 $ modify $ \gcs
     -> gcs { gcMechMap = refInsert ref ret $ gcMechMap gcs }
   return ret

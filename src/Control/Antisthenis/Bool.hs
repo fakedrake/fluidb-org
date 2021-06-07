@@ -12,8 +12,18 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
-module Control.Antisthenis.Bool (interpretBExp,BoolOp(..),And,Or,BoolTag) where
+module Control.Antisthenis.Bool
+  (interpretBExp
+  ,BoolOp(..)
+  ,GBool(..)
+  ,And
+  ,Or
+  ,BoolTag
+  ,Exists(..)
+  ,orToAndConv
+  ,andToOrConv) where
 
+import Control.Antisthenis.Convert
 import Control.Antisthenis.ATL.Class.Functorial
 import Data.Proxy
 import qualified Data.IntSet as IS
@@ -413,3 +423,7 @@ test =
 -- * A pair of bools (absorbing, non-absorbing)
 -- * A pair of bools & the operation to combine them (true false)
 -- We use all three in different contexts.
+andToOrConv :: Conv (BoolTag And m) (BoolTag Or m)
+andToOrConv = coerceConv GenericConv
+orToAndConv :: Conv (BoolTag Or m) (BoolTag And m)
+orToAndConv = coerceConv GenericConv

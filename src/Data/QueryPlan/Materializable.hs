@@ -1,6 +1,12 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Data.QueryPlan.Materializable
   (isMaterializable) where
 
+import Control.Antisthenis.Convert
+import Control.Arrow
+import qualified Control.Category as C
+import Data.QueryPlan.ProcTrail
 import Data.QueryPlan.MetaOp
 import Data.Utils.Functors
 import Control.Antisthenis.Types
@@ -34,7 +40,32 @@ isMaterializable ref = do
      ,confEpoch = states
      ,confTrPref = "topLevel:" ++ ashow ref
     }
-  _ res
+  case res of
+    BndRes GBool {..} -> return $ unExists gbTrue
+    BndBnd _bnd -> throwPlan $ "We forced the result but got a partial result."
+    BndErr e -> throwPlan $ "antisthenis error: " ++ ashow e
+
+type OrTag n = BoolTag Or (PlanParams n)
+type AndTag n = BoolTag And (PlanParams n)
+makeIsMatableProc
+  :: forall t n .
+  NodeRef n
+  -> [[NodeProc t n (BoolTag Or (PlanParams n) )]]
+  -> NodeProc t n (BoolTag Or (PlanParams n))
+makeIsMatableProc ref deps =
+  procOr
+  $ lowerNodeProc andToOrConv . procAnd . fmap (liftNodeProc $ orToAndConv)
+  <$> deps
+  where
+    procAnd :: [NodeProc0 t n (OrTag n) (AndTag n)]
+            -> NodeProc0 t n (OrTag n) (AndTag n)
+    procAnd ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+      where
+        mid = "min:" ++ ashow ref
+    procOr :: [NodeProc t n (OrTag n)] -> NodeProc t n (OrTag n)
+    procOr ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+      where
+        mid = ("sum:" ++ ashow ref)
 
 getOrMakeMech
   :: NodeRef n -> NodeProc t n (BoolTag Or (PlanParams n))
@@ -50,13 +81,13 @@ mkNewMech ref = squashMealy $ do
   mops <- lift2 $ findCostedMetaOps ref
   -- Should never see the same val twice.
   let mechs =
-        [_ [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
+        [[getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
         | (mop,_cost) <- mops]
   let ret =
-        withTrail (ErrCycle ref) ref
-        $ mkEpoch ref >>> (arr BndRes) ||| makeCostProc ref mechs
+        withTrail (ErrCycle (runNodeRef ref) . runNodeSet) ref
+        $ mkEpoch _zero ref >>> C.id ||| makeIsMatableProc ref mechs
   lift2 $ modify $ \gcs
-    -> gcs { gcMechMap = refInsert ref ret $ gcMechMap gcs }
+    -> gcs { matableMechMap = refInsert ref ret $ matableMechMap gcs }
   return ret
 
 

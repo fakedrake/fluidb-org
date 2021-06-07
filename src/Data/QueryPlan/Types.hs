@@ -45,6 +45,8 @@ module Data.QueryPlan.Types
   ,MonadLogic
   ,hoistPlanT
   ,costAsInt
+  ,lowerNodeProc
+  ,liftNodeProc
   ,Count
   ,NodeProc
   ,NTrail
@@ -60,6 +62,7 @@ module Data.QueryPlan.Types
   ,mplusPlanT) where
 
 
+import Control.Antisthenis.Convert
 import Control.Antisthenis.Bool
 import Data.Proxy
 import Control.Antisthenis.Sum
@@ -446,11 +449,29 @@ data NodeProcSt n w =
   } deriving Generic
 instance Default (NodeProcSt n w)
 
+type NTrail = NodeSet
 
 -- | NodeProc t n ()
 type NodeProc t n w = NodeProc0 t n w w
-type NodeProc0 t n w0 w =
-  ArrProc w (StateT (NodeProcSt n w0) (PlanT t n Identity))
+
+-- | A node process. The outer
+type NodeProc0 t n w w0 =
+  ArrProc w0 (StateT (NodeProcSt n w) (PlanT t n Identity))
+
+lowerNodeProc
+  :: ZCoEpoch w0 ~ ZCoEpoch w
+  => Conv w0 w
+  -> NodeProc0 t n w w0
+  -> NodeProc t n w
+lowerNodeProc = convArrProc
+{-# INLINE lowerNodeProc #-}
+liftNodeProc
+  :: ZCoEpoch w0 ~ ZCoEpoch w
+  => Conv w w0
+  -> NodeProc t n w
+  -> NodeProc0 t n w w0
+liftNodeProc = convArrProc
+{-# INLINE liftNodeProc #-}
 
 data PlanParams n
 
