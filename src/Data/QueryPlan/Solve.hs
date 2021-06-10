@@ -92,9 +92,9 @@ setNodeMaterialized node = wrapTraceT "setNodeMaterialized" $ do
   cost <- totalTransitionCost
   trM $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
 
-
 -- | Concretify materializability
-makeMaterializable :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
+makeMaterializable
+  :: forall t n m . (HasCallStack,MonadLogic m) => NodeRef n -> PlanT t n m ()
 makeMaterializable ref =
   wrapTrM ("makeMaterializable " ++ show ref) $ checkCache $ withNoMat ref $ do
     (deps,_star) <- foldrListT1
@@ -144,51 +144,61 @@ setNodeStateSafe' :: MonadLogic m =>
                   -> NodeRef n -> IsMat -> PlanT t n m ()
 setNodeStateSafe' getFwdOp node goalState =
   wrapTrM (printf "setNodeStateSafe %s %s" (show node) (show goalState)) $ do
-  curState <- getNodeState node
-  trM $ printf "Safe shift %s: %s -> %s" (show node) (show curState) (show goalState)
-  case curState of
-    Concrete _ Mat   -> case goalState of
-      Mat   -> top
-      NoMat -> bot "Tried to set concrete"
-    Concrete _ NoMat -> case goalState of
-      NoMat -> top
-      Mat   -> bot "Tried to set concrete"
-    Initial NoMat -> case goalState of
-      NoMat -> node `setNodeStateUnsafe` Concrete NoMat NoMat
-      Mat -> do -- just materialize
-        node `setNodeStateUnsafe` Concrete NoMat NoMat
-        -- xxx: setNodeMatHistoricalCosts node
-        forwardMop <- getFwdOp
-        let interm = toNodeList $ metaOpInterm forwardMop
-        let depset = toNodeList $ metaOpIn forwardMop
-        let trigAction = metaOpPlan forwardMop >>= mapM_ putTransition
-        guardlM ("Nodes don't fit in budget" ++ show (node:depset ++ interm))
-          $ nodesFit $ node:depset ++ interm
-        haltPlan node forwardMop
-        withProtected (node:depset ++ interm) $ do
-          trM $ "Materializing dependencies: " ++ show depset
-          setNodesMatSafe depset
-          trM $ "Intermediates: " ++ show interm
-          cutPlanT $ garbageCollectFor $ node:interm
-          -- Automatically set the states of intermediates
-          forM_ interm $ \ni -> do
-            prevState' <- getNodeState ni
-            let prevState = case prevState' of
-                  Concrete _ r -> r
-                  Initial r    -> r
-            ni `setNodeStateUnsafe` Concrete prevState Mat
-          -- Deal with sibling materializability: what we actually
-          -- want is to be able to reverse.
-          splitOnOutMaterialization node forwardMop
-          trigAction
-    Initial Mat -> case goalState of
-      Mat -> node `setNodeStateUnsafe` Concrete Mat Mat
-      NoMat -> do
-        -- XXX: setNodeNoMatHistoricalCosts node
-        delDepMatCache node
-        makeMaterializable node --  `eitherl` matNeighbors node
-        node `setNodeStateUnsafe` Concrete Mat NoMat
-        putDelNode node
+    curState <- getNodeState node
+    trM
+      $ printf
+        "Safe shift %s: %s -> %s"
+        (show node)
+        (show curState)
+        (show goalState)
+    case curState of
+      Concrete _ Mat -> case goalState of
+        Mat -> top
+        NoMat -> bot "Tried to set concrete"
+      Concrete _ NoMat -> case goalState of
+        NoMat -> top
+        Mat -> bot "Tried to set concrete"
+      Initial NoMat -> case goalState of
+        NoMat -> node `setNodeStateUnsafe` Concrete NoMat NoMat
+        Mat       -- just materialize
+          -> do
+            node `setNodeStateUnsafe` Concrete NoMat NoMat
+            -- xxx: setNodeMatHistoricalCosts node
+            forwardMop <- getFwdOp
+            let interm = toNodeList $ metaOpInterm forwardMop
+            let depset = toNodeList $ metaOpIn forwardMop
+            let trigAction = metaOpPlan forwardMop >>= mapM_ putTransition
+            guardlM
+              ("Nodes don't fit in budget" ++ show (node : depset ++ interm))
+              $ nodesFit
+              $ node : depset ++ interm
+            haltPlan node forwardMop
+            withProtected (node : depset ++ interm) $ do
+              trM $ "Materializing dependencies: " ++ show depset
+              setNodesMatSafe depset
+              trM $ "Intermediates: " ++ show interm
+              cutPlanT $ garbageCollectFor $ node : interm
+              -- Automatically set the states of intermediates
+              forM_ interm $ \ni -> do
+                prevState' <- getNodeState ni
+                let prevState = case prevState' of
+                      Concrete _ r -> r
+                      Initial r -> r
+                ni `setNodeStateUnsafe` Concrete prevState Mat
+              -- Deal with sibling materializability: what we actually
+              -- want is to be able to reverse.
+              splitOnOutMaterialization node forwardMop
+              trigAction
+      Initial Mat -> case goalState of
+        Mat -> node `setNodeStateUnsafe` Concrete Mat Mat
+        NoMat -> do
+          -- XXX: setNodeNoMatHistoricalCosts node
+          delDepMatCache node
+          isMaterializable node
+            >>= guardl ("not materializable, can't delete" ++ ashow node)
+          -- makeMaterializable node --  `eitherl` matNeighbors node
+          node `setNodeStateUnsafe` Concrete Mat NoMat
+          putDelNode node
 
 -- | Set a list of nodes to Mat state in an order that is likely to
 -- require the least budget.

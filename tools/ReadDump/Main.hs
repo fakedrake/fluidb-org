@@ -417,7 +417,7 @@ main = (`evalStateT` []) $ do
       createDirectoryIfMissing True branchDir
       B.writeFile (branchDir ++ "/graph.txt") $ B.intercalate "\n" graph
   -- States
-  when False $ do
+  when True $ do
     statess <- readStates dumpFile
     lift $ putStrLn $ printf "Will write %d state sets" (length statess)
     lift $ forM_ (enumerate statess) $ \(i,states) -> do

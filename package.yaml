@@ -23,43 +23,6 @@ when:
     else:
       cpp-options: [-D__linux__]
 
-dependencies:
-  - base >= 4.7 && < 5
-  - ghc >= 8.6.5
-  - extra >= 1.6.14
-  - bifunctors
-  - bytestring >= 0.10.8.1
-  - containers >= 0.5.7.1
-  - directory >= 1.3.0.0
-  - filepath >= 1.4.1.1
-  - generic-random >= 0.3.0.0
-  - hashable >= 1.2.6.1
-  - hashtables >= 1.2.1.0
-  - megaparsec >= 7.0.4
-  - mmorph >= 1.0.9
-  - mtl >= 2.2.1
-  - parallel >= 3.2.1.1
-  - process >= 1.4.3.0
-  - random >= 1.1
-  - time >= 1.6.0.1
-  - transformers >= 0.5.2.0
-  - unix >= 2.7.2.1
-  - constraints
-  - unordered-containers >= 0.2.9.0
-  - free
-  - profunctors
-  - groups
-  - monad-loops
-  - hashable
-  - ghc-prim
-  - ghc-compact
-  - pointed
-  - generic-data
-  # dev
-  - pretty-show
-  # - haskell-stack-trace-plugin
-  # [r|a raw string with newlines|]
-  - raw-strings-qq
 
 library:
   source-dirs: src
@@ -86,17 +49,59 @@ library:
   exposed-modules:
     - FluiDB.Schema.TPCH.Main
     - FluiDB.Schema.Graph.Main
+  dependencies:
+    - base >= 4.7 && < 5
+    - ghc >= 8.6.5
+    - extra >= 1.6.14
+    - bifunctors
+    - bytestring >= 0.10.8.1
+    - containers >= 0.5.7.1
+    - filepath >= 1.4.1.1
+    - generic-random >= 0.3.0.0
+    - hashable >= 1.2.6.1
+    - hashtables >= 1.2.1.0
+    - megaparsec >= 7.0.4
+    - mmorph >= 1.0.9
+    - mtl >= 2.2.1
+    - parallel >= 3.2.1.1
+    - process >= 1.4.3.0
+    - random >= 1.1
+    - time >= 1.6.0.1
+    - transformers >= 0.5.2.0
+    - unix >= 2.7.2.1
+    - constraints
+    - unordered-containers >= 0.2.9.0
+    - free
+    - profunctors
+    - groups
+    - monad-loops
+    - hashable
+    - ghc-prim
+    - ghc-compact
+    - pointed
+    - generic-data
+    - directory >= 1.3.0.0
+    # dev
+    # - pretty-show
+    # - haskell-stack-trace-plugin
+    # [r|a raw string with newlines|]
+
 executables:
   benchmark: &exe
     main: Main.hs
     source-dirs: tools/Benchmark
     ghc-options: -rtsopts
     dependencies:
+      - base >= 4.7 && < 5
+      - ghc >= 8.6.5
       - fluidb
   readdump:
     main: Main.hs
     source-dirs: tools/ReadDump
     dependencies:
+      - base >= 4.7 && < 5
+      - ghc >= 8.6.5
+      - directory >= 1.3.0.0
       - bifunctors
       - mtl
       - bytestring

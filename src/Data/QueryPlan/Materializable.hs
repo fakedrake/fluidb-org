@@ -3,7 +3,6 @@
 module Data.QueryPlan.Materializable
   (isMaterializable) where
 
-import Control.Antisthenis.Convert
 import Control.Arrow
 import qualified Control.Category as C
 import Data.QueryPlan.ProcTrail
@@ -13,7 +12,6 @@ import Control.Antisthenis.Types
 import Data.Utils.AShow
 import Control.Antisthenis.ATL.Transformers.Mealy
 import Data.Maybe
-import Data.Utils.Functors
 import Control.Antisthenis.Zipper
 import Control.Monad.State
 import Control.Monad.Except
@@ -23,7 +21,6 @@ import Control.Monad.Reader
 import Data.QueryPlan.Nodes
 import Control.Monad.Identity
 import Control.Antisthenis.Bool
-import Control.Antisthenis.Types
 import Data.List.NonEmpty as NEL
 import Data.QueryPlan.Types
 import Data.NodeContainers
@@ -85,10 +82,12 @@ mkNewMech ref = squashMealy $ do
         | (mop,_cost) <- mops]
   let ret =
         withTrail (ErrCycle (runNodeRef ref) . runNodeSet) ref
-        $ mkEpoch _zero ref >>> C.id ||| makeIsMatableProc ref mechs
+        $ mkEpoch (BndRes gTrue) ref >>> C.id ||| makeIsMatableProc ref mechs
   lift2 $ modify $ \gcs
     -> gcs { matableMechMap = refInsert ref ret $ matableMechMap gcs }
   return ret
+  where
+    gTrue = GBool { gbTrue = Exists True,gbFalse = Exists False }
 
 
 -- | Run PlanT in the Identity monad.

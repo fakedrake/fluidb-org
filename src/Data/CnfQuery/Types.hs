@@ -122,7 +122,8 @@ instance CNFConstr AShow sel_f prod_f col_f Identity e s =>
       Column c i -> sexp "Column" [ashow' $ hash c,ashow' i]
       NonSymbolName e -> sexp "NonSymbolName" [ashow' e]
 
-instance (Hashables2 e s, CNFConstr ARead sel_f prod_f col_f Identity e s) => ARead (CNFNameSPC sel_f prod_f col_f e s)
+instance (Hashables2 e s,CNFConstr ARead sel_f prod_f col_f Identity e s)
+  => ARead (CNFNameSPC sel_f prod_f col_f e s)
 instance (CNFConstr Eq sel_f prod_f col_f Identity e s,
           CNFConstr Hashable sel_f prod_f col_f Identity e s) =>
          Hashable (CNFNameSPC sel_f prod_f col_f e s)

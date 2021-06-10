@@ -172,7 +172,7 @@ insertAndRun queries postSolution = do
         (a,GCConfig t n)
     solveQuery = do
       QueryCppConf {..} <- cbQueryCppConf <$> get
-      when False $ do
+      when True $ do
         matNodes <- lift materializedNodes
         traceM $ "Mat nodes: " ++ ashow matNodes
         when (null matNodes) $ throwAStr "No ground truth"

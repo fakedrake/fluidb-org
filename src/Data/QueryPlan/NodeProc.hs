@@ -24,7 +24,6 @@ import Data.List.NonEmpty as NEL
 import Data.Maybe
 import Data.QueryPlan.Types
 import Data.NodeContainers
-import Control.Antisthenis.ATL.Class.Functorial
 import Control.Antisthenis.ATL.Common
 import Control.Monad.Identity
 import Control.Antisthenis.Minimum

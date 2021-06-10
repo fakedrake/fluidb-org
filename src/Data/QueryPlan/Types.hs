@@ -66,7 +66,6 @@ import Control.Antisthenis.Convert
 import Control.Antisthenis.Bool
 import Data.Proxy
 import Control.Antisthenis.Sum
-import Data.Utils.Monoid
 import Control.Antisthenis.Types
 import Control.Monad.Identity
 import Data.NodeContainers
