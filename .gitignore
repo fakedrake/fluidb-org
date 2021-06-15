@@ -1,9 +1,13 @@
-_build/
 .stack-work/
 fluidb.cabal
 stack.yaml.lock
+_build/
+_shake_build/
 .dir-locals.el
 tags
 *.prof
 *.profiterole.txt
+*-stack-dir/
 *.profiterole.html
+*.o
+*.hi

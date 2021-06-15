@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
@@ -21,16 +21,16 @@ module FluiDB.Schema.Graph.Schemata
   ,graphSchemaIsoMap) where
 
 
-import Data.CppAst
-import Data.Utils.Functors
-import Data.Codegen.SchemaAssocClass
-import Data.Query.QuerySize
-import Data.Query.SQL.FileSet
-import Data.Utils.AShow
-import Control.Monad
-import GHC.Generics
+import           Control.Monad
 import           Data.Bifunctor
+import           Data.Codegen.SchemaAssocClass
+import           Data.CppAst
 import           Data.List.Extra
+import           Data.Query.QuerySize
+import           Data.Query.SQL.FileSet
+import           Data.Utils.AShow
+import           Data.Utils.Functors
+import           GHC.Generics
 
 type GraphTypeVars e s t n = (Eq s, e ~ (s,s), t ~ (), n ~ ())
 

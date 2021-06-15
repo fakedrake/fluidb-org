@@ -18,7 +18,6 @@
 
 module Main where
 
-import GHC.Stack
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Bifunctor
@@ -27,7 +26,7 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 import           Data.Char
 import           Data.List
 import           Data.Maybe
-import           Data.Monoid
+import           GHC.Stack
 import           System.Directory
 import           System.Environment
 import           Text.Printf
@@ -99,7 +98,7 @@ readId errMsg = either
       =<< case' False "AlsoLeft" str
     fromLeft :: Either a b -> a
     fromLeft = \case
-      Left x -> x
+      Left x  -> x
       Right _ -> error errMsg
     case' :: Bool -> StringType -> StringType -> Either [Bool] StringType
     case' val pat =
@@ -112,21 +111,21 @@ readId errMsg = either
 readId errMsg = readStart . C8.unpack
   where
     readStart = \case
-      "[]" -> []
+      "[]"     -> []
       '[':rest -> readProv rest
-      _ -> error errMsg
+      _        -> error errMsg
     readProv = \case
-      'E':'i':'t':'h':'e':'r':'L':'e':'f':'t':rest -> False:readCom rest
+      'E':'i':'t':'h':'e':'r':'L':'e':'f':'t':rest     -> False:readCom rest
       'E':'i':'t':'h':'e':'r':'R':'i':'g':'h':'t':rest -> True:readCom rest
-      'S':'p':'l':'i':'t':'L':'e':'f':'t':rest -> False:readCom rest
-      'S':'p':'l':'i':'t':'R':'i':'g':'h':'t':rest -> True:readCom rest
-      'A':'l':'s':'o':'R':'i':'g':'h':'t':rest -> True:readCom rest
-      'A':'l':'s':'o':'L':'e':'f':'t':rest -> False:readCom rest
-      _ -> error errMsg
+      'S':'p':'l':'i':'t':'L':'e':'f':'t':rest         -> False:readCom rest
+      'S':'p':'l':'i':'t':'R':'i':'g':'h':'t':rest     -> True:readCom rest
+      'A':'l':'s':'o':'R':'i':'g':'h':'t':rest         -> True:readCom rest
+      'A':'l':'s':'o':'L':'e':'f':'t':rest             -> False:readCom rest
+      _                                                -> error errMsg
     readCom = \case
       ',':rest -> readProv rest
-      "]" -> []
-      _ -> error errMsg
+      "]"      -> []
+      _        -> error errMsg
 #endif
 
 data ProvenanceAtom = EitherLeft
@@ -138,12 +137,12 @@ data ProvenanceAtom = EitherLeft
   deriving (Show, Read)
 provenanceAsBool :: ProvenanceAtom -> Bool
 provenanceAsBool = \case
-  EitherLeft -> False
-  SplitLeft -> False
-  AlsoLeft -> False
+  EitherLeft  -> False
+  SplitLeft   -> False
+  AlsoLeft    -> False
   EitherRight -> True
-  SplitRight -> True
-  AlsoRight -> True
+  SplitRight  -> True
+  AlsoRight   -> True
 partitionParen :: StringType -> (StringType, StringType)
 partitionParen str = C8.splitAt (i + 1) str where
   i = snd
@@ -212,15 +211,15 @@ trieToList f = \case
 
 nodeId :: Node -> [Bool]
 nodeId = \case
-  NewPlan _ -> []
+  NewPlan _  -> []
   Node _ x _ -> x
 nodeString  :: Node -> StringType
 nodeString = \case
-  NewPlan _ -> undefined
+  NewPlan _  -> undefined
   Node _ _ s -> s
 nodeLinum :: Node -> Linum
 nodeLinum = \case
-  NewPlan _ -> undefined
+  NewPlan _  -> undefined
   Node i _ _ -> i
 reprNode :: Node -> String
 reprNode n = printf "[%d]'%s'" (nodeLinum n) (C8.unpack $ nodeString n)
@@ -327,9 +326,9 @@ indentLines = go [] where
   go _ off [] = (off, [])
   go stack off (l:ls) = if
     | "[Before]" `B.isPrefixOf` l -> recur False (+) $ pushStack . rmBrackets
-    | "[After" `B.isPrefixOf` l -> recur True (-) $ popStack . rmBrackets
-    | l == "[NEW STUFF]" -> (l:) <$> go stack off ls
-    | otherwise -> recur False const $ const id
+    | "[After" `B.isPrefixOf` l   -> recur True (-) $ popStack . rmBrackets
+    | l == "[NEW STUFF]"          -> (l:) <$> go stack off ls
+    | otherwise                   -> recur False const $ const id
     where
       rmBrackets = B.drop 2 . C8.dropWhile (/= ']')
       pushStack = (:)
@@ -364,9 +363,9 @@ finalNum = read' . go where
     res = C8.dropWhile (not . isNumber) $ C8.dropWhile isNumber x
 
 unsafeLast :: [a] -> a
-unsafeLast [x] = x
+unsafeLast [x]    = x
 unsafeLast (_:xs) = unsafeLast xs
-unsafeLast [] = error "Unsafe last on empty list"
+unsafeLast []     = error "Unsafe last on empty list"
 
 main :: IO ()
 main = (`evalStateT` []) $ do
@@ -396,7 +395,7 @@ main = (`evalStateT` []) $ do
         let result = lastLineToResult $ unsafeLast curatedBranch
         when (case result of
                 BranchSuccess -> True
-                _ -> False || ib `mod` 100 == 0)
+                _             -> False || ib `mod` 100 == 0)
           $ putStrLn
           $ printf
             "\t\tWrinting branch #%d (%d entries, %s)"

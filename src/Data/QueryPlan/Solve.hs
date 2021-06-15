@@ -196,7 +196,6 @@ setNodeStateSafe' getFwdOp node goalState =
           delDepMatCache node
           isMaterializable node
             >>= guardl ("not materializable, can't delete" ++ ashow node)
-          -- makeMaterializable node --  `eitherl` matNeighbors node
           node `setNodeStateUnsafe` Concrete Mat NoMat
           putDelNode node
 

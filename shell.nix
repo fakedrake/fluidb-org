@@ -8,6 +8,8 @@ with nixpkgs; let
     hasktags
     profiterole
     floskell
+    haskell-language-server
+    implicit-hie
   ]);
 
   nixPackages = [

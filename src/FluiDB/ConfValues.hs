@@ -23,38 +23,38 @@ module FluiDB.ConfValues
   , CodegenSymbol(..)
   ) where
 
-import Data.Query.QuerySchema.GetQueryPlan
-import Data.Cluster.Types.Clusters
-import Data.Cluster.Propagators
-import Data.CnfQuery.Build
-import Data.Utils.Unsafe
-import Data.Query.Optimizations.Utils
-import Text.Printf
-import Data.Cluster.InsertQuery
-import Data.Utils.Default
-import Data.Utils.Functors
-import Data.QueryPlan.Types
-import Data.NodeContainers
-import Data.BipartiteGraph
-import Data.Cluster.Types.Monad
-import FluiDB.Types
-import Data.Query.QuerySize
-import Data.CnfQuery.Types
-import Data.Query.Algebra
-import Data.Codegen.SchemaAssocClass
-import Data.Query.QuerySchema.Types
-import Data.Codegen.Build.Types
-import Data.Query.SQL.FileSet
-import Data.Utils.Hashable
-import Data.Query.SQL.Types
-import Data.CppAst
 import           Control.Monad.Writer
+import           Data.BipartiteGraph
+import           Data.Cluster.InsertQuery
+import           Data.Cluster.Propagators
+import           Data.Cluster.Types.Clusters
+import           Data.Cluster.Types.Monad
+import           Data.CnfQuery.Build
+import           Data.CnfQuery.Types
+import           Data.Codegen.Build.Types
+import           Data.Codegen.SchemaAssocClass
+import           Data.CppAst
 import           Data.Maybe
+import           Data.NodeContainers
+import           Data.Query.Algebra
+import           Data.Query.Optimizations.Utils
+import           Data.Query.QuerySchema.GetQueryPlan
+import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
+import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.Types
+import           Data.QueryPlan.Types
+import           Data.Utils.Default
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.Unsafe
+import           FluiDB.Types
+import           Text.Printf
 
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
-import qualified Data.HashMap.Lazy                        as HM
+import qualified Data.HashMap.Lazy                   as HM
 import           Data.String
 import           Data.Tuple
 
@@ -67,6 +67,10 @@ class CodegenSymbol e where
 
 -- Let's assume this is a table identifier
 instance CodegenSymbol Integer where
+  codegenSymbolLiteralType = const Nothing
+  codegenSymbolToSymbol = Just . fromString . ("table" ++) . show
+-- Let's assume this is a table identifier
+instance CodegenSymbol Int where
   codegenSymbolLiteralType = const Nothing
   codegenSymbolToSymbol = Just . fromString . ("table" ++) . show
 instance CodegenSymbol s => CodegenSymbol (s,s) where
@@ -83,8 +87,8 @@ instance CodegenSymbol ExpTypeSym where
   codegenSymbolLiteralType = expTypeSymCppType
   codegenSymbolToSymbol = fmap fromString . \case
     ECount (Just x) -> Just x
-    ESym x -> Just x
-    _ -> Nothing
+    ESym x          -> Just x
+    _               -> Nothing
 
 -- | Make a QueryCppConf from the type vars
 mkQueryCppConf :: forall e s .
@@ -176,8 +180,7 @@ mkGlobalConf expIso toUniq toFileSet primKeyAssoc schemaAssoc tableSizeAssoc = d
         tbl <- maybe (Left Nothing) return $ ref `refLU` tableMap
         maybe (Left $ Just tbl) return2 $ tbl `lookup` tableSizeAssoc
   nodeSizes' <- either (const Nothing) Just
-    $ traverse (\n -> (n,) . (,1) <$> nodeTableSize n)
-    $ newNodes
+    $ traverse (\n -> (n,) . (,1) <$> nodeTableSize n) newNodes
   return
     GlobalConf
     { globalExpTypeSymIso = expIso
@@ -207,12 +210,12 @@ mkGlobalConf expIso toUniq toFileSet primKeyAssoc schemaAssoc tableSizeAssoc = d
     clusterBuilt = do
       modify $ \cm -> cm { cnfInsertBottoms = True }
       tableMap' <- forM schemaAssoc $ \(t,_) -> do
-        n <- insertQueryPlan (literalType queryCppConf)
-          =<< return . (t,) <$> symPlan t
+        n <- insertQueryPlan (literalType queryCppConf) . return . (t,)
+          =<< symPlan t
         triggerClustPropagator $ NClustW $ NClust n
         return (n,t)
       modify $ \cm -> cm { cnfInsertBottoms = False }
-      (,fromRefAssocs tableMap') <$> lift2 (gbPropNet <$> get)
+      (,fromRefAssocs tableMap') <$> lift2 (gets gbPropNet)
     symPlan :: Monad m => s -> CGraphBuilderT e s t n m (QueryPlan e s)
     symPlan =
       getSymPlan (uniqueColumns queryCppConf) (tableSchema queryCppConf)

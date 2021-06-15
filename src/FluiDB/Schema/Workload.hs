@@ -24,51 +24,50 @@
 
 module FluiDB.Schema.Workload (runWorkloadCpp,runWorkloadEvals) where
 
-import Data.Foldable
-import Data.Query.QuerySchema.SchemaBase
-import Data.Bifunctor
-import FluiDB.Schema.TPCH.Values
-import Data.Codegen.Build
-import Data.Codegen.Build.Monads.PlanLift
-import Data.Utils.MTL
-import Data.QueryPlan.Transitions
-import Data.QueryPlan.Solve
-import Data.Cluster.InsertQuery
-import Control.Monad.Reader
-import Data.QueryPlan.Nodes
-import Data.QueryPlan.Types
-import Data.BipartiteGraph
-import Data.Cluster.Types.Monad
-import Control.Monad.Morph
-import Control.Monad.Except
-import Data.Utils.Debug
-import Data.Query.Optimizations
-import Control.Monad.Free
-import Data.Utils.Compose
-import qualified Data.HashSet as HS
-import Data.Utils.HContT
-import Data.Codegen.Build.Monads
-import Data.Query.QuerySchema.Types
-import qualified Data.List.NonEmpty as NEL
-import Data.CppAst.ExpressionLike
-import FluiDB.Classes
-import Data.Utils.Hashable
-import Data.Codegen.Build.Types
-import Data.Utils.Functors
-import Data.CnfQuery.Build
-import Data.Utils.ListT
-import Data.Utils.Default
-import Control.Monad.State
-import FluiDB.Utils
-import Data.Utils.Unsafe
-import Data.Proxy
-import FluiDB.Runner.DefaultGlobal
-import Data.NodeContainers
-import Data.QueryPlan.Types
-import Data.CnfQuery.Types
-import Data.Query.Algebra
-import FluiDB.Types
-import Data.Utils.AShow
+import           Control.Monad.Except
+import           Control.Monad.Free
+import           Control.Monad.Morph
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Bifunctor
+import           Data.BipartiteGraph
+import           Data.Cluster.InsertQuery
+import           Data.Cluster.Types.Monad
+import           Data.CnfQuery.Build
+import           Data.CnfQuery.Types
+import           Data.Codegen.Build
+import           Data.Codegen.Build.Monads
+import           Data.Codegen.Build.Monads.PlanLift
+import           Data.Codegen.Build.Types
+import           Data.CppAst.ExpressionLike
+import           Data.Foldable
+import qualified Data.HashSet                       as HS
+import qualified Data.List.NonEmpty                 as NEL
+import           Data.NodeContainers
+import           Data.Proxy
+import           Data.Query.Algebra
+import           Data.Query.Optimizations
+import           Data.Query.QuerySchema.SchemaBase
+import           Data.Query.QuerySchema.Types
+import           Data.QueryPlan.Nodes
+import           Data.QueryPlan.Solve
+import           Data.QueryPlan.Transitions
+import           Data.QueryPlan.Types
+import           Data.Utils.AShow
+import           Data.Utils.Compose
+import           Data.Utils.Debug
+import           Data.Utils.Default
+import           Data.Utils.Functors
+import           Data.Utils.HContT
+import           Data.Utils.Hashable
+import           Data.Utils.ListT
+import           Data.Utils.MTL
+import           Data.Utils.Unsafe
+import           FluiDB.Classes
+import           FluiDB.Runner.DefaultGlobal
+import           FluiDB.Schema.TPCH.Values
+import           FluiDB.Types
+import           FluiDB.Utils
 
 
 type ICodeBuilder e s t n a =
@@ -82,7 +81,7 @@ type ICodeBuilder e s t n a =
 
 lengthF :: (Foldable f,Functor t,Foldable t) => Free (Compose t f) x -> Int
 lengthF = \case
-  Pure _ -> 1
+  Pure _            -> 1
   Free (Compose xs) -> sum $ foldr ((*) . lengthF) 1 <$> xs
 
 -- type BacktrackMonad = ListT (State Int)
@@ -199,9 +198,9 @@ planFrontier
   where
     go :: (NodeSet n,NodeSet n) -> Transition t n -> (NodeSet n,NodeSet n)
     go (i,o) = \case
-      Trigger i' _ o' -> (i <> fromNodeList i',o <> fromNodeList o')
+      Trigger i' _ o'  -> (i <> fromNodeList i',o <> fromNodeList o')
       RTrigger i' _ o' -> (i <> fromNodeList i',o <> fromNodeList o')
-      DelNode _ -> (i,o)
+      DelNode _        -> (i,o)
 
 
 type CppCode = String
@@ -215,7 +214,7 @@ runSingleQuery query = do
     (ts,) <$> getQuerySolutionCpp
   where
     popSol :: Monad m => [x] -> m x
-    popSol [] = error "No solution for query"
+    popSol []    = error "No solution for query"
     popSol (x:_) = return x
 
 
@@ -266,6 +265,8 @@ runWorkloadCpp modGCnf qios = forEachQuery modGCnf qios $ \i query -> do
   return (costTrigs,planFrontier trigs)
 
 -- | Run a workload turning it into evals.
+--
+-- If all goes well: return (lenght k) === lenght <$> runWorkloadEvals k
 runWorkloadEvals
   :: forall e s t n m q .
   (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
@@ -274,8 +275,7 @@ runWorkloadEvals
   -> m [[Evaluation e s t n [CNFQuery e s]]]
 runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query -> do
   sqlToSolution query (return . headErr)
-    $ dropReader (lift2 askStates)
-    $ getEvaluations
+    $ dropReader (lift2 askStates) getEvaluations
   where
     askStates = (,,,) <$> get <*> lift2 get <*> lift3 get <*> lift3 ask
 

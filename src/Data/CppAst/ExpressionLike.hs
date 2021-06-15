@@ -20,5 +20,8 @@ class ExpressionLike a where
 instance ExpressionLike (Integer,Integer) where
   toExpression (fr,to) = toExpression
     $ if fr == to then "prim" ++ show fr else printf "foreign%d_%d" fr to
+instance ExpressionLike (Int,Int) where
+  toExpression (fr,to) = toExpression
+    $ if fr == to then "prim" ++ show fr else printf "foreign%d_%d" fr to
 instance ExpressionLike String where
   toExpression = SymbolExpression . Symbol . CppSymbol

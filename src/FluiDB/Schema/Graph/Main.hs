@@ -1,8 +1,7 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP                  #-}
 {-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE CPP        #-}
 {-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE GADTs                #-}
 {-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE PatternSynonyms      #-}
@@ -16,54 +15,23 @@
 module FluiDB.Schema.Graph.Main
   (graphMain) where
 
-import Data.QueryPlan.Types
-import FluiDB.Types
-import System.Timeout
-import FluiDB.Classes
-import Data.Utils.Unsafe
-import Data.Cluster.Types.Clusters
-import Data.CnfQuery.BuildUtils
-import FluiDB.Schema.Workload
-import Data.Utils.Functors
-import Data.Query.Algebra
-import FluiDB.Schema.Graph.Schemata
-import Data.NodeContainers
-import Data.Codegen.Build
-import Data.Utils.Tup
-import Data.Utils.AShow
-import           Data.Bifunctor
-import           Data.List
-import           Data.Maybe
+import           Data.Cluster.Types
+import           Data.CnfQuery.BuildUtils
+import           Data.Codegen.Build
+import           Data.NodeContainers
+import           Data.Query.Algebra
+import           Data.QueryPlan.Types
+import           Data.Utils.AShow
+import           Data.Utils.Functors
+import           Data.Utils.Tup
+import           FluiDB.Classes
+import           FluiDB.Schema.Graph.Schemata
+import           FluiDB.Schema.Graph.StarQuery
+import           FluiDB.Schema.Workload
+import           FluiDB.Types
 import           GHC.Generics
+import           System.Timeout
 import           Text.Printf
-
--- Workload stuff
-on :: Integer -> (a -> a) -> [a] -> Maybe [a]
-on _ _ []     = Nothing
-on 0 f (x:xs) = Just $ f x:xs
-on i f (x:xs) = (x:) <$> on (i-1) f xs
-
-
--- |variant 10 (1, False) [(a,b), (c,d)] --> [(a,b), (c,d + 10)]
-variant :: Integer -> (Integer, Bool) -> [(Integer, Integer)] -> Maybe [(Integer, Integer)]
-variant _ _ [] = Nothing
-variant pert (index, onLeft) q = on index modifier q
-  where
-    modifier = (if onLeft then first else second) (+ (pert + topTable))
-    topTable = foldl1 max $ (fst <$> q) ++ (snd <$> q)
-
-workloadAlist :: [(String, QuerySize -> Workload)]
-workloadAlist = [
-  -- A star join, change a specific point in each iteration
-  ("simple-star", \s -> starJoinVariants s $ repeat (1, False)),
-  -- A star join, each time change a different point.
-  ("alternating-star", \s -> starJoinVariants s $ cycle $ (,False) <$> [0..s-1])
-  ]
-  where
-    starJoinVariants starSize =
-      catMaybes
-      . fmap ($ (1,) <$> [2..starSize + 1])
-      . zipWith variant [1..]
 
 
 -- MAIN
@@ -75,73 +43,43 @@ evaluationDesc
 evaluationDesc = \case
   ForwardEval clust io q -> F [(q,io,snd $ primaryNRef clust)]
   ReverseEval clust io q -> R [(q,io,snd $ primaryNRef clust)]
-  Delete n q -> D [(q,Tup2 [] [],n)]
+  Delete n q             -> D [(q,Tup2 [] [],n)]
 
 instance MonadFail (Either String) where
   fail = Left
 
 instance MonadFakeIO (Either String)
 
-actualMain :: WorkloadConfig -> IO ()
+actualMain :: WorkloadConf -> IO ()
 actualMain wlConf = do
   putStrLn $ printf "Plans:"
-  putStrLn $ ashow [(q,evaluationDesc <$> vs) | (q,vs) <- vals]
+  putStrLn $ ashow [(q,evaluationDesc <$> vs) | QuerySol q vs <- vals]
   where
     vals :: forall e s t n .
-         (s ~ Integer,GraphTypeVars e s t n)
-         => [([Integer],[(Evaluation e s t n SExp)])]
+         (s ~ Int,GraphTypeVars e s t n)
+         => [SovledStarQ e s t n]
     vals =
-      zip (nub <$> fmap (toInts =<<) queryVariations)
-      $ fmap3 (showQ . cnfOrigDEBUG . head)
+      zipWith QuerySol workload
+      $ fmap3 cnfSexp
       $ fromRight
       $ runWorkloadEvals
         (\conf -> conf
-         { globalGCConfig =
-             (globalGCConfig conf) { budget = Just $ workloadBudget wlConf }
+         { globalGCConfig = (globalGCConfig conf)
+             { budget = Just $ wcBudget wlConf }
          })
-        queryVariations
+        workload
       where
+        cnfSexp = showQ . cnfOrigDEBUG . head
         fromRight = \case
-          Left e -> error e
+          Left e  -> error e
           Right r -> r
-        queryVariations :: Workload
-        queryVariations = mkWorkload wlConf
+        workload :: [StarQ]
+        workload =
+          take (wcWorkloadSize wlConf) $ mkWorkload $ wcQuerySize wlConf
         showQ :: Query e s -> SExp
         showQ = \case
           J _ l r -> ashow' (toList l,toList r)
-          q -> ashow' $ toList q
-        toInts (a,b) = [a,b]
-
-
-mkWorkload :: WorkloadConfig -> Workload
-mkWorkload WorkloadConfig{..} =
-  take workloadSize
-  $ fmap2 ((+ workloadTableOffset) `bimap` (+ workloadTableOffset))
-  $ ($ workloadQuerySize)
-  $ fromJustErr
-  $ workloadName `lookup` workloadAlist
-
-type Length = Int
-type QuerySize = Integer
-type Workload = [[(Integer,Integer)]]
-data WorkloadConfig =
-  WorkloadConfig
-  { workloadName :: String
-   ,workloadTableOffset :: Integer
-   ,workloadQuerySize :: QuerySize
-   ,workloadSize :: Length
-   ,workloadBudget :: Int
-  }
-  deriving Show
-
-defaultConfig :: WorkloadConfig
-defaultConfig = WorkloadConfig {
-  workloadName="simple-star",
-  workloadTableOffset=0,
-  workloadQuerySize=3,
-  workloadSize=5,
-  workloadBudget=100
-  }
+          q       -> ashow' $ toList q
 
 graphMain :: IO ()
 graphMain =

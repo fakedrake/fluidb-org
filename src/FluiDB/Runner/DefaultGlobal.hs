@@ -1,43 +1,43 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE UndecidableInstances   #-}
 module FluiDB.Runner.DefaultGlobal
   ( DefaultGlobal(..)
   ) where
 
-import Data.Codegen.Build.Types
-import Data.Utils.Functors
-import Data.CnfQuery.Build
-import Data.Codegen.Schema
-import Data.Utils.Default
-import Data.Utils.AShow
-import Data.Query.QuerySchema.SchemaBase
-import Data.Bifunctor
-import FluiDB.Schema.Graph.Joins
-import FluiDB.Schema.Graph.Schemata
-import FluiDB.Schema.Graph.Values
-import Control.Monad.Except
-import Control.Monad.State
-import FluiDB.Schema.TPCH.Parse
-import Text.Printf
-import FluiDB.Schema.TPCH.Values
-import FluiDB.ConfValues
-import Data.Query.SQL.FileSet
-import Data.Query.SQL.Types
-import Data.Query.QuerySchema.Types
-import Data.Query.Algebra
-import FluiDB.Types
-import Data.Proxy
-import Data.Utils.Hashable
-import FluiDB.Classes
-import Data.CppAst.ExpressionLike
+import           Control.Monad.Except
+import           Control.Monad.State
+import           Data.Bifunctor
+import           Data.CnfQuery.Build
+import           Data.Codegen.Build.Types
+import           Data.Codegen.Schema
+import           Data.CppAst.ExpressionLike
+import           Data.Proxy
+import           Data.Query.Algebra
+import           Data.Query.QuerySchema.SchemaBase
+import           Data.Query.QuerySchema.Types
+import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.Types
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           FluiDB.Classes
+import           FluiDB.ConfValues
+import           FluiDB.Schema.Graph.Joins
+import           FluiDB.Schema.Graph.Schemata
+import           FluiDB.Schema.Graph.Values
+import           FluiDB.Schema.TPCH.Parse
+import           FluiDB.Schema.TPCH.Values
+import           FluiDB.Types
+import           Text.Printf
 
 -- XXX: deprecate this in favor of workload params
 class (ExpressionLike e,MonadFakeIO m,Hashables2 e s)
@@ -73,26 +73,26 @@ instance MonadFakeIO m
          i]
     parseTpchQuery qtext
   putPS _ q = do
-    cppConf <- globalQueryCppConf <$> get
+    cppConf <- gets globalQueryCppConf
     either throwError return $ putPlanSymTpch cppConf q
 
 qgenRoot :: FilePath
-#ifdef __linux__
-qgenRoot = "/home/drninjabatman/Projects1/FluiDB/resources/tpch-dbgen"
-#else
+
+
+
 qgenRoot = "/Users/drninjabatman/Projects/UoE/fluidb/resources/tpch-dbgen"
-#endif
+
 
 -- Join-only
 instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s))
   => DefaultGlobal (s,s) s () () m [(s,s)] where
   defGlobalConf _ = graphGlobalConf . mkGraphSchema . join
   getIOQuery js = do
-    schemaAssoc <- globalSchemaAssoc <$> get
+    schemaAssoc <- gets globalSchemaAssoc
     putPS (Proxy :: Proxy [(s,s)])
       $ eqJoinQuery schemaAssoc [((s,s'),(s',s')) | (s,s') <- js]
   putPS _ q' = do
-    cppConf <- globalQueryCppConf <$> get
+    cppConf <- gets globalQueryCppConf
     either (throwError . toGlobalError) (return . first (uncurry mkPlanSym))
       $ (>>= maybe (throwAStr "No cnf found") return)
       $ fmap (>>= traverse (\s -> (,s) <$> mkPlanFromTbl cppConf s) . snd)
