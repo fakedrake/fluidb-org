@@ -1,12 +1,17 @@
 {-# LANGUAGE LambdaCase #-}
 module FluiDB.Schema.SSB.Queries (ssbQueries) where
 
+import           Data.Foldable
 import           Data.List
 import           Data.Query.Algebra
 import           Data.Query.SQL.Parser
 import           Data.Query.SQL.Types
 
-data IsInTable = IsLiteral | InTable | NotInTable
+data IsInTable
+  = IsLiteral
+  | InTable
+  | NotInTable
+  deriving Eq
 fromIsInTable :: IsInTable -> Maybe Bool
 fromIsInTable = \case
   IsLiteral  -> Nothing
@@ -30,6 +35,26 @@ tblPrefix = \case
   "supplier"  -> "s_"
   "customer"  -> "c_"
   tbln        -> error "unknown table: " ++ tbln
+
+allFields :: [String]
+allFields = nub $ do
+  q <- ssbQueries
+  e <- toList $ FlipQuery q
+  case e of
+    ESym sym -> return sym
+    _        -> []
+
+allTables :: [String]
+allTables = nub $ do
+  t <- ssbQueries >>= toList
+  case t of
+    NoTable     -> []
+    TSymbol tbl -> return tbl
+
+schema :: [(String,[String])]
+schema = do
+  tbl <- allTables
+  return (tbl,filter (\fld -> inTable (ESym fld) (TSymbol tbl) == InTable) allFields)
 
 ssbQueries :: [Query ExpTypeSym Table]
 ssbQueries =
