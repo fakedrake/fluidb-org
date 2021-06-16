@@ -1,41 +1,42 @@
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeFamilies        #-}
 module FluiDB.Schema.TPCH.Parse
   (parseTpchQuery
   , putPlanSymTpch
   ) where
 
-import Control.Monad.Except
-import Data.Query.SQL.Parser
-import Data.Utils.MTL
-import Data.Codegen.Schema
-import Data.Utils.Default
-import Data.Utils.Functors
-import Data.CnfQuery.Build
-import Data.Utils.Unsafe
-import Data.Query.QuerySchema.SchemaBase
-import Data.Bifunctor
-import Data.Utils.ListT
-import Data.Bitraversable
-import Data.Query.Optimizations.ExposeUnique
-import Data.Utils.AShow
-import Control.Monad.State
-import FluiDB.Schema.TPCH.Values
-import Data.Query.SQL.FileSet
-import Data.Maybe
-import FluiDB.Classes
-import Data.Query.QuerySchema.Types
-import Data.Utils.Hashable
-import Data.Query.SQL.Types
-import Data.Query.Algebra
-import Data.Codegen.Build.Types
-import FluiDB.Types
+import           Control.Monad.Except
+import           Control.Monad.State
+import           Data.Bifunctor
+import           Data.Bitraversable
+import           Data.CnfQuery.Build
+import           Data.Codegen.Build.Types
+import           Data.Codegen.Schema
+import           Data.Maybe
+import           Data.Query.Algebra
+import           Data.Query.Optimizations.ExposeUnique
+import           Data.Query.QuerySchema.SchemaBase
+import           Data.Query.QuerySchema.Types
+import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.Parser
+import           Data.Query.SQL.Types
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.ListT
+import           Data.Utils.MTL
+import           Data.Utils.Unsafe
+import           FluiDB.Classes
+import           FluiDB.Schema.TPCH.Values
+import           FluiDB.Types
 
 isInQCppConf :: SqlTypeVars e s t n =>
                QueryCppConf e s -> e -> Query e Table -> Maybe Bool
-isInQCppConf cppConf e q = inQ (isJust . literalType cppConf) e
+isInQCppConf cppConf e q =
+  inQ (isJust . literalType cppConf) e
   =<< traverse (tableSchema cppConf . Just . DataFile . datFile) q
 
 -- | Put unique columns and transform e into plansyms.

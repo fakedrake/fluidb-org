@@ -70,7 +70,7 @@ instance (Symbolic e',MonadGen e m) => MonadGen e' (ReaderT (e -> e') m) where
 instance (Monoid w,MonadGen e m) => MonadGen e (WriterT w m) where pop = lift pop
 
 dropPrefix :: String -> String -> Maybe String
-dropPrefix s l = if isPrefixOf s l then Just $ drop (length s) l else Nothing
+dropPrefix s l = if s `isPrefixOf` l then Just $ drop (length s) l else Nothing
 
 class (MonadSelect p,MonadPlus p) => MonadParse p where
   modText :: (String -> String) -> p ()
@@ -134,7 +134,7 @@ char c = do
 eof :: (HasCallStack,MonadParse p) => p ()
 eof = getText >>= \case
   [] -> return ()
-  _ -> throwText $ "Expcected end of file"
+  _  -> throwText "Expcected end of file"
 skipSpaces :: String -> String
 skipSpaces = drpSpace where
   drpSpace :: String -> String
@@ -142,7 +142,7 @@ skipSpaces = drpSpace where
   drpComment :: String -> String
   drpComment = \case
     '-':'-':xs -> drpSpace $ dropWhile (/= '\n') xs
-    xs -> xs
+    xs         -> xs
 spaces :: MonadParse p => p ()
 spaces = modText skipSpaces
 
@@ -153,14 +153,14 @@ sep1 s m = do {r <- m; (s >> fmap (r:) (sep1 s m)) <|> return [r]}
 word :: (HasCallStack,MonadParse p) => String -> p ()
 word w = do {spaces ; r <- lit w ; spaces ; return r}
 readWhile :: (HasCallStack,MonadParse p) => (Char -> Bool) -> p String
-readWhile f = span f <$> getText >>= \case
-  ([],_) -> throwText "Failed readWhile."
-  (ret,p) -> putText p >> return ret
+readWhile f = getText >>= (\case
+  ([],_)  -> throwText "Failed readWhile."
+  (ret,p) -> putText p >> return ret) . span f
 
 parseSym :: (HasCallStack,MonadParse p) => p String
-parseSym = span (\c -> isAlphaNum c || c == '_') <$> getText >>= \case
-  ([],xs) -> throwText $ printf "Expected symbol at '%s'" xs
-  (s,rest) -> putText rest >> return s
+parseSym = getText >>= (\case
+  ([],xs)  -> throwText $ printf "Expected symbol at '%s'" xs
+  (s,rest) -> putText rest >> return s) . span (\c -> isAlphaNum c || c == '_')
 
 parse :: P a -> String -> Either [PError] a
 parse (P (ExceptT (StateT f))) s = case partitionEithers $ fst <$> f s of
@@ -246,7 +246,7 @@ parseHaving eM = do
   where
     aggrSymM = \case
       NAggr AggrFirst e -> return e
-      ag -> do {e <- pop;tell [(e,ag)];return $ E0 e}
+      ag                -> do {e <- pop;tell [(e,ag)];return $ E0 e}
 
 parseOrderBy :: (HasCallStack,MonadParse p) => p e -> p (Query e s -> Query e s)
 parseOrderBy eM = do
@@ -263,7 +263,7 @@ parseSelectStar = word "select" >> word "*" >> return id
 parseNestedQueryE :: (HasCallStack,MonadParse p) =>
                     p e -> p (Query (NestedQueryE s e) s) -> p (NestedQueryE s e)
 parseNestedQueryE eM qM =
-  fmap NestedQueryE $ (Right <$> eM) <|> (Left <$> parens qM) <|> prsIn
+  fmap NestedQueryE $ Right <$> eM <|> Left <$> parens qM <|> prsIn
   where
     -- x in (select a from <query>) => exists (select * from (<query>) where x = a)
     prsIn = do
@@ -280,12 +280,12 @@ parseNestedQueryE eM qM =
         Q1 (QProj ((l,_):_)) _ -> return l
         Q1 _ q -> exposedSymbol q
         q -> throwText $ "Expected a query with unique symbols, not "
-            ++ show (bimap (const ()) (const ()) $ q)
+            ++ show (bimap (const ()) (const ()) q)
 parseQuery :: (HasCallStack,MonadGen e p,MonadParse p,Eq e) =>
              (String -> e -> Maybe e) -> p e -> p (Query e s) -> p (Query e s)
 parseQuery rmPref eM sM = do
-  putProjE <- (Left <$> (select parseSelectStar $ parseSelectProj eM))
-             <|> (Right <$> parseSelectGroup eM)
+  putProjE <- Left <$> (select parseSelectStar $ parseSelectProj eM)
+             <|> Right <$> parseSelectGroup eM
   prod <- parseFrom rmPref (select sM $ parens $ parseQuery rmPref eM sM)
     `select` fmap const (parseFromLeftOuterJoin eM sM)
   putSel <- fmap (fromMaybe id) $ parseMaybe $ parseWhere eM
@@ -297,15 +297,15 @@ parseQuery rmPref eM sM = do
         fmap (fromMaybe (id,[])) $ parseMaybe $ parseHaving eM
       return $ havingSel . Q1 (QGroup (grpProj ++ fmap2 E0 extraProj) exps)
   putSort <- fmap (fromMaybe id) $ parseMaybe $ parseOrderBy eM
-  putLimit <- fmap (fromMaybe id) $ parseMaybe parseLimit
+  putLimit <- (fromMaybe id) <$> parseMaybe parseLimit
   spaces
   return $ join $ flattenQ $ putLimit $ putSort $ putProj $ putSel $ Q0 $ prod
 
 flattenQ :: Query e ([e] -> s) -> Query e s
 flattenQ = go [] where
   go es = \case
-    Q0 s -> Q0 $ s es
-    Q1 o l -> Q1 o $ go (toList o ++ es) l
+    Q0 s     -> Q0 $ s es
+    Q1 o l   -> Q1 o $ go (toList o ++ es) l
     Q2 o l r -> Q2 o (go (toList o ++ es) l) (go (toList o ++ es) r)
 
 parseNestedQuery :: forall p e s.
@@ -368,10 +368,10 @@ parseBetween ex rM = do
 
 propToExpr :: Prop e -> Expr e
 propToExpr = \case
-  P2 POr l r -> E2 EOr (propToExpr l) (propToExpr r)
+  P2 POr l r  -> E2 EOr (propToExpr l) (propToExpr r)
   P2 PAnd l r -> E2 EAnd (propToExpr l) (propToExpr r)
-  P1 PNot e -> E1 ENot $ propToExpr e
-  P0 e -> E0 e
+  P1 PNot e   -> E1 ENot $ propToExpr e
+  P0 e        -> E0 e
 relToExpr :: Rel e -> Maybe (Expr e)
 relToExpr = \case
   R2 o l r -> do
@@ -404,7 +404,7 @@ parseExpr prsSym = tokTree prsTerm prsBOps where
         word "end"
         return (E2 EOr (E2 EAnd pe t) e)
       prsNeg = word "-"
-        >> E1 ENeg <$> select (parens (parseExpr prsSym)) (prsSym)
+        >> E1 ENeg <$> select (parens (parseExpr prsSym)) prsSym
   prsBOps :: HasCallStack => [p (Expr a -> Expr a -> Expr a)]
   prsBOps = [
     E2 <$> select (char '*' >> return EMul) (char '/' >> return EDiv),
@@ -431,8 +431,7 @@ tokTree :: forall p a . (HasCallStack,MonadParse p) =>
           p a -> [p (a -> a -> a)]  -> p a
 tokTree p1 pops = do
   a <- p1
-  chain <- prsChain
-  return $ ev a chain
+  ev a <$> prsChain
   where
     ev a [] = a
     ev a0 [((_i,f),a1)] = f a0 a1
@@ -462,8 +461,7 @@ parseAggr aM = foldr1 select [
       word "count" >> parens (word "*")
       tmp <- getText
       putText $ "sum(1)" ++ tmp
-      ret <- parseAggr aM
-      return ret
+      parseAggr aM
 
 -- | Sort of a right kan. RK *MUST* be the outermost monad otherwise
 -- select will swallow all previously thrown errors.
@@ -577,14 +575,16 @@ parseSQL isInS str =
   $ (>>= first (return . (,"") . ashow) . unnestQuery isInS)
   $ (`parse` str)
   $ (`evalStateT` fmap (ESym . printf "tmpSym%d") (intStream 0))
-  $ do {r <- parseNestedQuery rmPref parseExpTypeSym parseTableSym;eof;return r}
+  $ do
+    r <- parseNestedQuery rmPref parseExpTypeSym parseTableSym
+    eof
+    return r
   where
-    rndr [] = "No parsing errors."
-    rndr errs@((_,txt):_) = printf "%s\nText: '%s'" body txt where
-      body = unlines $ fmap fst $ takeWhile ((== length txt) . length . snd) errs
-    mkParseError = fromString
-      . rndr
-      . reverse
-      . sortOn (negate . length . snd)
+    rndr [] = undefined
+    rndr errs@((_,txt):_) = printf "%s\nText: '%s'" body txt
+      where
+        body =
+          unlines $ fmap fst $ takeWhile ((== length txt) . length . snd) errs
+    mkParseError = fromString . rndr . reverse . sortOn (negate . length . snd)
     rmPref pref (ESym esym) = ESym <$> dropPrefix (pref ++ ".") esym
     rmPref _ _              = Nothing
