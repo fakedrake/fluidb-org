@@ -22,7 +22,10 @@
 
 -- | The entry point is `sqlToSolution'
 
-module FluiDB.Schema.Workload (runWorkloadCpp,runWorkloadEvals) where
+module FluiDB.Schema.Workload
+  (runWorkloadCpp
+  ,runWorkloadEvals
+  ,runSingleQuery) where
 
 import           Control.Monad.Except
 import           Control.Monad.Free
@@ -170,7 +173,7 @@ insertAndRun queries postSolution = do
         (CodeBuilderT e s t n m)
         (a,GCConfig t n)
     solveQuery = do
-      QueryCppConf {..} <- cbQueryCppConf <$> get
+      QueryCppConf {..} <- gets cbQueryCppConf
       when True $ do
         matNodes <- lift materializedNodes
         traceM $ "Mat nodes: " ++ ashow matNodes
@@ -181,15 +184,14 @@ insertAndRun queries postSolution = do
       lift4 clearClustBuildCache
       -- lift $ reportGraph >> reportClusterConfig
       traceM $ "Commencing solution of node:" ++ ashow nOptqRef
-      nodeNum <- length . rNodes . propNet <$> ask
+      nodeNum <- asks (length . rNodes . propNet)
       traceM $ "Total nodes:" ++ show nodeNum
       (_qcost,conf)
         <- lift $ planLiftCB $ wrapTrace ("Solving node:" ++ show nOptqRef) $ do
           setNodeMaterialized nOptqRef
-          ios <- fmap mconcat
+          fmap mconcat
             $ mapM transitionCost =<< dropReader get getTransitions
-          return ios
-      (,pushHistory nOptqRef conf) <$> lift (local (const conf) $ postSolution)
+      (,pushHistory nOptqRef conf) <$> lift (local (const conf) postSolution)
 
 
 planFrontier :: [Transition t n] -> [NodeRef n]
@@ -208,10 +210,10 @@ runSingleQuery
   :: (Hashables2 e s,AShow e,AShow s,ExpressionLike e,MonadFakeIO m)
   => Query (PlanSym e s) (QueryPlan e s,s)
   -> GlobalSolveT e s t n m ([Transition t n],CppCode)
-runSingleQuery query = do
+runSingleQuery query =
   sqlToSolution query popSol $ do
-    ts <- transitions . NEL.head . epochs <$> getGCState
-    (ts,) <$> getQuerySolutionCpp
+  ts <- transitions . NEL.head . epochs <$> getGCState
+  (ts,) <$> getQuerySolutionCpp
   where
     popSol :: Monad m => [x] -> m x
     popSol []    = error "No solution for query"
@@ -246,7 +248,7 @@ runWorkloadCpp
   -> m [([(Transition t n,Cost)],[NodeRef n])]
 runWorkloadCpp modGCnf qios = forEachQuery modGCnf qios $ \i query -> do
   (trigs,cppCode) <- runSingleQuery query
-  gcc :: GCConfig t n <- getGlobalConf <$> get
+  gcc :: GCConfig t n <- gets getGlobalConf
   costTrigs <- either (throwError . toGlobalError) return
     $ dropReader (return gcc)
     $ mapM (\t -> (t,) <$> transitionCost t) trigs
@@ -273,11 +275,11 @@ runWorkloadEvals
   => (GlobalConf e s t n -> GlobalConf e s t n)
   -> [q]
   -> m [[Evaluation e s t n [CNFQuery e s]]]
-runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query -> do
+runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query ->
   sqlToSolution query (return . headErr)
-    $ dropReader (lift2 askStates) getEvaluations
+  $ dropReader (lift2 askStates) getEvaluations
   where
-    askStates = (,,,) <$> get <*> lift2 get <*> lift3 get <*> lift3 ask
+    askStates = gets (,,,) <*> lift2 get <*> lift3 get <*> lift3 ask
 
 getTpchQuery :: SqlTypeVars e s t n => Int -> IO (Query e s)
 getTpchQuery q =

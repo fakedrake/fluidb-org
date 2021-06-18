@@ -1,56 +1,42 @@
 module FluiDB.Schema.SSB.Main () where
 
+
+import           Control.Monad.State
+import           Data.Codegen.Build
+import           Data.Codegen.Run
+import qualified Data.IntMap               as IM
 import           Data.Query.Algebra
-data SSBField
-data SSBTbl
-data SSBLit = SSBNum Int | SSBString String
-data SSBFilter
-  = Lt SSBField SSBField
-  | ForeignEq SSBField SSBField
-  | Rng SSBField SSBLit SSBLit
-  | Or SSBFilter SSBFilter
-data SSBQuery =
-  SSBQuery
-  { ssbqSel    :: [Aggr (Expr SSBField)]
-   ,ssbqTbls   :: [SSBTbl]
-   ,ssbqFilter :: [SSBFilter]
-   ,ssbqGroup  :: [SSBField]
-   ,ssbqSort   :: [SSBField]
-  }
+import           Data.Query.SQL.Types
+import           Data.Utils.AShow
+import           FluiDB.Schema.SSB.Queries
+import           FluiDB.Schema.SSB.Values
+import           FluiDB.Schema.Workload
+import           FluiDB.Types
+import           FluiDB.Utils
+import           System.Timeout
+import           Text.Printf
 
-ssbToQ :: SSBQuery -> Query SSBESym SSBTbl
-ssbToQ = _
+type AnnotQuery =
+  Query (PlanSym ExpTypeSym Table) (QueryPlan ExpTypeSym Table,Table)
+type SSBQuery = Query ExpTypeSym Table
+type SSBGlobalSolveM = GlobalSolveT ExpTypeSym Table T N IO
 
-actualMain :: [SSBQuery] -> IO ()
-actualMain wlConf = do
-  putStrLn $ printf "Plans:"
-  putStrLn $ ashow [(q,evaluationDesc <$> vs) | QuerySol q vs <- vals]
-  where
-    vals :: forall e s t n .
-         (s ~ Int,GraphTypeVars e s t n)
-         => [SovledStarQ e s t n]
-    vals =
-      zipWith QuerySol workload
-      $ fmap3 cnfSexp
-      $ fromRight
-      $ runWorkloadEvals
-        (\conf -> conf
-         { globalGCConfig = (globalGCConfig conf)
-             { budget = Just $ wcBudget wlConf }
-         })
-        workload
-      where
-        cnfSexp = showQ . cnfOrigDEBUG . head
-        fromRight = \case
-          Left e  -> error e
-          Right r -> r
-        workload :: [StarQ]
-        workload =
-          take (wcWorkloadSize wlConf) $ mkWorkload $ wcQuerySize wlConf
-        showQ :: Query e s -> SExp
-        showQ = \case
-          J _ l r -> ashow' (toList l,toList r)
-          q       -> ashow' $ toList q
+annotateQuery
+  :: QueryCppConf ExpTypeSym Table
+  -> SSBQuery
+  -> SSBGlobalSolveM AnnotQuery
+annotateQuery = error "Not implemented"
+
+
+actualMain :: [Int] -> IO ()
+actualMain = mapM_ $ \qi -> runGlobalSolve ssbGlobalConf (fail . ashow) $ do
+  case IM.lookup qi ssbQueriesMap of
+    Nothing -> throwAStr $ printf "No such query %d" qi
+    Just query -> do
+      cppConf <- gets globalQueryCppConf
+      aquery <- annotateQuery cppConf query
+      (_transitions,cppCode)  <- runSingleQuery aquery
+      liftIO $ runCpp cppCode
 
 graphMain :: IO ()
 graphMain = timeout 3000000 (actualMain []) >>= \case

@@ -14,32 +14,32 @@ module Data.Codegen.CppType
   , compatCppTypes
   ) where
 
-import Data.Query.QuerySchema.Types
-import           Data.CppAst
+import           Data.CppAst.CppType
+import           Data.Query.QuerySchema.Types
 
 compatCppTypes :: CppType -> CppType -> Bool
 compatCppTypes t1 t2 = t1 == t2 || (isNum t1 && isNum t2) where
   isNum = \case
-    CppInt -> True
+    CppInt    -> True
     CppDouble -> True
-    CppNat -> True
-    _ -> False
+    CppNat    -> True
+    _         -> False
 
 cppTypeSize :: CppTypeF a -> Maybe Int
 cppTypeSize = \case
   CppArray t (LiteralSize l) -> (* l) <$> cppTypeSize t
-  CppArray _ (SizeOf _) -> Nothing
-  CppVoid -> Nothing
-  CppChar -> Just 1
-  CppNat -> Just 4
-  CppInt -> Just 4
-  CppDouble -> Just 8
-  CppBool -> Just 1
+  CppArray _ (SizeOf _)      -> Nothing
+  CppVoid                    -> Nothing
+  CppChar                    -> Just 1
+  CppNat                     -> Just 4
+  CppInt                     -> Just 4
+  CppDouble                  -> Just 8
+  CppBool                    -> Just 1
 
 cppTypeAlignment :: CppTypeF a -> Maybe Int
 cppTypeAlignment = \case
   CppArray t _ -> cppTypeSize t
-  x -> cppTypeSize x
+  x            -> cppTypeSize x
 
 schemaPostPaddings :: CppSchema' e -> Maybe [Int]
 schemaPostPaddings [] = Just []

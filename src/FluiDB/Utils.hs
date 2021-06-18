@@ -22,23 +22,23 @@ module FluiDB.Utils
   ,ListLike
   ,searchForBudget) where
 
-import Data.Utils.Debug
-import Data.Utils.Unsafe
-import Data.Utils.Hashable
-import Data.Utils.ListT
-import Data.QueryPlan.Types
-import FluiDB.Types
-import Control.Monad.Except
-import Control.Monad.Identity
-import Control.Monad.State
-import Control.Monad.Trans.Maybe
-import Data.Maybe
+import           Control.Monad.Except
+import           Control.Monad.Identity
+import           Control.Monad.State
+import           Control.Monad.Trans.Maybe
+import           Data.Maybe
+import           Data.QueryPlan.Types
+import           Data.Utils.Debug
+import           Data.Utils.Hashable
+import           Data.Utils.ListT
+import           Data.Utils.Unsafe
+import           FluiDB.Types
 
 -- | Use this datatype to push to the end left sides of either.
 data MaxOrd a = MOJust a | MOInf deriving (Eq, Show)
 instance Ord a => Ord (MaxOrd a) where
-  _ <= MOInf = True
-  MOInf <= _ = False
+  _ <= MOInf           = True
+  MOInf <= _           = False
   MOJust x <= MOJust y = x <= y
 
 
@@ -52,9 +52,9 @@ runGlobalSolve
 runGlobalSolve conf handle s = evalStateT (stripExcept s) conf
   where
     stripExcept :: GlobalSolveT e s t n m a -> StateT (GlobalConf e s t n) m a
-    stripExcept = join . fmap handleFailure . runExceptT where
+    stripExcept = handleFailure <=< runExceptT where
       handleFailure = \case
-        Left e -> lift $ handle e
+        Left e  -> lift $ handle e
         Right x -> return x
 
 -- | Seach for a budget that makes the query solvable. Assume that the
@@ -86,14 +86,14 @@ searchForBudget isSolvableM = budgetBounds 5 Nothing
     sandbox m = do {st <- get; ret <- m; put st; return ret}
     midBudget :: Int -> Maybe Int -> Int
     midBudget lower = \case
-      Nothing -> lower * 2
+      Nothing    -> lower * 2
       Just upper -> (upper + lower) `div` 2
     setBudget :: Int -> GlobalSolveT e s t n m ()
     setBudget = modify . modBudget . const . Just
     modBudget f conf =
       let oldBudget = budget $ globalGCConfig conf
       in conf {globalGCConfig=(globalGCConfig conf){budget=f oldBudget}}
-    getBudget = fromJustErr . budget . globalGCConfig <$> get
+    getBudget = gets (fromJustErr . budget . globalGCConfig)
 
 
 class (Monad l, Monad m) => ListLike m l | l -> m where
@@ -151,9 +151,8 @@ selectGlobalBy
       -> (a,GlobalConf e s t n))
   -> GlobalSolveT e s t n l a
   -> GlobalSolveT e s t n m (Maybe a)
-selectGlobalBy isBetter m =
-  selectExcept (selectState $ \conf -> fmap (selectList' conf)
-                . takeUniqueListLike fst 1) m
+selectGlobalBy isBetter = selectExcept (selectState $ \conf -> fmap (selectList' conf)
+                . takeUniqueListLike fst 1)
   where
     selectList'
       :: GlobalConf e s t n
@@ -179,5 +178,5 @@ selectListBy best sym = \case
         $ [case v' of {Left _ -> Nothing; Right v'' -> Just (v'',s')}
           | (v',s') <- xs]
       go (defV, defS) = \case
-        [] -> (Right $ Just defV, defS)
+        []           -> (Right $ Just defV, defS)
         (v',s'):rest -> go (best (v',s') (defV, defS)) rest
