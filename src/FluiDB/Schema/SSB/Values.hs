@@ -2,7 +2,6 @@ module FluiDB.Schema.SSB.Values (ssbGlobalConf,T,N) where
 
 -- | graphGlobalConf $ mkGraphSchema [[(1,2)]]
 import           Data.Bifunctor
-import           Data.Codegen.CppCode
 import           Data.Query.SQL.FileSet
 import           Data.Query.SQL.Types
 import           Data.Utils.Functors
@@ -23,7 +22,7 @@ ssbGlobalConf =
     genUniqName -- Build a unique name.
     (Just . DataFile . datFile)
     (first TSymbol <$> fmap3 ESym ssbPrimKeys) -- Primary keys
-    (first TSymbol <$> ssbSchema) -- Full schema
+    (bimap TSymbol (_) <$> ssbFldSchema) -- Full schema
     _tableSizeAssoc -- sizes in pages
   where
     genUniqName i = \case

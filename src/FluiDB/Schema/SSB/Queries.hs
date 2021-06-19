@@ -4,6 +4,7 @@ module FluiDB.Schema.SSB.Queries
   (ssbQueriesMap
   ,SSBField
   ,SSBTable
+  ,ssbFldSchema
   ,ssbTpchDBGenConf
   ,ssbSchema
   ,ssbPrimKeys) where

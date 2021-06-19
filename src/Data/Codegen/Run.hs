@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 module Data.Codegen.Run (runCpp,tmpDir,runProc,mkProc) where
 
+import           Control.Exception
 import           Control.Monad
 import           GHC.IO.Exception
 import           System.Directory
@@ -26,7 +27,8 @@ tmpDir opId m = do
     Just curDir -> return (curDir,setEnv "FLUIDB_IN_TMP_DIR" curDir)
   dir <- createTempDirectory rootTmp opId
   setEnv "FLUIDB_IN_TMP_DIR" dir
-  ret <- withCurrentDirectory dir $ m dir
+  ret <- withCurrentDirectory dir
+    $ m dir `onException` unsetEnv "FLUIDB_IN_TMP_DIR"
   unsetDir
   -- We don't want this to be removed if there is an error so that we
   -- can inspect the situation.
@@ -43,7 +45,7 @@ whileIO bM body = go
 -- | Runs process.
 runProc :: CreateProcess -> IO ()
 runProc prc = tmpDir "runProc" $  \dirp -> do
-  let cmdFile = dirp </> ".cmd"
+  let cmdFile = dirp </> "exec.cmd"
   writeFile cmdFile $ show $ cmdspec prc
   (_in,Just outHndl,Just errHndl,procHndl)
     <- createProcess prc { std_err = CreatePipe,std_out = CreatePipe }
@@ -68,7 +70,8 @@ runProc prc = tmpDir "runProc" $  \dirp -> do
 runCpp :: String -> IO ()
 runCpp str = tmpDir "runCpp" $ \dirp -> do
   let cppFile = dirp </> "exec.cpp"
-  let exeFile = dirp </> "exec.out"
+  let exeFile = dirp </> "exec.exe"
+  writeFile cppFile str
   -- Compile the C++ file
   runProc $ mkProc "c++" [cppFile,"-o",exeFile]
   -- Run the executable
@@ -79,4 +82,27 @@ transferToFile rhndl fname =
   withFile fname WriteMode $ \whndl -> hEachLine rhndl $ hPutStrLn whndl
 
 hEachLine :: Handle -> (String -> IO ()) -> IO ()
-hEachLine h f = whileIO (hIsEOF h) $ hGetLine h >>= f
+hEachLine h f = whileIO (not <$> hIsEOF h) $ hGetLine h >>= f
+
+
+type CppCode = String
+type Header = String
+type Symbol = String
+sysInclude :: Header -> CppCode
+sysInclude h = printf "#include <%s>\n" h
+
+declOStream :: Symbol -> FilePath -> CppCode
+declOStream sym path = printf "std::fstream %s;%s.open(\"%s\",std::ios::out); \n" sym sym path
+
+putLine :: Symbol -> String -> CppCode
+putLine sym msg = printf "%s << \"%s\" << std::endl;\n" sym msg
+
+mainFn :: Int -> CppCode -> CppCode
+mainFn exit body = printf "int main () {\n%s return %d;\n}" body exit
+
+runCommands :: Int -> IO ()
+runCommands exit = do
+  tmpDir "command1" $ \dir -> do
+    runCpp
+      $ sysInclude "iostream" ++ sysInclude "fstream"
+      ++ mainFn exit (declOStream "f" (dir </> "file") ++ putLine "f" "hello!")
