@@ -96,14 +96,6 @@ executables:
       - base >= 4.7 && < 5
       - ghc >= 8.6.5
       - fluidb
-  bamify: &exe
-    main: Main.hs
-    source-dirs: tools/Bamify
-    ghc-options: -rtsopts
-    dependencies:
-      - base >= 4.7 && < 5
-      - ghc >= 8.6.5
-      - fluidb
   readdump:
     main: Main.hs
     source-dirs: tools/ReadDump

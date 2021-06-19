@@ -10,6 +10,7 @@ import           Data.CppAst.CppType
 import           Data.Maybe
 import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.Types
+import           Data.Utils.Debug
 import           GHC.Int
 import           GHC.Word
 import           System.Exit
@@ -85,8 +86,9 @@ lineParser fields = do
         let ret = sign * (fromIntegral intPrt + 0.1 * decPrt)
         return ret
       CppChar -> BS.singleton <$> anySingle
-      CppNat -> BSB.toLazyByteString . BSB.int32LE
-        <$> (try parseDate <|> fmap fromIntegral parseNat)
+      CppNat -> do
+        BSB.toLazyByteString . BSB.int32LE
+          <$> (try parseDate <|> fmap fromIntegral parseNat)
         where
           parseDate :: MP Int32
           parseDate = do
@@ -140,11 +142,13 @@ zeroWord = fromIntegral (ord '0')
 wisDigit :: Word8 -> Bool
 wisDigit x = x <= nineWord && x >= zeroWord
 numStr :: MP Int
-numStr = BS.foldl' (\p x -> (p * 10) + digitToInt (w2c x)) 0
-         <$> takeWhileP (Just "number") wisDigit
+numStr =
+  BS.foldl' (\p x -> (p * 10) + digitToInt (w2c x)) 0
+  <$> takeWhileP (Just "parse number") wisDigit
 numStr1 :: MP Int
-numStr1 = BS.foldl' (\p x -> (p * 10) + digitToInt (w2c x)) 0
-          <$> takeWhile1P (Just "number") wisDigit
+numStr1 =
+  BS.foldl' (\p x -> (p * 10) + digitToInt (w2c x)) 0
+  <$> takeWhile1P (Just "parse number 1") wisDigit
 
 takeUntilChar :: Char -> MP BS.ByteString
 takeUntilChar c = takeWhileP (Just $ "looking for '" ++ [c] ++ "'")

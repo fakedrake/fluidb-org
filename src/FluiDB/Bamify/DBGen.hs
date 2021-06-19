@@ -3,7 +3,8 @@ module FluiDB.Bamify.DBGen (mkAllDataFiles) where
 import           Control.Monad
 import           Data.Codegen.Run
 import           Data.Query.QuerySchema.Types
-import           FluiDB.Bamify.Bamify
+import           Data.Utils.Debug
+import           FluiDB.Bamify.CsvParse
 import           FluiDB.Bamify.Types
 import           FluiDB.Bamify.Unbamify
 import           System.Directory
@@ -24,14 +25,17 @@ mkAllDataFiles DBGenConf{..} = do
   forM_ dbGenConfTables $ \DBGenTableConf{..} -> do
     schema <- getSchemaOrDie dbGenConfSchema dbGenTableConfFileBase
     let datFile = curDir </> dbGenTableConfFileBase <.> "dat"
-    withExists checkExists datFile $ \bamaDir -> do
+    withExists checkExists datFile $ tmpDir "dbgen" $ \td -> do
+      traceM $ printf "Generating: %s" dbGenTableConfFileBase
       runProc $ mkProc dbGenConfExec ["-s",show dbGenConfScale,"-T",[dbGenTableConfChar]]
-      let tblFile = curDir </> dbGenTableConfFileBase <.> "tbl"
-      let bamaFile = bamaDir </> dbGenTableConfFileBase <.> "bama"
-      mkBamaFile schema tblFile bamaFile
+      let tblFile = td </> dbGenTableConfFileBase <.> "tbl"
+      let bamaFile = td </> dbGenTableConfFileBase <.> "bama"
+      traceM $ printf "Bamify %s %s " tblFile bamaFile
+      bamifyFile (fst <$> schema) tblFile bamaFile
+      traceM $ printf "Unamify %s %s" bamaFile datFile
       mkDataFile schema bamaFile datFile
   where
-    withExists False _ m = tmpDir "mkTableDat" m
+    withExists False _ m = m
     withExists True datFile m = do
       exists <- doesFileExist datFile
-      unless exists $ tmpDir "mkTableDat" m
+      unless exists m

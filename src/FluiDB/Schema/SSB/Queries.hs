@@ -10,6 +10,7 @@ module FluiDB.Schema.SSB.Queries
   ,ssbPrimKeys) where
 
 import           Control.Monad
+import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
 import           Data.Foldable
 import qualified Data.IntMap                  as IM
@@ -19,6 +20,7 @@ import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.Parser
 import           Data.Query.SQL.Types
 import           Data.String
+import           Data.Utils.Functors
 import           FluiDB.Bamify.Types
 import           FluiDB.Schema.TPCH.Schemata
 
@@ -77,7 +79,7 @@ ssbFldSchema = do
 
 
 -- O(n^2) but it's done once
-ssbSchema :: [(SSBTable,CppSchema)]
+ssbSchema :: [(SSBTable,CppSchema' SSBField)]
 ssbSchema = appendOrderLines $ do
   (tblTpch,schTpch) <- tpchSchemaAssoc
   guard $ tblTpch /= "lineitems" && tblTpch /= "orders"
@@ -91,9 +93,10 @@ ssbSchema = appendOrderLines $ do
         return (tyTpch,eTpch)
   return (tbl,ssbSch)
   where
-    appendOrderLines :: [(SSBTable,CppSchema)] -> [(SSBTable,CppSchema)]
-    appendOrderLines xs = ("lineorders",lineordersSchema) : xs
-    lineordersSchema =
+    appendOrderLines
+      :: [(SSBTable,CppSchema' SSBField)] -> [(SSBTable,CppSchema' SSBField)]
+    appendOrderLines xs = ("lineorder",lineorderSchema) : xs
+    lineorderSchema =
       [(CppNat,"lo_orderkey")
       ,(CppNat,"lo_partkey")
       ,(CppNat,"lo_suppkey")
@@ -124,8 +127,6 @@ strType :: Int -> CppType
 strType = CppArray CppChar . LiteralSize
 dateType :: CppType
 dateType = CppNat
-
-
 
 -- | Except for the star index (which is lineorder) all other fields
 -- that end with "key" are primary keys.
@@ -277,13 +278,13 @@ inQuery :: ExpTypeSym -> Query ExpTypeSym Table -> Maybe Bool
 inQuery e = fmap and . traverse (fromIsInTable . inTable e)
 
 ssbTpchDBGenConf :: [SSBTable] -> DBGenConf
-ssbTpchDBGenConf tblNames =
+ssbTpchDBGenConf Tblnames =
   DBGenConf
   { dbGenConfExec = "dbgen"
    ,dbGenConfTables = mkTbl <$> tblNames
-   ,dbGenConfScale = 0.1
+   ,dbGenConfScale = 0.01
    ,dbGenConfIncremental = True
-   ,dbGenConfSchema = ssbSchema
+   ,dbGenConfSchema = fmap4 CppSymbol ssbSchema
   }
   where
     mkTbl :: String -> DBGenTableConf
