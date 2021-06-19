@@ -1,11 +1,25 @@
-{-# LANGUAGE LambdaCase #-}
-module FluiDB.Schema.SSB.Queries (ssbQueries) where
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+module FluiDB.Schema.SSB.Queries
+  (ssbQueriesMap
+  ,SSBField
+  ,SSBTable
+  ,ssbTpchDBGenConf
+  ,ssbSchema
+  ,ssbPrimKeys) where
 
+import           Control.Monad
+import           Data.CppAst.CppType
 import           Data.Foldable
+import qualified Data.IntMap                  as IM
 import           Data.List
 import           Data.Query.Algebra
+import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.Parser
 import           Data.Query.SQL.Types
+import           Data.String
+import           FluiDB.Bamify.Types
+import           FluiDB.Schema.TPCH.Schemata
 
 data IsInTable
   = IsLiteral
@@ -27,7 +41,9 @@ inTable = \case
       then InTable else NotInTable
   _ -> const IsLiteral
 
-tblPrefix :: String -> [Char]
+type SSBField = String
+type SSBTable = String
+tblPrefix :: SSBField -> String
 tblPrefix = \case
   "lineorder" -> "lo_"
   "dwdate"    -> "d_"
@@ -36,28 +52,92 @@ tblPrefix = \case
   "customer"  -> "c_"
   tbln        -> error "unknown table: " ++ tbln
 
-allFields :: [String]
+allFields :: [SSBField]
 allFields = nub $ do
-  q <- ssbQueries
+  q <- ssbQueriesList
   e <- toList $ FlipQuery q
   case e of
     ESym sym -> return sym
     _        -> []
 
-allTables :: [String]
+allTables :: [SSBTable]
 allTables = nub $ do
-  t <- ssbQueries >>= toList
+  t <- ssbQueriesList >>= toList
   case t of
     NoTable     -> []
     TSymbol tbl -> return tbl
 
-schema :: [(String,[String])]
-schema = do
+ssbFldSchema :: [(SSBTable,[SSBField])]
+ssbFldSchema = do
   tbl <- allTables
-  return (tbl,filter (\fld -> inTable (ESym fld) (TSymbol tbl) == InTable) allFields)
+  let tblFields =
+        filter (\fld -> inTable (ESym fld) (TSymbol tbl) == InTable) allFields
+  return (tbl,tblFields)
 
-ssbQueries :: [Query ExpTypeSym Table]
-ssbQueries =
+
+-- O(n^2) but it's done once
+ssbSchema :: [(SSBTable,CppSchema)]
+ssbSchema = appendOrderLines $ do
+  (tblTpch,schTpch) <- tpchSchemaAssoc
+  guard $ tblTpch /= "lineitems" && tblTpch /= "orders"
+  (tbl,flds) <- ssbFldSchema
+  guard $ tbl /= "lineorder"
+  let ssbSch = do
+        guard $ tbl == tblTpch
+        fld <- flds
+        (tyTpch,eTpch) <- schTpch
+        guard $ eTpch == fromString fld
+        return (tyTpch,eTpch)
+  return (tbl,ssbSch)
+  where
+    appendOrderLines :: [(SSBTable,CppSchema)] -> [(SSBTable,CppSchema)]
+    appendOrderLines xs = ("lineorders",lineordersSchema) : xs
+    lineordersSchema =
+      [(CppNat,"lo_orderkey")
+      ,(CppNat,"lo_partkey")
+      ,(CppNat,"lo_suppkey")
+      ,(CppInt,"lo_linenumber")
+      ,(CppNat,"lo_quantity")
+      ,(CppDouble,"lo_extendedprice")
+      ,(CppDouble,"lo_discount")
+      ,(CppDouble,"lo_tax")
+      ,(strType 1,"lo_returnflag")
+      ,(strType 1,"lo_linestatus")
+      ,(dateType,"lo_shipdate")
+      ,(dateType,"lo_commitdate")
+      ,(dateType,"lo_receiptdate")
+      ,(strType 25,"lo_shipinstruct")
+      ,(strType 10,"lo_shipmode")
+      ,(strType 44,"lo_comment")
+      ,(CppNat,"lo_orderkey")
+      ,(CppNat,"lo_custkey")
+      ,(strType 1,"lo_orderstatus")
+      ,(CppDouble,"lo_totalprice")
+      ,(dateType,"lo_orderdate")
+      ,(strType 15,"lo_orderpriority")
+      ,(strType 15,"lo_clerk")
+      ,(CppInt,"lo_shippriority")
+      ,(strType 79,"lo_comment")]
+
+strType :: Int -> CppType
+strType = CppArray CppChar . LiteralSize
+dateType :: CppType
+dateType = CppNat
+
+
+
+-- | Except for the star index (which is lineorder) all other fields
+-- that end with "key" are primary keys.
+ssbPrimKeys :: [(SSBTable,[SSBField])]
+ssbPrimKeys = do
+  (tbl,flds) <- ssbFldSchema
+  return (tbl,if tbl /= "lineoder" then [] else filter (isSuffixOf "key") flds)
+
+ssbQueriesMap :: IM.IntMap (Query ExpTypeSym Table)
+ssbQueriesMap = IM.fromList $ zip [0 ..] ssbQueriesList
+
+ssbQueriesList :: [Query ExpTypeSym Table]
+ssbQueriesList =
   fmap
     (fromRightStr . parseSQL inQuery . unwords)
     [["select sum(lo_extendedprice*lo_discount) as revenue"
@@ -194,3 +274,18 @@ fromRightStr = \case
 
 inQuery :: ExpTypeSym -> Query ExpTypeSym Table -> Maybe Bool
 inQuery e = fmap and . traverse (fromIsInTable . inTable e)
+
+ssbTpchDBGenConf :: [SSBTable] -> DBGenConf
+ssbTpchDBGenConf tblNames =
+  DBGenConf
+  { dbGenConfExec = "dbgen"
+   ,dbGenConfTables = mkTbl <$> tblNames
+   ,dbGenConfScale = 0.1
+   ,dbGenConfIncremental = True
+   ,dbGenConfSchema = ssbSchema
+  }
+  where
+    mkTbl :: String -> DBGenTableConf
+    mkTbl [] = error "empty table name"
+    mkTbl base@(c:_) =
+      DBGenTableConf { dbGenTableConfChar = c,dbGenTableConfFileBase = base }

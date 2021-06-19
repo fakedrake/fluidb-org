@@ -51,8 +51,6 @@ module Data.Codegen.CppCode
   , runCodeCache
   , coutSt
   -- Move the code for the following here.
-  , CppTypeF(..)
-  , CppType
   , QueryFileCache(..)
   , CppSize(..)
   , toCode
@@ -60,7 +58,6 @@ module Data.Codegen.CppCode
   , constString
   ) where
 
-import Data.CppAst.CppTypeF
 import           Data.CppAst.Argument
 import           Data.CppAst.Assignment
 import           Data.CppAst.Class
@@ -68,6 +65,7 @@ import           Data.CppAst.ClassDeclaration
 import           Data.CppAst.ClassSymbol
 import           Data.CppAst.CodeSymbol
 import           Data.CppAst.Constructor
+import           Data.CppAst.CppTypeF
 import           Data.CppAst.Declaration
 import           Data.CppAst.Expression
 import           Data.CppAst.Function
@@ -82,6 +80,6 @@ import           Data.CppAst.Template
 import           Data.CppAst.TmplDefArg
 import           Data.CppAst.TypeDef
 import           Data.CppAst.TypeModifier
-import Data.Query.SQL.FileSet
+import           Data.Query.SQL.FileSet
 
 type CppType = CppTypeF (Expression CodeSymbol)
