@@ -1,44 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 module FluiDB.Bamify.Bamify (mkBamaFile) where
 
-import           Control.Monad
 import           Control.Parallel.Strategies
-import qualified Data.ByteString.Builder               as BSB
-import qualified Data.ByteString.Lazy                  as BS
-import qualified Data.ByteString.Lazy.Char8            as BSC
+import qualified Data.ByteString.Builder      as BSB
+import qualified Data.ByteString.Lazy         as BS
+import qualified Data.ByteString.Lazy.Char8   as BSC
 import           Data.Char
-import           Data.Codegen.Run
-import           Data.CppAst.Argument
-import           Data.CppAst.Class
-import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
-import           Data.CppAst.Declaration
-import           Data.CppAst.Expression
-import           Data.CppAst.Function
-import           Data.CppAst.Include
-import           Data.CppAst.LiteralCode.Codegen
-import           Data.CppAst.LiteralCode.SoftUNameCode
-import           Data.CppAst.RecordCls
-import           Data.CppAst.Statement
-import           Data.CppAst.Symbol
-import           Data.CppAst.TypeModifier
 import           Data.Maybe
 import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.Types
-import qualified Data.Set                              as DS
-import           Data.Void
-import           FluiDB.Schema.TPCH.Schemata
 import           GHC.Int
 import           GHC.Word
-import           System.Directory
 import           System.Exit
-import           System.FilePath.Posix
 import           System.IO
-import           System.Posix.Files
 import           Text.Megaparsec
 import           Text.Megaparsec.Byte
-import           Text.Printf
 
+import           Data.Codegen.CppType
 import           FluiDB.Bamify.Types
 
 
@@ -78,8 +57,8 @@ lineParser fields = do
   _ <- eof
   return r
   where
-    prePads = sizedNullStr <$> fromMaybe unsizableTypeError
-              (schemaPostPaddings fields)
+    prePads =
+      sizedNullStr <$> fromMaybe unsizableTypeError (schemaPostPaddings fields)
       where
         sizedNullStr x = BS.take (fromIntegral x) $ BS.repeat 0
     toPaddedParser p t = (`mappend` p) <$> toParser t
@@ -90,9 +69,10 @@ lineParser fields = do
       _ <- readBar
       p2 <- b
       return $ p1 `mappend` p2
-    toParser (t, _) = case t of
-      CppArray CppChar (LiteralSize l) ->
-        BS.take (fromIntegral l) . (<> BS.repeat 0) <$> takeUntilChar '|'
+    toParser (t,_) = case t of
+      CppArray CppChar (LiteralSize l) -> BS.take (fromIntegral l)
+        . (<> BS.repeat 0)
+        <$> takeUntilChar '|'
       CppArray _ _ -> undefined
       CppDouble -> BSB.toLazyByteString . BSB.doubleLE <$> do
         sign <- option 1.0 $ tokens (==) "-" >> return (-1.0)
@@ -100,37 +80,41 @@ lineParser fields = do
         decPrt <- option 0 $ do
           _ <- char $ c2w '.'
           ret <- takeWhile1P (Just "decimal part") wisDigit
-          return $ BS.foldr
-            (\x p -> p * 0.1 + fromIntegral (digitToInt $ w2c x)) 0 ret
+          return $ BS.foldr (\x p -> p * 0.1
+                             + fromIntegral (digitToInt $ w2c x)) 0 ret
         let ret = sign * (fromIntegral intPrt + 0.1 * decPrt)
         return ret
       CppChar -> BS.singleton <$> anySingle
       CppNat -> BSB.toLazyByteString . BSB.int32LE
-        <$> (try parseDate <|> fmap fromIntegral parseNat) where
-        parseDate :: MP Int32
-        parseDate = do
-          y <- getNat 4
-          _ <- char $ c2w '-'
-          m <- getNat 2
-          _ <- char $ c2w '-'
-          d <- getNat 2
-          return $ fromInteger $ dateToInteger $ Date y m d 0 0 0
-        getNat :: Int -> MP Integer
-        getNat i = BS.foldl (\x y ->
-                               x*10 + fromIntegral y - fromIntegral (ord '0')) 0
-                   <$> takeP (Just "digits") i
-        parseNat = try numStr1 <|> (
-          do
-            throwStr <- takeUntilOneOf "#|"
-            stopper <- lookAhead $ takeP (Just "Field stop char.") 1
-            if stopper == "#"
-              then numStr1
-              else fail $ bs2s
-                   $ "Expected a number, got: \"" <> throwStr <> "\"")
+        <$> (try parseDate <|> fmap fromIntegral parseNat)
+        where
+          parseDate :: MP Int32
+          parseDate = do
+            y <- getNat 4
+            _ <- char $ c2w '-'
+            m <- getNat 2
+            _ <- char $ c2w '-'
+            d <- getNat 2
+            return $ fromInteger $ dateToInteger $ Date y m d 0 0 0
+          getNat :: Int -> MP Integer
+          getNat i =
+            BS.foldl
+              (\x y -> x * 10 + fromIntegral y - fromIntegral (ord '0'))
+              0
+            <$> takeP (Just "digits") i
+          parseNat =
+            try numStr1
+            <|> (do
+                   throwStr <- takeUntilOneOf "#|"
+                   stopper <- lookAhead $ takeP (Just "Field stop char.") 1
+                   if stopper == "#" then numStr1 else fail
+                     $ bs2s
+                     $ "Expected a number, got: \"" <> throwStr <> "\"")
       CppVoid -> undefined
-      CppBool -> (char (c2w '1') >> return "\1") <|> (char (c2w '0') >> return "\0")
-      CppInt -> BSB.toLazyByteString . BSB.int32LE . fromIntegral <$>
-        ((*) <$> option 1 (tokens (==) "-" >> return (-1)) <*> numStr1)
+      CppBool -> (char (c2w '1') >> return "\1")
+        <|> (char (c2w '0') >> return "\0")
+      CppInt -> BSB.toLazyByteString . BSB.int32LE . fromIntegral
+        <$> ((*) <$> option 1 (tokens (==) "-" >> return (-1)) <*> numStr1)
 
 
 unsizableTypeError :: a
