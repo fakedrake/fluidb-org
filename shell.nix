@@ -9,7 +9,7 @@ with nixpkgs; let
     profiterole
     floskell
     haskell-language-server
-    implicit-hie
+    # implicit-hie
   ]);
 
   nixPackages = [
