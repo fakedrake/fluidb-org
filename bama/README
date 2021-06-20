@@ -1,0 +1,15 @@
+You probably need C++17 for this.
+
+
+- We use Just(..) and Nothing() to have the operators decide at
+  compile time what the outputs are. Nothing() means we want to skip
+  that result and Just(filepath) means we want the result to be
+  generated.
+
+- mkOperation functions are wrapping the constructors because c++
+  typesystem can only infer the Maybes in function templates, not in
+  class templates.
+
+- All operation classes support the .run() method. We do it this way
+  rather than having them for historical reasons (the whole thing is
+  based on bama, that's also where the namespaces come from).

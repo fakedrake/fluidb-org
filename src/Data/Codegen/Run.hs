@@ -3,6 +3,7 @@ module Data.Codegen.Run (runCpp,tmpDir,runProc,mkProc) where
 
 import           Control.Exception
 import           Control.Monad
+import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           GHC.IO.Exception
 import           System.Directory
@@ -76,8 +77,10 @@ runCpp str = tmpDir "runCpp" $ \dirp -> do
   let exeFile = dirp </> "exec.exe"
   writeFile cppFile str
   -- Compile the C++ file
-  tmpDir "compilation" $ \dir -> runProc $ mkProc "c++" [cppFile,"-o",exeFile]
+  traceM $ "Compiling: c++ " ++ cppFile ++ " -o " ++ exeFile
+  tmpDir "compilation" $ \dir -> runProc $ mkProc "c++" ["-std=c++17",cppFile,"-o",exeFile]
   -- Run the executable
+  traceM "Running..."
   tmpDir "run_compiled" $ \dir -> runProc $ mkProc exeFile []
 
 transferToFile :: Handle -> FilePath -> IO ()

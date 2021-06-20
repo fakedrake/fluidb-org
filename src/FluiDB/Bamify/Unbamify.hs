@@ -35,7 +35,8 @@ unBamifyCode :: CppSchema -> BamaFile -> DataFile -> IO CppCode
 unBamifyCode schema bamaFile dataFile = do
   size <- fromIntegral . fileSize <$> getFileStatus bamaFile
   paddings <- maybe (die "Couldn't deduce paddings for schema") return
-    $ schemaPostPaddings schema
+    $ schemaPostPaddings
+    $ fst <$> schema
   sizes <- maybe (die "Couldn't deduce paddings for schema") return
     $ traverse (cppTypeSize . fst) schema
   let recordSize = sum sizes + sum paddings
@@ -48,7 +49,6 @@ unBamifyCode schema bamaFile dataFile = do
       $ mconcat (fmap toCodeIndent incs)
       <> toCodeIndent r
       <> toCodeIndent mainCode
-
 
 bamifyCode
   :: Int
@@ -76,7 +76,7 @@ bamifyCode recNum inFile outFile schema =
    })
   where
     incs =
-      LibraryInclude <$> ["fcntl.h","sys/stat.h","sys/types.h","codegen.hh"]
+      LibraryInclude <$> ["fcntl.h","sys/stat.h","sys/types.h","codegen_new.hh"]
 
 
 mainFn :: BamaFile -> DataFile -> Int -> [Statement CodeSymbol]
@@ -84,7 +84,7 @@ mainFn inFile outFile arrLen = (ExpressionSt . Quote <$> [
   "if (argc < 2) {std::cerr << \"Too few args.\" << std::endl;}"
   , "int fd"
   , "std::array<Record," <> show arrLen <> "> recordsArr"
-  , "Writer<Record> w(" <> outFile <> ");"
+  , "Writer<Record> w(" <> show outFile <> ");"
   , "require_neq(fd = ::open(\"" <> inFile <> "\", O_RDONLY), -1, \"failed to open file.\")"
   ])
   ++ [

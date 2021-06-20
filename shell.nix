@@ -17,13 +17,15 @@ with nixpkgs; let
   });
   ssb = callPackage ./nix/ssb {};
   nixPackages = [
-    rnix
+    clang
     ssb
     ghc
     stack
+    ccls
   ];
 in
 haskell.lib.buildStackProject {
+  CPATH = "${builtins.toString ./.}/bama/include";
   name = "fluidb";
   ghc = ghc;
   stack = stack;

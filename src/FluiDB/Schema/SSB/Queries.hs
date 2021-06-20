@@ -112,8 +112,6 @@ ssbSchema = appendOrderLines $ do
       ,(dateType,"lo_receiptdate")
       ,(strType 25,"lo_shipinstruct")
       ,(strType 10,"lo_shipmode")
-      ,(strType 44,"lo_comment")
-      ,(CppNat,"lo_orderkey")
       ,(CppNat,"lo_custkey")
       ,(strType 1,"lo_orderstatus")
       ,(CppDouble,"lo_totalprice")
@@ -278,7 +276,7 @@ inQuery :: ExpTypeSym -> Query ExpTypeSym Table -> Maybe Bool
 inQuery e = fmap and . traverse (fromIsInTable . inTable e)
 
 ssbTpchDBGenConf :: [SSBTable] -> DBGenConf
-ssbTpchDBGenConf Tblnames =
+ssbTpchDBGenConf tblNames =
   DBGenConf
   { dbGenConfExec = "dbgen"
    ,dbGenConfTables = mkTbl <$> tblNames
