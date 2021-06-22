@@ -1,9 +1,11 @@
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 module FluiDB.Bamify.CsvParse
   (bamifyFile) where
 
 import           Control.Applicative
+import           Control.Exception
 import           Control.Monad
 import           Data.Bifunctor
 import           Data.ByteString          (hGetLine)
@@ -11,13 +13,17 @@ import qualified Data.ByteString          as BS
 import           Data.ByteString.Builder  as BSB
 import qualified Data.ByteString.Char8    as B8
 import           Data.ByteString.Internal
+import qualified Data.ByteString.Lazy     as BSL
 import           Data.Codegen.CppType
 import           Data.CppAst.CppType
 import           Data.List.Extra
+import           Data.Query.QuerySize
 import           Data.Query.SQL.Types
 import           Data.Utils.AShow
+import           Data.Utils.Unsafe
 import           GHC.Generics
 import           System.IO                hiding (hGetLine)
+import           Text.Printf
 import           Text.Read
 
 type Blob = BSB.Builder
@@ -115,15 +121,38 @@ bamifyLine types line =
   where
     err = ParseError { typeToParse = Left types,parseInput = B8.unpack line }
 
-bamifyFile :: [CppType] -> FilePath -> FilePath -> IO ()
+getFileSize :: FilePath -> IO (Maybe Integer)
+getFileSize path = withFile path ReadMode $ \h -> do
+  size <- hFileSize h
+  return $ Just size
+
+bamifyFile :: [CppType] -> FilePath -> FilePath -> IO TableSize
 bamifyFile types tblFile bamaFile = do
-  withFile tblFile ReadMode
-    $ \rhndl -> withFile bamaFile WriteMode $ \whndl -> readRest rhndl whndl
+  withFile tblFile ReadMode $ \rhndl -> do
+    recordNum <- withFile bamaFile WriteMode $ \whndl -> readRest 0 rhndl whndl
+    recordSize <- maybe (fail "Cant't get record size.") return
+      $ cppSchemaSize types
+    sanityCheckSize recordNum
+    return
+      TableSize { tableSizeRows = recordNum,tableSizeRowSize = recordSize }
   where
-    readRest rhndl whndl = do
+    sanityCheckSize recordNum = do
+      actualSize <- fromJustErr <$> getFileSize bamaFile
+      let expectedSize =
+            toInteger $ fromJustErr (cppSchemaSize types) * recordNum
+      unless (actualSize == expectedSize)
+        $ fail
+        $ printf
+          "Expected size %d but found %d (accum size %d) for %s"
+          expectedSize
+          actualSize
+          bamaFile
+    readRest (!recNum) rhndl whndl = do
       isEof <- hIsEOF rhndl
-      when isEof $ do
+      if isEof then return recNum else do
         line <- hGetLine rhndl
         case bamifyLine types line of
-          Right struct -> hPutBuilder whndl struct >> readRest rhndl whndl
-          Left e       -> fail $ "Parse error: " ++ ashow e
+          Right struct -> do
+            hPutBuilder whndl struct
+            readRest (recNum + 1) rhndl whndl
+          Left e -> fail $ "Parse error: " ++ ashow e

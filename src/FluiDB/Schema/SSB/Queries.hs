@@ -85,55 +85,90 @@ ssbSchema =
   ,("customer",customerSchema)]
   where
     customerSchema =
+      -- long            custkey;
       [(CppNat,"c_custkey")
+       -- char            name[C_NAME_LEN + 1];
       ,(strType 18,"c_name")
+       -- char            address[C_ADDR_MAX + 1];
       ,(strType 40,"c_address")
-      ,(CppNat,"c_nationkey")
+       -- char            city[CITY_FIX+1];
+      ,(strType 11,"c_city")
+       -- char            nation_name[C_NATION_NAME_LEN+1];
+      ,(strType 15,"c_nation_name")
+       -- char            region_name[C_REGION_NAME_LEN+1];
+      ,(strType 13,"c_region_name")
+       -- char            phone[PHONE_LEN + 1];
       ,(strType 15,"c_phone")
-      ,(CppDouble,"c_acctbal")
-      ,(strType 10,"c_mktsegment")
-      ,(strType 117,"c_comment")]
+       -- char            mktsegment[MAXAGG_LEN + 1];
+      ,(strType 21,"c_mktsegment")]
     supplierSchema =
+      -- long            suppkey;
       [(CppNat,"s_suppkey")
+       -- char            name[S_NAME_LEN + 1];
       ,(strType 25,"s_name")
+       -- char            address[S_ADDR_MAX + 1];
       ,(strType 40,"s_address")
-      ,(strType 15,"s_phone")
-      ,(CppDouble,"s_acctbal")
-      ,(strType 101,"s_comment")]
+       -- char            city[CITY_FIX +1];
+      ,(strType 16,"s_city")
+       -- char            nation_name[S_NATION_NAME_LEN+1];
+      ,(strType 16,"s_nation_name")
+       -- char            region_name[S_REGION_NAME_LEN+1];
+      ,(strType 13,"s_region_name")
+       -- char            phone[PHONE_LEN + 1];
+      ,(strType 15,"s_phone")]
     partSchema =
+      -- long           partkey;
       [(CppNat,"p_partkey")
+       -- char           name[P_NAME_LEN + 1];
       ,(strType 55,"p_name")
+       -- char           mfgr[P_MFG_LEN + 1];
       ,(strType 25,"p_mfgr")
+       -- char           category[P_CAT_LEN + 1];
+      ,(strType 7,"p_category")
+       -- char           brand[P_BRND_LEN + 1];
       ,(strType 10,"p_brand")
+       -- char           color[P_COLOR_MAX + 1];
+      ,(strType 11,"p_color")
+       -- char           type[P_TYPE_MAX + 1];
       ,(strType 25,"p_type")
-      ,(CppInt,"p_size")
-      ,(strType 10,"p_container")
-      ,(CppDouble,"p_retailprice")
-      ,(strType 23,"p_comment")]
+       -- long            size;
+      ,(CppNat,"p_size")
+       -- char           container[P_CNTR_LEN + 1];
+      ,(strType 10,"p_container")]
     lineorderSchema =
       [(CppNat,"lo_orderkey")
-      ,(CppNat,"lo_partkey")
-      ,(CppNat,"lo_suppkey")
+       -- int             linenumber; /*integer, constrain to max of 7*/
       ,(CppInt,"lo_linenumber")
-      ,(CppNat,"lo_quantity")
-      ,(CppDouble,"lo_extendedprice")
-      ,(CppDouble,"lo_discount")
-      ,(CppDouble,"lo_tax")
-      ,(strType 1,"lo_returnflag")
-      ,(strType 1,"lo_linestatus")
-      ,(dateType,"lo_shipdate")
-      ,(dateType,"lo_commitdate")
-      ,(dateType,"lo_receiptdate")
-      ,(strType 25,"lo_shipinstruct")
-      ,(strType 10,"lo_shipmode")
+       -- long            custkey;
       ,(CppNat,"lo_custkey")
-      ,(strType 1,"lo_orderstatus")
-      ,(CppDouble,"lo_totalprice")
+       -- long            partkey;
+      ,(CppNat,"lo_partkey")
+       -- long            suppkey;
+      ,(CppNat,"lo_suppkey")
+       -- char            orderdate[DATE_LEN];
       ,(dateType,"lo_orderdate")
-      ,(strType 15,"lo_orderpriority")
-      ,(strType 15,"lo_clerk")
-      ,(CppInt,"lo_shippriority")
-      ,(strType 79,"lo_comment")]
+       -- char            opriority[MAXAGG_LEN + 1];
+      ,(strType 21,"lo_opriority")
+       -- long            ship_priority;
+      ,(CppNat,"lo_ship_priority")
+       -- char            shipmode[O_SHIP_MODE_LEN + 1];
+      ,(strType 10,"lo_shipmode")
+       -- long             quantity;
+      ,(CppNat,"lo_quantity")
+       -- long           extended_price;
+      ,(CppDouble,"lo_extendedprice")
+       -- long           order_totalprice;
+      ,(CppNat,"lo_orderstatus")
+       -- long           discount;
+      ,(CppDouble,"lo_discount")
+       -- long           revenue;
+      ,(CppNat,"lo_revenue")
+       -- long           supp_cost;
+      ,(CppNat,"lo_supp_cost")
+       -- long           tax;
+      ,(CppDouble,"lo_tax")
+       -- char            commit_date[DATE_LEN] ;
+      ,(strType 13,"lo_commitmedium")]
     dateSchema =
       [(CppNat,"d_datekey")
       ,(strType 18,"d_date")
@@ -307,6 +342,9 @@ fromRightStr = \case
 inQuery :: ExpTypeSym -> Query ExpTypeSym Table -> Maybe Bool
 inQuery e = fmap and . traverse (fromIsInTable . inTable e)
 
+
+-- To build the ssb queries in the directory /tmp/fluidb-data:
+-- ssbDBGen "/tmp/fluidb-data"
 ssbTpchDBGenConf :: [SSBTable] -> DBGenConf
 ssbTpchDBGenConf tblNames =
   DBGenConf

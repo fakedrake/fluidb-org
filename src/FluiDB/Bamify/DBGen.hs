@@ -1,8 +1,11 @@
 module FluiDB.Bamify.DBGen (mkAllDataFiles) where
 
 import           Control.Monad
+import           Data.Codegen.CppType
 import           Data.Codegen.Run
 import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
+import           Data.Query.SQL.Types
 import           Data.Utils.Debug
 import           FluiDB.Bamify.CsvParse
 import           FluiDB.Bamify.Types
@@ -18,25 +21,30 @@ getSchemaOrDie schemaAssoc tableName =
 
 
 -- | Runs dbgen to build all in the current directory.
-mkAllDataFiles :: DBGenConf -> IO ()
+mkAllDataFiles :: DBGenConf -> IO [(Table,TableSize)]
 mkAllDataFiles DBGenConf{..} = do
   curDir <- getCurrentDirectory
   let checkExists = dbGenConfIncremental
-  forM_ dbGenConfTables $ \tbl@DBGenTableConf{..} -> do
+  forM dbGenConfTables $ \tbl@DBGenTableConf{..} -> do
     schema <- getSchemaOrDie dbGenConfSchema dbGenTableConfFileBase
     when (null schema) $ fail $ "Can't deal with empty schema for: " ++ ashow tbl
     let datFile = curDir </> dbGenTableConfFileBase <.> "dat"
-    withExists checkExists datFile $ tmpDir "dbgen" $ \td -> do
+    let readQuerySize = read <$> readFile (datFile <.> "size")
+    x <- withExists readQuerySize checkExists datFile $ tmpDir "dbgen" $ \td -> do
       traceM $ printf "Generating: %s" dbGenTableConfFileBase
       runProc $ mkProc dbGenConfExec ["-s",show dbGenConfScale,"-T",[dbGenTableConfChar]]
       let tblFile = td </> dbGenTableConfFileBase <.> "tbl"
       let bamaFile = td </> dbGenTableConfFileBase <.> "bama"
       traceM $ printf "Bamify %s %s " tblFile bamaFile
-      bamifyFile (fst <$> schema) tblFile bamaFile
+      tableSize <- bamifyFile (fst <$> schema) tblFile bamaFile
       traceM $ printf "Unamify %s %s" bamaFile datFile
       mkDataFile schema bamaFile datFile
+      return tableSize
+    let symSize = (TSymbol dbGenTableConfFileBase,x)
+    writeFile (datFile <.> "size") $ show symSize
+    return symSize
   where
-    withExists False _ m = m
-    withExists True datFile m = do
+    withExists _ False _ m = m
+    withExists a True datFile m = do
       exists <- doesFileExist datFile
-      unless exists m
+      if exists then a else m

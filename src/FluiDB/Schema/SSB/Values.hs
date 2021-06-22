@@ -1,7 +1,8 @@
-module FluiDB.Schema.SSB.Values (ssbGlobalConf,T,N) where
+module FluiDB.Schema.SSB.Values (getSsbGlobalConf,T,N) where
 
 import           Control.Monad
 import           Data.Bifunctor
+import           Data.Query.QuerySize
 import           Data.Query.SQL.FileSet
 import           Data.Query.SQL.Types
 import           Data.Utils.Functors
@@ -16,15 +17,15 @@ import           Text.Printf
 type T = ()
 type N = ()
 
-ssbGlobalConf :: IO (GlobalConf ExpTypeSym Table T N)
-ssbGlobalConf = do
+getSsbGlobalConf :: IO (GlobalConf ExpTypeSym Table T N)
+getSsbGlobalConf = do
   tmp <- getTemporaryDirectory
   let dataDir = tmp </> "fluidb-data"
-  ssbDBGen dataDir
+  sizes <- ssbDBGen dataDir
   let retM = mkGlobalConf PreGlobalConf
         {pgcPrimKeyAssoc=first TSymbol <$> fmap3 ESym ssbPrimKeys
         ,pgcSchemaAssoc=bimap TSymbol (fmap2 ESym) <$> ssbSchema
-        ,pgcTableSizeAssoc=error "not implemented"
+        ,pgcTableSizeAssoc=sizes
         ,pgcExpIso=(id,id)
         ,pgcToUniq=genUniqName
         ,pgcToFileSet= \case
@@ -38,19 +39,17 @@ ssbGlobalConf = do
       _      -> Nothing
 
 
-ssbDBGen :: FilePath -> IO ()
+ssbDBGen :: FilePath -> IO [(Table,TableSize)]
 ssbDBGen dataDir = do
   let createParents = True
   createDirectoryIfMissing createParents dataDir
   withCurrentDirectory dataDir $ do
-    mkAllDataFiles $ ssbTpchDBGenConf $ fst <$> ssbSchema
+    ret <- mkAllDataFiles $ ssbTpchDBGenConf $ fst <$> ssbSchema
     tables <- listDirectory dataDir
     putStrLn "Created tables:"
     forM_ tables $ \tbl -> putStrLn $ "\t" ++ tbl
+    return ret
 
 resourcesDir :: FilePath
-#ifdef __APPLE__
+
 resourcesDir = "/Users/drninjabatman/Projects/UoE/FluiDB/resources/"
-#else
-resourcesDir = "/home/drninjabatman/Projects1/FluiDB/resources/"
-#endif

@@ -57,8 +57,8 @@ runProc prc = do
     ExitFailure exitCode -> do
       let errFile = dirp </> "exec.err"
       let outFile = dirp </> "exec.out"
-      transferToFile errHndl errFile
-      transferToFile outHndl outFile
+      transferToFile "stderr" errHndl errFile
+      transferToFile "stdout" outHndl outFile
       fail
         $ printf
           "Failed command(%d): %s.\n\tstderr: %s,\n\tstdout: %s\n\tcmd: %s\n"
@@ -83,9 +83,12 @@ runCpp str = tmpDir "runCpp" $ \dirp -> do
   traceM "Running..."
   tmpDir "run_compiled" $ \dir -> runProc $ mkProc exeFile []
 
-transferToFile :: Handle -> FilePath -> IO ()
-transferToFile rhndl fname =
-  withFile fname WriteMode $ \whndl -> hEachLine rhndl $ hPutStrLn whndl
+transferToFile :: String -> Handle -> FilePath -> IO ()
+transferToFile title rhndl fname = withFile fname WriteMode $ \whndl -> do
+  putStrLn $ "Lines found in " ++ title ++ ":"
+  hEachLine rhndl $ \l -> do
+    putStrLn l
+    hPutStrLn whndl l
 
 hEachLine :: Handle -> (String -> IO ()) -> IO ()
 hEachLine h f = whileIO (not <$> hIsEOF h) $ hGetLine h >>= f

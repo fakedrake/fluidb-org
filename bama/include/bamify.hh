@@ -9,6 +9,8 @@
 template<typename R, size_t batch_size=2000>
 void bama_to_dat(const std::string& bama_file, const std::string& dat_file) {
     int fd;
+    std::fstream log;
+    log.open("/tmp/bama_to_dat.log", std::fstream::app);
     size_t read_bytes, total_bytes = 0;
     std::array<R, batch_size> batch;
     require_neq(fd = ::open(bama_file.c_str(), O_RDONLY), -1,
@@ -19,8 +21,13 @@ void bama_to_dat(const std::string& bama_file, const std::string& dat_file) {
               << " -> " << dat_file << std::endl;
     ::lseek(fd, 0L, 0);
     Writer<R> w(dat_file);
+    bool shown = false;
     do {
         read_bytes = ::read(fd, batch.data(), sizeof(batch));
+        if (!shown) {
+          shown = true;
+          log << reinterpret_cast<R*>(batch.data())->show() << std::endl;
+        }
         total_bytes += read_bytes;
         require_eq(read_bytes % sizeof(R), 0UL,
                    "Alignment error, probably wrong type.");

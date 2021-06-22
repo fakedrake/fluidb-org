@@ -17,6 +17,8 @@ import           Data.CppAst.RecordCls
 import           Data.CppAst.Statement
 import           Data.CppAst.TypeModifier
 import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
+import           Data.Query.SQL.Types
 import qualified Data.Set                              as DS
 import           FluiDB.Bamify.Types
 

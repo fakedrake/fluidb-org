@@ -97,7 +97,7 @@ parseTpchQuery :: forall e s t n m .
                  String
                -> GlobalSolveT e s t n m (Query (PlanSym e s) (QueryPlan e s,s))
 parseTpchQuery qtext = do
-  cppConf :: QueryCppConf e s <- globalQueryCppConf <$> get
+  cppConf :: QueryCppConf e s <- gets globalQueryCppConf
   (>>= either throwError return . putPlanSymTpch cppConf)
     $ errLift
     $ eitherToExcept
