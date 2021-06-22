@@ -536,33 +536,6 @@ void eachRecord(const std::string& inpFile, std::function<void(const R&)> f) {
     reader.close();
 }
 
-#ifdef FAKE_BULK
-template<typename R>
-void eachRecordBulk(size_t len, const std::string& inpFile,
-                    std::function<void(R*, size_t)> callback) {
-    size_t counter = 0;
-    R recs[len];
-    eachRecord<R>(
-        inpFile,
-        [&](const R& r) {
-            recs[counter++] = r;
-            if (counter >= len) {
-                callback(recs, counter);
-                counter = 0;
-            }
-        });
-    if (counter > 0) callback(recs, counter);
-}
-
-
-template<typename R>
-void bulkWrite(size_t len, const std::string& inpFile, const R* recs)
-{
-    Writer<R> wr(inpFile);
-    for (size_t i = 0; i < len; i++) wr.write(recs[i]);
-    wr.close();
-}
-#else
 template<typename R>
 void eachRecordBulk(size_t len, const std::string& inpFile,
                     std::function<void(R*, size_t)> callback) {
@@ -588,5 +561,4 @@ void bulkWrite(size_t len, const std::string& inpFile, const R* recs)
     wr.bulkWrite(0, recs, len);
     wr.close();
 }
-#endif
 #endif

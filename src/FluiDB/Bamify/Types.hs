@@ -10,7 +10,9 @@ module FluiDB.Bamify.Types
 import qualified Data.ByteString.Lazy         as BS
 import qualified Data.ByteString.Lazy.Char8   as BSC
 import           Data.Query.QuerySchema.Types
+import           Data.Utils.AShow
 import           Data.Void
+import           GHC.Generics
 import           Text.Megaparsec
 
 type ParseErr = ParseErrorBundle BSC.ByteString Void
@@ -19,7 +21,8 @@ data DBGenTableConf =
   DBGenTableConf
   { dbGenTableConfFileBase :: FilePath
    ,dbGenTableConfChar     :: Char
-  }
+  } deriving Generic
+instance AShow DBGenTableConf
 
 data DBGenConf =
   DBGenConf

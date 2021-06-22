@@ -17,6 +17,7 @@ import           Data.Query.Optimizations.PushSelections
 import           Data.Query.Optimizations.Types
 import           Data.Utils.Compose
 import           Data.Utils.Functors
+import           Data.Utils.Unsafe
 
 -- | Make an equijoin and a selection.
 selAndJoin :: NEL.NonEmpty (Prop (Rel (Expr e')))
@@ -57,7 +58,7 @@ productPermutations emb (ps0,ts0) = go (ps',ts')
        -> Maybe (Free (Compose NEL.NonEmpty (Query e')) s)
     go = fmap (Free . Compose) . \case
       ([],(_,q') NEL.:| []) -> Just $ (NEL.:| []) q'
-      (ps,(_,q') NEL.:| []) -> Just $ return $ S (foldr1 And $ snd <$> ps) q'
+      (ps,(_,q') NEL.:| []) -> Just $ return $ S (foldr1Unsafe And $ snd <$> ps) q'
       ([],_ NEL.:| (_:_)) -> Nothing
       (ps,ts) -> NEL.nonEmpty $ do
         -- Partition subqs
@@ -115,8 +116,8 @@ joinPermutations emb = recur . pushSelections emb where
                     -> Maybe (Query e' (Free (Compose NEL.NonEmpty (Query e')) s))
   dropLayerAndRecur = \case
     Q2 o l r -> q2 o <$> recur l <*> recur r
-    Q1 o q -> q1 o <$> recur q
-    Q0 s -> Just $ Q0 $ Pure s
+    Q1 o q   -> q1 o <$> recur q
+    Q0 s     -> Just $ Q0 $ Pure s
   q2 o l r = Q2 o (Q0 l) (Q0 r)
   q1 o q = Q1 o $ Q0 q
 

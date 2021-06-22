@@ -1,43 +1,43 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveFoldable      #-}
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE DeriveTraversable   #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Data.Cluster.FoldPlans (queryPlans1,querySize,Query1(..)) where
 
-import qualified Data.List.NonEmpty as NEL
-import Data.Cluster.ClusterConfig
-import Data.Utils.Functors
-import Data.Utils.Function
-import Data.Utils.ListT
-import Data.Query.QuerySchema.SchemaBase
-import Data.Utils.Unsafe
-import Text.Printf
-import Data.Cluster.Propagators
-import Data.Utils.MTL
-import Data.Query.QuerySize
-import Data.Codegen.Build.Types
-import Data.Cluster.Types.Monad
-import Data.Utils.Hashable
-import Data.Utils.AShow
-import Data.NodeContainers
-import Data.Query.QuerySchema.Types
-import Data.Query.Algebra
-import Data.Cluster.Types.Clusters
-import GHC.Generics
-import Data.List.Extra
-import Data.Maybe
-import Data.Bifunctor
-import Control.Monad.Except
-import Data.Proxy
-import Control.Monad.State
-import Control.Monad.Reader
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Bifunctor
+import           Data.Cluster.ClusterConfig
+import           Data.Cluster.Propagators
+import           Data.Cluster.Types.Clusters
+import           Data.Cluster.Types.Monad
+import           Data.Codegen.Build.Types
+import           Data.List.Extra
+import qualified Data.List.NonEmpty                as NEL
+import           Data.Maybe
+import           Data.NodeContainers
+import           Data.Proxy
+import           Data.Query.Algebra
+import           Data.Query.QuerySchema.SchemaBase
+import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
+import           Data.Utils.AShow
+import           Data.Utils.Function
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.ListT
+import           Data.Utils.MTL
+import           Data.Utils.Unsafe
+import           GHC.Generics
+import           Text.Printf
 
 -- | All the different operators that correspond to materialize
 -- NodeRef using cluster.
@@ -88,7 +88,7 @@ queryPlans1 refO = do
       -> m [Query1 (PlanSym e s) (NodeRef n)]
     getQueryRecurse2 inps c = case inps of
       [lref,rref] -> return [Q2' op lref rref | op <- binOps]
-      _ -> inpNumError "BinClust or JoinClust" $ length inps
+      _           -> inpNumError "BinClust or JoinClust" $ length inps
       where
         binOps = clusterOp (Proxy :: Proxy (PlanSym e s)) refO c
     inpNumError :: String -> Int -> m x
@@ -105,9 +105,9 @@ querySize1
   -> Query1 (PlanSym e s) (([TableSize],Double),QueryPlan e s)
   -> m ([TableSize],Double)
 querySize1 clust q = do
-  ((_,assoc),planClust) <- dropReader (fst <$> get)
+  ((_,assoc),planClust) <- dropReader (gets fst)
     $ getValidClustPropagator clust
-  dropState (fst <$> get,modify . first . const) $ putPlanCluster planClust
+  dropState (gets fst,modify . first . const) $ putPlanCluster planClust
   case q of
     Q2' o l r -> inferBinQuerySizeN o <$> transl o assoc l
       <*> transl o (reverse assoc) r
@@ -117,7 +117,7 @@ querySize1 clust q = do
     -- we find as the first will refer to the antijoin
     chooseSym = \case
       QJoin _ -> listToMaybe . safeTail
-      _ -> listToMaybe
+      _       -> listToMaybe
     transl :: BQOp x
            -> [(PlanSym e s,PlanSym e s)]
            -> (([TableSize],Double),QueryPlan e s)
@@ -134,7 +134,7 @@ querySize :: forall e s t n m .
                          RefMap n (Maybe ([TableSize],Double)))
              m) =>
             NodeRef n -> m (([TableSize],Double),QueryPlan e s)
-querySize ref = refLU ref . snd <$> get >>= \case
+querySize ref = get >>= (\case
   Just (Just x) -> withPlan x
   Just Nothing -> do
     cs :: [([Query1 (PlanSym e s) (NodeRef n)],AnyCluster e s t n)] <-
@@ -152,11 +152,11 @@ querySize ref = refLU ref . snd <$> get >>= \case
       plan <- maybe (throwAStr "oops") return
         =<< dropReader (fst <$> get) (getNodePlanFull ref)
       modify $ second $ refInsert ref $ Just ret
-      return (ret,plan)
+      return (ret,plan)) . refLU ref . snd
   where
     withPlan ts =
       maybe (throwAStr $ "Can't get plan:" ++ show ref) (return . (ts,))
-      =<< dropState (fst <$> get,modify . first . const) (forceQueryPlan ref)
+      =<< dropState (gets fst,modify . first . const) (forceQueryPlan ref)
     getMedian = (>>= maybe (throwAStr "No size") return . medianSize)
 
 medianOn :: Ord b => (a -> b) -> [a] -> Maybe a
@@ -199,7 +199,7 @@ inferBinQuerySizeN o ((lsize,lcert),lplan) ((rsize,rcert),rplan) =
     -- other, that it will always be finding something.
     joinRows p = case (isUniqueSel lplan $ eqPairs p,isUniqueSel rplan $ eqPairs p) of
       (True,True)   -> cert 1 min
-      (True,False)  -> cert 1 $ flip const
+      (True,False)  -> cert 1 $ \ _ x -> x
       (False,True)  -> cert 1 const
       (False,False) -> cert 0.2 $ mul 0.70 ... (*)
     leftAntijoinRows p = if isUniqueSel lplan $ eqPairs p
@@ -207,15 +207,15 @@ inferBinQuerySizeN o ((lsize,lcert),lplan) ((rsize,rcert),rplan) =
       else cert 0.2 $ mul 0.1 ... const
     cert i = ((,i) ...)
     widthHeightOps = \case
-      QProd -> (cert 1 (+),cert 1 (*))
+      QProd            -> (cert 1 (+),cert 1 (*))
       -- We assume the smaller cardinality is always the lookup table
-      QJoin p -> (cert 1 (+),joinRows p)
+      QJoin p          -> (cert 1 (+),joinRows p)
       -- We assumen the smaller cardinality is always the lookup table
       QLeftAntijoin p  -> (cert 1 const,leftAntijoinRows p)
       QRightAntijoin p -> flip `bimap` flip $ widthHeightOps (QLeftAntijoin p)
-      QDistinct -> (cert 0.1 $ const id,cert 0.1 $ const id)
-      QProjQuery -> (cert 1 const,cert 1 $ const id)
-      QUnion -> (cert 1 const,cert 1 (+))
+      QDistinct        -> (cert 0.1 $ const id,cert 0.1 $ const id)
+      QProjQuery       -> (cert 1 const,cert 1 $ const id)
+      QUnion           -> (cert 1 const,cert 1 (+))
 
 inferUnQuerySizeN :: UQOp e -> ([TableSize],Double) -> ([TableSize],Double)
 inferUnQuerySizeN o (tbl,qcert) = second (foldl (*) qcert)
@@ -249,7 +249,7 @@ cnfAnd = go where
   go (Not (Or x y)) = cnfAnd (Not x) <> cnfAnd (Not y)
   go (Not (And x y)) = return $ Not (And x y)
   -- go (Not (And x y)) = cnfAnd $
-  --   Or (foldr1 And $ cnfAnd $ Not x) (foldr1 And $ cnfAnd $ Not y)
+  --   Or (foldr1Unsafe And $ cnfAnd $ Not x) (foldr1Unsafe And $ cnfAnd $ Not y)
   go (And x y) = cnfAnd x <> cnfAnd y
   go p@(Or x y) = fromMaybe (return p) $ goOr (cnfAnd x) (cnfAnd y)
     where
@@ -270,4 +270,4 @@ eqPairs :: Eq e => Prop (Rel (Expr e)) -> [(Expr e,Expr e)]
 eqPairs p = mapMaybe eqPair $ toList $ cnfAnd p
   where
     eqPair (P0 (R2 REq (R0 l) (R0 r))) = Just (l,r)
-    eqPair _ = Nothing
+    eqPair _                           = Nothing

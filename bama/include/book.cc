@@ -156,26 +156,6 @@ void shutdown() {
 #endif
 }
 
-void rename(const std::string &o, const std::string &n) {
-#ifdef MEMORY
-    std::map<std::string, std::vector<unsigned char*>*>::iterator it =
-        file_catalog.find(o);
-    if (it != file_catalog.end()) {
-        std::vector<unsigned char*>* data = it->second;
-        file_catalog.erase(it);
-        file_catalog.insert(std::make_pair(n, data));
-    }
-#elif VECTOR
-    std::map<std::string, page_info*>::iterator it =
-        file_catalog.find(o);
-    if (it != file_catalog.end()) {
-        page_info* info = it->second;
-        file_catalog.erase(it);
-        file_catalog.insert(std::make_pair(n, info));
-    }
-#endif
-    require(::rename(o.c_str(), n.c_str()) == 0, "could not rename files.");
-}
 
 size_t filesize(const std::string& f) {
     FILE *fd = ::fopen(f.c_str(), "rb");

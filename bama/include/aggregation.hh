@@ -5,7 +5,6 @@
 #include <cassert>
 
 #include "file.hh"
-#include "book.hh"
 #include "common.hh"
 #include "print_record.hh"
 

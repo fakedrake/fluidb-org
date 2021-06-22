@@ -103,6 +103,7 @@ import           Data.Utils.Functors
 import           Data.Utils.ListT
 import           Data.Utils.MTL
 import           Data.Utils.Ranges
+import           Data.Utils.Unsafe
 import           GHC.Generics
 import           Prelude                   hiding (filter, lookup)
 
@@ -152,7 +153,7 @@ modNodeLinks sid rev f ns@NodeStruct{..} =
         $ (nodeLinks Reversible, nodeLinks Irreversible)
   in ns{
     nodeLinks=(\case
-        Reversible -> revVal;
+        Reversible   -> revVal;
         Irreversible -> irrVal)
     }
 
@@ -288,7 +289,7 @@ instance (AShow a, AShow i, Enum i, Bounded i) => AShow (NodeStruct' i t a) wher
 instance (ARead a, ARead i, Eq i) => ARead (NodeStruct' i t a) where
   aread' = \case
     Sub [Sym "NodeStruct",x] -> NodeStruct <$> areadCase' x
-    _ -> Nothing
+    _                        -> Nothing
 
 instance (Show a, Show i, Enum i, Bounded i) => Show (NodeStruct' i t a) where
   show NodeStruct{..} = printf
@@ -535,7 +536,7 @@ getAllLinksL :: Monad m => Side -> NodeRef l -> GraphBuilderT l r m (NodeSet r)
 getAllLinksL side ref =
   fmap mconcat $ forM fullRange $ \rev -> getNodeLinksL side [rev] ref >>= \case
     Nothing -> error "Not found"
-    Just l -> return l
+    Just l  -> return l
 
 pathsBetweenR :: forall t n m . Monad m =>
                 NodeRef n
@@ -581,7 +582,7 @@ neighborSetRN i side ref = fmap3 nub $ fmap uniqMerge $ runListT $ do
     uniqMerge :: Ord a => [([a],b)] -> [([a],b)]
     uniqMerge = foldr insertUniq [] . sortOn fst . fmap (first sort) where
       insertUniq (x,y) = \case
-        [] -> [(x,y)]
+        []            -> [(x,y)]
         xs@((x',_):_) -> if x == x' then xs else (x,y):xs
 
 
@@ -663,4 +664,4 @@ depSetRN i side ref = evalStateT (go i ref) mempty where
 
 allCombinations :: Monoid x => [[x]] -> [x]
 allCombinations [] = []
-allCombinations xs = foldr1 (liftM2 mappend) xs
+allCombinations xs = foldr1Unsafe (liftM2 mappend) xs

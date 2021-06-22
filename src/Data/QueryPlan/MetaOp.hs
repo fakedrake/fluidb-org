@@ -53,6 +53,7 @@ import           Data.Utils.Ranges
 import           Prelude                    hiding (filter, lookup)
 
 import           Data.QueryPlan.Types
+import           Data.Utils.Unsafe
 
 getNodeLinksL' :: Monad m =>
                  Side
@@ -61,7 +62,7 @@ getNodeLinksL' :: Monad m =>
                -> GraphBuilderT t n m (NodeSet n)
 getNodeLinksL' s rev ref = getNodeLinksL s rev ref <&> \case
   Nothing -> error $ printf "Non-existent t-node: %n" ref
-  Just x -> x
+  Just x  -> x
 {-# INLINE getNodeLinksL' #-}
 
 getNodeLinksR' :: Monad m =>
@@ -194,7 +195,7 @@ findOnSide :: forall t n m . Monad m =>
            -> GraphBuilderT t n m (NodeSet t)
            -> PlanT t n m [(InSet n, OutSet n, NodeRef t)]
 findOnSide (revsIn, revsOut) tNodesM = do
-  net <- propNet <$> ask
+  net <- asks propNet
   tNodes <- liftPlanT $ stripGB net tNodesM
   liftPlanT $ forM (toNodeList tNodes) $ \tnode -> let
     linksOn revs side = stripGB net $ getNodeLinksL' side revs tnode
@@ -236,7 +237,7 @@ findTriggerableMetaOps n = do
 
 getHardBudget :: Monad m => PlanT t n m (Maybe Int)
 getHardBudget = do
-  budgM <- budget <$> ask
+  budgM <- asks budget
   concr <- fmap sum . mapM totalNodePages
     =<< filterM isProtected
     =<< nodesInState [Concrete Mat Mat,Concrete NoMat Mat]
@@ -248,7 +249,7 @@ findPrioritizedMetaOp :: forall n t m . MonadLogic m =>
                       -> PlanT t n m (MetaOp t n)
 findPrioritizedMetaOp splitFn ref = findTriggerableMetaOps ref >>= \case
   [] -> bot $ printf "no findTriggerableMetaOps %n" ref
-  xs -> foldr1 splitFn $ return <$> xs
+  xs -> foldr1Unsafe splitFn $ return <$> xs
 
 metaOpNeededPages :: Monad m => MetaOp t n -> PlanT t n m Int
 metaOpNeededPages MetaOp{..} = fmap sum $ mapM totalNodePages

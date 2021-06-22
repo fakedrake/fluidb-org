@@ -1004,7 +1004,7 @@ propCnfAnd = go where
   go (Not (Or x y)) = go (Not x) <> go (Not y)
   go (Not (And x y)) = return $ Not (And x y)
   -- go (Not (And x y)) = go $
-  --   Or (foldr1 And $ go $ Not x) (foldr1 And $ go $ Not y)
+  --   Or (foldr1Unsafe And $ go $ Not x) (foldr1Unsafe And $ go $ Not y)
   go (And x y) = go x <> go y
   go p@(Or x y) = fromMaybe (return p) $ goOr (go x) (go y)
     where

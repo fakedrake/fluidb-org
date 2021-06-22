@@ -22,8 +22,9 @@ mkAllDataFiles :: DBGenConf -> IO ()
 mkAllDataFiles DBGenConf{..} = do
   curDir <- getCurrentDirectory
   let checkExists = dbGenConfIncremental
-  forM_ dbGenConfTables $ \DBGenTableConf{..} -> do
+  forM_ dbGenConfTables $ \tbl@DBGenTableConf{..} -> do
     schema <- getSchemaOrDie dbGenConfSchema dbGenTableConfFileBase
+    when (null schema) $ fail $ "Can't deal with empty schema for: " ++ ashow tbl
     let datFile = curDir </> dbGenTableConfFileBase <.> "dat"
     withExists checkExists datFile $ tmpDir "dbgen" $ \td -> do
       traceM $ printf "Generating: %s" dbGenTableConfFileBase

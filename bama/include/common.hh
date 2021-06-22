@@ -3,13 +3,15 @@
 
 #include <type_traits>
 #include <cstring>
+#include <cstdio>
 #include <string>
 #include <sstream>
 #include <cassert>
 #include <array>
 #include <map>
 #include <vector>
-#include "book.hh"
+#include <filesystem>
+
 
 typedef size_t page_num_t;
 typedef size_t rec_num_t;
@@ -189,9 +191,7 @@ inline bool operator!=(const std::array<char, n>& x, const std::string s) {
 #define WITH(v, exp) do {if constexpr (!decltype(v)::isNothing) exp;} while(0)
 #define WITHOUT(v, exp) do {if constexpr (decltype(v)::isNothing) exp;} while(0)
 
-void deleteFile(const std::string& fn) {
-    fs::remove(fn);
-}
+void deleteFile(const std::string& fn) { ::remove(fn.c_str()); }
 
 // #define CHECK_STRINGS
 #ifdef CHECK_STRINGS

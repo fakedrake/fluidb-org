@@ -1,13 +1,12 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Data.Cluster.Propagators
@@ -32,38 +31,39 @@ module Data.Cluster.Propagators
   , forceQueryPlan
   ) where
 
-import Data.Utils.Function
-import Data.Utils.Functors
-import Data.Utils.MTL
-import Data.Utils.Types
-import Data.Utils.Tup
-import Data.Utils.Hashable
-import Data.Either
-import qualified Data.List.NonEmpty as NEL
-import Data.Query.Optimizations.ExposeUnique
-import Data.Utils.AShow
-import Control.Monad.Trans.Maybe
-import Data.Utils.Debug
-import Data.Utils.Default
-import Data.List
-import Data.Cluster.ClusterConfig
-import Control.Monad.Except
-import Data.Maybe
-import Control.Applicative
-import Control.Monad.Reader
-import Data.Bitraversable
-import Data.Cluster.Types.Zip
-import Data.NodeContainers
-import Control.Monad.State
-import qualified Data.HashMap.Strict                    as HM
+import           Control.Applicative
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
-import           Data.Functor.Identity
-import           Data.Query.Algebra
 import           Data.BipartiteGraph
+import           Data.Bitraversable
+import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Zip
 import           Data.CppAst.CppType
-import           Data.Utils.EmptyF
+import           Data.Either
+import           Data.Functor.Identity
+import qualified Data.HashMap.Strict                   as HM
+import           Data.List
+import qualified Data.List.NonEmpty                    as NEL
+import           Data.Maybe
+import           Data.NodeContainers
+import           Data.Query.Algebra
+import           Data.Query.Optimizations.ExposeUnique
 import           Data.Query.QuerySchema
+import           Data.Utils.AShow
+import           Data.Utils.Debug
+import           Data.Utils.Default
+import           Data.Utils.EmptyF
+import           Data.Utils.Function
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.MTL
+import           Data.Utils.Tup
+import           Data.Utils.Types
+import           Data.Utils.Unsafe
 
 getReversibleB :: BQOp e -> IsReversible
 getReversibleB = \case
@@ -78,7 +78,7 @@ getReversibleU :: UQOp e -> IsReversible
 getReversibleU = \case
   QSel _     -> Reversible
   QGroup _ _ -> Irreversible
-  QProj _  -> Reversible
+  QProj _    -> Reversible
   QSort _    -> Irreversible
   QLimit _   -> Reversible
   QDrop _    -> Reversible
@@ -195,11 +195,11 @@ liftG :: forall e s x .
       -> Defaulting x
       -> Either (AShowStr e s) (Defaulting x)
 liftG old gf l r = promote <$> case gf of
-  G0 Nothing -> return old
+  G0 Nothing  -> return old
   G0 (Just x) -> return $ pure x
-  GL f -> traverse f l
-  GR f -> traverse f r
-  G2 f -> sequenceA $ f <$> l <*> r
+  GL f        -> traverse f l
+  GR f        -> traverse f r
+  G2 f        -> sequenceA $ f <$> l <*> r
   where
     promote :: Defaulting x -> Defaulting x
     promote = promoteN (foldl (<|>) empty $ argsG gf l r) . (old <|>)
@@ -284,7 +284,7 @@ bopOutput assoc o = case o of
   QDistinct        -> error "QDistinct should have been optimized into QGroup"
   where
     tp assoc' x = case translatePlan' assoc' x of
-      Left _ -> throwAStr $ ashow (void o, length assoc)
+      Left _  -> throwAStr $ ashow (void o, length assoc)
       Right x -> return x
 
 -- | Output is Tup2 (Inp x Sec -> Prim) (Inp x Prim -> Sec)
@@ -382,7 +382,7 @@ putPlanPropagator c p = modPropagators c
     -- association will be empty and we have no way of telling the
     -- propagators apart.
     ins a@(_,[]) as = a:as
-    ins a@(_,k) as = if k `notElem` fmap snd as then a:as else as
+    ins a@(_,k) as  = if k `notElem` fmap snd as then a:as else as
 modPropagators :: (Hashables2 e s, Monad m) =>
                  AnyCluster e s t n
                -> Endo (Maybe (ClustPropagators e s t n))
@@ -393,7 +393,7 @@ modPropagators c f = modify $ \clustConf -> clustConf{
 getPropagators :: (Hashables2 e s, MonadReader (ClusterConfig e s t n) m) =>
                  AnyCluster e s t n
                -> m (Maybe (ClustPropagators e s t n))
-getPropagators c = HM.lookup c . cnfPropagators <$> ask
+getPropagators c = asks (HM.lookup c . cnfPropagators)
 
 getPlanPropagators :: (Hashables2 e s, MonadReader (ClusterConfig e s t n) m) =>
                      AnyCluster e s t n
@@ -403,7 +403,7 @@ getPlanPropagators c = maybe [] planPropagators <$> getPropagators c
 
 getNodePlan :: MonadReader (ClusterConfig e s t n) m =>
               NodeRef n -> m (Defaulting (QueryPlan e s))
-getNodePlan nref = fromMaybe empty . refLU nref . cnfNodePlans <$> ask
+getNodePlan nref = asks (fromMaybe empty . refLU nref . cnfNodePlans)
 
 modNodePlan :: MonadState (ClusterConfig e s t n) m =>
               NodeRef n
@@ -426,7 +426,7 @@ getPlanCluster :: forall e s t n m .
                -- -> CGraphBuilderT e s t n m (PlanCluster NodeRef e s t n)
 getPlanCluster = fmap dropId
                  . bitraverse (withComp $ const $ return empty)
-                 (withComp $ getNodePlan)
+                 (withComp getNodePlan)
                  . putId
   where
     withComp :: (NodeRef a -> m x)
@@ -446,18 +446,16 @@ putPlanCluster :: forall e s t n m .
                  (MonadState (ClusterConfig e s t n) m, Hashables2 e s) =>
                  PlanCluster NodeRef e s t n
                -> m ()
-putPlanCluster = fmap (const ())
-  . traverse (uncurry go . unMetaD)
-  . putId
+putPlanCluster = void . traverse (uncurry go . unMetaD) . putId
   where
-    go :: Defaulting (QueryPlan e s)
-       -> NodeRef n
-       -> m ()
+    go :: Defaulting (QueryPlan e s) -> NodeRef n -> m ()
     go p ref = ifDefaultingEmpty p (return ()) $ modNodePlan ref $ const p
     putId :: PlanCluster NodeRef e s t n
-          -> AnyCluster' (PlanSym e s) Identity
-          (WMetaD (Defaulting (QueryPlan e s)) NodeRef t)
-          (WMetaD (Defaulting (QueryPlan e s)) NodeRef n)
+          -> AnyCluster'
+            (PlanSym e s)
+            Identity
+            (WMetaD (Defaulting (QueryPlan e s)) NodeRef t)
+            (WMetaD (Defaulting (QueryPlan e s)) NodeRef n)
     putId = putIdentity
 
 
@@ -491,7 +489,7 @@ triggerClustPropagator clust = do
   putPlanCluster newPlanClust
 getNodePlanFull :: MonadReader (ClusterConfig e s t n) m =>
                   NodeRef n -> m (Maybe (QueryPlan e s))
-getNodePlanFull r = (>>= getDefaultingFull) . refLU r . cnfNodePlans <$> ask
+getNodePlanFull r = asks $ getDefaultingFull <=< refLU r . cnfNodePlans
 
 -- | Assume a consistent view of clusters. Find a trigger that will
 -- return a query plen.
@@ -514,7 +512,7 @@ forceQueryPlan n =
       guard $ not $ ref `nsMember` trail
       modify (nsInsert ref)
       -- Here we actually need `eitherl`...
-      clusts <- lift2 $ (filter $ elem ref . clusterOutputs) . (>>= snd)
+      clusts <- lift2 $ filter (elem ref . clusterOutputs) . (>>= snd)
                <$> lookupClustersN ref
       oneOfM clusts $ \c -> do
         case partition (elem ref) [clusterInputs c,clusterOutputs c] of
@@ -525,10 +523,10 @@ forceQueryPlan n =
             unlessDone $ throwAStr "We made the deps "
           _ -> mzero
       where
-        oneOfM [] _ = mzero
-        oneOfM cs fm = foldr1 (<|>) $ fm <$> cs
+        oneOfM [] _  = mzero
+        oneOfM cs fm = foldr1Unsafe (<|>) $ fm <$> cs
         unlessDone :: StateT (NodeSet n) (MaybeT m) (QueryPlan e s)
                    -> StateT (NodeSet n) (MaybeT m) (QueryPlan e s)
         unlessDone m = dropReader (lift2 get) (getNodePlanFull ref) >>= \case
-          Just x -> return x
+          Just x  -> return x
           Nothing -> m

@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "file.hh"
-#include "book.hh"
 #include "common.hh"
 #include "print_record.hh"
 
@@ -34,148 +33,134 @@ class EquiJoinPredicate {
 
 // Joins
 
-template <typename Predicate,
-          typename Combine,
-          typename OutType,          // Maybe(std::string)
-          typename LeftTriagleType,  // Maybe(std::string)
-          typename RightTriagleType> // Maybe(std::string)
+template <typename Predicate, typename Combine,
+          typename OutType,           // Maybe(std::string)
+          typename LeftTriagleType,   // Maybe(std::string)
+          typename RightTriagleType>  // Maybe(std::string)
 class Join {
-    typedef typename Predicate::Domain0 Left;
-    typedef typename Predicate::Domain1 Right;
-    typedef typename Combine::Codomain Out;
+  typedef typename Predicate::Domain0 Left;
+  typedef typename Predicate::Domain1 Right;
+  typedef typename Combine::Codomain Out;
 
  public:
-    Join(const OutType& o,
-         const LeftTriagleType& lt,
-         const RightTriagleType& rt,
-         const std::string& l,
-         const std::string& r) :
-            leftfile(l), rightfile(r), outfile(o),
-            left_triangle_filename(lt), right_triangle_filename(rt)
-    {
-        TYPE_EQ(typename Predicate::Domain0, Left);
-        TYPE_EQ(typename Predicate::Domain1, Right);
-        TYPE_EQ(typename Predicate::Codomain, bool);
-        TYPE_EQ(typename Combine::Domain0, Left);
-        TYPE_EQ(typename Combine::Domain1, Right);
-        TYPE_EQ(typename Combine::Codomain, Out);
-    }
+  Join(const OutType& o, const LeftTriagleType& lt, const RightTriagleType& rt,
+       const std::string& l, const std::string& r)
+      : leftfile(l),
+        rightfile(r),
+        outfile(o),
+        left_triangle_filename(lt),
+        right_triangle_filename(rt) {
+    TYPE_EQ(typename Predicate::Domain0, Left);
+    TYPE_EQ(typename Predicate::Domain1, Right);
+    TYPE_EQ(typename Predicate::Codomain, bool);
+    TYPE_EQ(typename Combine::Domain0, Left);
+    TYPE_EQ(typename Combine::Domain1, Right);
+    TYPE_EQ(typename Combine::Codomain, Out);
+  }
 
-    ~Join() {}
-    void print_output(size_t x) {
-        print_records<Left>(left_triangle_filename, x);
-        print_records<Right>(right_triangle_filename, x);
-        print_records<Out>(outfile, x);
-        report();
-    }
+  ~Join() {}
+  void print_output(size_t x) {
+    print_records<Left>(left_triangle_filename, x);
+    print_records<Right>(right_triangle_filename, x);
+    print_records<Out>(outfile, x);
+    report();
+  }
 
-    void run() {
-        Writer<Left> left_triangle_writer;
-        Writer<Right> right_triangle_writer;
-        Writer<size_t> left_indexes_writer, right_indexes_writer;
-        Writer<Out> output(outfile.value);
-        bool left_touched;
-        size_t left_index = 0;
+  void run() {
+    Writer<Left> left_triangle_writer;
+    Writer<Right> right_triangle_writer;
+    Writer<size_t> left_indexes_writer, right_indexes_writer;
+    Writer<Out> output(outfile.value);
+    bool left_touched;
+    size_t left_index = 0;
 
-        // Open triangle files
-        WITH(left_triangle_filename,
-             left_triangle_writer.open(left_triangle_filename.value.first));
-        WITH(left_triangle_filename,
-             left_indexes_writer.open(left_triangle_filename.value.second));
-        WITH(right_triangle_filename,
-             right_indexes_writer.open(right_triangle_filename.value.second));
+    // Open triangle files
+    WITH(left_triangle_filename,
+         left_triangle_writer.open(left_triangle_filename.value.first));
+    WITH(left_triangle_filename,
+         left_indexes_writer.open(left_triangle_filename.value.second));
+    WITH(right_triangle_filename,
+         right_indexes_writer.open(right_triangle_filename.value.second));
 
-        std::vector<bool> right_touched_map;
-        eachRecord<Left>(
-            leftfile,
-            [&](const Left& left_record) {
-                left_touched = false;
-                size_t right_index = 0;
-                eachRecord<Right>(
-                    rightfile,
-                    [&](const Right& right_record) {
-                        if (left_index == 0) right_touched_map.push_back(false);
-                        if (predicate(left_record, right_record)) {
-                            Out temp = combiner(left_record, right_record);
-                            output.write(temp);
-                            if (left_touched) {
-                                // We are re-touching, this should be
-                                // removed if we are unjoining.
-                                WITH(left_triangle_filename,
-                                     left_indexes_writer.write(left_index));
-                            } else {
-                                left_touched = true;
-                            }
+    std::vector<bool> right_touched_map;
+    eachRecord<Left>(leftfile, [&](const Left& left_record) {
+      left_touched = false;
+      size_t right_index = 0;
+      eachRecord<Right>(rightfile, [&](const Right& right_record) {
+        if (left_index == 0) right_touched_map.push_back(false);
+        if (predicate(left_record, right_record)) {
+          Out temp = combiner(left_record, right_record);
+          output.write(temp);
+          if (left_touched) {
+            // We are re-touching, this should be
+            // removed if we are unjoining.
+            WITH(left_triangle_filename, left_indexes_writer.write(left_index));
+          } else {
+            left_touched = true;
+          }
 
-                            if (right_touched_map[right_index]) {
-                                // We are re-touching, this should be
-                                // removed if we are unjoining.
-                                WITH(right_triangle_filename,
-                                     right_indexes_writer.write(right_index));
-                            } else {
-                                right_touched_map[right_index] = true;
-                            }
-                        }
-
-                        right_index++;
-                    });
-
-                if constexpr (!LeftTriagleType::isNothing) {
-                        if (!left_touched)
-                            left_triangle_writer.write(left_record);
-                }
-                left_index++;
-            });
-
-        // Close triangle
-        if constexpr (!LeftTriagleType::isNothing) {
-            left_triangle_writer.close();
-            left_indexes_writer.close();
+          if (right_touched_map[right_index]) {
+            // We are re-touching, this should be
+            // removed if we are unjoining.
+            WITH(right_triangle_filename,
+                 right_indexes_writer.write(right_index));
+          } else {
+            right_touched_map[right_index] = true;
+          }
         }
 
-        // Write the right triangle.
-        if constexpr (!RightTriagleType::isNothing) {
-            right_indexes_writer.close();
-            Reader<Right> right_reader;
-            right_reader.open(rightfile);
-            right_triangle_writer.open(right_triangle_filename.value.first);
-            for (size_t i = 0;
-                 i < right_touched_map.size() && right_reader.hasNext();
-                 i++) {
-                auto rec = right_reader.nextRecord();
-                if (!right_touched_map[i])
-                    right_triangle_writer.write(rec);
-            }
-            right_triangle_writer.close();
-            right_reader.close();
-        }
+        right_index++;
+      });
 
-        output.close();
+      if constexpr (!LeftTriagleType::isNothing) {
+        if (!left_touched) left_triangle_writer.write(left_record);
+      }
+      left_index++;
+    });
+
+    // Close triangle
+    if constexpr (!LeftTriagleType::isNothing) {
+      left_triangle_writer.close();
+      left_indexes_writer.close();
     }
+
+    // Write the right triangle.
+    if constexpr (!RightTriagleType::isNothing) {
+      right_indexes_writer.close();
+      Reader<Right> right_reader;
+      right_reader.open(rightfile);
+      right_triangle_writer.open(right_triangle_filename.value.first);
+      for (size_t i = 0; i < right_touched_map.size() && right_reader.hasNext();
+           i++) {
+        auto rec = right_reader.nextRecord();
+        if (!right_touched_map[i]) right_triangle_writer.write(rec);
+      }
+      right_triangle_writer.close();
+      right_reader.close();
+    }
+
+    output.close();
+  }
 
  private:
-    std::string leftfile;
-    std::string rightfile;
-    OutType outfile;
-    Combine combiner;
-    Predicate predicate;
-    LeftTriagleType left_triangle_filename;
-    RightTriagleType right_triangle_filename;
-
+  std::string leftfile;
+  std::string rightfile;
+  OutType outfile;
+  Combine combiner;
+  Predicate predicate;
+  LeftTriagleType left_triangle_filename;
+  RightTriagleType right_triangle_filename;
 };
 
-template <typename Predicate,
-          typename Combine,
-          typename OutType, // Maybe(std::string)
-          typename LeftTriagleType,  // Maybe(std::string)
-          typename RightTriagleType> // Maybe(std::string)
-auto mkJoin(const OutType& o,
-            const LeftTriagleType& lt,
-            const RightTriagleType& rt,
-            const std::string& l,
+template <typename Predicate, typename Combine,
+          typename OutType,           // Maybe(std::string)
+          typename LeftTriagleType,   // Maybe(std::string)
+          typename RightTriagleType>  // Maybe(std::string)
+auto mkJoin(const OutType& o, const LeftTriagleType& lt,
+            const RightTriagleType& rt, const std::string& l,
             const std::string& r) {
-    return Join<Predicate, Combine, OutType, LeftTriagleType, RightTriagleType>(
-        o, lt, rt, l, r);
+  return Join<Predicate, Combine, OutType, LeftTriagleType, RightTriagleType>(
+      o, lt, rt, l, r);
 }
 
 template <typename Combine, typename OutType>
