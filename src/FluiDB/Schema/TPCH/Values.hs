@@ -1,9 +1,9 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RankNTypes            #-}
@@ -27,25 +27,25 @@ module FluiDB.Schema.TPCH.Values
   ,cppFile
   ,exeFile) where
 
-import Data.Bifunctor
-import Data.Codegen.Build.Types
-import Data.Utils.Default
-import Control.Monad.State
-import Data.Utils.ListT
-import Data.CnfQuery.Build
-import Data.Utils.AShow
-import Data.CnfQuery.Types
-import Data.Query.Algebra
-import FluiDB.Types
-import Data.Utils.Unsafe
-import FluiDB.Schema.TPCH.Schemata
-import Data.Utils.Functors
-import Text.Printf
-import FluiDB.ConfValues
-import Data.Query.SQL.Types
-import Data.Query.SQL.FileSet
-import Data.Query.QuerySize
-import Data.Codegen.SchemaAssocClass
+import           Control.Monad.State
+import           Data.Bifunctor
+import           Data.CnfQuery.Build
+import           Data.CnfQuery.Types
+import           Data.Codegen.Build.Types
+import           Data.Codegen.SchemaAssocClass
+import           Data.Query.Algebra
+import           Data.Query.QuerySize
+import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.Types
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.Functors
+import           Data.Utils.ListT
+import           Data.Utils.Unsafe
+import           FluiDB.ConfValues
+import           FluiDB.Schema.TPCH.Schemata
+import           FluiDB.Types
+import           Text.Printf
 
 
 tpchSqlSchemaAssoc :: SqlTypeVars e s t n => SchemaAssoc e s
@@ -62,16 +62,18 @@ tpchGlobalConf :: SqlTypeVars e s t n => GlobalConf e s t n
 tpchGlobalConf =
   fromJustErr
   $ mkGlobalConf
-    (id,id)
-    asUniq
-    id
-    tpchSqlPrimKeys
-    tpchSqlSchemaAssoc
-    tpchSqlTableSizes
+  $ PreGlobalConf
+  { pgcExpIso = (id,id)
+   ,pgcToUniq = asUniq
+   ,pgcToFileSet = id
+   ,pgcPrimKeyAssoc = tpchSqlPrimKeys
+   ,pgcSchemaAssoc = tpchSqlSchemaAssoc
+   ,pgcTableSizeAssoc = tpchSqlTableSizes
+  }
   where
     asUniq i = \case
       ESym e -> Just $ ESym $ printf "uniq_%s_%d" e i
-      _ -> Nothing
+      _      -> Nothing
 
 
 cppFile :: Int -> FilePath

@@ -49,7 +49,3 @@ ssbDBGen dataDir = do
     putStrLn "Created tables:"
     forM_ tables $ \tbl -> putStrLn $ "\t" ++ tbl
     return ret
-
-resourcesDir :: FilePath
-
-resourcesDir = "/Users/drninjabatman/Projects/UoE/FluiDB/resources/"

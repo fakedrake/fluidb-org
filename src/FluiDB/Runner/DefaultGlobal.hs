@@ -31,6 +31,7 @@ import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           FluiDB.Classes
 import           FluiDB.ConfValues
+import           FluiDB.Schema.Common
 import           FluiDB.Schema.Graph.Joins
 import           FluiDB.Schema.Graph.Schemata
 import           FluiDB.Schema.Graph.Values
@@ -74,7 +75,7 @@ instance MonadFakeIO m
     parseTpchQuery qtext
   putPS _ q = do
     cppConf <- gets globalQueryCppConf
-    either throwError return $ putPlanSymTpch cppConf q
+    either throwError return $ annotateQuery cppConf q
 
 qgenRoot :: FilePath
 
