@@ -60,7 +60,7 @@ tpchFileCache :: SqlTypeVars e s t n => QueryFileCache e s
 tpchFileCache = mkFileCache id tpchSqlSchemaAssoc
 tpchGlobalConf :: SqlTypeVars e s t n => GlobalConf e s t n
 tpchGlobalConf =
-  fromJustErr
+  fromRightErr
   $ mkGlobalConf
   $ PreGlobalConf
   { pgcExpIso = (id,id)

@@ -39,8 +39,10 @@ actualMain qs = do
     Just query -> do
       cppConf <- gets globalQueryCppConf
       aquery <- annotateQuerySSB cppConf query
-      (_transitions,cppCode)  <- runSingleQuery aquery
-      liftIO $ runCpp cppCode
+      (transitions,_cppCode)  <- runSingleQuery aquery
+      -- liftIO $ runCpp cppCode
+      liftIO $ putStrLn $ ashow transitions
+      return ()
 
 graphMain :: IO ()
 graphMain = timeout 3000000 (actualMain [1..12]) >>= \case

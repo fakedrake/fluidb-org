@@ -47,15 +47,6 @@ module Data.Codegen.Build
   , PlanSym
   ) where
 
-import Data.Codegen.TriggerCode
-import Data.CnfQuery.BuildUtils
-import Data.QueryPlan.Transitions
-import Data.Utils.Functors
-import Data.Utils.MTL
-import Data.Utils.ListT
-import Data.QueryPlan.Types
-import Data.CnfQuery.Types
-import Data.Utils.Tup
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -63,10 +54,13 @@ import           Data.Bifunctor
 import           Data.BipartiteGraph
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
+import           Data.CnfQuery.BuildUtils
+import           Data.CnfQuery.Types
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.Constructors
 import           Data.Codegen.Build.Monads
 import           Data.Codegen.Build.UpdateMatPlans
+import           Data.Codegen.TriggerCode
 import qualified Data.CppAst                       as CC
 import           Data.Either
 import qualified Data.HashSet                      as HS
@@ -76,9 +70,15 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.NodeContainers
 import           Data.Query.QuerySchema
+import           Data.QueryPlan.Transitions
+import           Data.QueryPlan.Types
 import           Data.String
 import           Data.Utils.AShow
+import           Data.Utils.Functors
 import           Data.Utils.Hashable
+import           Data.Utils.ListT
+import           Data.Utils.MTL
+import           Data.Utils.Tup
 import           GHC.Generics
 import           Prelude                           hiding (exp)
 
@@ -92,7 +92,7 @@ evaluationValue :: Evaluation e s t n q -> q
 evaluationValue = \case
   ForwardEval _ _ q -> q
   ReverseEval _ _ q -> q
-  Delete _ q -> q
+  Delete _ q        -> q
 
 -- | The code of each plan.
 getCppCode
@@ -121,7 +121,7 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
       let cout = ashowCout "Delete: " queryView
       dropReader (lift getClusterConfig) $ delNodeFile n
       case fileM of
-        Nothing -> return []
+        Nothing   -> return []
         Just file -> [comment,cout] `andThen` delCode file
 
 andThen
@@ -233,7 +233,7 @@ getCppProgram body = do
       where
         toCodeBl = intercalate "\n\n" . fmap CC.toCodeIndent
         toCodeBuild = \case
-          Left xs -> throwError $ CircularReference xs
+          Left xs  -> throwError $ CircularReference xs
           Right xs -> return xs
 
 -- | Physical plans
@@ -242,7 +242,7 @@ getQuerySolutionCpp
   (AShow e,AShow s,CC.ExpressionLike e,Monad m,Hashables2 e s)
   => CodeBuilderT e s t n m String
 getQuerySolutionCpp = do
-  tellInclude $ CC.LocalInclude "include/codegen_new.hh"
+  tellInclude $ CC.LibraryInclude "codegen.hh"
   tellInclude $ CC.LibraryInclude "array"
   tellInclude $ CC.LibraryInclude "string"
   body <- getCppCode
@@ -257,14 +257,14 @@ getEvaluations
 getEvaluations = runListT $ mkListT getCleanBundles >>= \case
   ForwardTransitionBundle io c -> ForwardEval c io <$> getQueriesC c
   ReverseTransitionBundle io c -> ReverseEval c io <$> getQueriesC c
-  DeleteTransitionBundle n -> fmap2 return $ Delete n <$> getQueryN n
+  DeleteTransitionBundle n     -> fmap2 return $ Delete n <$> getQueryN n
   where
     getCleanBundles :: m [TransitionBundle e s t n]
     getCleanBundles = do
-      trns <- reverse <$> dropReader (trd4 <$> ask) getTransitions
-      dropReader (fst4 <$> ask) $ bundleTransitions trns
+      trns <- reverse <$> dropReader (asks trd4) getTransitions
+      dropReader (asks fst4) $ bundleTransitions trns
     getQueryN :: NodeRef n -> ListT m (CNFQuery e s)
     getQueryN nref =
-      fmap fst $ mkListT $ dropReader (fst4 <$> ask) $ getClustersNonInput nref
+      fmap fst $ mkListT $ dropReader (asks fst4) $ getClustersNonInput nref
     getQueriesC :: AnyCluster e s t n -> ListT m [CNFQuery e s]
-    getQueriesC = dropReader (fst4 <$> ask) . getQueriesFromClust
+    getQueriesC = dropReader (asks fst4) . getQueriesFromClust

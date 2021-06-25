@@ -34,9 +34,9 @@ module Data.Query.QuerySchema.SchemaBase
   , translatePlanMap''
   ) where
 
-import Data.CnfQuery.Build
 import           Control.Monad.Reader
 import           Data.Bitraversable
+import           Data.CnfQuery.Build
 import           Data.CnfQuery.Types
 import           Data.CppAst
 import           Data.Functor.Identity
@@ -96,17 +96,19 @@ querySchema plan = [(columnPropsCppType,ps)
 -- XXX: increment indices
 
 
--- Filter the unique ones
+-- | Filter the unique ones. None means there were no uniques (or the
+-- plan was empty.
 mkQueryPlan :: [(CppType,(e,Bool))] -> Maybe (QueryPlan' e)
-mkQueryPlan sch = fromSchemaQP
-  [(sym,ColumnProps {columnPropsConst=False,columnPropsCppType=ty},uniq)
-  | (ty, (sym, uniq)) <- sch]
+mkQueryPlan sch =
+  fromSchemaQP
+    [(sym
+     ,ColumnProps { columnPropsConst = False,columnPropsCppType = ty }
+     ,uniq) | (ty,(sym,uniq)) <- sch]
   where
     fromSchemaQP :: [(e,ColumnProps,Bool)] -> Maybe (QueryPlan' e)
-    fromSchemaQP sch = NEL.nonEmpty [s | (s,_,isU) <- sch, isU]
-      <&> \uniq -> QueryPlan {
-        qpSchema=[(s,prop) | (s,prop,_isU) <- sch],
-        qpUnique=return uniq}
+    fromSchemaQP
+      sch = NEL.nonEmpty [s | (s,_,isU) <- sch,isU] <&> \uniq -> QueryPlan
+      { qpSchema = [(s,prop) | (s,prop,_isU) <- sch],qpUnique = return uniq }
 
 
 planSymTypeSym' :: Hashables2 e s =>
@@ -115,55 +117,55 @@ planSymTypeSym' :: Hashables2 e s =>
                 -> Maybe (Either e CppType)
 planSymTypeSym' plans ps = case planSymCnfName ps of
   NonSymbolName e -> Just $ Left e
-  _               -> fmap (Right . columnPropsCppType)
-                    $ listToMaybe (catMaybes $ lookupQP ps <$> plans)
+  _ -> Right . columnPropsCppType
+    <$> listToMaybe (catMaybes $ lookupQP ps <$> plans)
 
 
-#if 0
--- MAY THIS BE A REMINDER OF THE HORRORS THAT EMERGE FROM FORMAL
--- EQUALITY OF OBJECTIVELY UNEQUALS. VIVA LA REVOLUTION.
---
--- | This is not an extremely lax version of equality that succeeds in
--- cases of normal equality but also for provenance. It is similar to
--- name equality. The only guarantee is that equal symbols will have
--- equal types.
---
--- XXX: Soft equality is broken really... It can't find equal symbols
--- on stacks of selections or projections. That's what we have in/out
--- assocs for. This is used in two places:
---
--- * Codegen -- propagators should correlate the symbols one to one
---   rather than having a black-box approach so that the C++ can be
---   created.
--- * In optimization to match symbols.
---
--- See if plansym can carry provenance information explicitly.
---
--- Reminder: We use PlanSym rather than plain symbols for two reasons:
---
--- * π Α x π Α --> π ( Α x A ) causes conflicting symbols
--- * Plan schemata are constituted by "nameless" symbols. We need to
---   be able to match between them.
--- * Names are not dependable, we want to connect subtrees regardless
---   of name
-softPlanSymEq :: (Eq e, Eq s) => PlanSym e s -> PlanSym e s -> Bool
-softPlanSymEq c c' = or $ (==) <$> nameStack c <*> nameStack c'
-  where
-    nameStack :: PlanSym e s -> [Either (e,Maybe s) (CNFCol e s)]
-    nameStack = (. planSymCnfName) $ \case
-      Column x _ -> first (fmap Just) <$> cnfColumnStack x
-      PrimaryCol e s _ -> [Left (e,Just s)]
-      NonSymbolName e -> [Left (e,Nothing)]
 
-softLookupQP :: Hashables2 e s =>
-               PlanSym e s -> QueryPlan e s -> Maybe ColumnProps
-softLookupQP ps' =
-  headSafe . fmap snd . filter (softPlanSymEq ps' . fst) . schemaQP
-  where
-    headSafe = \case
-      [] -> Nothing
-      x:_ -> Just x
-#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 hardLookupQP :: Hashables2 e s =>
                PlanSym e s -> QueryPlan e s -> Maybe ColumnProps

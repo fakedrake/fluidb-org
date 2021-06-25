@@ -5,6 +5,7 @@ import           Data.Bifunctor
 import           Data.Query.QuerySize
 import           Data.Query.SQL.FileSet
 import           Data.Query.SQL.Types
+import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           FluiDB.Bamify.DBGen
 import           FluiDB.ConfValues
@@ -32,7 +33,9 @@ getSsbGlobalConf = do
             TSymbol s ->Just $ DataFile $ dataDir </> s <.> "dat"
             NoTable   -> Nothing
         }
-  maybe (fail "mkGlobalConf failed") return retM
+  case retM of
+    Left l  -> fail $ ashow l
+    Right r -> return r
   where
     genUniqName i = \case
       ESym e -> Just $ ESym $ printf "uniq_%s_%d" e i

@@ -57,6 +57,7 @@ import           Data.Bifunctor
 import qualified Data.HashMap.Lazy                   as HM
 import           Data.String
 import           Data.Tuple
+import           Data.Utils.AShow
 
 -- |Expr atoms that can correspond to c++ code (they have a type and a
 -- name).
@@ -166,7 +167,7 @@ mkGlobalConf
   :: forall e0 e s t n .
   (Hashables2 e s,CodegenSymbol e,Ord s,t ~ (),n ~ ())
   => PreGlobalConf e0 e s
-  -> Maybe (GlobalConf e s t n)
+  -> Either (GlobalError e s t n) (GlobalConf e s t n)
 mkGlobalConf pgc@PreGlobalConf {..} = do
   let gbState = mempty
   let (pair :: Either (ClusterError e s) (Bipartite t n,RefMap n s)
@@ -174,13 +175,13 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
         (`evalState` gbState)
         $ (`runStateT` def { cnfTableColumns = toTableColumns pgcSchemaAssoc })
         $ runExceptT clusterBuilt
-  (propNetLocal,tableMap) <- either (const Nothing) Just pair
+  (propNetLocal,tableMap) <- first toGlobalError pair
   let newNodes = refKeys tableMap
   -- nodeTableSize :: NodeRef n -> Either (Maybe s) [TableSize]
   let nodeTableSize ref = do
         tbl <- maybe (Left Nothing) return $ ref `refLU` tableMap
         maybe (Left $ Just tbl) return2 $ tbl `lookup` pgcTableSizeAssoc
-  nodeSizes' <- either (const Nothing) Just
+  nodeSizes' <- either (\x -> throwAStr $ ashow x) return
     $ traverse (\n -> (n,) . (,1) <$> nodeTableSize n) newNodes
   return
     GlobalConf

@@ -5,7 +5,6 @@ module FluiDB.Bamify.CsvParse
   (bamifyFile) where
 
 import           Control.Applicative
-import           Control.Exception
 import           Control.Monad
 import           Data.Bifunctor
 import           Data.ByteString          (hGetLine)
@@ -13,7 +12,6 @@ import qualified Data.ByteString          as BS
 import           Data.ByteString.Builder  as BSB
 import qualified Data.ByteString.Char8    as B8
 import           Data.ByteString.Internal
-import qualified Data.ByteString.Lazy     as BSL
 import           Data.Codegen.CppType
 import           Data.CppAst.CppType
 import           Data.List.Extra

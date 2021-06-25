@@ -1,7 +1,6 @@
 module FluiDB.Bamify.DBGen (mkAllDataFiles) where
 
 import           Control.Monad
-import           Data.Codegen.CppType
 import           Data.Codegen.Run
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
@@ -29,8 +28,9 @@ mkAllDataFiles DBGenConf{..} = do
     schema <- getSchemaOrDie dbGenConfSchema dbGenTableConfFileBase
     when (null schema) $ fail $ "Can't deal with empty schema for: " ++ ashow tbl
     let datFile = curDir </> dbGenTableConfFileBase <.> "dat"
-    let readQuerySize = read <$> readFile (datFile <.> "size")
-    x <- withExists readQuerySize checkExists datFile $ tmpDir "dbgen" $ \td -> do
+    let sizeFile = datFile <.> "size"
+    let readQuerySize = read <$> readFile sizeFile
+    withExists readQuerySize checkExists datFile $ tmpDir "dbgen" $ \td -> do
       traceM $ printf "Generating: %s" dbGenTableConfFileBase
       runProc $ mkProc dbGenConfExec ["-s",show dbGenConfScale,"-T",[dbGenTableConfChar]]
       let tblFile = td </> dbGenTableConfFileBase <.> "tbl"
@@ -39,10 +39,9 @@ mkAllDataFiles DBGenConf{..} = do
       tableSize <- bamifyFile (fst <$> schema) tblFile bamaFile
       traceM $ printf "Unamify %s %s" bamaFile datFile
       mkDataFile schema bamaFile datFile
-      return tableSize
-    let symSize = (TSymbol dbGenTableConfFileBase,x)
-    writeFile (datFile <.> "size") $ show symSize
-    return symSize
+      let symSize = (TSymbol dbGenTableConfFileBase,tableSize)
+      writeFile sizeFile $ show symSize
+      return symSize
   where
     withExists _ False _ m = m
     withExists a True datFile m = do

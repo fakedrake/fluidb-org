@@ -85,9 +85,9 @@ qgenRoot = "/Users/drninjabatman/Projects/UoE/fluidb/resources/tpch-dbgen"
 
 
 -- Join-only
-instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s))
+instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s),AShowV s)
   => DefaultGlobal (s,s) s () () m [(s,s)] where
-  defGlobalConf _ = graphGlobalConf . mkGraphSchema . join
+  defGlobalConf _ x = graphGlobalConf $ mkGraphSchema $ join x
   getIOQuery js = do
     schemaAssoc <- gets globalSchemaAssoc
     putPS (Proxy :: Proxy [(s,s)])

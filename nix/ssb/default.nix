@@ -2,7 +2,7 @@
 stdenv.mkDerivation {
   name = "ssb-dbgen";
   src = fetchFromGitHub {
-    owner = "greenlion";
+    owner = "fakedrake";
     repo = "ssb-dbgen";
     rev = "HEAD";
     sha256 = "10x9f2mqb4vxz1a1grvsnnyrf3pcdd0pc39v0alyd940hx65qzi7"; # lib.fakeSha256;

@@ -18,6 +18,7 @@ import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.Parser
 import           Data.Query.SQL.Types
+import           Data.Utils.AShowDebug
 import           Data.Utils.Functors
 import           FluiDB.Bamify.Types
 
@@ -94,9 +95,9 @@ ssbSchema =
        -- char            city[CITY_FIX+1];
       ,(strType 11,"c_city")
        -- char            nation_name[C_NATION_NAME_LEN+1];
-      ,(strType 15,"c_nation_name")
+      ,(strType 15,"c_nation")
        -- char            region_name[C_REGION_NAME_LEN+1];
-      ,(strType 13,"c_region_name")
+      ,(strType 13,"c_region")
        -- char            phone[PHONE_LEN + 1];
       ,(strType 15,"c_phone")
        -- char            mktsegment[MAXAGG_LEN + 1];
@@ -111,9 +112,9 @@ ssbSchema =
        -- char            city[CITY_FIX +1];
       ,(strType 16,"s_city")
        -- char            nation_name[S_NATION_NAME_LEN+1];
-      ,(strType 16,"s_nation_name")
+      ,(strType 16,"s_nation")
        -- char            region_name[S_REGION_NAME_LEN+1];
-      ,(strType 13,"s_region_name")
+      ,(strType 13,"s_region")
        -- char            phone[PHONE_LEN + 1];
       ,(strType 15,"s_phone")]
     partSchema =
@@ -126,7 +127,7 @@ ssbSchema =
        -- char           category[P_CAT_LEN + 1];
       ,(strType 7,"p_category")
        -- char           brand[P_BRND_LEN + 1];
-      ,(strType 10,"p_brand")
+      ,(strType 10,"p_brand1")
        -- char           color[P_COLOR_MAX + 1];
       ,(strType 11,"p_color")
        -- char           type[P_TYPE_MAX + 1];
@@ -196,9 +197,12 @@ dateType = CppNat
 -- | Except for the star index (which is lineorder) all other fields
 -- that end with "key" are primary keys.
 ssbPrimKeys :: [(SSBTable,[SSBField])]
-ssbPrimKeys = do
+ssbPrimKeys = traceAShow "Prim keys: " $ do
   (tbl,flds) <- ssbFldSchema
-  return (tbl,if tbl /= "lineoder" then [] else filter (isSuffixOf "key") flds)
+  return
+    (tbl
+    ,if tbl == "lineorder" then ["lo_orderkey"]
+     else filter (isSuffixOf "key") flds)
 
 ssbQueriesMap :: IM.IntMap (Query ExpTypeSym Table)
 ssbQueriesMap = IM.fromList $ zip [0 ..] ssbQueriesList

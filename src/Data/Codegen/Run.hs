@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 module Data.Codegen.Run (runCpp,tmpDir,runProc,mkProc) where
 
@@ -12,7 +13,6 @@ import           System.FilePath
 import           System.IO
 import           System.IO.Temp
 import           System.Process
-import           Text.Printf
 
 mkProc :: FilePath -> [String] -> CreateProcess
 mkProc prog args = (proc prog args){cwd=Nothing}
@@ -93,7 +93,7 @@ transferToFile title rhndl fname = withFile fname WriteMode $ \whndl -> do
 hEachLine :: Handle -> (String -> IO ()) -> IO ()
 hEachLine h f = whileIO (not <$> hIsEOF h) $ hGetLine h >>= f
 
-
+#ifdef TEST_CODE
 type CppCode = String
 type Header = String
 type Symbol = String
@@ -115,3 +115,4 @@ runCommands exit =
   runCpp
     $ sysInclude "iostream" ++ sysInclude "fstream"
     ++ mainFn exit (declOStream "f" (dir </> "file") ++ putLine "f" "hello!")
+#endif
