@@ -1,10 +1,10 @@
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveFoldable        #-}
+{-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DeriveTraversable     #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE InstanceSigs          #-}
@@ -62,27 +62,27 @@ module Data.QueryPlan.Types
   ,mplusPlanT) where
 
 
-import Control.Antisthenis.Convert
-import Control.Antisthenis.Bool
-import Data.Proxy
-import Control.Antisthenis.Sum
-import Control.Antisthenis.Types
-import Control.Monad.Identity
-import Data.NodeContainers
-import Control.Monad.Writer hiding (Sum)
+import           Control.Antisthenis.Bool
+import           Control.Antisthenis.Convert
+import           Control.Antisthenis.Sum
+import           Control.Antisthenis.Types
 import           Control.Applicative
 import           Control.Monad.Except
+import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
+import           Control.Monad.Writer        hiding (Sum)
 import           Data.BipartiteGraph
 import           Data.Function
 import           Data.Group
-import qualified Data.HashSet              as HS
-import           Data.IntMap               (Key)
+import qualified Data.HashSet                as HS
+import           Data.IntMap                 (Key)
 import           Data.List
-import qualified Data.List.NonEmpty        as NEL
+import qualified Data.List.NonEmpty          as NEL
 import           Data.Maybe
+import           Data.NodeContainers
+import           Data.Proxy
 import           Data.Query.QuerySize
 import           Data.QueryPlan.CostTypes
 import           Data.String
@@ -90,12 +90,12 @@ import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
-import           Data.Utils.Hashable
 import           Data.Utils.HContT
+import           Data.Utils.Hashable
 import           Data.Utils.ListT
-import           GHC.Generics              (Generic)
+import           GHC.Generics                (Generic)
 import           GHC.Stack
-import           Prelude                   hiding (filter, lookup)
+import           Prelude                     hiding (filter, lookup)
 
 data IsMat = Mat | NoMat deriving (Show, Read, Eq, Generic)
 data NodeState =
@@ -139,10 +139,10 @@ data ProvenanceAtom = EitherLeft
   deriving Show
 provenanceAsBool :: ProvenanceAtom -> Bool
 provenanceAsBool = \case
-  EitherLeft -> False
-  SplitLeft -> False
+  EitherLeft  -> False
+  SplitLeft   -> False
   EitherRight -> True
-  SplitRight -> True
+  SplitRight  -> True
 
 
 type IsMatable = Bool
@@ -152,9 +152,9 @@ data GCState t n = GCState {
   matableMechMap    :: RefMap n (NodeProc t n (BoolTag Or (PlanParams n))),
   gcCache           :: GCCache (MetaOp t n) t n,
   epochs            :: NEL.NonEmpty (GCEpoch t n),
-#ifdef GHCI
-  gcLog             :: [String],
-#endif
+
+
+
   -- | Nodes with nonzero protection are not demoted when the epoch changes
   nodeProtection    :: RefMap n Count,
   epochFilter       :: HS.HashSet (GCEpoch t n, RefMap n Count),
@@ -165,19 +165,20 @@ data GCState t n = GCState {
   } deriving Generic
 
 type Certainty = Double
-data QueryHistory n = QueryHistory { unQueryHistory :: [NodeRef n] }
+newtype QueryHistory n =
+  QueryHistory { unQueryHistory :: [NodeRef n] }
   deriving Generic
 instance Default (QueryHistory n)
 data GCConfig t n =
   GCConfig
   { -- These are configuration but ok.
-    propNet :: Bipartite t n
-   ,nodeSizes :: RefMap n ([TableSize],Certainty)
+    propNet       :: Bipartite t n
+   ,nodeSizes     :: RefMap n ([TableSize],Certainty)
    ,intermediates :: NodeSet n
-   ,budget :: Maybe PageNum
-   ,queryHistory :: QueryHistory n
-   ,maxBranching :: Maybe Count
-   ,maxTreeDepth :: Maybe Count
+   ,budget        :: Maybe PageNum
+   ,queryHistory  :: QueryHistory n
+   ,maxBranching  :: Maybe Count
+   ,maxTreeDepth  :: Maybe Count
   }
   deriving Generic
 pushHistory :: NodeRef n -> GCConfig t n -> GCConfig t n
@@ -190,18 +191,18 @@ instance Default (GCEpoch t n)
 instance Default (GCState t n)
 
 trM :: Monad m => String -> PlanT t n m ()
-#ifdef GHCI
-trM msg = modify $ \gss -> gss{gcLog=msg:gcLog gss}
-getGcLog :: Monad m => PlanT t n m [String]
-getGcLog = reverse . gcLog <$> get
-#else
-#ifdef VERBOSE_SOLVING
-trM = traceM <=< traceMsg
-#else
+
+
+
+
+
+
+
+
 trM = const $ return ()
-#endif
+
 {-# INLINE trM #-}
-#endif
+
 
 traceMsg :: Monad m => String -> PlanT t n m String
 traceMsg = branchingIdTrace
@@ -276,9 +277,9 @@ instance BotMonad m => BotMonad (ExceptT e m) where
 -- | This was a bad path, clear all our progress
 bot :: MonadPlus m => String -> PlanT t n m a
 bot msg = do
-  traceDebug <$> get >>= \case
+  get >>= (\case
     x:_ -> trM x
-    _ -> return ()
+    _   -> return ()) . traceDebug
   trM $ "BOT: " ++ msg
   lift3 mzero
 
@@ -370,7 +371,7 @@ mplusPlanT = mplusPlanT'
 
 -- | For epoch
 isMoreRecent :: Ord v => RefMap n v -> RefMap n v -> Bool
-isMoreRecent delta = or . refIntersectionWithKey (const $ (>=)) delta
+isMoreRecent delta = or . refIntersectionWithKey (const (>=)) delta
 
 mplusPlanT' :: MonadPlus m =>
               StateT s (ReaderT r (ExceptT e m)) a
@@ -385,7 +386,7 @@ mplusPlanT' s s' = s `mplusState` s'
           where
             mplusExcept (ExceptT v) (ExceptT v') = ExceptT $ v `mplus` v'
 
-
+
 -- METAOP
 
 -- | A set of triggers that may have Intermediate nodes on the output
@@ -437,7 +438,7 @@ instance Eq (MetaOp t n) where
   a == b = mopTriple a == mopTriple b
   {-# INLINE (==) #-}
 
-
+
 -- Node procs
 -- | A map containing all the proc maps. Mutually recursive with the
 -- proc itself.

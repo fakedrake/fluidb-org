@@ -11,8 +11,6 @@
 
 module Data.Cluster.InsertQuery (insertQueryPlan) where
 
-import Data.CnfQuery.BuildUtils
-import Data.CnfQuery.Build
 import           Control.Applicative
 import           Control.Monad.Except
 import           Control.Monad.Free
@@ -23,6 +21,8 @@ import           Data.Cluster.PutCluster
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.PutCluster.Join
 import           Data.Cluster.Types
+import           Data.CnfQuery.Build
+import           Data.CnfQuery.BuildUtils
 import           Data.CnfQuery.Types
 import           Data.CppAst.CppType
 import qualified Data.HashMap.Strict            as HM
@@ -57,19 +57,18 @@ insertQueryPlan
 insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
   recur :: QueryForest e s -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
   recur forest = do
-    ret <- cachedM forest $ case qfQueries forest of
+    cachedM forest $ case qfQueries forest of
       Right s -> go0 s
       Left qs -> fmap foldInsPlanRes $ forM qs $ \case
         Q2 o l r -> go2 o (queryToForest l) (queryToForest r)
         Q1 o q   -> go1 o (queryToForest q)
         Q0 s     -> recur s
-    return ret
     where
       cachedM :: QueryForest e s
               -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
               -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
       cachedM forest' m = do
-        HM.lookup forest' . queriesCache . clustBuildCache <$> get >>= \case
+        gets (HM.lookup forest' . queriesCache . clustBuildCache) >>= \case
           Just ret -> return ret
           Nothing -> do
             ret <- m
@@ -84,7 +83,7 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
         let ncnfS :: NCNFQuery e s = ncnfSymbol (planSymOrig <$> planAllSyms plan) s
         ref <- mkNodeFromCnf (ncnfToCnf ncnfS) >>= \case
           [ref] -> return ref
-          _ -> throwAStr $ "Multiple refs for symbol " ++ ashow s
+          _     -> throwAStr $ "Multiple refs for symbol " ++ ashow s
         _ <- putNCluster plan (ref,ncnfS)
         return InsPlanRes {
           insPlanRef=ref,

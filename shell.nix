@@ -22,6 +22,7 @@ with nixpkgs; let
     ghc
     stack
     ccls
+    graphviz
   ];
 in
 haskell.lib.buildStackProject {

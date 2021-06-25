@@ -134,30 +134,35 @@ querySize :: forall e s t n m .
                          RefMap n (Maybe ([TableSize],Double)))
              m) =>
             NodeRef n -> m (([TableSize],Double),QueryPlan e s)
-querySize ref = get >>= (\case
-  Just (Just x) -> withPlan x
-  Just Nothing -> do
-    cs :: [([Query1 (PlanSym e s) (NodeRef n)],AnyCluster e s t n)] <-
-      dropReader (fst <$> get) (queryPlans1 ref)
-    -- Note: in the clusters appearing here `ref` is a non-input node.
-    throwAStr $ "Cycle: " ++ ashow (ref,cs)
-  Nothing -> dropReader (fst <$> get) (queryPlans1 ref) >>= \case
-    [] -> throwAStr $ "Size of bot node should be in cache: " ++ show ref
-    clusts -> getMedian $ takeListT 100 $ do
-      (q1s,clust) <- mkListT $ return clusts
-      q1 <- maybe mzero return $ listToMaybe q1s
-      modify $ second $ refInsert ref Nothing
-      -- querySize1 also triggers the propagator for the plans.
-      ret <- querySize1 clust =<< traverse querySize q1
-      plan <- maybe (throwAStr "oops") return
-        =<< dropReader (fst <$> get) (getNodePlanFull ref)
-      modify $ second $ refInsert ref $ Just ret
-      return (ret,plan)) . refLU ref . snd
+querySize ref =
+  get
+  >>= (\case
+         Just (Just x) -> withPlan x
+         Just Nothing -> do
+           cs :: [([Query1 (PlanSym e s) (NodeRef n)],AnyCluster e s t n)]
+             <- dropReader (gets fst) (queryPlans1 ref)
+           -- Note: in the clusters appearing here `ref` is a non-input node.
+           throwAStr $ "Cycle: " ++ ashow (ref,cs)
+         Nothing -> dropReader (gets fst) (queryPlans1 ref) >>= \case
+           []
+             -> throwAStr $ "Size of bot node should be in cache: " ++ show ref
+           clusts -> getMedian $ takeListT 100 $ do
+             (q1s,clust) <- mkListT $ return clusts
+             q1 <- maybe mzero return $ listToMaybe q1s
+             modify $ second $ refInsert ref Nothing
+             -- querySize1 also triggers the propagator for the plans.
+             ret <- querySize1 clust =<< traverse querySize q1
+             plan <- maybe (throwAStr "oops") return
+               =<< dropReader (gets fst) (getNodePlanFull ref)
+             modify $ second $ refInsert ref $ Just ret
+             return (ret,plan)) . refLU ref . snd
   where
     withPlan ts =
       maybe (throwAStr $ "Can't get plan:" ++ show ref) (return . (ts,))
       =<< dropState (gets fst,modify . first . const) (forceQueryPlan ref)
-    getMedian = (>>= maybe (throwAStr "No size") return . medianSize)
+    getMedian =
+      (>>= maybe (throwAStr $ "No candidate size for " ++ ashow ref) return
+       . medianSize)
 
 medianOn :: Ord b => (a -> b) -> [a] -> Maybe a
 medianOn _ [] = Nothing
@@ -174,7 +179,6 @@ medianSize qs = do
     $ topPercOn 0.2 (snd . fst . snd) qsWithSums
   -- guard $ sizeInt < 50000
   return ret
-  where
 
 -- |Equivalent to (-) because the parser is a bit weird with the dash.
 minus :: Num n => n -> n -> n

@@ -1,8 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
-module Data.Utils.Unsafe (safeTail,headErr,fromJustErr,foldr1Unsafe,fromRightErr) where
+module Data.Utils.Unsafe
+  (safeTail
+  ,headErr
+  ,fromJustErr
+  ,foldr1Unsafe
+  ,fromRightErr) where
 
 import           Data.Utils.AShow
-import           GHC.Stack
+
 safeTail :: [a] -> [a]
 safeTail = \case
   []   -> []

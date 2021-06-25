@@ -1,6 +1,12 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
-module Data.Codegen.Run (runCpp,tmpDir,runProc,mkProc) where
+module Data.Codegen.Run
+  (runCpp
+  ,tmpDir
+  ,ShouldRemove(..)
+  ,runProc
+  ,mkProc
+  ,tmpDir') where
 
 import           Control.Exception
 import           Control.Monad
@@ -17,12 +23,16 @@ import           System.Process
 mkProc :: FilePath -> [String] -> CreateProcess
 mkProc prog args = (proc prog args){cwd=Nothing}
 
--- Starts operating in a temporary directory. The first tmpDir call
+-- |Starts operating in a temporary directory. The first tmpDir call
 -- creates a directory in /tmp and nested one create directories
--- inside. The state of nesting is managed by FLUIDB_IN_TMP_DIR.
+-- inside. The state of nesting is managed by
+-- FLUIDB_IN_TMP_DIR. ShouldRemove tells us whether the dir should be
+-- removed when the operation finishes. Note that the directory is
+-- removed if a parent directory is removed.
 type DirPath = FilePath
-tmpDir :: String -> (DirPath -> IO a) -> IO a
-tmpDir opId m = do
+data ShouldRemove = RemoveDir | KeepDir
+tmpDir' :: ShouldRemove -> String -> (DirPath -> IO a) -> IO a
+tmpDir' shouldRemove opId m = do
   canonTmp <- (</> "fluidb_temps") <$> getCanonicalTemporaryDirectory
   (rootTmp,unsetDir :: IO ()) <- lookupEnv "FLUIDB_IN_TMP_DIR" <&> \case
     Nothing     -> (canonTmp,unsetEnv "FLUIDB_IN_TMP_DIR")
@@ -35,8 +45,13 @@ tmpDir opId m = do
   unsetDir
   -- We don't want this to be removed if there is an error so that we
   -- can inspect the situation.
-  removeDirectoryRecursive dir
+  case shouldRemove of
+    RemoveDir -> removeDirectoryRecursive dir
+    KeepDir   -> return ()
   return ret
+
+tmpDir :: String -> (DirPath -> IO a) -> IO a
+tmpDir = tmpDir' RemoveDir
 
 whileIO :: IO Bool -> IO () -> IO ()
 whileIO bM body = go

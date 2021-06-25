@@ -39,16 +39,6 @@ module FluiDB.Types
   , RunningConf(..)
   ) where
 
-import Data.Codegen.Build.Monads.Class
-import Data.Utils.MTL
-import Data.BipartiteGraph
-import Data.Query.Algebra
-import Data.Query.SQL.Types
-import Data.Codegen.SchemaAssocClass
-import Data.Utils.Default
-import Data.Cluster.Types.Monad
-import Data.CnfQuery.Types
-import Data.QueryPlan.Types
 import           Control.Monad.Cont
 import           Control.Monad.Except
 import           Control.Monad.Identity
@@ -56,14 +46,24 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import qualified Data.List.NonEmpty                       as NEL
+import           Data.BipartiteGraph
+import           Data.Cluster.Types.Monad
+import           Data.CnfQuery.Types
+import           Data.Codegen.Build.Monads.Class
+import           Data.Codegen.SchemaAssocClass
+import qualified Data.List.NonEmpty              as NEL
+import           Data.NodeContainers
+import           Data.Query.Algebra
+import           Data.Query.Optimizations
+import           Data.Query.QuerySize
+import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.Types
+import           Data.QueryPlan.Nodes
+import           Data.QueryPlan.Types
 import           Data.String
 import           Data.Utils.AShow
-import Data.Query.SQL.FileSet
-import Data.NodeContainers
-import Data.Query.Optimizations
-import           Data.QueryPlan.Nodes
-import           Data.Query.QuerySize
+import           Data.Utils.Default
+import           Data.Utils.MTL
 import           FluiDB.SumTypes                 as ST
 import           GHC.Generics
 
@@ -129,7 +129,7 @@ instance Default RunningConf
 instance AShow RunningConf
 globalPopUniqueNum :: Monad m => GlobalSolveT e s t n m Int
 globalPopUniqueNum = do
-  n <- runningUniqueNumber . globalRunning <$> get
+  n <- gets (runningUniqueNumber . globalRunning)
   modify $ \gc -> gc{
     globalRunning=(globalRunning gc){
         runningUniqueNumber=1 + runningUniqueNumber (globalRunning gc)}}

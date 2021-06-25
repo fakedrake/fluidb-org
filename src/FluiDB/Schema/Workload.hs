@@ -155,15 +155,21 @@ materializedNodes = lift5 $ do
   matConcM <- fmap2 (Concrete Mat Mat,) $ nodesInState [Concrete Mat Mat]
   return $ matIni ++ matConcN ++ matConcM
 
-insertAndRun :: forall m a e s t n .
-               (MonadHalt m, Hashable s, Hashables2 e s,
-                AShow e, AShow s, MonadPlus m, BotMonad m,
-                HValue m ~ PlanSearchScore) =>
-               Free (Compose NEL.NonEmpty (Query e)) (s,QueryPlan e s)
-             -> CodeBuilderT e s t n m a
-             -> GlobalSolveT e s t n m a
+insertAndRun
+  :: forall m a e s t n .
+  (MonadHalt m
+  ,Hashable s
+  ,Hashables2 e s
+  ,AShow e
+  ,AShow s
+  ,MonadPlus m
+  ,BotMonad m
+  ,HValue m ~ PlanSearchScore)
+  => Free (Compose NEL.NonEmpty (Query e)) (s,QueryPlan e s)
+  -> CodeBuilderT e s t n m a
+  -> GlobalSolveT e s t n m a
 insertAndRun queries postSolution = do
-  (ret,conf) <- joinExcept $ hoist (runCodeBuild . lift) $ solveQuery
+  (ret,conf) <- joinExcept $ hoist (runCodeBuild . lift) solveQuery
   modify $ \gs' -> gs' { globalGCConfig = conf }
   return ret
   where
@@ -182,15 +188,14 @@ insertAndRun queries postSolution = do
         $ lift3
         $ insertQueryPlan literalType queries
       lift4 clearClustBuildCache
-      -- lift $ reportGraph >> reportClusterConfig
+      -- lift $ reportGraph >> reportClusterConfig/
       traceM $ "Commencing solution of node:" ++ ashow nOptqRef
       nodeNum <- asks (length . rNodes . propNet)
       traceM $ "Total nodes:" ++ show nodeNum
       (_qcost,conf)
         <- lift $ planLiftCB $ wrapTrace ("Solving node:" ++ show nOptqRef) $ do
           setNodeMaterialized nOptqRef
-          fmap mconcat
-            $ mapM transitionCost =<< dropReader get getTransitions
+          fmap mconcat $ mapM transitionCost =<< dropReader get getTransitions
       (,pushHistory nOptqRef conf) <$> lift (local (const conf) postSolution)
 
 

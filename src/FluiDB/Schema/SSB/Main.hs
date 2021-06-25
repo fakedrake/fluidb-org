@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 module FluiDB.Schema.SSB.Main (graphMain) where
 
 
@@ -5,9 +7,11 @@ import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Codegen.Build
 import           Data.Codegen.Run
+import           Data.DotLatex
 import qualified Data.IntMap               as IM
 import           Data.Query.Algebra
 import           Data.Query.SQL.Types
+import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
@@ -15,6 +19,9 @@ import           FluiDB.Schema.SSB.Values
 import           FluiDB.Schema.Workload
 import           FluiDB.Types
 import           FluiDB.Utils
+import           System.FilePath
+import           System.IO
+import           System.Process
 import           System.Timeout
 import           Text.Printf
 
@@ -33,16 +40,32 @@ annotateQuerySSB cppConf query =
 actualMain :: [Int] -> IO ()
 actualMain qs = do
   ssbGlobalConf <- getSsbGlobalConf
-  forM_  qs $ \qi -> runGlobalSolve ssbGlobalConf (fail . ashow) $ do
-  case IM.lookup qi ssbQueriesMap of
-    Nothing -> throwAStr $ printf "No such query %d" qi
-    Just query -> do
-      cppConf <- gets globalQueryCppConf
-      aquery <- annotateQuerySSB cppConf query
-      (transitions,_cppCode)  <- runSingleQuery aquery
-      -- liftIO $ runCpp cppCode
-      liftIO $ putStrLn $ ashow transitions
-      return ()
+  runGlobalSolve ssbGlobalConf (fail . ashow) $ forM_ qs $ \qi -> do
+    liftIO $ putStrLn $ "Running query: " ++ show qi
+    case IM.lookup qi ssbQueriesMap of
+      Nothing -> throwAStr $ printf "No such query %d" qi
+      Just query -> do
+        cppConf <- gets globalQueryCppConf
+        aquery <- annotateQuerySSB cppConf query
+        (transitions,_cppCode) <- catchError (runSingleQuery aquery) $ \e -> do
+          pngPath <- renderGraph
+          liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
+          throwError e
+        -- liftIO $ runCpp cppCode
+        liftIO $ putStrLn $ ashow transitions
+        return ()
+
+type ImagePath = FilePath
+renderGraph :: SSBGlobalSolveM ImagePath
+renderGraph = do
+  gr <- gets $ propNet . getGlobalConf
+  liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
+    let graphBase = d </> "graph"
+    writeFile (graphBase <.> "dot") $ simpleRender @T @N gr
+    withFile (graphBase <.> "dot") ReadMode $ \hndl -> do
+      runProc
+        (mkProc "dot" ["-o" ++ graphBase <.> "png", "-Tpng"]) { std_in = UseHandle hndl }
+      return $ graphBase <.> "png"
 
 graphMain :: IO ()
 graphMain = timeout 3000000 (actualMain [1..12]) >>= \case

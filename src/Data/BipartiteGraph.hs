@@ -20,22 +20,22 @@
 
 -- |NOTE: Incoming neighbors is the forward trigger input
 
--- | Bipartite graphs are graphs with two kinds of nodes. Here we
--- denote them with n and t. Roughly each n-node corresponds to a
--- relation and each t-node corresponds to a (part of an)
--- operation. Each n-node is only connected to t-nodes and visa
--- versa. Here we define the GraphBuilderT monad that we use to build
--- and maintain the graph. Each edge may be directed or
--- indirected. The n-nodes connected to a t-node are sematically split
--- in two non-empty groups: input and output nodes. Input connections
--- are n-to-t (directed) or underiected and output connections are
--- either t-to-n (directed) or undirected. We will see later that
--- plans are a trace of triggers of t-nodes whereby each trigger
--- assumes all input n-nodes are in a materialized state and which
--- materializes a subset of the output nodes. We can reverse-trigger a
--- t-node when the output nodes are all undirected (and therefore
--- reversible) in which case reverse-triggering materializes any
--- subset undirected input nodes.
+-- Bipartite graphs are graphs with two kinds of nodes. Here we denote
+-- them with n and t. Roughly each n-node corresponds to a relation
+-- and each t-node corresponds to a (part of an) operation. Each
+-- n-node is only connected to t-nodes and visa versa. Here we define
+-- the GraphBuilderT monad that we use to build and maintain the
+-- graph. Each edge may be directed or indirected. The n-nodes
+-- connected to a t-node are sematically split in two non-empty
+-- groups: input and output nodes. Input connections are n-to-t
+-- (directed) or underiected and output connections are either t-to-n
+-- (directed) or undirected. We will see later that plans are a trace
+-- of triggers of t-nodes whereby each trigger assumes all input
+-- n-nodes are in a materialized state and which materializes a subset
+-- of the output nodes. We can reverse-trigger a t-node when the
+-- output nodes are all undirected (and therefore reversible) in which
+-- case reverse-triggering materializes any subset undirected input
+-- nodes.
 
 module Data.BipartiteGraph
   ( Bipartite(..)
@@ -90,6 +90,7 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
+import           Data.Coerce
 import qualified Data.IntMap               as IM
 import           Data.List
 import           Data.Maybe
@@ -146,16 +147,16 @@ modNodeLinks :: Side
              -> (NodeSet l -> NodeSet l)
              -> NodeStruct l r
              -> NodeStruct l r
-modNodeLinks sid rev f ns@NodeStruct{..} =
-  let (revVal, irrVal) =
-        (case rev of {Reversible -> first; Irreversible -> second})
-        (modSide sid f)
-        $ (nodeLinks Reversible, nodeLinks Irreversible)
-  in ns{
-    nodeLinks=(\case
-        Reversible   -> revVal;
-        Irreversible -> irrVal)
-    }
+modNodeLinks sid rev f ns@NodeStruct {..} =
+  let (revVal,irrVal) =
+        (case rev of
+           Reversible   -> first
+           Irreversible -> second)
+          (modSide sid f)
+          (nodeLinks Reversible,nodeLinks Irreversible)
+  in ns { nodeLinks = \case
+    Reversible   -> revVal
+    Irreversible -> irrVal }
 
 overNodeSetL :: Monad m =>
               NodeSet l
@@ -255,14 +256,14 @@ deleteNodeL ref = do
     gbPropNet=(gbPropNet gbs){
         lNodes=refDelete ref $ lNodes (gbPropNet gbs)}}
 
-#ifdef ENABLE_DELETE_NODES
-deleteNodeR :: Monad m => NodeRef r -> GraphBuilderT l r m ()
-deleteNodeR = flipGraphBuilderT . deleteNodeL
-registerRmNodeL :: Monad m => NodeRef t -> GraphBuilderT t n m ()
-registerRmNodeL ref = modify
-  $ \gbs@GBState{ gbDiff=gbd@GBDiff{ gbDiffRmNodes=(nt, nn) }} ->
-      gbs{gbDiff=gbd{gbDiffRmNodes=(ref:nt, nn)}}
-#endif
+
+
+
+
+
+
+
+
 
 registerNewNodeL :: Monad m => NodeRef t -> GraphBuilderT t n m ()
 registerNewNodeL ref = modify
@@ -273,7 +274,7 @@ registerNewNodeL ref = modify
 -- provided, make a new node. True if we created it , False if we didn't
 newNodeL :: Monad m => Maybe (NodeRef t) -> GraphBuilderT t n m (Bool, NodeRef t)
 newNodeL mref = do
-  bp@Bipartite{lNodes=l} <- gbPropNet <$> get
+  bp@Bipartite{lNodes=l} <- gets gbPropNet
   let mrefNext = fromMaybe ((+1) $ safeLast (NodeRef 0) $ refMapKeys l) mref
   if isJust $ mrefNext `refLU` l then return (False, mrefNext) else do
     let l' = refInsert mrefNext (NodeStruct (const (mempty, mempty))) l
@@ -310,7 +311,7 @@ instance (AShow t,AShow n) => AShow (Bipartite t n)
 instance (ARead t,ARead n) => ARead (Bipartite t n)
 instance Default (Bipartite t n)
 instance Bifunctor Bipartite where
-  bimap _ _ Bipartite{} = undefined
+  bimap _ _ a = coerce a
 instance Functor (Bipartite l) where
   fmap = bimap id
 
@@ -374,7 +375,7 @@ instance Monoid (Bipartite l r) where
 
 nodeRefs :: Monad m => GraphBuilderT a b m ([NodeRef a], [NodeRef b])
 nodeRefs = do
-  (Bipartite x y) <- gbPropNet <$> get
+  (Bipartite x y) <- gets gbPropNet
   return (refKeys x, refKeys y)
 
 data GBState a b = GBState {gbPropNet :: Bipartite a b, gbDiff :: GBDiff a b}
@@ -433,7 +434,7 @@ getNodeStructR :: MonadReader (GBState t n) m =>
                  NodeRef n
                -> m (Maybe (NodeStruct t n))
 getNodeStructR r = do
-  Bipartite{rNodes=rn} <- gbPropNet <$> ask
+  Bipartite{rNodes=rn} <- asks gbPropNet
   return $ r `refLU` rn
 {-# INLINE getNodeStructR #-}
 getNodeStructL :: MonadReader (GBState t n) m =>
@@ -444,22 +445,22 @@ getNodeStructL = flipReaderGBState . getNodeStructR
 
 flipReaderGBState :: MonadReader (GBState l r) m =>
                     ReaderT (GBState r l) m a -> m a
-flipReaderGBState = dropReader (flipGBState <$> ask)
+flipReaderGBState = dropReader (asks flipGBState)
 {-# INLINE flipReaderGBState #-}
 
 biapply :: (a -> b) -> (a,a) -> (b,b)
 biapply f = bimap f f
 
 allNodesL :: Monad m => GraphBuilderT l r m [NodeRef l]
-allNodesL = refKeys . lNodes . gbPropNet <$> get
+allNodesL = gets (refKeys . lNodes . gbPropNet)
 
 allNodesR :: Monad m => GraphBuilderT l r m [NodeRef r]
-allNodesR = refKeys . rNodes . gbPropNet <$> get
+allNodesR = gets (refKeys . rNodes . gbPropNet)
 
 -- | All nodes with no incoming links.
 getBottomNodesR :: GraphBuilder a b [NodeRef b]
 getBottomNodesR = do
-  Bipartite{rNodes=rn} <- gbPropNet <$> get
+  Bipartite{rNodes=rn} <- gets gbPropNet
   return $ fmap fst $ filter (hasNoIncoming . snd) $ refAssocs rn
   where
     hasNoIncoming NodeStruct{..} =
@@ -542,27 +543,28 @@ pathsBetweenR :: forall t n m . Monad m =>
                 NodeRef n
               -> NodeRef n
               -> GraphBuilderT t n m [([NodeRef n], [NodeRef t])]
-pathsBetweenR from to = if from == to then return [([from], [])] else runListT $ do
-  (fromT, from') <- eachNeighbor Out from
-  (toT, to') <- eachNeighbor Inp to
-  (intermPathN, intermPathT) <- mkListT $ pathsBetweenR from' to'
-  return $ ([from] ++ intermPathN ++ [to], [fromT] ++ intermPathT ++ [toT])
+pathsBetweenR from to =
+  if from == to then return [([from],[])] else runListT $ do
+    (fromT,from') <- eachNeighbor Out from
+    (toT,to') <- eachNeighbor Inp to
+    (intermPathN,intermPathT) <- mkListT $ pathsBetweenR from' to'
+    return ([from] ++ intermPathN ++ [to],[fromT] ++ intermPathT ++ [toT])
   where
-    eachNeighbor :: Side
-                 -> NodeRef n
-                 -> ListT (GraphBuilderT t n m) (NodeRef t, NodeRef n)
-    eachNeighbor side ref = mkListT $ fmap (>>= sequenceA) $ neighborSetR side ref
+    eachNeighbor
+      :: Side -> NodeRef n -> ListT (GraphBuilderT t n m) (NodeRef t,NodeRef n)
+    eachNeighbor side ref = mkListT $ (>>= sequenceA) <$> neighborSetR side ref
 
 -- | (ts, ns) `in` neightborSetRN k s n means that if ALL ns were
 -- materialized we could trigger all of ts and get n. Find ns on @s@
 -- side of the computation. That means if @s@ is @Out@ then to make
 -- @n@ we would reverse trigger. k is the MINIMUM radius.
-neighborSetRN :: forall t n m .
-                Monad m =>
-                Int
-              -> Side
-              -> NodeRef n
-              -> GraphBuilderT t n m [([NodeRef t], [NodeRef n])]
+neighborSetRN
+  :: forall t n m .
+  Monad m
+  => Int
+  -> Side
+  -> NodeRef n
+  -> GraphBuilderT t n m [([NodeRef t],[NodeRef n])]
 neighborSetRN 0 _ ref = return [([], [ref])]
 neighborSetRN 1 side ref = fmap2 (first return) $ neighborSetR side ref
 neighborSetRN i side ref = fmap3 nub $ fmap uniqMerge $ runListT $ do
@@ -599,9 +601,7 @@ neighborSetR side ref = runListT $ do
   where
     possibleNeighbors :: forall x y . NodeRef y
                       -> GraphBuilderT x y m [NodeRef x]
-    possibleNeighbors = fmap (>>= toNodeList)
-                        . fmap toList
-                        . getNodeLinksR side fullRange
+    possibleNeighbors = fmap (toNodeList <=< toList) . getNodeLinksR side fullRange
 
 topNodes :: Monad m => GraphBuilderT t n m [NodeRef n]
 topNodes = limitNodes Out
@@ -610,7 +610,7 @@ botNodes = limitNodes Inp
 
 limitNodes :: Monad m => Side -> GraphBuilderT t n m [NodeRef n]
 limitNodes side =
-  fmap fst
+  gets (fmap fst
   . filter (nsNull
              . mconcat
              . fmap (getSide side)
@@ -619,8 +619,7 @@ limitNodes side =
              . snd)
   . refAssocs
   . rNodes
-  . gbPropNet
-  <$> get
+  . gbPropNet)
 
 -- |Searching strictly in one direction get the possible dependency
 -- sets of a node. A dependency set is the set of t-nodes that are to
