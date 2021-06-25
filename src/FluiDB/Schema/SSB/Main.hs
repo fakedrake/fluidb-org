@@ -48,7 +48,8 @@ actualMain qs = do
         cppConf <- gets globalQueryCppConf
         aquery <- annotateQuerySSB cppConf query
         (transitions,_cppCode) <- catchError (runSingleQuery aquery) $ \e -> do
-          pngPath <- renderGraph
+          (queryPath,pngPath) <- renderGraph query
+          liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
           liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
           throwError e
         -- liftIO $ runCpp cppCode
@@ -56,16 +57,21 @@ actualMain qs = do
         return ()
 
 type ImagePath = FilePath
-renderGraph :: SSBGlobalSolveM ImagePath
-renderGraph = do
+type QueryPath = FilePath
+renderGraph :: SSBQuery -> SSBGlobalSolveM (QueryPath, ImagePath)
+renderGraph query = do
   gr <- gets $ propNet . getGlobalConf
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
-    writeFile (graphBase <.> "dot") $ simpleRender @T @N gr
-    withFile (graphBase <.> "dot") ReadMode $ \hndl -> do
+        dotPath = graphBase <.> "dot"
+        qPath = graphBase <.> "query"
+        imgPath = graphBase <.> "png"
+    writeFile qPath $ ashow query
+    writeFile dotPath $ simpleRender @T @N gr
+    withFile dotPath ReadMode $ \hndl -> do
       runProc
-        (mkProc "dot" ["-o" ++ graphBase <.> "png", "-Tpng"]) { std_in = UseHandle hndl }
-      return $ graphBase <.> "png"
+        (mkProc "dot" ["-o" ++ imgPath, "-Tpng"]) { std_in = UseHandle hndl }
+      return (qPath,imgPath)
 
 graphMain :: IO ()
 graphMain = timeout 3000000 (actualMain [1..12]) >>= \case
