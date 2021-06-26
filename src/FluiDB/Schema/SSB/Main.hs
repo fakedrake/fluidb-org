@@ -5,6 +5,7 @@ module FluiDB.Schema.SSB.Main (graphMain) where
 
 import           Control.Monad.Except
 import           Control.Monad.State
+import           Data.BipartiteGraph
 import           Data.Codegen.Build
 import           Data.Codegen.Run
 import           Data.DotLatex
@@ -13,6 +14,7 @@ import           Data.Query.Algebra
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Default
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
 import           FluiDB.Schema.SSB.Values
@@ -37,6 +39,12 @@ annotateQuerySSB cppConf query =
   either throwError return $ annotateQuery cppConf query
 
 
+finallyError :: MonadError e m => m a -> m () -> m a
+finallyError m hndl = do
+  ret <- m `catchError` (\e -> hndl >> throwError e)
+  hndl
+  return ret
+
 actualMain :: [Int] -> IO ()
 actualMain qs = do
   ssbGlobalConf <- getSsbGlobalConf
@@ -47,31 +55,41 @@ actualMain qs = do
       Just query -> do
         cppConf <- gets globalQueryCppConf
         aquery <- annotateQuerySSB cppConf query
-        (transitions,_cppCode) <- catchError (runSingleQuery aquery) $ \e -> do
-          (queryPath,pngPath) <- renderGraph query
+        (transitions,_cppCode) <- finallyError (runSingleQuery aquery) $ do
+          (queryPath,pngPath,grPath) <- renderGraph query
           liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
           liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
-          throwError e
+          liftIO $ putStrLn $ "The raw graph at: " ++ grPath
         -- liftIO $ runCpp cppCode
         liftIO $ putStrLn $ ashow transitions
         return ()
 
 type ImagePath = FilePath
 type QueryPath = FilePath
-renderGraph :: SSBQuery -> SSBGlobalSolveM (QueryPath, ImagePath)
+type GraphPath = FilePath
+renderGraph :: SSBQuery -> SSBGlobalSolveM (QueryPath, ImagePath,GraphPath)
 renderGraph query = do
   gr <- gets $ propNet . getGlobalConf
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
         dotPath = graphBase <.> "dot"
         qPath = graphBase <.> "query"
+        grPath = graphBase <.> "graph"
         imgPath = graphBase <.> "png"
+    writeFile grPath $ ashow gr
     writeFile qPath $ ashow query
     writeFile dotPath $ simpleRender @T @N gr
     withFile dotPath ReadMode $ \hndl -> do
       runProc
         (mkProc "dot" ["-o" ++ imgPath, "-Tpng"]) { std_in = UseHandle hndl }
-      return (qPath,imgPath)
+      return (qPath,imgPath,grPath)
+
+readGraph :: GraphPath -> GraphBuilderT T N IO a -> IO a
+readGraph gpath m = do
+  gr <- aread <$> readFile gpath
+  case gr of
+    Nothing -> fail $ "Failed to read graph at: " ++ gpath
+    Just g  -> evalStateT m def{gbPropNet = g}
 
 graphMain :: IO ()
 graphMain = timeout 3000000 (actualMain [1..12]) >>= \case

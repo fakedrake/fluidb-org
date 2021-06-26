@@ -44,7 +44,6 @@ module Data.BipartiteGraph
   , GBState(..)
   , GBDiff(..)
   , NodeStruct
-  , NodeStruct'(..)
   , toBGFunc
   , IsReversible(..)
   , Side(..)
@@ -98,7 +97,6 @@ import           Data.Monoid
 import           Data.NodeContainers
 import           Data.Tuple
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.ListT
@@ -110,12 +108,13 @@ import           Prelude                   hiding (filter, lookup)
 
 -- # GRAPH
 -- |Quick information access for nodes. This is for either t or n
-newtype NodeStruct' i t a = NodeStruct {
-  -- Incoming links that are only incoming
-  nodeLinks   :: i -> (NodeSet t, NodeSet t)
+newtype NodeStruct t n = NodeStruct {
+  -- Incoming links that are only incoming (inp,outpg)
+  nodeLinks   :: IsReversible -> (NodeSet t, NodeSet t)
   } deriving (Functor, Foldable, Traversable, Generic)
+
 data IsReversible = Reversible | Irreversible
-  deriving (Show, Eq, Enum, Bounded,Generic)
+  deriving (Show, Eq, Enum, Bounded,Generic,Read)
 instance AShow IsReversible
 instance ARead IsReversible
 data Side = Inp | Out deriving (Show, Eq, Enum, Bounded)
@@ -129,10 +128,11 @@ getSide = \case
   Inp -> fst
   Out -> snd
 
-modSide :: Side
-        -> (NodeSet a -> NodeSet a)
-        -> (NodeSet a, NodeSet a)
-        -> (NodeSet a, NodeSet a)
+modSide
+  :: Side
+  -> (NodeSet a -> NodeSet a)
+  -> (NodeSet a,NodeSet a)
+  -> (NodeSet a,NodeSet a)
 modSide = \case
   Inp -> first
   Out -> second
@@ -142,11 +142,12 @@ getNodeLinks sid revs nstruct =
   mconcat [getNodeLinks1 sid rev nstruct | rev <- revs]
 getNodeLinks1 :: Side -> IsReversible -> NodeStruct l r -> NodeSet l
 getNodeLinks1 sid rev = getSide sid . ($ rev) . nodeLinks
-modNodeLinks :: Side
-             -> IsReversible
-             -> (NodeSet l -> NodeSet l)
-             -> NodeStruct l r
-             -> NodeStruct l r
+modNodeLinks
+  :: Side
+  -> IsReversible
+  -> (NodeSet l -> NodeSet l)
+  -> NodeStruct l r
+  -> NodeStruct l r
 modNodeLinks sid rev f ns@NodeStruct {..} =
   let (revVal,irrVal) =
         (case rev of
@@ -168,19 +169,21 @@ overNodeSetL ns f = forM_ (toNodeList ns) $ \ref -> do
   let newNodes = refAdjust f ref $ lNodes bp
   put gbs{gbPropNet=bp{lNodes=newNodes}}
 
-overNodeSetR :: Monad m =>
-               NodeSet r
-             -> (NodeStruct l r -> NodeStruct l r)
-             -> GraphBuilderT l r m ()
+overNodeSetR
+  :: Monad m
+  => NodeSet r
+  -> (NodeStruct l r -> NodeStruct l r)
+  -> GraphBuilderT l r m ()
 overNodeSetR ns f = flipGraphBuilderT $ overNodeSetL ns f
 
 -- |Query neighbors of an n-node. Treats tha n-node as if it were a
 -- t-node.
-getNodeLinksR :: Monad m =>
-                Side
-              -> [IsReversible]
-              -> NodeRef n
-              -> GraphBuilderT t n m (Maybe (NodeSet t))
+getNodeLinksR
+  :: Monad m
+  => Side
+  -> [IsReversible]
+  -> NodeRef n
+  -> GraphBuilderT t n m (Maybe (NodeSet t))
 getNodeLinksR s r = flipGraphBuilderT . getNodeLinksL s r
 {-# INLINABLE getNodeLinksR #-}
 
@@ -256,15 +259,6 @@ deleteNodeL ref = do
     gbPropNet=(gbPropNet gbs){
         lNodes=refDelete ref $ lNodes (gbPropNet gbs)}}
 
-
-
-
-
-
-
-
-
-
 registerNewNodeL :: Monad m => NodeRef t -> GraphBuilderT t n m ()
 registerNewNodeL ref = modify
   $ \gbs@GBState{ gbDiff=gbd@GBDiff{ gbDiffNewNodes=(nt, nn) }} ->
@@ -284,29 +278,17 @@ newNodeL mref = do
 newNodeR :: Monad m => Maybe (NodeRef n) -> GraphBuilderT t n m (Bool, NodeRef n)
 newNodeR = flipGraphBuilderT . newNodeL
 
-type NodeStruct = NodeStruct' IsReversible
-instance (AShow a, AShow i, Enum i, Bounded i) => AShow (NodeStruct' i t a) where
+instance AShow a => AShow (NodeStruct t a) where
   ashow' (NodeStruct x) = sexp "NodeStruct" [ashowCase' x]
-instance (ARead a, ARead i, Eq i) => ARead (NodeStruct' i t a) where
+instance ARead a => ARead (NodeStruct t a) where
   aread' = \case
     Sub [Sym "NodeStruct",x] -> NodeStruct <$> areadCase' x
     _                        -> Nothing
 
-instance (Show a, Show i, Enum i, Bounded i) => Show (NodeStruct' i t a) where
-  show NodeStruct{..} = printf
-                        "NodeStruct {nodeLinks=%s}"
-                        sNodeLinks
-    where
-      sNodeLinks :: String
-      sNodeLinks = printf "(\\case {%s})"
-                   $ intercalate "; "
-                   [printf "%s -> %s" (show x) (show $ nodeLinks x)
-                   | x <- fullRange]
-
 data Bipartite t n = Bipartite {
   lNodes :: RefMap t (NodeStruct n t),
   rNodes :: RefMap n (NodeStruct t n)
-  } deriving (Show, Generic)
+  } deriving (Generic)
 instance (AShow t,AShow n) => AShow (Bipartite t n)
 instance (ARead t,ARead n) => ARead (Bipartite t n)
 instance Default (Bipartite t n)
@@ -390,6 +372,7 @@ putPropNet pn = modify $ \gbs -> gbs{gbPropNet=pn}
 
 instance Semigroup (GBState a b) where
   (GBState x y) <> (GBState x' y') = GBState (x <> x') (y <> y')
+instance Default (GBState t n) where def = mempty
 instance Monoid (GBState a b) where mempty = GBState mempty mempty
 instance Semigroup (GBDiff a b) where
   (GBDiff x y) <> (GBDiff x' y') = GBDiff (x <> x') (y <> y')
@@ -503,7 +486,8 @@ reprNode nodeReprTNode = runMaybeT $ do
       $ MaybeT
       $ getNodeLinksL side [x] nodeReprTNode
 
-reprGraph :: forall t n m . Monad m => GraphBuilderT t n m (Maybe [NodeRepr t n])
+reprGraph
+  :: forall t n m . Monad m => GraphBuilderT t n m (Maybe [NodeRepr t n])
 reprGraph = do
   tns :: [NodeRef t] <- fst <$> nodeRefs
   runMaybeT $ mapM (MaybeT . reprNode) tns

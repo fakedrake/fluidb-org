@@ -30,17 +30,16 @@ module Data.Utils.AShow.Common
   , ashowCase'
   ) where
 
-import Data.Semigroup
 import           Control.Monad.Free
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy     as HM
 import qualified Data.HashSet          as HS
 import qualified Data.IntMap           as IM
 import qualified Data.IntSet           as IS
-import           Data.List
 import qualified Data.List.NonEmpty    as NEL
 import           Data.Proxy
 import           Data.Ratio
+import           Data.Semigroup
 import qualified Data.Set              as DS
 import           Data.Utils.Compose
 import           Data.Utils.Const
@@ -52,6 +51,7 @@ import           GHC.Generics
 
 data SExp = Sym String
   | Rec String [(String,SExp)]
+  | Case [(String,SExp)]
   | Str String
   | Vec [SExp]
   | Tup [SExp]
@@ -111,11 +111,11 @@ class AShow a where
 normalizeRecords :: SExp -> SExp
 normalizeRecords = \case
   Rec x [(_,y)] -> Sub [Sym x, normalizeRecords y]
-  Rec x xs -> Rec x $ fmap2 normalizeRecords xs
-  Sub xs -> Sub $ normalizeRecords <$> xs
-  Vec xs -> Vec $ normalizeRecords <$> xs
-  Tup xs -> Tup $ normalizeRecords <$> xs
-  x -> x
+  Rec x xs      -> Rec x $ fmap2 normalizeRecords xs
+  Sub xs        -> Sub $ normalizeRecords <$> xs
+  Vec xs        -> Vec $ normalizeRecords <$> xs
+  Tup xs        -> Tup $ normalizeRecords <$> xs
+  x             -> x
 
 -- Fallback ashow functions for queries
 sexp :: String -> [SExp] -> SExp
@@ -179,11 +179,6 @@ instance (AShow a,AShow (f (Free f a))) => AShow (Free f a)
 instance AShowV a => AShow (NEL.NonEmpty a) where
   ashow' (h NEL.:| hs) = ashow' $ h:hs
 instance AShow Void where ashow' = undefined
-ashowCase' :: (Enum a,Bounded a,AShow a,AShow b) => (a -> b) -> SExp
-ashowCase' f = Sub $ [Sym "\\case",Sym "{"] ++ fC ++ [Sym "}"]
-  where
-    fC :: [SExp]
-    fC = intercalate [Sym ";"]
-         [[ashow' x, Sym "->" ,ashow' $ f x]
-         | x <- fullRange]
+ashowCase' :: (Enum a,Bounded a,Show a,AShow b) => (a -> b) -> SExp
+ashowCase' f = Case [(show x,ashow' $ f x) | x <- fullRange]
 instance AShow a => AShow (Min a)

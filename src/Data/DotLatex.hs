@@ -44,12 +44,32 @@ import           System.FilePath.Posix
 import           Text.Printf
 
 -- # DOT
-data Shape = Square | Box | Ellipse deriving Show
-data Style = Invis | Filled | Wedged deriving Show
+data Shape
+  = Square
+  | Box
+  | Ellipse
+  deriving Show
+data Style
+  = Invis
+  | Filled
+  | Wedged
+  deriving Show
 -- http://graphviz.org/doc/info/colors.html
-data Color1 = Red | Blue | Green | Purple | Orange | Yellow | Brown | Pink | Grey
-  deriving (Enum, Show)
-data Color = NoColor | MultiColor (NEL.NonEmpty Color1) | SingleColor Color1
+data Color1
+  = Red
+  | Blue
+  | Green
+  | Purple
+  | Orange
+  | Yellow
+  | Brown
+  | Pink
+  | Grey
+  deriving (Enum,Show)
+data Color
+  = NoColor
+  | MultiColor (NEL.NonEmpty Color1)
+  | SingleColor Color1
   deriving Show
 type NodeLabel = String
 data DotNodeProp = DLabel NodeLabel
@@ -60,17 +80,19 @@ data DotNodeProp = DLabel NodeLabel
 newtype DotEdgeProp = DDir IsDirected deriving Show
 type DSym = String
 data IsDirected = Directed | Undirected deriving (Show, Eq)
-data DProperty = GlobalEdgeProp [DotEdgeProp]
-               | GlobalNodeProp [DotNodeProp]
-               | GlobalTitle String
-               deriving (Show)
-data DotAst = DLink (DSym, DSym) [DotEdgeProp]
-            | DNode DSym [DotNodeProp]
-            | DSubGraph DSym [DotAst]
-            | DGraph DSym [DotAst]
-            | DProp DProperty
-            | DLiteral String
-            deriving Show
+data DProperty
+  = GlobalEdgeProp [DotEdgeProp]
+  | GlobalNodeProp [DotNodeProp]
+  | GlobalTitle String
+  deriving (Show)
+data DotAst
+  = DLink (DSym,DSym) [DotEdgeProp]
+  | DNode DSym [DotNodeProp]
+  | DSubGraph DSym [DotAst]
+  | DGraph DSym [DotAst]
+  | DProp DProperty
+  | DLiteral String
+  deriving Show
 
 instance Monoid Color where
   mempty = NoColor
@@ -240,19 +262,19 @@ renderAll :: BipartiteRenderHead
           -> [(NodeRef NodeLabel -> Bool, Color1)]
           -> DSym
           -> GraphBuilder NodeLabel NodeLabel DotAst
-renderAll BipartiteRenderHead{..} csetl csetr s = do
+renderAll BipartiteRenderHead {..} csetl csetr s = do
   links <- renderLinks
-  (fmap $ fixN L -> lnodes, fmap $ fixN R -> rnodes) <- nodeRefs
-  return $ DGraph s $ globalHead
-    ++ rightHead
-    ++ rnodes
-    ++ lnodes
-    ++ edgeHead
-    ++ links
+  (fmap $ fixN L -> lnodes,fmap $ fixN R -> rnodes) <- nodeRefs
+  return
+    $ DGraph s
+    $ globalHead ++ rightHead ++ rnodes ++ lnodes ++ edgeHead ++ links
   where
-    getShape = \case {R -> Ellipse; L -> Box}
-    fixN s r = DNode (toSym s r)
-      $ [DLabel $ printf "%s" (show r), DShape (getShape s)] ++ color s r
+    getShape = \case
+      R -> Ellipse
+      L -> Box
+    fixN s r =
+      DNode (toSym s r)
+      $ [DLabel $ printf "%s" (show r),DShape (getShape s)] ++ color s r
     csetFn L = csetl
     csetFn R = csetr
     color :: LatexSide -> NodeRef NodeLabel -> [DotNodeProp]

@@ -2,6 +2,7 @@
 {-# LANGUAGE DefaultSignatures     #-}
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE EmptyCase             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -11,7 +12,6 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE ViewPatterns          #-}
 module Data.Utils.AShow.ARead
   ( aread
   , garead'
@@ -26,7 +26,6 @@ import           Control.Monad
 import           Data.Bifunctor
 import           Data.Char
 import           Data.Functor.Identity
-import           Data.Utils.Hashable
 import qualified Data.HashMap.Lazy       as HM
 import qualified Data.HashSet            as HS
 import qualified Data.IntMap             as IM
@@ -40,6 +39,7 @@ import           Data.Utils.AShow.Common
 import           Data.Utils.Compose
 import           Data.Utils.Const
 import           Data.Utils.Default
+import           Data.Utils.Hashable
 import           Data.Utils.Tup
 import           GHC.Generics
 import           Text.Read
@@ -100,7 +100,7 @@ instance (GSelListRead a, Constructor c) => GARead (M1 C c a) where
 instance GARead U1 where
   garead' = \case
     Sub [] -> Right U1
-    _ -> error "Not a U1"
+    _      -> error "Not a U1"
 
 -- | Sums: encode choice between constructors
 instance (GARead a, GARead b) => GARead (a :+: b) where
@@ -130,7 +130,7 @@ replaceSpace = reverse . go where
   go :: String -> String
   go = (`foldl'` []) $ curry $ \case
     (xs@(' ':_),c) -> if isSpace c then xs else c:xs
-    (xs,c) -> if isSpace c then ' ':xs else c:xs
+    (xs,c)         -> if isSpace c then ' ':xs else c:xs
 runParser :: Parser a -> String -> Maybe (a,String)
 runParser p s = case runParser' p $ replaceSpace s of
   []  -> Nothing
@@ -156,7 +156,7 @@ readCharsGreedy f = Parser $ \case
     xs'    -> return xs'
 readChar :: (Char -> Bool) -> Parser Char
 readChar f = Parser $ \case
-  [] -> empty
+  []   -> empty
   x:xs -> if f x then return (x,xs) else empty
 readString :: String -> Parser String
 readString str = sequenceA $ readChar . (==) <$> str
@@ -189,36 +189,43 @@ stripSpaces :: Parser a -> Parser a
 stripSpaces p = do {readSpaces; r <- p; readSpaces; return r}
 
 readSymSexp :: Parser String
-readSymSexp = readCharsGreedy $ \c -> isAlphaNum c || c == '\''
+readSymSexp =
+  readCharsGreedy $ \c -> isAlphaNum c || c == '\'' || c == '.' || c == '_'
 readStringLit :: Parser String
 readStringLit = fmap join
   $ readBetween ('"','"')
   $ readRepeat
   $ readString "\\\"" <|> fmap return (readChar (/= '"'))
-readRecPair :: Parser a -> Parser (String,a)
-readRecPair m = do
+readSymPair :: Parser a -> String -> Parser (String,a)
+readSymPair m sep = do
   s <- readSymSexp
   readSpaces
-  void $ readChar (== '=')
+  void $ readString sep
   readSpaces
   val <- m
   return (s,val)
 
-readListOf :: (Char,Char) -> Parser a -> Parser [a]
-readListOf rang = readBetween rang
-  . ((readSpaces >> return []) <|>)
-  . readIntersp1 (void $ readChar (== ','))
-  . stripSpaces
+readListOf :: (Char,Char) -> String -> Parser a -> Parser [a]
+readListOf rang sep p = emptyP <|> nonEmptyP
+  where
+    emptyP = readBetween rang readSpaces >> return []
+    nonEmptyP =
+      readBetween rang (readIntersp1 (void $ readString sep) (stripSpaces p))
+readCaseSexpP :: Parser a -> Parser [(String,a)]
+readCaseSexpP p = do
+  _ <- readString "\\case"
+  readSpaces
+  readListOf ('{','}') ";" $ readSymPair p "->"
 
 readRecSexpP :: Parser a -> Parser (String, [(String,a)])
 readRecSexpP p = do
   rsym <- readSymSexp
   readSpaces
-  body <- readListOf ('{','}') $ readRecPair p
+  body <- readListOf ('{','}') "," $ readSymPair p "="
   return (rsym,body)
 
 readVecSexpP :: Parser a -> Parser [a]
-readVecSexpP = readListOf ('[',']')
+readVecSexpP = readListOf ('[',']') ","
 readTupSexpP :: Parser a -> Parser [a]
 readTupSexpP p = do
   void $ readChar (== '(')
@@ -228,41 +235,32 @@ readTupSexpP p = do
   void $ readChar (== ')')
   return $ h:h1:t
 
-dropSExpParens1 :: SExp -> SExp
-dropSExpParens1 = \case
-  Tup [x] -> dropSExpParens1 x
-  Sub [x] -> dropSExpParens1 x
-  x -> x
-
-readConstr :: Parser a -> Parser (String,[a])
-readConstr recur = do
-  sym <- readSymSexp
-  rest <- readRepeat $ readSpaces >> recur
-  return (sym,rest)
-readSExp :: Parser SExp
-readSExp = noParenConstr <|> readSubSExp
-
-readSubSExp :: Parser SExp
-readSubSExp = fmap dropSExpParens1
-  $ (uncurry Rec <$> readRecSexpP readSExp)
+readSExpNoParen :: Parser SExp
+readSExpNoParen =
+  uncurry Rec <$> readRecSexpP readSExp
   <|> (Str <$> readStringLit)
+  <|> (Case <$> readCaseSexpP readSExp)
   <|> (Vec <$> readVecSexpP readSExp)
   <|> (Tup <$> readTupSexpP readSExp)
-  <|> subConst
   <|> (Sym <$> readSymSexp)
-subConst :: Parser SExp
-subConst = readBetween ('(',')') $ stripSpaces noParenConstr
-noParenConstr :: Parser SExp
-noParenConstr = do
-  (sym,rest) <- readConstr readSubSExp
-  return $ case rest of
-    [] -> Sym sym
-    _  -> Sub $ Sym sym:rest
+readSExpParen :: Parser SExp
+readSExpParen = readBetween ('(',')') $ stripSpaces readSExp
+
+readSExpInner :: Parser SExp
+readSExpInner = readSExpNoParen <|> readSExpParen
+
+readSExp :: Parser SExp
+readSExp = do
+  exps <- readIntersp1 (readChar (== ' ') >> readSpaces) readSExpInner
+  case exps of
+    []  -> error "unreachable"
+    [x] -> return x
+    xs  -> return $ Sub xs
 
 symRead :: Read a => SExp -> Maybe a
 symRead = \case
   Sym s -> readMaybe s
-  _ -> Nothing
+  _     -> Nothing
 instance ARead SExp where aread' = Just
 instance ARead Bool where aread' = symRead
 instance ARead Int where aread' = symRead
@@ -275,11 +273,11 @@ instance ARead () where
 instance (ARead a, ARead b) => ARead (a,b) where
   aread' = \case
     Tup [a,b] -> (,) <$> aread' a <*> aread' b
-    _ -> Nothing
+    _         -> Nothing
 instance (ARead a, ARead b, ARead c) => ARead (a,b,c) where
   aread' = \case
     Tup [a,b,c] -> (,,) <$> aread' a <*> aread' b <*> aread' c
-    _ -> Nothing
+    _           -> Nothing
 instance ARead a => ARead (Maybe a)
 instance (ARead a, ARead b) => ARead (Either a b)
 instance ARead (f (g a)) => ARead (Compose f g a)
@@ -294,33 +292,33 @@ class AReadList vt a where
 instance ARead a => AReadList NormalVec a where
   areadList' _ = \case
     Vec as -> aread' `traverse` as
-    _ -> Nothing
+    _      -> Nothing
 instance AReadList StringVec Char where
   areadList' _ = \case
     Str str -> Just str
-    _ -> Nothing
+    _       -> Nothing
 instance AReadList (VecType a) a => ARead [a] where
   aread' = areadList' (Proxy :: Proxy (VecType a))
-instance (ARead a, ARead b, Hashable a, Eq a) => ARead (HM.HashMap a b) where
+instance (ARead a,ARead b,Hashable a,Eq a) => ARead (HM.HashMap a b) where
   aread' = \case
-    Sub [Sym "fromList", p] -> HM.fromList <$> aread' p
-    _ -> Nothing
+    Sub [Sym "HM.fromList",p] -> HM.fromList <$> aread' p
+    _                         -> Nothing
 instance (ARead a) => ARead (IM.IntMap a) where
   aread' = \case
-    Sub [Sym "fromList", p] -> IM.fromList <$> aread' p
-    _ -> Nothing
+    Sub [Sym "IM.fromList", p] -> IM.fromList <$> aread' p
+    _                          -> Nothing
 instance (Hashable a, Eq a, AReadList (VecType a) a) => ARead (HS.HashSet a) where
   aread' = \case
-    Sub [Sym "fromList", p] -> HS.fromList <$> aread' p
-    _ -> Nothing
+    Sub [Sym "HS.fromList", p] -> HS.fromList <$> aread' p
+    _                          -> Nothing
 instance ARead IS.IntSet where
   aread' = \case
-    Sub [Sym "fromList", p] -> IS.fromList <$> aread' p
-    _ -> Nothing
+    Sub [Sym "IS.fromList", p] -> IS.fromList <$> aread' p
+    _                          -> Nothing
 instance (AReadList (VecType a) a, ARead a, Ord a) => ARead (DS.Set a) where
   aread' = \case
     Sub [Sym "DS.fromList", p] -> DS.fromList <$> aread' p
-    _ -> Nothing
+    _                          -> Nothing
 
 type AReadV a = (ARead a, AReadList (VecType a) a)
 
@@ -331,15 +329,18 @@ instance Default Re
 instance AShow Re
 instance ARead Re
 instance AReadV a => ARead (NEL.NonEmpty a)
-areadCase' :: forall a b . (Eq a, ARead a,ARead b) => SExp -> Maybe (a -> b)
+areadCase' :: forall a b . (Eq a, Read a,ARead b) => SExp -> Maybe (a -> b)
 areadCase' = \case
-  Sub (Sym "\\case":Sym "{":xs) -> go xs
-  _ -> Nothing
+  Case xs -> do
+    lut <- go xs
+    return $ fromJustErr . (`lookup` lut)
+  _       -> Nothing
   where
-    go :: [SExp] -> Maybe (a -> b)
+    fromJustErr (Just x) = x
+    fromJustErr Nothing  = error "aread: \\case read failed."
+    go :: [(String,SExp)] -> Maybe [(a,b)]
     go = \case
-      [aread' -> Just f,Sym "->",aread' -> Just t,Sym "}"] -> do
-        Just $ \x -> if x == f then t else error "non exhaustive cases"
-      (aread' -> Just f):Sym "->":(aread' -> Just t):Sym ";":xs ->
-        (\r x -> if x == f then t else r x) <$> go xs
-      _ -> Nothing
+      [] -> Just []
+      (t,vM):xs -> do
+        v <- aread' vM
+        ((read t,v) :) <$> go xs
