@@ -27,12 +27,12 @@ module Data.Cluster.ClusterConfig
   , isIntermediateClust
   ) where
 
-import Data.CnfQuery.Types
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.Types
+import           Data.CnfQuery.Types
 import qualified Data.HashMap.Strict  as HM
 import           Data.List
 import           Data.Maybe
@@ -56,7 +56,7 @@ replaceCluster cold cnew = do
   -- XXX We are finding cnfs but not props!!
   props <- (HM.lookup cold . cnfPropagators) <$> get >>= \case
       Nothing -> throwAStr $ "Not in update map: " ++ ashow (cold,cnew,cnfsN )
-      Just x -> return x
+      Just x  -> return x
   modify $ \cc -> cc{
     cnfPropagators=HM.insert cnew props $ HM.delete cold $ cnfPropagators cc}
   forM_ (nub $ cnfsN ++ cnfsT) $ \cnf ->
@@ -66,10 +66,10 @@ replaceCluster cold cnew = do
   where
     luCNFT t = refLU t . trefToCnf <$> get >>= \case
       Just cnf -> return cnf
-      Nothing -> throwAStr $ "Couldn't find cnf for t node: " ++ show t
+      Nothing  -> throwAStr $ "Couldn't find cnf for t node: " ++ show t
     luCNFN n = refLU n . nrefToCnfs <$> get >>= \case
       Just cnfs -> return cnfs
-      Nothing -> throwAStr $ "Couldn't find cnf for tnnode: " ++ show n
+      Nothing   -> throwAStr $ "Couldn't find cnf for tnnode: " ++ show n
 
 -- | From the value of the node get a query (the reference might not
 -- exist in the graph, that's why we return a Maybe)
@@ -79,11 +79,12 @@ getNodeCnfN ref = dropState (ask,const $ return ())
   $ fromMaybe [] . (ref `refLU`) . nrefToCnfs <$> ask
 {-# INLINE getNodeCnfN #-}
 
-mkNodeFromCnfT :: (Hashables2 e s, Monad m) =>
-                 CNFQuery e s
-               -> CGraphBuilderT e s t n m (NodeRef t)
+mkNodeFromCnfT
+  :: (Hashables2 e s,Monad m)
+  => CNFQuery e s
+  -> CGraphBuilderT e s t n m (NodeRef t)
 mkNodeFromCnfT cnf = do
-  (_isNew, ref) <- lift2 $ newNodeL Nothing
+  ref <- lift2 $ newNodeT
   linkTRefCnf ref cnf
   return ref
 
@@ -91,7 +92,7 @@ mkNodeFormCnfNUnsafe :: (Hashables2 e s, Monad m) =>
                        CNFQuery e s
                      -> CGraphBuilderT e s t n m (NodeRef n)
 mkNodeFormCnfNUnsafe qcnf = do
-  (_isNew, ref) <- lift2 $ newNodeR Nothing
+  ref <- lift2 $ newNodeN
   -- The new node should have a score
   linkNRefCnfs ref [qcnf]
   return ref

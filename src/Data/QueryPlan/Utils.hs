@@ -29,13 +29,15 @@ module Data.QueryPlan.Utils
   ) where
 
 import           Control.Monad
+import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.NodeContainers
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
+import           Data.Utils.Default
 import           Data.Utils.Unsafe
 
 lsplit :: MonadLogic m => PlanT t n m a -> PlanT t n m a -> PlanT t n m a
@@ -79,10 +81,10 @@ withCleanupMsg m msg = do
   modify $ \st -> st{traceDebug=tail msgTr'}
   return ret
 
-gbToPlan :: MonadReader (GCConfig t n) m => GraphBuilder t n a -> m a
+gbToPlan :: MonadReader (GCConfig t n) m => GraphBuilderT t n Identity a -> m a
 gbToPlan gb = do
   graph <- asks propNet
-  return $ evalState gb mempty{gbPropNet=graph}
+  return $ evalState gb def { gbPropNet = graph }
 
 splitM :: MonadPlus m => [a] -> (a -> m b) -> m b
 splitM a f = go a where

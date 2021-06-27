@@ -33,7 +33,7 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.InsertQuery
 import           Data.Cluster.Types.Monad
 import           Data.CnfQuery.Build
@@ -135,7 +135,7 @@ runCodeBuild x = do
     -- Note that the gcState propnet here is overriden if we use
     -- planLift. (Set before or set after??)
     $ stateLayer (setNodeStatesToGCState globalMatNodes globalGCConfig def)
-    $ stateLayer mempty{gbPropNet=propNet globalGCConfig}
+    $ stateLayer def {gbPropNet=propNet globalGCConfig}
     $ stateLayer globalClusterConfig
     $ errLayer @(ClusterError e s)
     $ stateLayer (emptyCBState globalQueryCppConf)
@@ -190,7 +190,7 @@ insertAndRun queries postSolution = do
       lift4 clearClustBuildCache
       -- lift $ reportGraph >> reportClusterConfig/
       traceM $ "Commencing solution of node:" ++ ashow nOptqRef
-      nodeNum <- asks (length . rNodes . propNet)
+      nodeNum <- asks (length . nNodes . propNet)
       traceM $ "Total nodes:" ++ show nodeNum
       (_qcost,conf)
         <- lift $ planLiftCB $ wrapTrace ("Solving node:" ++ show nOptqRef) $ do

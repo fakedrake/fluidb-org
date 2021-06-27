@@ -51,7 +51,7 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
 import           Data.CnfQuery.BuildUtils

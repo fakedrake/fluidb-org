@@ -36,7 +36,7 @@ import           Control.Monad.Cont
 import           Control.Monad.Extra
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Function
 import           Data.List
 import           Data.List.Extra
@@ -53,29 +53,30 @@ import           Data.Utils.Ranges
 import           Prelude                    hiding (filter, lookup)
 
 import           Data.QueryPlan.Types
+import           Data.Utils.Default
 import           Data.Utils.Unsafe
 
-getNodeLinksL' :: Monad m =>
+getNodeLinksT' :: Monad m =>
                  Side
                -> [IsReversible]
                -> NodeRef t
                -> GraphBuilderT t n m (NodeSet n)
-getNodeLinksL' s rev ref = getNodeLinksL s rev ref <&> \case
+getNodeLinksT' s rev ref = getNodeLinksT (NodeLinksFilter ref [s] rev) <&> \case
   Nothing -> error $ printf "Non-existent t-node: %n" ref
   Just x  -> x
-{-# INLINE getNodeLinksL' #-}
+{-# INLINE getNodeLinksT' #-}
 
-getNodeLinksR' :: Monad m =>
+getNodeLinksN' :: Monad m =>
                  Side
                -> [IsReversible]
                -> NodeRef n
                -> GraphBuilderT t n m (NodeSet t)
-getNodeLinksR' s rev ref = getNodeLinksR s rev ref >>= \case
+getNodeLinksN' s rev ref = getNodeLinksN (NodeLinksFilter ref [s] rev) >>= \case
   Nothing -> do
-    ns <- allNodesR
+    (_,ns) <- nodeRefs
     error $ printf "Non-existent n-node: %n (n-nodes: %s)" ref (show ns)
   Just x -> return x
-{-# INLINE getNodeLinksR' #-}
+{-# INLINE getNodeLinksN' #-}
 
 nubMetaOp :: [MetaOp t n] -> [MetaOp t n]
 nubMetaOp = nubOn $ \MetaOp{..} -> (metaOpIn, metaOpOut, metaOpInterm)
@@ -166,9 +167,7 @@ findMetaOps = fmap2 fst . findCostedMetaOps
 findMetaOps' :: Monad m => NodeRef n -> PlanT t n m [MetaOp t n]
 findMetaOps' ref = do
   mops <- runListT $ followUnsafe followIns ref <|> followUnsafe followOuts ref
-  fmap (map fst . sortOn snd)
-    $ forM mops
-    $ (\op -> (op,) <$> metaOpNeededPages op)
+  map fst . sortOn snd <$> forM mops (\op -> (op,) <$> metaOpNeededPages op)
 {-# INLINE findMetaOps' #-}
 
 findCostedMetaOps :: Monad m => NodeRef n -> PlanT t n m [(MetaOp t n,Cost)]
@@ -194,32 +193,29 @@ findOnSide :: forall t n m . Monad m =>
              ([IsReversible], [IsReversible])
            -> GraphBuilderT t n m (NodeSet t)
            -> PlanT t n m [(InSet n, OutSet n, NodeRef t)]
-findOnSide (revsIn, revsOut) tNodesM = do
+findOnSide (revsIn,revsOut) tNodesM = do
   net <- asks propNet
   tNodes <- liftPlanT $ stripGB net tNodesM
-  liftPlanT $ forM (toNodeList tNodes) $ \tnode -> let
-    linksOn revs side = stripGB net $ getNodeLinksL' side revs tnode
-    in tritup
-       <$> linksOn revsIn Inp
-       <*> linksOn revsOut Out
-       <*> return tnode
+  liftPlanT $ forM (toNodeList tNodes) $ \tnode
+    -> let linksOn revs side = stripGB net $ getNodeLinksT' side revs tnode
+    in tritup <$> linksOn revsIn Inp <*> linksOn revsOut Out <*> return tnode
   where
     stripGB :: Bipartite t n -> StateT (GBState t n) m a -> m a
-    stripGB net = (`evalStateT` mempty{gbPropNet=net})
-    tritup a b c = (a, b, c)
+    stripGB net = (`evalStateT` def { gbPropNet = net })
+    tritup a b c = (a,b,c)
 {-# INLINE findOnSide #-}
 
 -- |This is in absolute terms,s NodeRef would be in the InSet
 findOnIn :: Monad m =>
            NodeRef n
          -> PlanT t n m [(InSet n, OutSet n, NodeRef t)]
-findOnIn = findOnSide (fullRange, [Reversible]) . getNodeLinksR' Out [Reversible]
+findOnIn = findOnSide (fullRange, [Reversible]) . getNodeLinksN' Out [Reversible]
 
 -- |This is in absolute terms,s NodeRef would be in the OutSet
 findOnOut :: Monad m =>
             NodeRef n
           -> PlanT t n m [(InSet n, OutSet n, NodeRef t)]
-findOnOut = findOnSide (fullRange, fullRange) . getNodeLinksR' Inp fullRange
+findOnOut = findOnSide (fullRange,fullRange) . getNodeLinksN' Inp fullRange
 
 findTriggerableMetaOps
   :: forall n t m . MonadLogic m => NodeRef n -> PlanT t n m [MetaOp t n]

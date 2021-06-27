@@ -10,24 +10,24 @@ module Data.Cluster.PutCluster
   , planSymAssoc
   ) where
 
-import Data.Utils.Debug
-import Data.Utils.Functors
-import Data.Utils.Tup
-import Data.CppAst.CppType
-import Data.Utils.Hashable
 import           Control.Applicative
 import           Control.Monad
 import           Data.Bifunctor
-import           Data.Query.Algebra
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
-import           Data.CnfQuery.Types
 import           Data.CnfQuery.BuildUtils
+import           Data.CnfQuery.Types
+import           Data.CppAst.CppType
 import           Data.NodeContainers
+import           Data.Query.Algebra
 import           Data.Query.QuerySchema
+import           Data.Utils.Debug
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.Tup
 
 
 -- | Create the T node and connect it to the inputs
@@ -51,9 +51,17 @@ putBinCluster symAssoc op (l,_ncnfL) (r,_ncnfR) (out,ncnfO) = do
       let cnfO = ncnfToCnf ncnfO
       tRef <- mkNodeFromCnfT cnfO
       let rev = getReversibleB op
+      let linkTo nref =
+            linkNodes
+              NodeLinkDescr
+              { nldNSide = Out,nldIsRev = rev,nldTNode = tRef,nldNNode = nref }
+      let linkFrom nref =
+            linkNodes
+              NodeLinkDescr
+              { nldNSide = Inp,nldIsRev = rev,nldTNode = tRef,nldNNode = nref }
       lift2 $ do
-        appendNodeLinksL Out rev tRef $ fromNodeList [out]
-        appendNodeLinksL Inp rev tRef $ fromNodeList [l,r]
+        linkTo out
+        mapM_ linkFrom [l,r]
       let clust =
             updateCHash
               BinClust
@@ -110,25 +118,32 @@ putUnCluster
     constraints = [(unClusterIn,inp),(unClusterPrimaryOut,refO)]
     mkClust = do
       let cnfO = ncnfToCnf ncnfO
-      do
-         -- The same is clustered.
-        tRef <- mkNodeFromCnfT cnfO
-        let rev = getReversibleU op
-        lift2 $ do
-          appendNodeLinksL Out rev tRef $ fromNodeList [secRef,refO]
-          appendNodeLinksL Inp rev tRef $ fromNodeList [inp]
-        let clust :: UnClust e s t n =
-              updateCHash
-                UnClust
-                { unClusterIn = noopRef inp
-                 ,unClusterPrimaryOut = withOpRef op refO
-                 ,unClusterSecondaryOut =
-                    withOpRefM (maybe empty pure coopM) secRef
-                 ,unClusterT = tRef
-                 ,unClusterHash = undefined
-                }
-        registerClusterInput inp $ UnClustW clust
-        return clust
+       -- The same is clustered.
+      tRef <- mkNodeFromCnfT cnfO
+      let rev = getReversibleU op
+      let linkTo nref =
+            linkNodes
+              NodeLinkDescr
+              { nldNSide = Out,nldIsRev = rev,nldTNode = tRef,nldNNode = nref }
+      let linkFrom nref =
+            linkNodes
+              NodeLinkDescr
+              { nldNSide = Inp,nldIsRev = rev,nldTNode = tRef,nldNNode = nref }
+      lift2 $ do
+        mapM_ linkTo [secRef,refO]
+        linkFrom inp
+      let clust :: UnClust e s t n =
+            updateCHash
+              UnClust
+              { unClusterIn = noopRef inp
+               ,unClusterPrimaryOut = withOpRef op refO
+               ,unClusterSecondaryOut =
+                  withOpRefM (maybe empty pure coopM) secRef
+               ,unClusterT = tRef
+               ,unClusterHash = undefined
+              }
+      registerClusterInput inp $ UnClustW clust
+      return clust
 
 putUnClustPropagator
   :: (HasCallStack,Hashables2 e s,Monad m)

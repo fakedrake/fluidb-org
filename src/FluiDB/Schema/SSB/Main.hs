@@ -5,16 +5,18 @@ module FluiDB.Schema.SSB.Main (graphMain) where
 
 import           Control.Monad.Except
 import           Control.Monad.State
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Codegen.Build
 import           Data.Codegen.Run
 import           Data.DotLatex
 import qualified Data.IntMap               as IM
+import           Data.NodeContainers
 import           Data.Query.Algebra
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Default
+import           Data.Utils.Ranges
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
 import           FluiDB.Schema.SSB.Values
@@ -45,24 +47,50 @@ finallyError m hndl = do
   hndl
   return ret
 
-actualMain :: [Int] -> IO ()
-actualMain qs = do
+runQuery :: SSBQuery -> SSBGlobalSolveM ()
+runQuery query = do
+  cppConf <- gets globalQueryCppConf
+  aquery <- annotateQuerySSB cppConf query
+  (transitions,_cppCode) <- finallyError (runSingleQuery aquery) $ do
+    (queryPath,pngPath,grPath) <- renderGraph query
+    liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
+    liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
+    liftIO $ putStrLn $ "The raw graph at: " ++ grPath
+  -- liftIO $ runCpp cppCode
+  liftIO $ putStrLn $ ashow transitions
+  return ()
+
+ssbRunGlobalSolve :: SSBGlobalSolveM a -> IO a
+ssbRunGlobalSolve m = do
   ssbGlobalConf <- getSsbGlobalConf
-  runGlobalSolve ssbGlobalConf (fail . ashow) $ forM_ qs $ \qi -> do
-    liftIO $ putStrLn $ "Running query: " ++ show qi
-    case IM.lookup qi ssbQueriesMap of
-      Nothing -> throwAStr $ printf "No such query %d" qi
-      Just query -> do
-        cppConf <- gets globalQueryCppConf
-        aquery <- annotateQuerySSB cppConf query
-        (transitions,_cppCode) <- finallyError (runSingleQuery aquery) $ do
-          (queryPath,pngPath,grPath) <- renderGraph query
-          liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
-          liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
-          liftIO $ putStrLn $ "The raw graph at: " ++ grPath
-        -- liftIO $ runCpp cppCode
-        liftIO $ putStrLn $ ashow transitions
-        return ()
+  runGlobalSolve ssbGlobalConf (fail . ashow) m
+
+singleQuery :: IO ()
+singleQuery =
+  ssbRunGlobalSolve
+  $ runQuery
+  $ ssbParse
+  $ unwords
+    ["select c_city, s_city, d_year, sum(lo_revenue) as revenue"
+    ,"from customer, lineorder, supplier, date"
+    ,"where lo_custkey = c_custkey"
+    ,"and lo_suppkey = s_suppkey"
+    ,"and lo_orderdate = d_datekey"
+    ,"and c_nation = 'UNITED STATES'" -- this
+    ,"and s_nation = 'UNITED STATES'" -- this
+    ,"and d_year >= 1992 and d_year <= 1997" -- this
+    ,"group by c_city, s_city, d_year"
+    ,"order by d_year, revenue desc"]
+-- XXX: removing any of the "this" lines makes singleQuery run.
+
+
+actualMain :: [Int] -> IO ()
+actualMain qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
+  liftIO $ putStrLn $ "Running query: " ++ show qi
+  case IM.lookup qi ssbQueriesMap of
+    Nothing    -> throwAStr $ printf "No such query %d" qi
+    Just query -> runQuery query
+
 
 type ImagePath = FilePath
 type QueryPath = FilePath
@@ -83,6 +111,17 @@ renderGraph query = do
       runProc
         (mkProc "dot" ["-o" ++ imgPath, "-Tpng"]) { std_in = UseHandle hndl }
       return (qPath,imgPath,grPath)
+
+getInputNodes :: NodeRef N -> GraphBuilderT T N IO [(NodeRef T,[NodeRef N])]
+getInputNodes ref = do
+  ts <- getNodeLinksN
+    NodeLinksFilter { nlfSide = [Inp],nlfIsRev = fullRange,nlfNode = ref }
+    >>= maybe (fail $ "No such n-node: " ++ show ref) return
+  forM (toNodeList ts) $ \t -> do
+    ns <- getNodeLinksT
+      NodeLinksFilter { nlfSide = [Inp],nlfIsRev = fullRange,nlfNode = t }
+      >>= maybe (fail $ "No such t-node: " ++ show t) return
+    return (t,toNodeList ns)
 
 readGraph :: GraphPath -> GraphBuilderT T N IO a -> IO a
 readGraph gpath m = do

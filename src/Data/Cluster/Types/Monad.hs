@@ -48,7 +48,7 @@ import           Control.Monad.Except
 import           Control.Monad.Free
 import           Control.Monad.Morph
 import           Control.Monad.State
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Bits
 import           Data.Cluster.Types.Clusters
 import           Data.CnfQuery.Types

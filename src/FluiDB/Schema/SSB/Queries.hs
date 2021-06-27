@@ -4,6 +4,7 @@ module FluiDB.Schema.SSB.Queries
   (ssbQueriesMap
   ,SSBField
   ,SSBTable
+  ,ssbParse
   ,ssbFldSchema
   ,ssbTpchDBGenConf
   ,ssbSchema
@@ -207,10 +208,12 @@ ssbPrimKeys = traceAShow "Prim keys: " $ do
 ssbQueriesMap :: IM.IntMap (Query ExpTypeSym Table)
 ssbQueriesMap = IM.fromList $ zip [0 ..] ssbQueriesList
 
+ssbParse :: String -> Query ExpTypeSym Table
+ssbParse = fromRightStr . parseSQL inQuery
 ssbQueriesList :: [Query ExpTypeSym Table]
 ssbQueriesList =
   fmap
-    (fromRightStr . parseSQL inQuery . unwords)
+    (ssbParse . unwords)
     [["select sum(lo_extendedprice*lo_discount) as revenue"
      ,"from lineorder, date"
      ,"where lo_orderdate = d_datekey"

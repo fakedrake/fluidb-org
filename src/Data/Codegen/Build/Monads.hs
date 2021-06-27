@@ -62,7 +62,7 @@ import Data.Utils.Functors
 import Data.QueryPlan.Types
 import           Control.Monad.State.Class
 import           Control.Monad.Trans
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.Codegen.Build.Monads.CodeBuilder

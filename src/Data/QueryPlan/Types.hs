@@ -73,7 +73,7 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Writer        hiding (Sum)
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Function
 import           Data.Group
 import qualified Data.HashSet                as HS

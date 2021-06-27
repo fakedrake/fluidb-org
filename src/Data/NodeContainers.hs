@@ -68,9 +68,8 @@ module Data.NodeContainers
   , nsDisjoint
   , nsIsSubsetOf
   , nsFold
-  ) where
+  ,refLookupMax) where
 
-import Data.Utils.OptSet
 import           Control.Arrow            (first, (***))
 import           Control.Monad.Identity
 import           Data.Char
@@ -85,6 +84,7 @@ import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Function
 import           Data.Utils.Hashable
+import           Data.Utils.OptSet
 import           GHC.Generics             (Generic)
 import           Text.Printf
 
@@ -98,16 +98,16 @@ instance AShow (NodeRef n) where
   ashow' (NodeRef r) = sexp "N" [ashow' r]
 instance ARead (NodeRef n) where
   aread' = \case
-    Sub [Sym "N", r] -> N <$> aread' r
+    Sub [Sym "N", r]       -> N <$> aread' r
     Sub [Sym "NodeRef", r] -> N <$> aread' r
-    _ -> Nothing
+    _                      -> Nothing
 instance Show (NodeRef n) where
   show (NodeRef n) = "<" ++ show n ++ ">"
 instance Read (NodeRef a) where
   readsPrec _ x = if
     | "NodeRef " `isPrefixOf` norm' x -> go 8
-    | "N " `isPrefixOf` norm' x -> go 2
-    | otherwise -> []
+    | "N " `isPrefixOf` norm' x       -> go 2
+    | otherwise                       -> []
     where
       norm' = dropWhile (\a -> isSpace a || a == '(')
       go prefSize = first NodeRef <$> reads (drop prefSize x)
@@ -230,6 +230,8 @@ refAssocs :: RefMap n v -> [(NodeRef n,v)]
 refAssocs (RefMap m) = [(NodeRef k,v) | (k,v) <- IM.toAscList m]
 refRestrictKeys :: RefMap n a -> NodeSet n -> RefMap n a
 refRestrictKeys (RefMap r) (NodeSet f) = RefMap $ IM.restrictKeys r f
+refLookupMax :: RefMap n a -> Maybe (NodeRef n,a)
+refLookupMax (RefMap r) = first NodeRef <$> IM.lookupMax r
 refIsSubmapOfBy :: (a -> b -> Bool) -> RefMap n a -> RefMap n b -> Bool
 refIsSubmapOfBy f (RefMap a) (RefMap b) = IM.isSubmapOfBy f a b
 refFromAssocs :: [(NodeRef n,v)] -> RefMap n v

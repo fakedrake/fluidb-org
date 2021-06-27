@@ -24,7 +24,7 @@ module FluiDB.ConfValues
   ,CodegenSymbol(..)) where
 
 import           Control.Monad.Writer
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.InsertQuery
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types.Clusters
@@ -169,7 +169,7 @@ mkGlobalConf
   => PreGlobalConf e0 e s
   -> Either (GlobalError e s t n) (GlobalConf e s t n)
 mkGlobalConf pgc@PreGlobalConf {..} = do
-  let gbState = mempty
+  let gbState = def
   let (pair :: Either (ClusterError e s) (Bipartite t n,RefMap n s)
         ,clusterConfig :: ClusterConfig e s t n) =
         (`evalState` gbState)
@@ -188,7 +188,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
     { globalExpTypeSymIso = pgcExpIso
      ,globalRunning = def { runningConfBudgetSearch = True }
      ,globalSchemaAssoc = pgcSchemaAssoc
-     ,globalMatNodes = refKeys $ rNodes propNetLocal
+     ,globalMatNodes = nNodes propNetLocal
      ,globalQueryCppConf = queryCppConf
       -- Based on this we check if they are materialized.
      ,globalClusterConfig = clusterConfig

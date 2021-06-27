@@ -22,10 +22,11 @@ module Data.DotLatex
   , simpleRender
   ) where
 
+import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Coerce
 import           Data.List
 import qualified Data.List.NonEmpty     as NEL
@@ -224,17 +225,17 @@ instance ToDot DotAst where
       body <- toDot' p
       return $ printf "%s %s {\n%s}" gtype s body
 
-renderLinks :: GraphBuilder DSym DSym [DotAst]
+renderLinks :: GraphBuilderT DSym DSym Identity [DotAst]
 renderLinks = do
-  (lRefs, rRefs) <- nodeRefs
-  lLinks <- mkLinks L (fmap toNodeList . getAllLinksL Out) lRefs
-  rLinks <- mkLinks R (fmap toNodeList . getAllLinksR Inp) rRefs
+  (lRefs,rRefs) <- nodeRefs
+  lLinks <- mkLinks L (fmap toNodeList . getAllLinksT Out) $ toNodeList lRefs
+  rLinks <- mkLinks R (fmap toNodeList . getAllLinksN Inp) $ toNodeList rRefs
   return $ lLinks ++ rLinks
   where
     mkLinks side getN refs = runListT $ do
       r <- mkListT $ return refs
       n <- mkListT $ getN r
-      return $ DLink (toSym side r, toSym (otherSide side) n) []
+      return $ DLink (toSym side r,toSym (otherSide side) n) []
 
 data LatexSide = L | R deriving Show
 otherSide :: LatexSide -> LatexSide
@@ -257,14 +258,20 @@ instance Default BipartiteRenderHead where
     [DProp (GlobalNodeProp [DShape Ellipse])]
     [DProp (GlobalEdgeProp [DDir Directed])]
 
-renderAll :: BipartiteRenderHead
-          -> [(NodeRef NodeLabel -> Bool, Color1)]
-          -> [(NodeRef NodeLabel -> Bool, Color1)]
-          -> DSym
-          -> GraphBuilder NodeLabel NodeLabel DotAst
+renderAll
+  :: BipartiteRenderHead
+  -> [(NodeRef NodeLabel
+       -> Bool
+      ,Color1)]
+  -> [(NodeRef NodeLabel
+       -> Bool
+      ,Color1)]
+  -> DSym
+  -> GraphBuilderT NodeLabel NodeLabel Identity DotAst
 renderAll BipartiteRenderHead {..} csetl csetr s = do
   links <- renderLinks
-  (fmap $ fixN L -> lnodes,fmap $ fixN R -> rnodes) <- nodeRefs
+  (fmap (fixN L) . toNodeList -> lnodes
+    ,fmap (fixN R) . toNodeList -> rnodes) <- nodeRefs
   return
     $ DGraph s
     $ globalHead ++ rightHead ++ rnodes ++ lnodes ++ edgeHead ++ links
@@ -448,7 +455,7 @@ instance Latexifiable a => Latexifiable (Maybe a) where
 simpleRender :: (Latexifiable t,Latexifiable n) => Bipartite t n -> String
 simpleRender bip = runRenderM def
   $ toDot'
-  $ (`evalState` mempty{
+  $ (`evalState` def{
         gbPropNet=bimap (unLatex . toLatex) (unLatex . toLatex) bip
         })
   $ renderAll def mempty mempty "G"

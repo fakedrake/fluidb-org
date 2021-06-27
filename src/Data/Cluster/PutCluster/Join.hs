@@ -1,7 +1,7 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE ViewPatterns        #-}
 
@@ -12,26 +12,26 @@ module Data.Cluster.PutCluster.Join
   , QRef(..)
   ) where
 
-import Data.List.Extra
-import Data.Utils.ListT
-import Data.Utils.Debug
-import Data.CnfQuery.BuildUtils
-import Data.Utils.Functors
-import Data.Utils.Tup
-import Data.Utils.Hashable
-import Control.Monad.Except
+import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.Query.Algebra
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
-import           Data.CnfQuery.Types
 import           Data.CnfQuery.Build
+import           Data.CnfQuery.BuildUtils
+import           Data.CnfQuery.Types
+import           Data.List.Extra
 import           Data.NodeContainers
+import           Data.Query.Algebra
 import           Data.Query.QuerySchema
+import           Data.Utils.Debug
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.ListT
+import           Data.Utils.Tup
 
 data QRef n e s = QRef {getQRef :: NodeRef n, getNCNF :: NCNFQuery e s}
   deriving (Eq, Show)
@@ -163,12 +163,23 @@ liftCnfError :: Monad m =>
              -> ExceptT (ClusterError e s) m a
 liftCnfError = ExceptT . fmap (first ClusterCNFError)
 
-(.<~.) :: Monad m => NodeRef l -> NodeRef r -> GraphBuilderT l r m ()
-outT .<~. inN = appendNodeLinksL Inp Irreversible outT $ nsSingleton inN
-(.<<~>.) :: Monad m => NodeRef l -> [NodeRef r] -> GraphBuilderT l r m ()
-outT .<<~>. inNs = appendNodeLinksL Inp Reversible outT $ fromNodeList inNs
-(.<~>>.) :: Monad m => NodeRef l -> [NodeRef r] -> GraphBuilderT l r m ()
-inT .<~>>. outNs = appendNodeLinksL Out Reversible inT $ fromNodeList outNs
+(.<~.) :: Monad m => NodeRef t -> NodeRef n -> GraphBuilderT t n m ()
+outT .<~. inN =
+  linkNodes
+    NodeLinkDescr
+    { nldNSide = Inp,nldIsRev = Irreversible,nldTNode = outT,nldNNode = inN }
+
+(.<<~>.) :: Monad m => NodeRef t -> [NodeRef n] -> GraphBuilderT t n m ()
+outT .<<~>. inNs = forM_ inNs $ \inN -> do
+  linkNodes
+    NodeLinkDescr
+    { nldNSide = Inp,nldIsRev = Reversible,nldTNode = outT,nldNNode = inN }
+
+(.<~>>.) :: Monad m => NodeRef t -> [NodeRef n] -> GraphBuilderT t n m ()
+inT .<~>>. outNs = forM_ outNs $ \outN -> do
+  linkNodes
+    NodeLinkDescr
+    { nldNSide = Out,nldIsRev = Reversible,nldTNode = inT,nldNNode = outN }
 
 -- Connect 3 nodes with a join cluster
 putJoinClusterI :: forall e s t n  m . (Hashables2 e s, Monad m) =>

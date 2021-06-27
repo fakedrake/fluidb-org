@@ -19,11 +19,12 @@ module Data.QueryPlan.Transitions
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import qualified Data.List.NonEmpty   as NEL
 import           Data.NodeContainers
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
+import           Data.Utils.Default
 import           Data.Utils.MTL
 import           Data.Utils.Ranges
 import           Text.Printf
@@ -35,15 +36,17 @@ mkTriggerUnsafe :: Monad  m =>
                 -> ([IsReversible], [IsReversible])
                 -> NodeRef t
                 -> PlanT t n m (Transition t n)
-mkTriggerUnsafe mkTrig (inf, outf) tref = do
-  net <- propNet <$> ask
+mkTriggerUnsafe mkTrig (inf,outf) tref = do
+  net <- asks propNet
   let getLinksFrom side dir =
         fmap toNodeList
         $ (>>= maybe (throwError $ NonExistentNode $ Left tref) return)
         $ lift
         $ evalStateT
-        (getNodeLinksL side dir tref)
-        mempty{gbPropNet=net}
+          (getNodeLinksT
+             NodeLinksFilter
+             { nlfNode = tref,nlfSide = return side,nlfIsRev = dir })
+          def { gbPropNet = net }
   inps <- getLinksFrom Inp inf
   outs <- getLinksFrom Out outf
   return $ mkTrig inps tref outs

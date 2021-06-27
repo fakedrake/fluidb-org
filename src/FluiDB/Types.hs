@@ -46,7 +46,7 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.Types.Monad
 import           Data.CnfQuery.Types
 import           Data.Codegen.Build.Monads.Class
@@ -213,9 +213,9 @@ instance IsGlobalConf e s t n (GCState t n) where
     nodesInSt = runIdentity . dropReader (Identity st) . nodesInState' graph
 
 instance IsGlobalConf e s t n (GBState t n) where
-  getGlobalConf GlobalConf{..} = mempty{gbPropNet=propNet globalGCConfig}
-  modGlobalConf x cnf = cnf{globalGCConfig=(globalGCConfig cnf){
-                         propNet=gbPropNet x}}
+  getGlobalConf GlobalConf {..} = def { gbPropNet = propNet globalGCConfig }
+  modGlobalConf x cnf =
+    cnf { globalGCConfig = (globalGCConfig cnf) { propNet = gbPropNet x } }
 instance IsGlobalConf e s t n (QueryCppConf e s) where
   getGlobalConf = globalQueryCppConf
   modGlobalConf x cnf = cnf{globalQueryCppConf=x}

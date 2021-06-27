@@ -33,9 +33,7 @@ module Data.QueryPlan.Solve
   , isDeletable
   ) where
 
-import Data.QueryPlan.History
-import Control.Antisthenis.Types
-import Data.QueryPlan.NodeProc
+import           Control.Antisthenis.Types
 import           Control.Monad.Cont
 import           Control.Monad.Except
 import           Control.Monad.Extra
@@ -43,7 +41,7 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Functor.Identity
 import qualified Data.HashSet                as HS
 import           Data.List.Extra
@@ -53,7 +51,9 @@ import           Data.NodeContainers
 import           Data.Query.QuerySize
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Dependencies
+import           Data.QueryPlan.History
 import           Data.QueryPlan.MetaOpCache
+import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Transitions
 import           Data.Utils.Debug
@@ -65,6 +65,7 @@ import           Data.Utils.Tup
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
+import           Data.Utils.Default
 
 warmupCache :: forall t n m . Monad m => NodeRef n -> PlanT t n m ()
 warmupCache node = do
@@ -114,7 +115,7 @@ makeMaterializable ref =
     isConcreteMat =
       fmap (\case
               Concrete _ Mat -> True
-              _ -> False) . getNodeState
+              _              -> False) . getNodeState
 
 haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
@@ -153,11 +154,11 @@ setNodeStateSafe' getFwdOp node goalState =
         (show goalState)
     case curState of
       Concrete _ Mat -> case goalState of
-        Mat -> top
+        Mat   -> top
         NoMat -> bot "Tried to set concrete"
       Concrete _ NoMat -> case goalState of
         NoMat -> top
-        Mat -> bot "Tried to set concrete"
+        Mat   -> bot "Tried to set concrete"
       Initial NoMat -> case goalState of
         NoMat -> node `setNodeStateUnsafe` Concrete NoMat NoMat
         Mat       -- just materialize
@@ -183,7 +184,7 @@ setNodeStateSafe' getFwdOp node goalState =
                 prevState' <- getNodeState ni
                 let prevState = case prevState' of
                       Concrete _ r -> r
-                      Initial r -> r
+                      Initial r    -> r
                 ni `setNodeStateUnsafe` Concrete prevState Mat
               -- Deal with sibling materializability: what we actually
               -- want is to be able to reverse.
@@ -269,8 +270,8 @@ makeTriggerableUnsafe mop = wrapTrM ("makeTriggerableUnsafe " ++ showMetaOp mop)
 setConcreteMat :: MonadLogic m => NodeRef n -> PlanT t n m ()
 setConcreteMat ref = getNodeState ref >>= \case
   Concrete _ NoMat -> bot "setConcreteMat"
-  Concrete _ Mat -> top
-  Initial m -> setNodeStateUnsafe ref $ Concrete m Mat
+  Concrete _ Mat   -> top
+  Initial m        -> setNodeStateUnsafe ref $ Concrete m Mat
 
 -- |Remove equivalent metaops from list
 nubMops :: [MetaOp t n] -> [MetaOp t n]
@@ -471,17 +472,10 @@ planSanityCheck :: forall t n m . MonadLogic m =>
                   PlanT t n m (Either (PlanSanityError t n) ())
 planSanityCheck = runExceptT $ do
   conf <- ask
-  let (_,nRefs) =
-        nodeRefs
-        `evalState` mempty
-        { gbPropNet = propNet conf
-        }
-  checkTbl nRefs MissingSize $ fmap2 fst nodeSizes
+  let (_,nRefs) = nodeRefs `evalState` def { gbPropNet = propNet conf }
+  checkTbl (toNodeList nRefs) MissingSize $ fmap2 fst nodeSizes
   let localBotNodes =
-        getBottomNodesR
-        `evalState` mempty
-        { gbPropNet = propNet conf
-        }
+        getBottomNodesN `evalState` def { gbPropNet = propNet conf }
   st <- lift (get :: PlanT t n m (GCState t n))
   lift $ forM_ localBotNodes makeMaterializable
   lift $ put st
@@ -500,7 +494,7 @@ planSanityCheck = runExceptT $ do
 isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
 isDeletable ref = getNodeState ref >>= \case
   Concrete _ Mat -> return False
-  _ -> withNoMat ref $ isMaterializable ref
+  _              -> withNoMat ref $ isMaterializable ref
 
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a
 withNoMat = withNodeState (Concrete Mat NoMat) . return

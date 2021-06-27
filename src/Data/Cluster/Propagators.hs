@@ -37,7 +37,7 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
