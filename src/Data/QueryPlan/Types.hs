@@ -442,11 +442,11 @@ instance Eq (MetaOp t n) where
 -- Node procs
 -- | A map containing all the proc maps. Mutually recursive with the
 -- proc itself.
-data NodeProcSt n w =
-  NodeProcSt
-  { -- npsProcs :: RefMap n (ArrProc w m)
-   npsTrail :: NTrail n
-  } deriving Generic
+newtype NodeProcSt n w =
+  NodeProcSt {  -- npsProcs :: RefMap n (ArrProc w m)
+               npsTrail :: NTrail n
+             }
+  deriving Generic
 instance Default (NodeProcSt n w)
 
 type NTrail = NodeSet

@@ -103,13 +103,13 @@ renderGraph query = do
         dotPath = graphBase <.> "dot"
         qPath = graphBase <.> "query"
         grPath = graphBase <.> "graph"
-        imgPath = graphBase <.> "png"
+        imgPath = graphBase <.> "svg"
     writeFile grPath $ ashow gr
     writeFile qPath $ ashow query
     writeFile dotPath $ simpleRender @T @N gr
     withFile dotPath ReadMode $ \hndl -> do
       runProc
-        (mkProc "dot" ["-o" ++ imgPath, "-Tpng"]) { std_in = UseHandle hndl }
+        (mkProc "dot" ["-o" ++ imgPath, "-Tsvg"]) { std_in = UseHandle hndl }
       return (qPath,imgPath,grPath)
 
 getInputNodes :: NodeRef N -> GraphBuilderT T N IO [(NodeRef T,[NodeRef N])]

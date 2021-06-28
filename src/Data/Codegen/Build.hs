@@ -112,7 +112,7 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
     DeleteTransitionBundle n -> do
       lift $ delMatPlan n
       fileM <- dropReader (lift getClusterConfig) $ getNodeFile n
-      queryView <- dropReader (lift getClusterConfig)
+      queryView <- dropState (lift getClusterConfig,const $ return ())
         $ (maybe (throwError $ NodeNotFoundN n) return =<<)
         $ fmap listToMaybe
         $ fmap2 cnfOrigDEBUG
@@ -257,14 +257,14 @@ getEvaluations
 getEvaluations = runListT $ mkListT getCleanBundles >>= \case
   ForwardTransitionBundle io c -> ForwardEval c io <$> getQueriesC c
   ReverseTransitionBundle io c -> ReverseEval c io <$> getQueriesC c
-  DeleteTransitionBundle n     -> fmap2 return $ Delete n <$> getQueryN n
+  DeleteTransitionBundle n     -> Delete n <$> getCNFs n
   where
     getCleanBundles :: m [TransitionBundle e s t n]
     getCleanBundles = do
       trns <- reverse <$> dropReader (asks trd4) getTransitions
       dropReader (asks fst4) $ bundleTransitions trns
-    getQueryN :: NodeRef n -> ListT m (CNFQuery e s)
-    getQueryN nref =
-      fmap fst $ mkListT $ dropReader (asks fst4) $ getClustersNonInput nref
+    getCNFs :: NodeRef n -> ListT m [CNFQuery e s]
+    getCNFs
+      ref = lift $ dropState (asks fst4,const $ return ()) $ lookupCnfN ref
     getQueriesC :: AnyCluster e s t n -> ListT m [CNFQuery e s]
-    getQueriesC = dropReader (asks fst4) . getQueriesFromClust
+    getQueriesC = dropState (asks fst4,const $ return ()) . getQueriesFromClust

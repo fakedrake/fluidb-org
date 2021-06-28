@@ -40,6 +40,7 @@ putBinCluster
   -> (NodeRef n,NCNFQuery e s) -- Out
   -> CGraphBuilderT e s t n m (BinClust e s t n)
 putBinCluster symAssoc op (l,_ncnfL) (r,_ncnfR) (out,ncnfO) = do
+  traceM "putBinCluster"
   clust <- idempotentClusterInsert constraints mkClust
   putBClustPropagator clust symAssoc op
   forM_ [ncnfO] $ \ncnf -> linkCnfClust (ncnfToCnf ncnf) $ BinClustW clust
@@ -109,6 +110,7 @@ putUnCluster
   (inp,_ncnfI)
   (secRef,ncnfCoO)
   (refO,ncnfO) = do
+  traceM "putUnCluster"
   c <- idempotentClusterInsert constraints mkClust
   putUnClustPropagator (Tup2 symAssocPrim symAssocSec) literalType c op
   forM_ [ncnfO,ncnfCoO] $ \ncnf

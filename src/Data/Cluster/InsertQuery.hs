@@ -33,6 +33,7 @@ import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
 import           Data.Utils.Compose
+import           Data.Utils.Debug
 import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable

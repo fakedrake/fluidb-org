@@ -19,39 +19,37 @@
 {-# OPTIONS_GHC -Wno-unused-foralls -Wno-name-shadowing -Wno-unused-top-binds #-}
 
 module Data.Codegen.Build.IoFiles.ClustToIo
-  ( getClusterN
-  , getClusterT
-  , toFiles
-  , clustToIoFiles
-  ) where
+  (getClusterT
+  ,toFiles
+  ,clustToIoFiles) where
 
-import Data.QueryPlan.Nodes
-import Data.Utils.MTL
-import Data.Utils.Unsafe
-import Data.Utils.Functors
-import Data.Cluster.ClusterConfig
-import Data.CnfQuery.Types
-import Data.Utils.Hashable
-import Data.QueryPlan.Types
-import Data.Utils.Compose
-import Data.Cluster.Types
 import           Control.Applicative
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.Either
-import           Data.Maybe
-import           Data.Tuple
-import           Data.Void
-import           Data.Utils.AShow
+import           Data.Cluster.ClusterConfig
+import           Data.Cluster.Types
+import           Data.CnfQuery.Types
 import           Data.Codegen.Build.IoFiles.MkFiles
 import           Data.Codegen.Build.IoFiles.Types
 import           Data.Codegen.Build.Monads.CodeBuilder
+import           Data.Either
+import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Query.QuerySchema
-import           Prelude                                          hiding (exp)
+import           Data.QueryPlan.Nodes
+import           Data.QueryPlan.Types
+import           Data.Tuple
+import           Data.Utils.AShow
+import           Data.Utils.Compose
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.MTL
+import           Data.Utils.Unsafe
+import           Data.Void
+import           Prelude                               hiding (exp)
 
 -- | Pattern match on the query and cluster that contains the
 -- filepaths to generate code. (output, input)
@@ -76,8 +74,8 @@ matMaybe :: MonadReader (ClusterConfig e s t n,GCState t n) m
          -> m (Maybe (NodeRef n))
 matMaybe ref = dropReader (snd <$> ask) $ getNodeStateReader ref <&> \case
   Concrete _ Mat -> Just ref
-  Initial Mat -> Just ref
-  _ -> Nothing
+  Initial Mat    -> Just ref
+  _              -> Nothing
 
 -- | Turn the ends of a cluster into (Plan,File) pairs. This checks
 -- first if the at the edge is (to be) materialized and puts Nothing
@@ -133,14 +131,3 @@ getClusterT
   -> m (CNFQuery e s,AnyCluster e s t n)
 getClusterT t =
   maybe (throwAStr $ "No cluster for: " ++ ashow t) return =<< lookupClusterT t
-
-getClusterN :: (Hashables2 e s,
-               MonadState (ClusterConfig e s t n) m,
-               MonadError (CodeBuildErr e s t n) m) =>
-              NodeRef n
-            -> m [(CNFQuery e s, AnyCluster e s t n)]
-getClusterN n = do
-  metaSetM <- lookupClustersN n
-  case metaSetM of
-    [] -> throwError $ NoClusterForN n
-    xs -> return $ fmap2 headErr $ toList xs

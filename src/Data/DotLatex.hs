@@ -225,17 +225,26 @@ instance ToDot DotAst where
       body <- toDot' p
       return $ printf "%s %s {\n%s}" gtype s body
 
+-- renderLinks :: GraphBuilderT DSym DSym Identity [DotAst]
+-- renderLinks = do
+--   (lRefs,rRefs) <- nodeRefs
+--   lLinks <- mkLinks L (fmap toNodeList . getAllLinksT Out) $ toNodeList lRefs
+--   rLinks <- mkLinks R (fmap toNodeList . getAllLinksN Inp) $ toNodeList rRefs
+--   return $ lLinks ++ rLinks
+--   where
+--     mkLinks side getN refs = runListT $ do
+--       r <- mkListT $ return refs
+--       n <- mkListT $ getN r
+--       return $ DLink (toSym side r,toSym (otherSide side) n) []
 renderLinks :: GraphBuilderT DSym DSym Identity [DotAst]
 renderLinks = do
-  (lRefs,rRefs) <- nodeRefs
-  lLinks <- mkLinks L (fmap toNodeList . getAllLinksT Out) $ toNodeList lRefs
-  rLinks <- mkLinks R (fmap toNodeList . getAllLinksN Inp) $ toNodeList rRefs
-  return $ lLinks ++ rLinks
-  where
-    mkLinks side getN refs = runListT $ do
-      r <- mkListT $ return refs
-      n <- mkListT $ getN r
-      return $ DLink (toSym side r,toSym (otherSide side) n) []
+  g <- gets gbPropNet
+  return
+    [case nldNSide of
+      Out -> DLink (toSym L nldTNode,toSym R nldNNode) []
+      Inp -> DLink (toSym R nldNNode,toSym L nldTNode) []
+    | NodeLinkDescr {..} <- listLinks g]
+
 
 data LatexSide = L | R deriving Show
 otherSide :: LatexSide -> LatexSide

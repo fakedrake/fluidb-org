@@ -487,8 +487,10 @@ triggerClustPropagator :: (MonadState (ClusterConfig e s t n) m,
 triggerClustPropagator clust = do
   (_,newPlanClust) <- dropReader get $ getValidClustPropagator clust
   putPlanCluster newPlanClust
-getNodePlanFull :: MonadReader (ClusterConfig e s t n) m =>
-                  NodeRef n -> m (Maybe (QueryPlan e s))
+getNodePlanFull
+  :: MonadReader (ClusterConfig e s t n) m
+  => NodeRef n
+  -> m (Maybe (QueryPlan e s))
 getNodePlanFull r = asks $ getDefaultingFull <=< refLU r . cnfNodePlans
 
 -- | Assume a consistent view of clusters. Find a trigger that will
@@ -500,10 +502,7 @@ forceQueryPlan :: forall e s t n m err .
                   MonadError err m, AShowError e s err,
                   Hashables2 e s) =>
                  NodeRef n -> m (Maybe (QueryPlan e s))
-forceQueryPlan n =
-  runMaybeT
-  $ (`evalStateT` mempty)
-  $ go n
+forceQueryPlan n = runMaybeT $ (`evalStateT` mempty) $ go n
   where
     go :: NodeRef n -> StateT (NodeSet n) (MaybeT m) (QueryPlan e s)
     go ref = unlessDone $ do
@@ -512,14 +511,14 @@ forceQueryPlan n =
       guard $ not $ ref `nsMember` trail
       modify (nsInsert ref)
       -- Here we actually need `eitherl`...
-      clusts <- lift2 $ filter (elem ref . clusterOutputs) . (>>= snd)
-               <$> lookupClustersN ref
+      clusts <- lift2
+        $ filter (elem ref . clusterOutputs) <$> lookupClustersN ref
       oneOfM clusts $ \c -> do
         case partition (elem ref) [clusterInputs c,clusterOutputs c] of
           ([_siblings],[deps]) -> do
             guard $ not $ any (`nsMember` trail) deps
             mapM_ go deps
-            lift2$ triggerClustPropagator c
+            lift2 $ triggerClustPropagator c
             unlessDone $ throwAStr "We made the deps "
           _ -> mzero
       where

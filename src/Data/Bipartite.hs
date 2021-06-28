@@ -16,7 +16,7 @@ module Data.Bipartite
   ,linkNodes
   ,nodeRefs
   ,getAllLinksN
-  ,getAllLinksT) where
+  ,getAllLinksT,listLinks) where
 
 import           Control.Monad.Morph
 import           Control.Monad.State
@@ -33,19 +33,15 @@ import           Unsafe.Coerce
 -- graph is accessible by this data structure.
 data NodeLinksTo a =
   NodeLinksTo
-  {
-    -- | Each of these nodes are on the tip of an reversible arrow.
+  { -- | Each of these nodes are on the tip of an reversible arrow.
     nlRevOut   :: NodeSet a
-   ,
     -- | Each of these nodes are on the tip of a non-reversible arrow.
-    nlIrrevOut :: NodeSet a
-   ,
+   ,nlIrrevOut :: NodeSet a
     -- | Each of these nodes are on the butt of a reversibel arrow.
-    nlRevIn    :: NodeSet a
-   ,
+   ,nlRevIn    :: NodeSet a
     -- | Each of these nodes are on the butt of a non-reversible
     -- arrow.
-    nlIrrevIn  :: NodeSet a
+   ,nlIrrevIn  :: NodeSet a
   }
   deriving (Show,Read,Generic)
 instance Default (NodeLinksTo a)

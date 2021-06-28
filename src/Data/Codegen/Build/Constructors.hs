@@ -48,29 +48,16 @@ module Data.Codegen.Build.Constructors
   , unJoinCall
   ) where
 
-import Data.Utils.ListT
-import Data.Utils.Functors
-import Data.CnfQuery.Types
-import Data.Utils.Hashable
-import Data.Utils.Tup
-import Data.Query.QuerySchema.Types
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
+import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Bitraversable
-import           Data.Either
-import           Data.Foldable
-import           Data.List
-import           Data.Maybe
-import           Data.Monoid
-import qualified Data.Set                                    as DS
-import           Data.String
-import Data.Query.Algebra
-import           Data.Utils.AShow
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types
+import           Data.CnfQuery.Types
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.EquiJoinUtils
 import           Data.Codegen.Build.Expression
@@ -78,10 +65,24 @@ import           Data.Codegen.Build.IoFiles
 import           Data.Codegen.Build.Monads
 import           Data.Codegen.Schema
 import qualified Data.CppAst                      as CC
-import           Data.Query.SQL.FileSet
+import           Data.Either
+import           Data.Foldable
+import           Data.List
+import           Data.Maybe
+import           Data.Monoid
 import           Data.NodeContainers
+import           Data.Query.Algebra
 import           Data.Query.QuerySchema
-import           Prelude                                     hiding (exp)
+import           Data.Query.QuerySchema.Types
+import           Data.Query.SQL.FileSet
+import qualified Data.Set                         as DS
+import           Data.String
+import           Data.Utils.AShow
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.ListT
+import           Data.Utils.Tup
+import           Prelude                          hiding (exp)
 
 type Constr = (CC.FunctionSymbol CC.CodeSymbol, [CC.TmplInstArg CC.CodeSymbol])
 tmplClass :: CC.Class a -> CC.TmplInstArg a
@@ -301,7 +302,7 @@ selCall outAssoc p = do
 
 
 getQueriesFromClust
-  :: (Hashables2 e s,MonadReader (ClusterConfig e s t n) m)
+  :: (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => AnyCluster e s t n
   -> m [CNFQuery e s]
 getQueriesFromClust clust = getNodeCnfN $ snd $ primaryNRef clust
@@ -366,13 +367,13 @@ clusterCall c = do
           QLimit _ -> True
           QDrop _ -> True
         checkBOp outSyms = \case
-          QJoin p -> all3 (`selem` outSyms) p
-          QLeftAntijoin p -> all3 (`selem` outSyms) p
+          QJoin p          -> all3 (`selem` outSyms) p
+          QLeftAntijoin p  -> all3 (`selem` outSyms) p
           QRightAntijoin p -> all3 (`selem` outSyms) p
-          QProd -> True
-          QUnion -> True
-          QProjQuery -> True
-          QDistinct -> True
+          QProd            -> True
+          QUnion           -> True
+          QProjQuery       -> True
+          QDistinct        -> True
         selectOp :: ((AShowV e, AShowV s) => [f (PlanSym e s)] -> String)
                  -> (f (PlanSym e s) -> Bool)
                  -> WMetaD [f (PlanSym e s)] NodeRef n
@@ -394,11 +395,11 @@ bopQueryCall :: forall e s t n m .
              -> BQOp (PlanSym e s)
              -> m Constr
 bopQueryCall outAssocAndPlan = \case
-  QJoin p       -> joinCall outAssocAndPlan p
-  QDistinct     -> throwAStr "QDistinct should have been optimized out."
-  QProjQuery    -> throwAStr "QProjQuery should have been optimized out."
-  QUnion        -> unionCall outAssocAndPlan
-  QProd         -> prodCall outAssocAndPlan
+  QJoin p          -> joinCall outAssocAndPlan p
+  QDistinct        -> throwAStr "QDistinct should have been optimized out."
+  QProjQuery       -> throwAStr "QProjQuery should have been optimized out."
+  QUnion           -> unionCall outAssocAndPlan
+  QProd            -> prodCall outAssocAndPlan
   QLeftAntijoin p  -> joinCall outAssocAndPlan p
   QRightAntijoin p -> joinCall outAssocAndPlan p
 
@@ -455,7 +456,7 @@ instance ConstructorArg a => ConstructorArg (Maybe a) where
   toConstrType :: forall a . ConstructorArg a => Maybe (Maybe a) -> CC.Type CC.CodeSymbol
   toConstrType = \case
     Nothing -> constr "Nothing" (Nothing :: Maybe a)
-    Just x -> constr "Just" x
+    Just x  -> constr "Just" x
     where
       constr constrName constrArg = CC.ClassType
         (DS.singleton CC.CppConst)

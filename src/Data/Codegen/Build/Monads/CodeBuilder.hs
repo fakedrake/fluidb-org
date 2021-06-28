@@ -53,12 +53,12 @@ module Data.Codegen.Build.Monads.CodeBuilder
   , tryInsert
   ) where
 
-import Data.CnfQuery.Types
 import           Control.Monad.Except
 import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
+import           Data.CnfQuery.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.List
 import           Data.Query.SQL.FileSet
@@ -69,6 +69,7 @@ import           Data.Utils.Hashable
 import           Control.Monad.State
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.Utils.MTL
 import           Prelude                         hiding (exp)
 
 -- |A code builder monad that can throw errors, carries the code
@@ -96,40 +97,46 @@ delQueryFile q = do
   st <- getCBState
   putCBState st{cbQueryFileCache=delCachedFile (cbQueryFileCache st) q}
 
-delNodeFile :: (Hashables2 e s,
-               MonadError (CodeBuildErr e s t n) m,
-               MonadCodeBuilder e s t n m,
-               MonadReader (ClusterConfig e s t n) m) =>
-              NodeRef n
-            -> m ()
-delNodeFile ref = getNodeCnfN ref >>= mapM_ delQueryFile
+delNodeFile
+  :: (Hashables2 e s
+     ,MonadError (CodeBuildErr e s t n) m
+     ,MonadCodeBuilder e s t n m
+     ,MonadReader (ClusterConfig e s t n) m)
+  => NodeRef n
+  -> m ()
+delNodeFile ref =
+  dropState (ask,const $ return ()) (getNodeCnfN ref) >>= mapM_ delQueryFile
 
-getNodeFile :: (Hashables2 e s,
-               MonadCodeBuilder e s t n m,
-               MonadError (CodeBuildErr e s t n) m,
-               MonadReader (ClusterConfig e s t n) m) =>
-              NodeRef n
-            -> m (Maybe FileSet)
-getNodeFile n = getNodeCnfN n >>= \case
+getNodeFile
+  :: (Hashables2 e s
+     ,MonadCodeBuilder e s t n m
+     ,MonadError (CodeBuildErr e s t n) m
+     ,MonadReader (ClusterConfig e s t n) m)
+  => NodeRef n
+  -> m (Maybe FileSet)
+getNodeFile n = dropState (ask,const $ return ()) (getNodeCnfN n) >>= \case
   [] -> throwAStr $ "No file for node: " ++ ashow n
   cnfs -> do
     queryToFile <- getCachedFile . cbQueryFileCache <$> getCBState
     case nub $ queryToFile <$> cnfs of
       [filename] -> return filename
-      names -> throwAStr $ "Expected one filename for node: " ++ ashow (n,names)
+      names
+        -> throwAStr $ "Expected one filename for node: " ++ ashow (n,names)
 
 -- | Create a filename for writing. Throw if there already is a file
 -- for the query corresponding to the node.
-mkNodeFile :: forall e s t n m constr .
-             (FileSetConstructor constr,
-              Hashables2 e s,
-              MonadCodeBuilder e s t n m,
-              MonadError (CodeBuildErr e s t n) m,
-              MonadReader (ClusterConfig e s t n) m) =>
-             constr
-           -> NodeRef n
-           -> m FileSet
-mkNodeFile constr n = getNodeCnfN n >>= \case
+mkNodeFile
+  :: forall e s t n m constr .
+  (FileSetConstructor constr
+  ,Hashables2 e s
+  ,MonadCodeBuilder e s t n m
+  ,MonadError (CodeBuildErr e s t n) m
+  ,MonadReader (ClusterConfig e s t n) m)
+  => constr
+  -> NodeRef n
+  -> m FileSet
+mkNodeFile constr n =
+  dropState (ask,const $ return ()) (getNodeCnfN n) >>= \case
     [] -> error $ "No cnfs for node " ++ show n
     cnfs -> getNodeFile n >>= \case
       Just fn -> throwAStr $ "Overwriting file" ++ ashow (n,cnfs,fn)
@@ -149,7 +156,7 @@ mkFileName constr n cnfs = do
   let assoc = (\cnf -> (qf cnf,cnf)) <$> cnfs
   fileset <- case nub $ mapMaybe fst assoc of
               []  -> return $ constructFileSet constr (runNodeRef n)
-              [f] -> return $ f
+              [f] -> return f
               xs  -> throwAStr $ "Conflicting files for node: " ++ ashow (n,xs)
   mapM_ (`putQueryFile` fileset) $ snd <$> filter (isNothing . fst) assoc
   return fileset

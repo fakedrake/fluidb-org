@@ -49,16 +49,18 @@ import           Data.Utils.Hashable
 import           Data.Utils.MTL
 
 import qualified Data.List.NonEmpty                    as NEL
+import           Data.Utils.AShow
 
 
 -- | Lifts the plan monad to graph builder copying in the plan
 -- computation any relevant information from the graph builder.
-planLiftCB :: forall e s t n m a .
-             (Monad m, Hashables2 e s) =>
-             PlanT t n m a
-           -> CodeBuilderT' e s t n (PlanT t n m) (a, GCConfig t n)
+planLiftCB
+  :: forall e s t n m a .
+  (Monad m,Hashables2 e s)
+  => PlanT t n m a
+  -> CodeBuilderT' e s t n (PlanT t n m) (a,GCConfig t n)
 planLiftCB plan = do
-  graph <- lift4 $ gbPropNet <$> get
+  graph <- lift4 $ gets gbPropNet
   cConf <- lift2 get
   gcConfE <- asks (updateAll graph cConf)
   case gcConfE of
@@ -66,12 +68,13 @@ planLiftCB plan = do
     Left (Right e) -> lift4 $ throwError e
     Right gcConf   -> lift5 $ (,gcConf) <$> local (const gcConf) plan
 
-updateConf :: (GCConfig t n -> a -> GCConfig t n)
-           -> ExceptT (SizeInferenceError e s t n) (PlanT t n Identity) a
-           -> GCConfig t n
-           -> Either
-           (Either (SizeInferenceError e s t n) (PlanningError t n))
-           (GCConfig t n)
+updateConf
+  :: (GCConfig t n -> a -> GCConfig t n)
+  -> ExceptT (SizeInferenceError e s t n) (PlanT t n Identity) a
+  -> GCConfig t n
+  -> Either
+    (Either (SizeInferenceError e s t n) (PlanningError t n))
+    (GCConfig t n)
 updateConf putVal mkValM conf =
   putVal conf <$> case runIdentity $ runPlanT' def conf $ runExceptT mkValM of
     Left e          -> Left $ Right e
@@ -133,9 +136,11 @@ missingSizes = do
   return $ (`filter` ns) $ \n
     -> maybe True ((< 0.5) . snd) $ refLU n sizes
 
-getCnfM :: (MonadError (SizeInferenceError e s t n) m,
-           MonadReader (ClusterConfig e s t n) m) =>
-           NodeRef n -> m (NEL.NonEmpty (CNFQuery e s))
+getCnfM
+  :: (MonadError (SizeInferenceError e s t n) m
+     ,MonadReader (ClusterConfig e s t n) m)
+  => NodeRef n
+  -> m (NEL.NonEmpty (CNFQuery e s))
 getCnfM k = do
   rMap <- asks nrefToCnfs
   case refLU k rMap of
@@ -152,6 +157,7 @@ filterAlreadySized refs = do
 
 filterInterms
   :: (Hashables2 e s
+     ,MonadAShowErr e s err m
      ,MonadState
         (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double)))
         m)
@@ -162,8 +168,8 @@ filterInterms refs = (`filterM` refs) $ \ref ->
     True  -> modify (second $ refInsert ref $ Just ([],1)) >> return False
     False -> return True
 
-onlyCC :: (MonadState
-          (ClusterConfig e s t n, RefMap n (Maybe ([TableSize],Double)))
-          m) =>
-         StateT (ClusterConfig e s t n) m a -> m a
+onlyCC
+  :: MonadState (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double))) m
+  => StateT (ClusterConfig e s t n) m a
+  -> m a
 onlyCC = dropState (gets fst,modify . first . const)
