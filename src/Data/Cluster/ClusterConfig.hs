@@ -42,7 +42,7 @@ import           Data.Utils.Hashable
 import           Data.Utils.ListT
 import           Data.Utils.MTL
 
-destruct c = (clusterInputs c,clusterOutputs c)
+-- destruct c = (clusterInputs c,clusterOutputs c)
 replaceCluster
   :: (MonadError err m
      ,AShowError e s err
@@ -152,10 +152,6 @@ lookupClustersN ref = do
   clusts <- gets $ fromMaybe [] . HM.lookup q . cnfToClustMap
   let clusts' =
         filter (\c -> ref `elem` (clusterInputs c ++ clusterOutputs c)) clusts
-  traceM
-    $ "Lookup: "
-    ++ ashow
-      (ref,hash q,destruct <$> clusts,destruct <$> clusts')
   return clusts'
 {-# INLINE lookupClustersN #-}
 
@@ -209,7 +205,6 @@ linkCnfClust
   -> AnyCluster e s t n
   -> m ()
 linkCnfClust q clust = do
-  traceM $ "Linking: " ++ show (hash q,destruct clust)
   modify $ \r -> r
     { cnfToClustMap = HM.alter (Just . maybe [clust] (clust :)) q
         $ cnfToClustMap r
@@ -232,7 +227,6 @@ linkNRefCnf
   -> CNFQuery e s
   -> m ()
 linkNRefCnf ref cnf = do
-  traceM $ "Linking: " ++ show (ref,hash cnf)
   refsToCnfs <- gets nrefToCnfs
   -- XXX: If this has worked well for a while remove this check and
   -- enforce the 1-1 corrensondence.

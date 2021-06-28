@@ -31,6 +31,7 @@ import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
+import           Data.Utils.MTL
 import           Data.Utils.Tup
 
 data QRef n e s = QRef {getQRef :: NodeRef n, getNCNF :: NCNFQuery e s}
@@ -118,18 +119,25 @@ mkJoinClustConfig p (lref,lncnfs,ql) (rref,rncnfs,qr) =
 putJoinClusterC :: forall e s t n m . (Hashables2 e s, Monad m) =>
                  JoinClustConfig n e s
                -> CGraphBuilderT e s t n m (JoinClust e s t n)
-putJoinClusterC jcc@JoinClustConfig{..} = do
+putJoinClusterC jcc = do
+  traceM $ "Inserting join cluster..."
   c <- idempotentClusterInsert constr $ putJoinClusterI jcc
-  forM_ [qrefLO,qrefO,qrefRO] $ \ncnf ->
+  traceM
+    $ "putJoinClusterC "
+    ++ show
+      (getQRef <$> [qrefLO jcc,qrefO jcc,qrefRO jcc]
+      ,[clusterOutputs $ JoinClustW c])
+  forM_ [qrefLO jcc,qrefO jcc,qrefRO jcc] $ \ncnf -> do
     linkCnfClust (ncnfToCnf $ getNCNF ncnf) $ JoinClustW c
-  putJClustProp (assocL,assocO,assocR) jProp c
+  putJClustProp (assocL jcc,assocO jcc,assocR jcc) (jProp jcc) c
   return c
   where
-    constr = [(binClusterLeftIn . joinBinCluster,getQRef qrefLI),
-              (binClusterRightIn . joinBinCluster,getQRef qrefRI),
-              (binClusterOut . joinBinCluster,getQRef qrefO),
-              (joinClusterLeftAntijoin, getQRef qrefLO),
-              (joinClusterRightAntijoin, getQRef qrefRO)]
+    constr =
+      [(binClusterLeftIn . joinBinCluster,getQRef $ qrefLI jcc)
+      ,(binClusterRightIn . joinBinCluster,getQRef $ qrefRI jcc)
+      ,(binClusterOut . joinBinCluster,getQRef $ qrefO jcc)
+      ,(joinClusterLeftAntijoin,getQRef $ qrefLO jcc)
+      ,(joinClusterRightAntijoin,getQRef $ qrefRO jcc)]
 
 -- | This is used only for intermediate nodes that we know we wont match.
 mkCNF :: (Monad m,Hashables2 e s)
@@ -185,50 +193,67 @@ inT .<~>>. outNs = forM_ outNs $ \outN -> do
 putJoinClusterI :: forall e s t n  m . (Hashables2 e s, Monad m) =>
                  JoinClustConfig n e s
                -> CGraphBuilderT e s t n m (JoinClust e s t n)
-putJoinClusterI JoinClustConfig{..} = do
+putJoinClusterI JoinClustConfig {..} = do
   -- Node
   let cnfO = ncnfToCnf $ getNCNF qrefO
       cnfLO = ncnfToCnf $ getNCNF qrefLO
       cnfRO = ncnfToCnf $ getNCNF qrefRO
-  cnfLInterm <- mkCNF $ Q2 QProjQuery (Q0 $ getNCNF qrefLI) (Q0 $ getNCNF qrefO)
-  cnfRInterm <- mkCNF $ Q2 QProjQuery (Q0  $ getNCNF qrefRI) (Q0 $ getNCNF qrefO)
+  cnfLInterm <- mkCNF
+    $ Q2 QProjQuery (Q0 $ getNCNF qrefLI) (Q0 $ getNCNF qrefO)
+  cnfRInterm <- mkCNF
+    $ Q2 QProjQuery (Q0 $ getNCNF qrefRI) (Q0 $ getNCNF qrefO)
   tRef <- mkNodeFromCnfT cnfO
   lSplit <- mkNodeFromCnfT cnfLO
   rSplit <- mkNodeFromCnfT cnfRO
-
   -- Intermediates should not be shared between clusters
   lInterm <- mkNodeFormCnfNUnsafe cnfLInterm
   rInterm <- mkNodeFormCnfNUnsafe cnfRInterm
-
+  cnfl <- lookupCnfN lInterm
+  unless (cnfl == [cnfLInterm]) $ error "oops cnf"
   -- Structure
   lift2 $ do
     lSplit .<<~>. [getQRef qrefLI]
-    lSplit .<~.   getQRef qrefRI
+    lSplit .<~. getQRef qrefRI
     rSplit .<<~>. [getQRef qrefRI]
-    rSplit .<~.   getQRef qrefLI
-    tRef   .<<~>. [lInterm, rInterm]
-    rSplit .<~>>. [rInterm, getQRef qrefRO]
-    lSplit .<~>>. [getQRef qrefLO, lInterm]
-    tRef   .<~>>. [getQRef qrefO]
-  let clust :: JoinClust e s t n = updateCHash JoinClust {
-        joinBinCluster=updateCHash BinClust{
-            binClusterLeftIn=noopRef $ getQRef qrefLI,
-            binClusterRightIn=noopRef $ getQRef qrefRI,
-            binClusterOut=withOpRef (QJoin jProp) $ getQRef qrefO,
-            binClusterT=tRef,
-            binClusterHash=undefined},
-        joinClusterLeftAntijoin=withOpRef (QLeftAntijoin jProp) $ getQRef qrefLO,
-        joinClusterRightAntijoin=withOpRef (QRightAntijoin jProp) $ getQRef qrefRO,
-        joinClusterLeftIntermediate=noopRef lInterm,
-        joinClusterRightIntermediate=noopRef rInterm,
-        joinClusterLeftSplit=lSplit,
-        joinClusterRightSplit=rSplit,
-        joinClusterHash=undefined}
-  forM_ [getQRef qrefLI,getQRef qrefRI] $ \ref ->
-    registerClusterInput ref $ JoinClustW clust
+    rSplit .<~. getQRef qrefLI
+    tRef .<<~>. [lInterm,rInterm]
+    rSplit .<~>>. [rInterm,getQRef qrefRO]
+    lSplit .<~>>. [getQRef qrefLO,lInterm]
+    tRef .<~>>. [getQRef qrefO]
+  let clust :: JoinClust e s t n =
+        updateCHash
+          JoinClust
+          { joinBinCluster = updateCHash
+              BinClust
+              { binClusterLeftIn = noopRef $ getQRef qrefLI
+               ,binClusterRightIn = noopRef $ getQRef qrefRI
+               ,binClusterOut = withOpRef (QJoin jProp) $ getQRef qrefO
+               ,binClusterT = tRef
+               ,binClusterHash = undefined
+              }
+           ,joinClusterLeftAntijoin = withOpRef (QLeftAntijoin jProp)
+              $ getQRef qrefLO
+           ,joinClusterRightAntijoin = withOpRef (QRightAntijoin jProp)
+              $ getQRef qrefRO
+           ,joinClusterLeftIntermediate = noopRef lInterm
+           ,joinClusterRightIntermediate = noopRef rInterm
+           ,joinClusterLeftSplit = lSplit
+           ,joinClusterRightSplit = rSplit
+           ,joinClusterHash = undefined
+          }
+  forM_ [getQRef qrefLI,getQRef qrefRI]
+    $ \ref -> registerClusterInput ref $ JoinClustW clust
   -- We normally link cnfs outside of the context of this function but
   -- these are intermediates.
   forM_ [cnfLInterm,cnfRInterm] $ \cnf -> linkCnfClust cnf $ JoinClustW clust
+  clust0 <- lookupClustersN lInterm
+  unless (clust0 == [JoinClustW clust])
+    $ error "Intermediates are properly linked to the cluster!"
+  areInterm
+    <- dropReader get $ isIntermediateClust `traverse` [lInterm,rInterm]
+  traceM
+    $ "Intermediates: "
+    ++ show (zip areInterm [lInterm,rInterm],clusterInterms $ JoinClustW clust)
   return clust
 
 

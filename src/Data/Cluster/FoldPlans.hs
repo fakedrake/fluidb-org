@@ -73,15 +73,20 @@ instance (AShow e,AShow s)
   => AShow (Query1 e s)
 queryPlans1
   :: forall e s t n m err .
-  (Hashables2 e s,MonadState (ClusterConfig e s t n) m,MonadAShowErr e s err m)
+  (Hashables2 e s
+  ,MonadState (ClusterConfig e s t n) m
+  ,MonadAShowErr e s err m
+  ,HasCallStack)
   => NodeRef n
   -> m [(NEL.NonEmpty (Query1 (PlanSym e s) (NodeRef n)),AnyCluster e s t n)]
 queryPlans1 refO = do
   clusts <- getClustersNonInput refO
   when (null clusts) $ do
+    isInterm <- dropReader get $ isIntermediateClust refO
     allClusts <- lookupClustersN refO
     throwAStr
-      $ "NodeRef is in none of the clusters output " ++ ashow (refO,allClusts)
+      $ "NodeRef is in none of the clusters: "
+      ++ ashow (refO,allClusts,isInterm)
   forM clusts $ \clust -> fmap (,clust) $ case clust of
     JoinClustW c       -> getQueryRecurse2 (clusterInputs clust) c
     BinClustW c        -> getQueryRecurse2 (clusterInputs clust) c

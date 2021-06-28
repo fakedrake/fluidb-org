@@ -55,31 +55,35 @@ withOpRefM :: (Hashables2 e s,Traversable op) =>
            -> WMetaD (f (op (PlanSym e s))) NodeRef n
 withOpRefM op r = WMetaD (op, r)
 
-putRet :: forall e s t n m f c .
-         (Hashables2 e s, Monad m, SpecificCluster c,
-          Eq (c NodeRef f t n),
-          CanPutIdentity (c NodeRef f) (c Identity Identity) NodeRef f,
-          Bitraversable (c Identity Identity),
-          Zip2 (c Identity Identity),
-          f ~ ComposedType c (PlanSym e s) NodeRef) =>
-         c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n
-       -> c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n
-       -> CGraphBuilderT e s t n m (c NodeRef f t n)
+putRet
+  :: forall e s t n m f c .
+  (Hashables2 e s
+  ,Monad m
+  ,SpecificCluster c
+  ,Eq (c NodeRef f t n)
+  ,CanPutIdentity (c NodeRef f) (c Identity Identity) NodeRef f
+  ,Bitraversable (c Identity Identity)
+  ,Zip2 (c Identity Identity)
+  ,f ~ ComposedType c (PlanSym e s) NodeRef)
+  => c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n
+  -> c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n
+  -> CGraphBuilderT e s t n m (c NodeRef f t n)
 putRet ret c = do
   clust'' <- fmap dropIdentity
-            $ bitraverse (return . fst) (uncurry combOps)
-            $ zip2 (putIdentity ret)
-            $ putIdentity c
+    $ bitraverse (return . fst) (uncurry combOps)
+    $ zip2 (putIdentity ret)
+    $ putIdentity c
   let retAny = fromSpecificClust ret
   let oldAny = fromSpecificClust clust''
   replaceCluster retAny oldAny
   return clust''
   where
-    combOps :: ComposedType c (PlanSym e s) NodeRef n -> f n -> CGraphBuilderT e s t n m (f n)
+    combOps :: ComposedType c (PlanSym e s) NodeRef n
+            -> f n
+            -> CGraphBuilderT e s t n m (f n)
     combOps l r = case (extractRef pc pe l,extractRef pc pe r) of
-      ((opl,fl),(opr,fr)) -> if fl /= fr
-        then return l -- It's an intermediate.
-        else case mkComposedType pc pe (opl <|> opr, fl :: NodeRef n) of
+      ((opl,fl),(opr,fr)) -> if fl /= fr then return l -- It's an intermediate.
+        else case mkComposedType pc pe (opl <|> opr,fl :: NodeRef n) of
           Just x  -> return x
           Nothing -> throwAStr "oops"
       where
@@ -134,9 +138,8 @@ idempotentClusterInsert constraints m = do
     extrRef = extractRef (Proxy :: Proxy c) (Proxy :: Proxy (PlanSym e s))
 
 -- The exceptions are real, the state is dropped.
-quarantine :: Monad m =>
-             CGraphBuilderT e s t n m a
-           -> CGraphBuilderT e s t n m a
+quarantine
+  :: Monad m => CGraphBuilderT e s t n m a -> CGraphBuilderT e s t n m a
 quarantine m = do
   ccnf <- get
   gbst <- lift2 get
