@@ -67,6 +67,8 @@ import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
 import           Data.Utils.Default
 
+
+-- | run a bunch of common stuff to make the following more responsive.
 warmupCache :: forall t n m . Monad m => NodeRef n -> PlanT t n m ()
 warmupCache node = do
   trM "Warming up cache..."
@@ -88,7 +90,7 @@ warmupCache node = do
 setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
 setNodeMaterialized node = wrapTraceT "setNodeMaterialized" $ do
   -- Populate the metaop cache
-  warmupCache node
+  when False $ warmupCache node
   setNodeStateSafe node Mat
   cost <- totalTransitionCost
   trM $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)

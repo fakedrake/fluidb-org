@@ -102,9 +102,9 @@ sqlToSolution query serializeSols getSolution = do
   -- traceM "Orig query:\n"
   -- traceM $ ashow $ first planSymOrig query
   qs <- optQueryPlan @e @s (literalType cppConf) symIso query
-  ioLogMsg ioOps $ "Opt queries: [size:" ++  show (lengthF qs) ++ "]\n"
   -- SANITY CHECK
   when False $ wrapTrace "Sanity checking..." $ do
+    ioLogMsg ioOps $ "Opt queries: [size:" ++  show (lengthF qs) ++ "]\n"
     let toCnfs q = HS.fromList
           $ fmap fst
           $ either undefined id
@@ -180,22 +180,23 @@ insertAndRun queries postSolution = do
         (a,GCConfig t n)
     solveQuery = do
       QueryCppConf {..} <- gets cbQueryCppConf
-      when True $ do
+      when False $ do
         matNodes <- lift materializedNodes
         traceM $ "Mat nodes: " ++ ashow matNodes
         when (null matNodes) $ throwAStr "No ground truth"
-      nOptqRef :: NodeRef n <- wrapTraceT "inserting plans"
-        $ lift3
-        $ insertQueryPlan literalType queries
+      nOptqRef :: NodeRef n <- lift3 $ insertQueryPlan literalType queries
       lift4 clearClustBuildCache
       -- lift $ reportGraph >> reportClusterConfig/
-      traceM $ "Commencing solution of node:" ++ ashow nOptqRef
       nodeNum <- asks (length . nNodes . propNet)
-      traceM $ "Total nodes:" ++ show nodeNum
-      (_qcost,conf)
-        <- lift $ planLiftCB $ wrapTrace ("Solving node:" ++ show nOptqRef) $ do
-          setNodeMaterialized nOptqRef
-          fmap mconcat $ mapM transitionCost =<< dropReader get getTransitions
+      traceM
+        $ printf
+          "Total nodes: %d, solving node: %n, opt DAG size: %d"
+          nodeNum
+          nOptqRef
+          (lengthF queries)
+      (_qcost,conf) <- lift $ planLiftCB $ do
+        setNodeMaterialized nOptqRef
+        fmap mconcat $ mapM transitionCost =<< dropReader get getTransitions
       (,pushHistory nOptqRef conf) <$> lift (local (const conf) postSolution)
 
 

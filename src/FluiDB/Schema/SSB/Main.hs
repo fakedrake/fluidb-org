@@ -47,15 +47,19 @@ finallyError m hndl = do
   hndl
   return ret
 
-runQuery :: SSBQuery -> SSBGlobalSolveM ()
-runQuery query = do
+shouldRender Verbose = True
+shouldRender Quiet   = False
+
+runQuery :: Verbosity -> SSBQuery -> SSBGlobalSolveM ()
+runQuery verbosity  query = do
   cppConf <- gets globalQueryCppConf
   aquery <- annotateQuerySSB cppConf query
-  (transitions,_cppCode) <- finallyError (runSingleQuery aquery) $ do
-    (queryPath,pngPath,grPath) <- renderGraph query
-    liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
-    liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
-    liftIO $ putStrLn $ "The raw graph at: " ++ grPath
+  (transitions,_cppCode)
+    <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
+      (queryPath,pngPath,grPath) <- renderGraph query
+      liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
+      liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
+      liftIO $ putStrLn $ "The raw graph at: " ++ grPath
   -- liftIO $ runCpp cppCode
   liftIO $ putStrLn $ ashow transitions
   return ()
@@ -68,7 +72,7 @@ ssbRunGlobalSolve m = do
 singleQuery :: IO ()
 singleQuery =
   ssbRunGlobalSolve
-  $ runQuery
+  $ runQuery Verbose
   $ ssbParse
   $ unwords
     ["select c_city, s_city, d_year, sum(lo_revenue) as revenue"
@@ -83,13 +87,13 @@ singleQuery =
     ,"order by d_year, revenue desc"]
 -- XXX: removing any of the "this" lines makes singleQuery run.
 
-
-actualMain :: [Int] -> IO ()
-actualMain qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
+data Verbosity = Verbose | Quiet
+actualMain :: Verbosity -> [Int] -> IO ()
+actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
   liftIO $ putStrLn $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
     Nothing    -> throwAStr $ printf "No such query %d" qi
-    Just query -> runQuery query
+    Just query -> runQuery verbosity query
 
 
 type ImagePath = FilePath
@@ -131,6 +135,7 @@ readGraph gpath m = do
     Just g  -> evalStateT m def{gbPropNet = g}
 
 ssbMain :: IO ()
-ssbMain = timeout 5000000 (actualMain [1..12]) >>= \case
-  Nothing -> putStrLn "TIMEOUT!!"
-  Just () -> putStrLn "Done!"
+ssbMain = do
+  timeout 10000000 (actualMain Quiet [1..12]) >>= \case
+    Nothing -> putStrLn "TIMEOUT!!"
+    Just () -> putStrLn "Done!"

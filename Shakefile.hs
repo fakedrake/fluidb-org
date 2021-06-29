@@ -68,9 +68,9 @@ stackCmd conf scmd args = "stack" : workDir ++ rest
   where
     workDir = maybe [] (\x -> ["--work-dir",x]) $ cnfStackRoot conf
     rest = case scmd of
-      StackBuild -> "build" : cnfStackArgs conf ++ args
+      StackBuild -> cnfStackArgs conf ++ ["build"] ++ args
       StackPath  -> "path" : args
-      StackRun   -> "run" : cnfStackArgs conf ++ args
+      StackRun   -> cnfStackArgs conf ++ "run" ++ args
 
 
 execRule :: Config -> String -> Rules FilePath
@@ -146,4 +146,4 @@ main =
       noNixCmd (Timeout 10) readdumpExec
     phony "run-benchmark" $ do
       need [benchmarkExec]
-      cmd [benchmarkExec,"+RTS","-p"]
+      noNixCmd $ stackCmd benchConf StackRun ["+RTS","-p"]

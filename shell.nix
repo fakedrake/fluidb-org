@@ -6,6 +6,7 @@ with nixpkgs; let
     base
     shake
     hasktags
+    profiteur
     profiterole
     floskell
     haskell-language-server

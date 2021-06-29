@@ -166,7 +166,7 @@ ssbSchema =
        -- long           revenue;
       ,(CppNat,"lo_revenue")
        -- long           supp_cost;
-      ,(CppNat,"lo_supp_cost")
+      ,(CppNat,"lo_supplycost")
        -- long           tax;
       ,(CppDouble,"lo_tax")
        -- char            commit_date[DATE_LEN] ;
