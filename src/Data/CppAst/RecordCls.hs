@@ -18,16 +18,11 @@ import           Data.CppAst.TypeModifier
 import           Data.List
 import qualified Data.Set                 as DS
 import           Data.Tuple
-import           Data.Utils.Debug
 import           Data.Utils.Function
 import           Data.Utils.Unsafe
 
 
-recordCls
-  :: HasCallStack
-  => Symbol CodeSymbol
-  -> [(CppType,CodeSymbol)]
-  -> Class CodeSymbol
+recordCls :: Symbol CodeSymbol -> [(CppType,CodeSymbol)] -> Class CodeSymbol
 recordCls name sch =
   Class
   { className = name

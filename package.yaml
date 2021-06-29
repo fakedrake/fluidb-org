@@ -49,6 +49,7 @@ library:
   exposed-modules:
     - FluiDB.Schema.TPCH.Main
     - FluiDB.Schema.Graph.Main
+    - FluiDB.Schema.SSB.Main
   dependencies:
     - base >= 4.7 && < 5
     - ghc >= 8.6.5

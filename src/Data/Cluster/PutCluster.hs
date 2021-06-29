@@ -18,14 +18,12 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
-import           Data.Cluster.Types.Clusters
 import           Data.CnfQuery.BuildUtils
 import           Data.CnfQuery.Types
 import           Data.CppAst.CppType
 import           Data.NodeContainers
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
-import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.Tup
@@ -41,7 +39,6 @@ putBinCluster
   -> (NodeRef n,NCNFQuery e s) -- Out
   -> CGraphBuilderT e s t n m (BinClust e s t n)
 putBinCluster symAssoc op (l,_ncnfL) (r,_ncnfR) (out,ncnfO) = do
-  traceM "putBinCluster"
   clust <- idempotentClusterInsert constraints mkClust
   putBClustPropagator clust symAssoc op
   forM_ [ncnfO] $ \ncnf -> linkCnfClust (ncnfToCnf ncnf) $ BinClustW clust
@@ -95,7 +92,7 @@ planSymAssoc = fmap (bimap mkSym mkSym) . ncnfResInOutNames where
 -- (QProd .. A == A).
 putUnCluster
   :: forall e s t n m .
-  (HasCallStack,Hashables2 e s,Monad m)
+  (Hashables2 e s,Monad m)
   => ([(PlanSym e s,PlanSym e s)],[(PlanSym e s,PlanSym e s)])
   -- ^ Only the primary is required
   -> (e -> Maybe CppType)
@@ -112,8 +109,6 @@ putUnCluster
   (secRef,ncnfCoO)
   (refO,ncnfO) = do
   c <- idempotentClusterInsert constraints mkClust
-  traceM
-    $ "putUnCluster: " ++ ashow (refO,secRef,inp,destructCluster $ UnClustW c)
   putUnClustPropagator (Tup2 symAssocPrim symAssocSec) literalType c op
   forM_ [ncnfO,ncnfCoO] $ \ncnf
     -> linkCnfClust (ncnfToCnf ncnf) $ UnClustW c
@@ -153,7 +148,7 @@ putUnCluster
       return clust
 
 putUnClustPropagator
-  :: (HasCallStack,Hashables2 e s,Monad m)
+  :: (Hashables2 e s,Monad m)
   => Tup2 [(PlanSym e s,PlanSym e s)]
   -> (e -> Maybe CppType)
   -> UnClust e s t n

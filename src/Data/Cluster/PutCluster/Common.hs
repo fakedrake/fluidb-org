@@ -34,7 +34,6 @@ import           Data.Proxy
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
@@ -159,7 +158,6 @@ cachedMkRef
 cachedMkRef fromCache toCache cnf = gets fromCache >>= \case
   Nothing -> do
     x <- lift mkRef
-    traceM $ "Making ref: " ++ ashow x
     modify $ toCache x
     return x
   Just ref -> lift (linkNRefCnf ref cnf) >> return ref

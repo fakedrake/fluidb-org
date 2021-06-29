@@ -39,7 +39,6 @@ import           Data.Query.SQL.Types
 import           Data.String
 import           Data.Utils.Default
 import           Data.Utils.Functors
-import           Data.Utils.ListT
 import           Prelude                hiding (filter, lookup)
 import           System.FilePath.Posix
 import           Text.Printf

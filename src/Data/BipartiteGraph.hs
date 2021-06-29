@@ -37,7 +37,7 @@
 -- case reverse-triggering materializes any subset undirected input
 -- nodes.
 
-module Data.Bipartite
+module Data.BipartiteGraph
   (Bipartite
   ,nNodes
   ,GraphBuilderT

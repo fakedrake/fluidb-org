@@ -14,34 +14,33 @@
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Data.Cluster.Types.Monad
-  ( ClusterError(..)
-  , ClusterConfig(..)
-  , ClustPropagators(..)
-  , ClustBuildCache(..)
-  , InsPlanRes(..)
-  , QueryForest(..)
-  , CGraphBuilderT
-  , CPropagator
-  , ACPropagator
-  , PlanCluster
-  , PropCluster
-  , Defaulting
-  , CPropagatorPlan
-  , forestToQuery
-  , queryToForest
-  , freeToForest
-  , regCall
-  , showRegCall
-  , clearClustBuildCache
-  , ifDefaultingEmpty
-  , demoteDefaulting
-  , hoistCGraphBuilderT
-  , promoteDefaulting
-  , getDefaultingFull
-  , getDefaultingDef
-  , defaultingLe
-  , getDef
-  ) where
+  (ClusterError(..)
+  ,ClusterConfig(..)
+  ,ClustPropagators(..)
+  ,ClustBuildCache(..)
+  ,InsPlanRes(..)
+  ,QueryForest(..)
+  ,CGraphBuilderT
+  ,CPropagator
+  ,ACPropagator
+  ,PlanCluster
+  ,PropCluster
+  ,Defaulting
+  ,CPropagatorPlan
+  ,forestToQuery
+  ,queryToForest
+  ,freeToForest
+  ,regCall
+  ,showRegCall
+  ,clearClustBuildCache
+  ,ifDefaultingEmpty
+  ,demoteDefaulting
+  ,hoistCGraphBuilderT
+  ,promoteDefaulting
+  ,getDefaultingFull
+  ,getDefaultingDef
+  ,defaultingLe
+  ,getDef) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -121,7 +120,7 @@ freeToForest = \case
     in QueryForest {qfHash=hash v,qfQueries=Left v}
   Pure a -> QueryForest {qfHash=hash a,qfQueries=Right a}
 forestToQuery :: QueryForest e s -> Query e (s, QueryPlan e s)
-forestToQuery = either ((>>= forestToQuery) . NEL.head) Q0 . qfQueries
+forestToQuery = either (forestToQuery <=<  NEL.head) Q0 . qfQueries
 queryToForest :: Hashables2 e s => Query e (QueryForest e s) -> QueryForest e s
 queryToForest q = let v = return q in QueryForest {qfHash=hash v,qfQueries=Left v}
 
@@ -141,11 +140,11 @@ clearClustBuildCache = modify $ \cc -> cc{clustBuildCache=def}
 -- | Count function calls
 showRegCall :: MonadState (ClusterConfig e s t n) m => m ()
 showRegCall = do
-  ls <- sortOn snd . HM.toList . callCount . clustBuildCache <$> get
+  ls <- gets $ sortOn snd . HM.toList . callCount . clustBuildCache
   traceM "Functions called:"
   case ls of
     [] -> traceM "<No functions called to show>"
-    _ -> forM_ ls $ \(n,c) -> traceM $ printf "\t%s -> %d" n c
+    _  -> forM_ ls $ \(n,c) -> traceM $ printf "\t%s -> %d" n c
 
 regCall :: MonadState (ClusterConfig e s t n) m => String -> m ()
 regCall call = modify $ \cc -> cc{
@@ -171,50 +170,50 @@ instance Applicative Defaulting where
   --
   --   (++) <$> DefaultingFull x x' <*> DefaultingFull y y'
   --     ==> DefaultingFull (x ++ y) (x' ++ y)
-  DefaultingEmpty <*> _ = DefaultingEmpty
-  _ <*> DefaultingEmpty = DefaultingEmpty
-  DefaultingDef f <*> DefaultingDef x = DefaultingDef $ f x
+  DefaultingEmpty <*> _                       = DefaultingEmpty
+  _ <*> DefaultingEmpty                       = DefaultingEmpty
+  DefaultingDef f <*> DefaultingDef x         = DefaultingDef $ f x
   DefaultingFull df vf <*> DefaultingFull d v = DefaultingFull (df d) (vf v)
-  DefaultingFull _ vf <*> DefaultingDef v = DefaultingDef (vf v)
-  DefaultingDef f <*> DefaultingFull _ v = DefaultingDef (f v)
+  DefaultingFull _ vf <*> DefaultingDef v     = DefaultingDef (vf v)
+  DefaultingDef f <*> DefaultingFull _ v      = DefaultingDef (f v)
 -- | Alternative is left biased, ie l <|> r, l sets the default
 -- value when available.
 instance Alternative Defaulting where
   empty = DefaultingEmpty
-  a <|> DefaultingEmpty = a
-  DefaultingEmpty <|> a = a
-  a <|> (DefaultingDef _) = a
+  a <|> DefaultingEmpty                    = a
+  DefaultingEmpty <|> a                    = a
+  a <|> (DefaultingDef _)                  = a
   (DefaultingDef d) <|> DefaultingFull _ a = DefaultingFull d a
-  a <|> _ = a
+  a <|> _                                  = a
 
 promoteDefaulting :: Defaulting a -> Defaulting a
 promoteDefaulting = \case
-  DefaultingEmpty -> DefaultingEmpty
-  DefaultingDef x -> DefaultingFull x x
+  DefaultingEmpty        -> DefaultingEmpty
+  DefaultingDef x        -> DefaultingFull x x
   d@(DefaultingFull _ _) -> d
 demoteDefaulting :: Defaulting a -> Defaulting a
 demoteDefaulting = \case
   DefaultingFull a _ -> DefaultingDef a
-  x -> x
+  x                  -> x
 defaultingLe :: Defaulting e -> Defaulting e -> Bool
 defaultingLe x y = lv x <= lv y where
   lv :: Defaulting x -> Int
   lv = \case
-    DefaultingEmpty -> 0
-    DefaultingDef _ -> 1
+    DefaultingEmpty    -> 0
+    DefaultingDef _    -> 1
     DefaultingFull _ _ -> 2
 
 getDef :: Defaulting a -> Maybe a
 getDef d = getDefaultingFull d <|> getDefaultingDef d
 getDefaultingDef :: Defaulting a -> Maybe a
 getDefaultingDef = \case
-  DefaultingDef a -> Just a
+  DefaultingDef a    -> Just a
   DefaultingFull d _ -> Just d
-  _ -> Nothing
+  _                  -> Nothing
 getDefaultingFull :: Defaulting a -> Maybe a
 getDefaultingFull = \case
   DefaultingFull _ v -> Just v
-  _ -> Nothing
+  _                  -> Nothing
 ifDefaultingEmpty :: Defaulting a -> x -> x -> x
 ifDefaultingEmpty p isEmpty isntEmpty = case p of
   DefaultingEmpty -> isEmpty

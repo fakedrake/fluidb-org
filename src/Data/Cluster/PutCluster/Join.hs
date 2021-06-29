@@ -28,7 +28,6 @@ import           Data.NodeContainers
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
@@ -120,13 +119,7 @@ putJoinClusterC :: forall e s t n m . (Hashables2 e s, Monad m) =>
                  JoinClustConfig n e s
                -> CGraphBuilderT e s t n m (JoinClust e s t n)
 putJoinClusterC jcc = do
-  traceM $ "Inserting join cluster..."
   c <- idempotentClusterInsert constr $ putJoinClusterI jcc
-  traceM
-    $ "putJoinClusterC "
-    ++ show
-      (getQRef <$> [qrefLO jcc,qrefO jcc,qrefRO jcc]
-      ,[clusterOutputs $ JoinClustW c])
   forM_ [qrefLO jcc,qrefO jcc,qrefRO jcc] $ \ncnf -> do
     linkCnfClust (ncnfToCnf $ getNCNF ncnf) $ JoinClustW c
   putJClustProp (assocL jcc,assocO jcc,assocR jcc) (jProp jcc) c
@@ -195,7 +188,6 @@ putJoinClusterI :: forall e s t n  m . (Hashables2 e s, Monad m) =>
                -> CGraphBuilderT e s t n m (JoinClust e s t n)
 putJoinClusterI JoinClustConfig {..} = do
   -- Node
-  traceM $ "Join  node: " ++ show (getQRef qrefO)
   let cnfO = ncnfToCnf $ getNCNF qrefO
       cnfLO = ncnfToCnf $ getNCNF qrefLO
       cnfRO = ncnfToCnf $ getNCNF qrefRO

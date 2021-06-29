@@ -1,16 +1,16 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeOperators #-}
-import Control.Monad.Reader
-import Debug.Trace
-import Development.Shake
-import Development.Shake.Rule
-import Development.Shake.Command
-import Development.Shake.FilePath
-import Development.Shake.Util
-import Control.Monad.Except
-import Data.List.Extra
-import Text.Printf
-import Control.Exception.Extra
+{-# LANGUAGE TypeOperators    #-}
+import           Control.Exception.Extra
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Data.List.Extra
+import           Debug.Trace
+import           Development.Shake
+import           Development.Shake.Command
+import           Development.Shake.FilePath
+import           Development.Shake.Rule
+import           Development.Shake.Util
+import           Text.Printf
 
 data Config =
   Config
@@ -51,10 +51,10 @@ localInstallRoot = do
   v <- liftIO $ firstJust (getVal . splitOn ": ") . lines <$> readFile paths
   case v of
     Nothing -> fail "oops"
-    Just a -> return a
+    Just a  -> return a
   where
     getVal ["local-install-root",v] = Just v
-    getVal _ = Nothing
+    getVal _                        = Nothing
 
 haskellExec :: String -> FDBAction FilePath
 haskellExec exeName = do
@@ -69,12 +69,14 @@ stackCmd conf scmd args = "stack" : workDir ++ rest
     workDir = maybe [] (\x -> ["--work-dir",x]) $ cnfStackRoot conf
     rest = case scmd of
       StackBuild -> "build" : cnfStackArgs conf ++ args
-      StackPath -> "path" : args
-      StackRun -> "run" : cnfStackArgs conf ++ args
+      StackPath  -> "path" : args
+      StackRun   -> "run" : cnfStackArgs conf ++ args
+
 
 execRule :: Config -> String -> Rules FilePath
 execRule conf execName = do
   let execPath = "_build/bin" </> execName
+  phony execName $ need [execPath]
   execPath %> \out -> do
     putInfo $ printf "Building executable %s (%s)" execName execPath
     needSrcFiles
@@ -98,24 +100,39 @@ readdumpConf = defConf { cnfNeedFiles = need ["tools/ReadDump/Main.hs"] }
 branchesConf :: Config
 branchesConf =
   Config
-  { cnfStackRoot = Just branchesDir
+  { cnfStackRoot = Just ".branches-stack-dir/"
    ,cnfStackArgs = ["--ghc-options","-DVERBOSE_SOLVING"]
    ,cnfNeedFiles = needSrcFiles
   }
-  where
-    branchesDir = ".branches-stack-dir/"
+
+benchConf :: Config
+benchConf =
+  Config
+  { cnfStackRoot = Just ".benchmark-stack-dir/"
+   ,cnfStackArgs = ["--profile"]
+   ,cnfNeedFiles = needSrcFiles
+  }
 
 pathsFileRule :: Config -> Rules ()
 pathsFileRule conf = do
   let paths = runReader pathsFileR conf
-  paths %> \out -> noNixCmd (FileStdout out) $ stackCmd conf StackPath []
+  paths %> \out -> do
+    () <- noNixCmd (FileStdout out) $ stackCmd conf StackPath []
+    putInfo $ "Listed haskell files in: " ++ out
+
+profileBenchmark :: FilePath
+profileBenchmark = "/tmp/benchmark.prof"
+
+
 
 main :: IO ()
 main =
   shakeArgs shakeOptions { shakeVerbosity = Verbose,shakeFiles = "_build" } $ do
-    want [tokenBranch]
-    benchmarkExec <- execRule branchesConf "benchmark"
+    -- want [tokenBranch]
+    benchmarkExec <- execRule benchConf "benchmark"
+    benchmarkBranchesExec <- execRule branchesConf "benchmark-branches"
     readdumpExec <- execRule readdumpConf "readdump"
+    pathsFileRule benchConf
     pathsFileRule branchesConf
     pathsFileRule readdumpConf
     logDump %> \out -> do
@@ -127,3 +144,6 @@ main =
       need [logDump,readdumpExec]
       cmd_ ["mkdir","-p",branchesRoot]
       noNixCmd (Timeout 10) readdumpExec
+    phony "run-benchmark" $ do
+      need [benchmarkExec]
+      cmd [benchmarkExec,"+RTS","-p"]

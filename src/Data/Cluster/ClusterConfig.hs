@@ -255,7 +255,7 @@ mkNodeFromCnf cnf = matchNode cnf >>= \case
     -- The new node should have a score
     linkNRefCnf ref cnf
     return [ref]
-  ns -> return $ nub $ fst <$> ns
+  ns -> return $ nub $ fst <$>  ns
 
 isIntermediateClust
   :: (Hashables2 e s

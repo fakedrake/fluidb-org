@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-deferred-type-errors #-}
-module FluiDB.Schema.SSB.Main (graphMain) where
+module FluiDB.Schema.SSB.Main (ssbMain) where
 
 
 import           Control.Monad.Except
@@ -130,7 +130,7 @@ readGraph gpath m = do
     Nothing -> fail $ "Failed to read graph at: " ++ gpath
     Just g  -> evalStateT m def{gbPropNet = g}
 
-graphMain :: IO ()
-graphMain = timeout 3000000 (actualMain [1..12]) >>= \case
+ssbMain :: IO ()
+ssbMain = timeout 5000000 (actualMain [1..12]) >>= \case
   Nothing -> putStrLn "TIMEOUT!!"
   Just () -> putStrLn "Done!"

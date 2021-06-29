@@ -83,7 +83,7 @@ warmupCache node = do
       when (any (nsNull . fst) xs) $ throwPlan
         $ printf "Empty depset for %n: %s" node (ashow xs)
       trM $ printf "Deps of %n: %s" node $ ashow xs
-      mapM_ findMetaOps =<< refKeys . nodeSizes <$> ask
+      mapM_ findMetaOps =<< asks (refKeys . nodeSizes)
 
 setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
 setNodeMaterialized node = wrapTraceT "setNodeMaterialized" $ do
@@ -126,13 +126,13 @@ haltPlan matRef mop = do
 
 haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
-  frefs <- toNodeList . frontier <$> get
+  frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
   star :: Double <- sum . fmap (maybe 0 (fromIntegral . costAsInt))
     <$> mapM (getCost ForceResult) frefs
   histCosts <- takeListT 5 pastCosts
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
-  halt $ PlanSearchScore concreteCost (Just $ star)
+  halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
 
 -- | Make a plan for a node to be concrete.
@@ -207,14 +207,13 @@ setNodesMatSafe deps = do
   hbM <- getHardBudget
   (matDeps,unMatDeps) <- partitionM isMaterialized deps
   forM_ deps $ \n -> setNodeStateSafe n Mat
-  ret
-    <- fmap (reverse . sortOn (\(_,x,_) -> 0 - x)) $ forM unMatDeps $ \dep -> do
-      pgs <- totalNodePages dep
-      -- Unless it's already materialized mat.
-      fp <- maybe (bot $ printf "No metaops for %n" dep) metaOpNeededPages
-        . listToMaybe
-        =<< findTriggerableMetaOps dep
-      return (pgs,fp,dep)
+  ret <- fmap (sortOn (\(_,x,_) -> x)) $ forM unMatDeps $ \dep -> do
+    pgs <- totalNodePages dep
+    -- Unless it's already materialized mat.
+    fp <- maybe (bot $ printf "No metaops for %n" dep) metaOpNeededPages
+      . listToMaybe
+      =<< findTriggerableMetaOps dep
+    return (pgs,fp,dep)
   case hbM of
     Nothing -> top
     Just hb -> guardl ("no valid trigger sequence for deps: " ++ show ret)
@@ -346,12 +345,12 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
     preReport = do
       nsize <- sum <$> traverse totalNodePages ns
       totalSize <- getDataSize
-      budget <- maybe "<unboundend>" show . budget <$> ask
+      budget <- asks $ maybe "<unboundend>" show . budget
       nsmap <- forM ns $ \n -> (n,) <$> totalNodePages n
       trM $ printf "Starting GC to make (%d / %s) %s: %d"
         totalSize budget (show nsmap) nsize
     withGC m = do
-      isGC <- garbageCollecting <$> get
+      isGC <- gets garbageCollecting
       if isGC then bot "nested GCs" else do
         setGC True
         -- Check that gc is possiblex
@@ -373,7 +372,7 @@ nodesFit ns = do
            =<< filterM (fmap (> 0) . getNodeProtection)
            =<< nodesInState [Concrete NoMat Mat,Concrete Mat Mat]
   size <- sum <$> traverse totalNodePages ns
-  budg <- budget <$> ask
+  budg <- asks budget
   trM $ printf "Needed node size: %d, budget: %s, protec: %d"
     size (show budg) protec
   return $ maybe True (size + protec <=) budg

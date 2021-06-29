@@ -54,7 +54,6 @@ import           Data.Query.Algebra
 import           Data.Query.Optimizations.ExposeUnique
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -506,7 +505,6 @@ forceQueryPlan n = runMaybeT $ (`evalStateT` mempty) $ go n
   where
     go :: NodeRef n -> StateT (NodeSet n) (MaybeT m) (QueryPlan e s)
     go ref = unlessDone $ do
-      when (n == 6) $ traceM $ "go " ++ show ref
       trail <- get
       guard $ not $ ref `nsMember` trail
       modify (nsInsert ref)
