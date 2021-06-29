@@ -33,7 +33,6 @@ import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
 import           Data.Utils.Compose
-import           Data.Utils.Debug
 import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
@@ -101,8 +100,8 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
           (refO,assocO,opO) <- expandOp cachedMkRo ncnfI o
           let coOpM :: Maybe (UQOp e) = coUQOp o $ HM.keys $ fst ncnfI
           (refCoO,assocCoO,opCoOM) <- case coOpM of
-            Just coOp -> expandOp cachedMkRcoo ncnfI coOp <&> \case
-              (a,b,c) -> (a,b,Just c)
+            Just coOp -> expandOp cachedMkRcoo ncnfI coOp
+              <&> \(a,b,c) -> (a,b,Just c)
             Nothing   -> return (refIn,[],Nothing)
           void $ lift $ putUnCluster
             (assocO,assocCoO)
@@ -135,7 +134,7 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
             expandOp cachedMkR ncnfI o' = do
               resO <- lift $ toNCNFQueryUC o' ncnfI
               let ncnfO = putIdentityCNFQ (fst <$> Q1 o' dbgQ) <$> ncnfResNCNF resO
-              refO <- cachedMkR (ncnfToCnf ncnfO)
+              refO <- cachedMkR $ ncnfToCnf ncnfO
               return ((refO,ncnfO),
                       bimap mkS mkS <$> ncnfResInOutNames resO,
                       uncurry mkPlanSym <$> ncnfResOrig resO)

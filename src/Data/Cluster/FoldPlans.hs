@@ -12,7 +12,6 @@
 module Data.Cluster.FoldPlans (queryPlans1,querySize,Query1(..)) where
 
 import           Control.Monad.Except
-import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Cluster.ClusterConfig
@@ -84,9 +83,10 @@ queryPlans1 refO = do
   when (null clusts) $ do
     isInterm <- dropReader get $ isIntermediateClust refO
     allClusts <- lookupClustersN refO
+    allCnfs <- lookupCnfN refO
     throwAStr
       $ "NodeRef is in none of the clusters: "
-      ++ ashow (refO,allClusts,isInterm)
+      ++ ashow (refO,fmap cnfOrigDEBUG' allCnfs,allClusts,isInterm)
   forM clusts $ \clust -> fmap (,clust) $ case clust of
     JoinClustW c       -> getQueryRecurse2 (clusterInputs clust) c
     BinClustW c        -> getQueryRecurse2 (clusterInputs clust) c
@@ -105,7 +105,9 @@ queryPlans1 refO = do
           ,snd $ unMetaD $ unClusterSecondaryOut c
           ,refO]
           $ \x -> (x,) . cnfOrigDEBUG' . head <$> getNodeCnfN x
-        throwAStr $ "No operators in cluster: " ++ ashow (refO,cnfs,c)
+        throwAStr
+          $ "No operators in cluster or clust does not contain the reference!!: "
+          ++ ashow (refO,cnfs,c)
       _ -> inpNumError "UnClust" $ length inps
       where
         unOps = NEL.nonEmpty $ clusterOp (Proxy :: Proxy (PlanSym e s)) refO c

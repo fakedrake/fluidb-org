@@ -18,6 +18,7 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Clusters
 import           Data.CnfQuery.BuildUtils
 import           Data.CnfQuery.Types
 import           Data.CppAst.CppType
@@ -110,14 +111,18 @@ putUnCluster
   (inp,_ncnfI)
   (secRef,ncnfCoO)
   (refO,ncnfO) = do
-  traceM "putUnCluster"
   c <- idempotentClusterInsert constraints mkClust
+  traceM
+    $ "putUnCluster: " ++ ashow (refO,secRef,inp,destructCluster $ UnClustW c)
   putUnClustPropagator (Tup2 symAssocPrim symAssocSec) literalType c op
   forM_ [ncnfO,ncnfCoO] $ \ncnf
     -> linkCnfClust (ncnfToCnf ncnf) $ UnClustW c
   return c
   where
-    constraints = [(unClusterIn,inp),(unClusterPrimaryOut,refO)]
+    constraints =
+      [(unClusterIn,inp)
+      ,(unClusterSecondaryOut,secRef)
+      ,(unClusterPrimaryOut,refO)]
     mkClust = do
       let cnfO = ncnfToCnf ncnfO
        -- The same is clustered.

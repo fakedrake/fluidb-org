@@ -47,7 +47,6 @@ import           Data.Utils.Compose
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.MTL
-import           Data.Utils.Unsafe
 import           Data.Void
 import           Prelude                               hiding (exp)
 

@@ -27,11 +27,11 @@ import           Data.List.Extra
 import           Data.NodeContainers
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
+import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
-import           Data.Utils.MTL
 import           Data.Utils.Tup
 
 data QRef n e s = QRef {getQRef :: NodeRef n, getNCNF :: NCNFQuery e s}
@@ -195,6 +195,7 @@ putJoinClusterI :: forall e s t n  m . (Hashables2 e s, Monad m) =>
                -> CGraphBuilderT e s t n m (JoinClust e s t n)
 putJoinClusterI JoinClustConfig {..} = do
   -- Node
+  traceM $ "Join  node: " ++ show (getQRef qrefO)
   let cnfO = ncnfToCnf $ getNCNF qrefO
       cnfLO = ncnfToCnf $ getNCNF qrefLO
       cnfRO = ncnfToCnf $ getNCNF qrefRO
@@ -208,8 +209,6 @@ putJoinClusterI JoinClustConfig {..} = do
   -- Intermediates should not be shared between clusters
   lInterm <- mkNodeFormCnfNUnsafe cnfLInterm
   rInterm <- mkNodeFormCnfNUnsafe cnfRInterm
-  cnfl <- lookupCnfN lInterm
-  unless (cnfl == [cnfLInterm]) $ error "oops cnf"
   -- Structure
   lift2 $ do
     lSplit .<<~>. [getQRef qrefLI]
@@ -246,16 +245,7 @@ putJoinClusterI JoinClustConfig {..} = do
   -- We normally link cnfs outside of the context of this function but
   -- these are intermediates.
   forM_ [cnfLInterm,cnfRInterm] $ \cnf -> linkCnfClust cnf $ JoinClustW clust
-  clust0 <- lookupClustersN lInterm
-  unless (clust0 == [JoinClustW clust])
-    $ error "Intermediates are properly linked to the cluster!"
-  areInterm
-    <- dropReader get $ isIntermediateClust `traverse` [lInterm,rInterm]
-  traceM
-    $ "Intermediates: "
-    ++ show (zip areInterm [lInterm,rInterm],clusterInterms $ JoinClustW clust)
   return clust
-
 
 -- PUTPROP
 putJClustProp :: (HasCallStack,Hashables2 e s, Monad m) =>

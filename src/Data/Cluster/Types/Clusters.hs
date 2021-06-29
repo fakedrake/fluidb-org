@@ -23,34 +23,34 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds -Wno-name-shadowing -Wno-orphans #-}
 
 module Data.Cluster.Types.Clusters
-  ( AnyCluster'(..)
-  , JoinClust'(..)
-  , WMetaD(..)
-  , updateCHash
-  , primaryTRef
-  , BinClust'(..)
-  , UnClust'(..)
-  , NClust'(..)
-  , AnyCluster
-  , JoinClust
-  , BinClust
-  , UnClust
-  , NClust
-  , Direction(..)
-  , SpecificCluster(..)
-  , CanPutIdentity(..)
-  , clusterInputs
-  , clusterOutputs
-  , clusterInterms
-  , traverseAnyRoles
-  , traverseJoinRoles
-  , traverseBinRoles
-  , traverseUnRoles
-  , primaryNRef
-  , allNodeRefsAnyClust
-  , allNodeRefs
-  , traverseEAnyClust
-  ) where
+  (AnyCluster'(..)
+  ,JoinClust'(..)
+  ,WMetaD(..)
+  ,destructCluster
+  ,updateCHash
+  ,primaryTRef
+  ,BinClust'(..)
+  ,UnClust'(..)
+  ,NClust'(..)
+  ,AnyCluster
+  ,JoinClust
+  ,BinClust
+  ,UnClust
+  ,NClust
+  ,Direction(..)
+  ,SpecificCluster(..)
+  ,CanPutIdentity(..)
+  ,clusterInputs
+  ,clusterOutputs
+  ,clusterInterms
+  ,traverseAnyRoles
+  ,traverseJoinRoles
+  ,traverseBinRoles
+  ,traverseUnRoles
+  ,primaryNRef
+  ,allNodeRefsAnyClust
+  ,allNodeRefs
+  ,traverseEAnyClust) where
 
 import           Control.Applicative
 import           Control.Monad.Identity
@@ -644,3 +644,5 @@ traverseESpecificClust _ f =
     pe = Proxy :: Proxy e
     pc = Proxy :: Proxy c
     swap (a,b) = (b,a)
+destructCluster :: AnyCluster e s t n -> ([NodeRef n],[NodeRef n],[NodeRef n])
+destructCluster c = (clusterInputs c,clusterInterms c,clusterOutputs c)

@@ -150,19 +150,24 @@ quarantine m = do
       return r
 
 -- | Make a reference to a CNF unless the cnf is already there.
-cachedMkRef :: (Hashables2 e s, Monad m) =>
-              (c -> Maybe (NodeRef n))
-            -> (NodeRef n -> c -> c)
-            -> CNFQuery e s
-            -> StateT c (CGraphBuilderT e s t n m) (NodeRef n)
+cachedMkRef
+  :: (Hashables2 e s,Monad m)
+  => (c -> Maybe (NodeRef n))
+  -> (NodeRef n -> c -> c)
+  -> CNFQuery e s
+  -> StateT c (CGraphBuilderT e s t n m) (NodeRef n)
 cachedMkRef fromCache toCache cnf = gets fromCache >>= \case
-  Nothing  -> do {x <- lift mkRef; modify $ toCache x; return x}
+  Nothing -> do
+    x <- lift mkRef
+    traceM $ "Making ref: " ++ ashow x
+    modify $ toCache x
+    return x
   Just ref -> lift (linkNRefCnf ref cnf) >> return ref
   where
     mkRef = mkNodeFromCnf cnf >>= \case
       [ref] -> return ref
-      refs -> throwAStr $ "Expected exactly one ref per cnf: "
-             ++ ashow (refs,cnf)
+      refs
+        -> throwAStr $ "Expected exactly one ref per cnf: " ++ ashow (refs,cnf)
 
 runCnfCache :: Monad m =>
               ListT (CNFBuild e s) a

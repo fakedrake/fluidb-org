@@ -8,7 +8,6 @@ module Data.Cluster.ClusterConfig
   ,getNodeCnfN
   ,registerClusterInput
   ,mkNodeFromCnfT
-  ,mkNodeFromCnfN
   ,lookupClustersX
   ,lookupClustersN
   ,lookupClusterT
@@ -36,10 +35,8 @@ import           Data.List
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
-import           Data.Utils.ListT
 import           Data.Utils.MTL
 
 -- destruct c = (clusterInputs c,clusterOutputs c)
@@ -102,15 +99,6 @@ mkNodeFormCnfNUnsafe qcnf = do
   linkNRefCnf ref qcnf
   return ref
 
--- Make or find nodes
-mkNodeFromCnfN :: (Hashables2 e s, Monad m) =>
-                 CNFQuery e s
-               -> CGraphBuilderT e s t n m
-               (Either (NodeRef n) [(NodeRef n, AnyCluster e s t n)])
-mkNodeFromCnfN cnf = matchNode cnf >>= \case
-  [] -> Left <$> mkNodeFormCnfNUnsafe cnf
-  ns -> return $ Right ns
-
 lookupClustersX :: (Traversable f, Hashables2 e s,
                    MonadState (ClusterConfig e s t n) m) =>
                   f (CNFQuery e s)
@@ -137,9 +125,6 @@ lookupCnfN
 lookupCnfN ref = gets $ fromMaybe [] . refLU ref . nrefToCnfs
 
 -- | First lookup the CNF and then lookup the cluster.
---
--- XXX: when the cnf corresponds to a cluster that does not contain
--- the node in question
 lookupClustersN
   :: (Hashables2 e s
      ,MonadState (ClusterConfig e s t n) m
@@ -149,10 +134,14 @@ lookupClustersN
 lookupClustersN ref = do
   cnfs <- getNodeCnfN ref
   let q = head cnfs
-  clusts <- gets $ fromMaybe [] . HM.lookup q . cnfToClustMap
-  let clusts' =
-        filter (\c -> ref `elem` (clusterInputs c ++ clusterOutputs c)) clusts
-  return clusts'
+  gets $ fromMaybe [] . HM.lookup q . cnfToClustMap
+-- If all goes well the clusts found should all contain the provided ref
+-- let clusts' =
+--       filter
+--         (\c -> ref
+--          `elem` (clusterInputs c ++ clusterOutputs c ++ clusterInterms c))
+--         clusts
+-- return clusts
 {-# INLINE lookupClustersN #-}
 
 lookupClusterT
@@ -260,7 +249,13 @@ mkNodeFromCnf
   :: (Hashables2 e s,Monad m)
   => CNFQuery e s
   -> CGraphBuilderT e s t n m [NodeRef n]
-mkNodeFromCnf = fmap (either return $ nub . fmap fst) . mkNodeFromCnfN
+mkNodeFromCnf cnf = matchNode cnf >>= \case
+  [] -> do
+    ref <- lift2 newNodeN
+    -- The new node should have a score
+    linkNRefCnf ref cnf
+    return [ref]
+  ns -> return $ nub $ fst <$> ns
 
 isIntermediateClust
   :: (Hashables2 e s
