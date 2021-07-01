@@ -5,23 +5,23 @@
 
 module Data.Cluster.ClusterConfig
   (getClustersNonInput
-  ,getNodeCnfN
+  ,getNodeQnfN
   ,registerClusterInput
-  ,mkNodeFromCnfT
+  ,mkNodeFromQnfT
   ,lookupClustersX
   ,lookupClustersN
   ,lookupClusterT
   ,replaceCluster
   ,lookupClusters
   ,matchNode
-  ,linkCnfClust
-  ,linkNRefCnf
-  ,clearNRefCnfs
-  ,linkTRefCnf
-  ,clearTRefCnf
-  ,lookupCnfN
-  ,mkNodeFromCnf
-  ,mkNodeFormCnfNUnsafe
+  ,linkQnfClust
+  ,linkNRefQnf
+  ,clearNRefQnfs
+  ,linkTRefQnf
+  ,clearTRefQnf
+  ,lookupQnfN
+  ,mkNodeFromQnf
+  ,mkNodeFormQnfNUnsafe
   ,isIntermediateClust) where
 
 import           Control.Monad.Except
@@ -29,11 +29,11 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bipartite
 import           Data.Cluster.Types
-import           Data.CnfQuery.Types
 import qualified Data.HashMap.Strict  as HM
 import           Data.List
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
@@ -49,62 +49,62 @@ replaceCluster
   -> AnyCluster e s t n
   -> m ()
 replaceCluster cold cnew = do
-  cnfsT <- mapM luCNFT $ fst $ allNodeRefsAnyClust cold
-  cnfsN <- fmap join $ mapM luCNFN $ snd $ allNodeRefsAnyClust cold
-  -- XXX We are finding cnfs but not props!!
-  props <- gets (HM.lookup cold . cnfPropagators) >>= \case
-    Nothing -> throwAStr $ "Not in update map: " ++ ashow (cold,cnew,cnfsN)
+  qnfsT <- mapM luQNFT $ fst $ allNodeRefsAnyClust cold
+  qnfsN <- fmap join $ mapM luQNFN $ snd $ allNodeRefsAnyClust cold
+  -- XXX We are finding qnfs but not props!!
+  props <- gets (HM.lookup cold . qnfPropagators) >>= \case
+    Nothing -> throwAStr $ "Not in update map: " ++ ashow (cold,cnew,qnfsN)
     Just x  -> return x
   modify $ \cc -> cc
-    { cnfPropagators =
-        HM.insert cnew props $ HM.delete cold $ cnfPropagators cc
+    { qnfPropagators =
+        HM.insert cnew props $ HM.delete cold $ qnfPropagators cc
     }
-  forM_ (nub $ cnfsN ++ cnfsT) $ \cnf -> modify $ \cc -> cc
-    { cnfToClustMap = HM.adjust ((cnew :) . filter (/= cold)) cnf
-        $ cnfToClustMap cc
+  forM_ (nub $ qnfsN ++ qnfsT) $ \qnf -> modify $ \cc -> cc
+    { qnfToClustMap = HM.adjust ((cnew :) . filter (/= cold)) qnf
+        $ qnfToClustMap cc
     }
   where
-    luCNFT t = gets (refLU t . trefToCnf) >>= \case
-      Just cnf -> return cnf
-      Nothing  -> throwAStr $ "Couldn't find cnf for t node: " ++ show t
-    luCNFN n = gets (refLU n . nrefToCnfs) >>= \case
-      Just cnfs -> return cnfs
-      Nothing   -> throwAStr $ "Couldn't find cnf for tnnode: " ++ show n
+    luQNFT t = gets (refLU t . trefToQnf) >>= \case
+      Just qnf -> return qnf
+      Nothing  -> throwAStr $ "Couldn't find qnf for t node: " ++ show t
+    luQNFN n = gets (refLU n . nrefToQnfs) >>= \case
+      Just qnfs -> return qnfs
+      Nothing   -> throwAStr $ "Couldn't find qnf for tnnode: " ++ show n
 
 -- | From the value of the node get a query (the reference might not
 -- exist in the graph, that's why we return a Maybe)
-getNodeCnfN
+getNodeQnfN
   :: (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => NodeRef n
-  -> m [CNFQuery e s]
-getNodeCnfN ref = gets $ fromMaybe [] . (ref `refLU`) . nrefToCnfs
-{-# INLINE getNodeCnfN #-}
+  -> m [QNFQuery e s]
+getNodeQnfN ref = gets $ fromMaybe [] . (ref `refLU`) . nrefToQnfs
+{-# INLINE getNodeQnfN #-}
 
-mkNodeFromCnfT
+mkNodeFromQnfT
   :: (Hashables2 e s,Monad m)
-  => CNFQuery e s
+  => QNFQuery e s
   -> CGraphBuilderT e s t n m (NodeRef t)
-mkNodeFromCnfT cnf = do
+mkNodeFromQnfT qnf = do
   ref <- lift2 newNodeT
-  linkTRefCnf ref cnf
+  linkTRefQnf ref qnf
   return ref
 
-mkNodeFormCnfNUnsafe
+mkNodeFormQnfNUnsafe
   :: (Hashables2 e s,Monad m)
-  => CNFQuery e s
+  => QNFQuery e s
   -> CGraphBuilderT e s t n m (NodeRef n)
-mkNodeFormCnfNUnsafe qcnf = do
+mkNodeFormQnfNUnsafe qqnf = do
   ref <- lift2 newNodeN
   -- The new node should have a score
-  linkNRefCnf ref qcnf
+  linkNRefQnf ref qqnf
   return ref
 
 lookupClustersX :: (Traversable f, Hashables2 e s,
                    MonadState (ClusterConfig e s t n) m) =>
-                  f (CNFQuery e s)
-                -> m (f (CNFQuery e s, [AnyCluster e s t n]))
-lookupClustersX = mapM $ \cnf -> gets
-  $ (cnf,) . fromMaybe [] . (cnf `HM.lookup`) . cnfToClustMap
+                  f (QNFQuery e s)
+                -> m (f (QNFQuery e s, [AnyCluster e s t n]))
+lookupClustersX = mapM $ \qnf -> gets
+  $ (qnf,) . fromMaybe [] . (qnf `HM.lookup`) . qnfToClustMap
 {-# INLINE lookupClustersX #-}
 
 -- | Get clusters for which the node is not an input.
@@ -116,15 +116,15 @@ getClustersNonInput
 getClustersNonInput ref =
   filter (notElem ref . clusterInputs) <$> lookupClustersN ref
 
-lookupCnfN
+lookupQnfN
   :: (Hashables2 e s
      ,MonadState (ClusterConfig e s t n) m
      ,MonadAShowErr e s err m)
   => NodeRef n
-  -> m [CNFQuery e s]
-lookupCnfN ref = gets $ fromMaybe [] . refLU ref . nrefToCnfs
+  -> m [QNFQuery e s]
+lookupQnfN ref = gets $ fromMaybe [] . refLU ref . nrefToQnfs
 
--- | First lookup the CNF and then lookup the cluster.
+-- | First lookup the QNF and then lookup the cluster.
 lookupClustersN
   :: (Hashables2 e s
      ,MonadState (ClusterConfig e s t n) m
@@ -132,9 +132,9 @@ lookupClustersN
   => NodeRef n
   -> m [AnyCluster e s t n]
 lookupClustersN ref = do
-  cnfs <- getNodeCnfN ref
-  let q = head cnfs
-  gets $ fromMaybe [] . HM.lookup q . cnfToClustMap
+  qnfs <- getNodeQnfN ref
+  let q = head qnfs
+  gets $ fromMaybe [] . HM.lookup q . qnfToClustMap
 -- If all goes well the clusts found should all contain the provided ref
 -- let clusts' =
 --       filter
@@ -151,52 +151,52 @@ lookupClusterT
      ,HasCallStack
      ,AShowError e s err)
   => NodeRef t
-  -> m (Maybe (CNFQuery e s,AnyCluster e s t n))
+  -> m (Maybe (QNFQuery e s,AnyCluster e s t n))
 lookupClusterT ref = do
-  cnfs <- gets $ refLU ref . trefToCnf
-  lookupClustersX cnfs >>= \case
+  qnfs <- gets $ refLU ref . trefToQnf
+  lookupClustersX qnfs >>= \case
     Nothing -> return Nothing
-    Just (cnf,clusts)
+    Just (qnf,clusts)
       -> case nub $ filter (elem ref . fst . allNodeRefsAnyClust) clusts of
-        [clust] -> return $ Just (cnf,clust)
+        [clust] -> return $ Just (qnf,clust)
         [] -> return Nothing
         xs -> throwAStr
           $ "Each t node should be in exactly one cluster" ++ ashow (ref,xs)
 
 -- | Multiple join clusters will result in the same node.
 lookupClusters :: (Hashables2 e s, MonadState (ClusterConfig e s t n) m) =>
-                 CNFQuery e s
+                 QNFQuery e s
                -> m [AnyCluster e s t n]
-lookupClusters cnf = gets $ maybe [] toList . (cnf `HM.lookup`) . cnfToClustMap
+lookupClusters qnf = gets $ maybe [] toList . (qnf `HM.lookup`) . qnfToClustMap
 
 -- | From a query get the nodes and the corresponding cluster that
--- express. The total distinct noderefs should be 1 but our CNF
--- mechanism is not perfect so there might be more cnf
+-- express. The total distinct noderefs should be 1 but our QNF
+-- mechanism is not perfect so there might be more qnf
 -- representations.
 matchNode :: forall e s t  n m .
             (Hashables2 e s, MonadState (ClusterConfig e s t n) m) =>
-            CNFQuery e s
+            QNFQuery e s
           -> m [(NodeRef n, AnyCluster e s t n)]
-matchNode cnf = lookupClusters cnf >>= fmap join . mapM go
+matchNode qnf = lookupClusters qnf >>= fmap join . mapM go
   where
     go :: AnyCluster e s t n -> m [(NodeRef n, AnyCluster e s t n)]
     go clust = fmap2 (,clust)
-      $ filterM (`materializesCnf` cnf)
+      $ filterM (`materializesQnf` qnf)
       $ snd
       $ allNodeRefsAnyClust clust
-    materializesCnf :: NodeRef n -> CNFQuery e s -> m Bool
-    materializesCnf ref cnf' = dropReader get $ elem cnf' <$> getNodeCnfN ref
+    materializesQnf :: NodeRef n -> QNFQuery e s -> m Bool
+    materializesQnf ref qnf' = dropReader get $ elem qnf' <$> getNodeQnfN ref
 
-linkCnfClust
+linkQnfClust
   :: forall e s t n m .
   (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
-  => CNFQuery e s
+  => QNFQuery e s
   -> AnyCluster e s t n
   -> m ()
-linkCnfClust q clust = do
+linkQnfClust q clust = do
   modify $ \r -> r
-    { cnfToClustMap = HM.alter (Just . maybe [clust] (clust :)) q
-        $ cnfToClustMap r
+    { qnfToClustMap = HM.alter (Just . maybe [clust] (clust :)) q
+        $ qnfToClustMap r
     }
 
 registerClusterInput
@@ -206,54 +206,54 @@ registerClusterInput
   -> AnyCluster e s t n
   -> m ()
 registerClusterInput ref clust = do
-  cnfs <- dropReader get $ getNodeCnfN ref
-  forM_ cnfs $ \cnf -> linkCnfClust cnf clust
+  qnfs <- dropReader get $ getNodeQnfN ref
+  forM_ qnfs $ \qnf -> linkQnfClust qnf clust
 
-linkNRefCnf
+linkNRefQnf
   :: forall e s t n m .
   (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => NodeRef n
-  -> CNFQuery e s
+  -> QNFQuery e s
   -> m ()
-linkNRefCnf ref cnf = do
-  refsToCnfs <- gets nrefToCnfs
+linkNRefQnf ref qnf = do
+  refsToQnfs <- gets nrefToQnfs
   -- XXX: If this has worked well for a while remove this check and
   -- enforce the 1-1 corrensondence.
-  when (isJust $ refLU ref refsToCnfs) $ error $ "already linked " ++ show ref
+  when (isJust $ refLU ref refsToQnfs) $ error $ "already linked " ++ show ref
   modify $ \r -> r
-    { nrefToCnfs = refAlter (Just . maybe [cnf] (cnf :)) ref $ nrefToCnfs r }
-clearNRefCnfs
+    { nrefToQnfs = refAlter (Just . maybe [qnf] (qnf :)) ref $ nrefToQnfs r }
+clearNRefQnfs
   :: forall e s t n m .
   (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => NodeRef n
   -> m ()
-clearNRefCnfs ref = modify $ \r -> r{nrefToCnfs=refDelete ref $ nrefToCnfs r}
+clearNRefQnfs ref = modify $ \r -> r{nrefToQnfs=refDelete ref $ nrefToQnfs r}
 
-linkTRefCnf
+linkTRefQnf
   :: forall e s t n m .
   (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => NodeRef t
-  -> CNFQuery e s
+  -> QNFQuery e s
   -> m ()
-linkTRefCnf ref cnf = modify $ \r -> r{trefToCnf=refInsert ref cnf $ trefToCnf r}
+linkTRefQnf ref qnf = modify $ \r -> r{trefToQnf=refInsert ref qnf $ trefToQnf r}
 
-clearTRefCnf
+clearTRefQnf
   :: forall e s t n m .
   (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => NodeRef t
   -> m ()
-clearTRefCnf ref = modify $ \r -> r{trefToCnf=refDelete ref $ trefToCnf r}
+clearTRefQnf ref = modify $ \r -> r{trefToQnf=refDelete ref $ trefToQnf r}
 
 -- | make or find the nodes
-mkNodeFromCnf
+mkNodeFromQnf
   :: (Hashables2 e s,Monad m)
-  => CNFQuery e s
+  => QNFQuery e s
   -> CGraphBuilderT e s t n m [NodeRef n]
-mkNodeFromCnf cnf = matchNode cnf >>= \case
+mkNodeFromQnf qnf = matchNode qnf >>= \case
   [] -> do
     ref <- lift2 newNodeN
     -- The new node should have a score
-    linkNRefCnf ref cnf
+    linkNRefQnf ref qnf
     return [ref]
   ns -> return $ nub $ fst <$>  ns
 

@@ -388,11 +388,11 @@ modPropagators :: (Hashables2 e s, Monad m) =>
                -- ^(Propagator,In/Out mapping)
                -> CGraphBuilderT e s t n m ()
 modPropagators c f = modify $ \clustConf -> clustConf{
-  cnfPropagators=HM.alter f c $ cnfPropagators clustConf}
+  qnfPropagators=HM.alter f c $ qnfPropagators clustConf}
 getPropagators :: (Hashables2 e s, MonadReader (ClusterConfig e s t n) m) =>
                  AnyCluster e s t n
                -> m (Maybe (ClustPropagators e s t n))
-getPropagators c = asks (HM.lookup c . cnfPropagators)
+getPropagators c = asks (HM.lookup c . qnfPropagators)
 
 getPlanPropagators :: (Hashables2 e s, MonadReader (ClusterConfig e s t n) m) =>
                      AnyCluster e s t n
@@ -402,20 +402,20 @@ getPlanPropagators c = maybe [] planPropagators <$> getPropagators c
 
 getNodePlan :: MonadReader (ClusterConfig e s t n) m =>
               NodeRef n -> m (Defaulting (QueryPlan e s))
-getNodePlan nref = asks (fromMaybe empty . refLU nref . cnfNodePlans)
+getNodePlan nref = asks (fromMaybe empty . refLU nref . qnfNodePlans)
 
 modNodePlan :: MonadState (ClusterConfig e s t n) m =>
               NodeRef n
             -> Endo (Defaulting (QueryPlan e s))
             -> m ()
 modNodePlan nref f = modify $ \clustConf -> clustConf {
-  cnfNodePlans=refAlter
+  qnfNodePlans=refAlter
     (Just . f . fromMaybe empty)
     nref
-    $ cnfNodePlans clustConf}
+    $ qnfNodePlans clustConf}
 delNodePlan :: Monad m => NodeRef n -> CGraphBuilderT e s t n m ()
 delNodePlan nref = modify $ \clustConf -> clustConf {
-  cnfNodePlans=refAdjust demoteDefaulting nref $ cnfNodePlans clustConf}
+  qnfNodePlans=refAdjust demoteDefaulting nref $ qnfNodePlans clustConf}
 
 -- | Fill the noderefs with plans.
 getPlanCluster :: forall e s t n m .
@@ -490,7 +490,7 @@ getNodePlanFull
   :: MonadReader (ClusterConfig e s t n) m
   => NodeRef n
   -> m (Maybe (QueryPlan e s))
-getNodePlanFull r = asks $ getDefaultingFull <=< refLU r . cnfNodePlans
+getNodePlanFull r = asks $ getDefaultingFull <=< refLU r . qnfNodePlans
 
 -- | Assume a consistent view of clusters. Find a trigger that will
 -- return a query plen.

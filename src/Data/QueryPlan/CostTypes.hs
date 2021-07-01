@@ -27,7 +27,6 @@ import           GHC.Generics
 
 data Cost = Cost { costReads :: Int,costWrites :: Int }
   deriving (Show,Eq,Generic)
-
 -- XXX: Here we are INCONSISTENT in assuming that reads and writes
 -- cost the same.
 instance Ord Cost where
@@ -62,7 +61,7 @@ data StarScore mop t n =
   StarScore   -- Total cost
   { starToDouble :: Double
     -- The metaops and their cost.
-   ,starMetaOps :: HS.HashSet (mop,Double)
+   ,starMetaOps  :: HS.HashSet (mop,Double)
   }
   deriving (Generic,Eq)
 instance AShow mop => AShow (StarScore mop t n)

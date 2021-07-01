@@ -35,7 +35,7 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.FoldPlans
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Monads.CodeBuilder
 import           Data.Codegen.Build.Types
 import           Data.Functor.Identity
@@ -125,7 +125,7 @@ updateIntermediates :: Hashables2 e s =>
 updateIntermediates cConf gcConf =
   gcConf
   { intermediates = fromNodeList
-      $ join [clusterInterms x | x <- join $ toList $ cnfToClustMap cConf]
+      $ join [clusterInterms x | x <- join $ toList $ qnfToClustMap cConf]
   }
 
 
@@ -136,16 +136,16 @@ missingSizes = do
   return $ (`filter` ns) $ \n
     -> maybe True ((< 0.5) . snd) $ refLU n sizes
 
-getCnfM
+getQnfM
   :: (MonadError (SizeInferenceError e s t n) m
      ,MonadReader (ClusterConfig e s t n) m)
   => NodeRef n
-  -> m (NEL.NonEmpty (CNFQuery e s))
-getCnfM k = do
-  rMap <- asks nrefToCnfs
+  -> m (NEL.NonEmpty (QNFQuery e s))
+getQnfM k = do
+  rMap <- asks nrefToQnfs
   case refLU k rMap of
-    Nothing     -> throwError $ NoCnf k $ refKeys rMap
-    Just []     -> throwError $ EmptyCnfList k
+    Nothing     -> throwError $ NoQnf k $ refKeys rMap
+    Just []     -> throwError $ EmptyQnfList k
     Just (x:xs) -> return $ x NEL.:| xs
 
 

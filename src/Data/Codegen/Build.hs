@@ -54,8 +54,6 @@ import           Data.Bifunctor
 import           Data.Bipartite
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
-import           Data.CnfQuery.BuildUtils
-import           Data.CnfQuery.Types
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.Constructors
 import           Data.Codegen.Build.Monads
@@ -69,6 +67,8 @@ import qualified Data.List.NonEmpty                as NEL
 import           Data.Maybe
 import           Data.Monoid
 import           Data.NodeContainers
+import           Data.QnfQuery.BuildUtils
+import           Data.QnfQuery.Types
 import           Data.Query.QuerySchema
 import           Data.QueryPlan.Transitions
 import           Data.QueryPlan.Types
@@ -115,8 +115,8 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
       queryView <- dropState (lift getClusterConfig,const $ return ())
         $ (maybe (throwError $ NodeNotFoundN n) return =<<)
         $ fmap listToMaybe
-        $ fmap2 cnfOrigDEBUG
-        $ getNodeCnfN n
+        $ fmap2 qnfOrigDEBUG
+        $ getNodeQnfN n
       let comment = CC.Comment $ "Delete: " ++ ashow queryView
       let cout = ashowCout "Delete: " queryView
       dropReader (lift getClusterConfig) $ delNodeFile n
@@ -253,18 +253,18 @@ getEvaluations
   (MonadReader (ClusterConfig e s t n,GBState t n,GCState t n,GCConfig t n) m
   ,MonadAShowErr e s err m
   ,Hashables2 e s)
-  => m [Evaluation e s t n [CNFQuery e s]]
+  => m [Evaluation e s t n [QNFQuery e s]]
 getEvaluations = runListT $ mkListT getCleanBundles >>= \case
   ForwardTransitionBundle io c -> ForwardEval c io <$> getQueriesC c
   ReverseTransitionBundle io c -> ReverseEval c io <$> getQueriesC c
-  DeleteTransitionBundle n     -> Delete n <$> getCNFs n
+  DeleteTransitionBundle n     -> Delete n <$> getQNFs n
   where
     getCleanBundles :: m [TransitionBundle e s t n]
     getCleanBundles = do
       trns <- reverse <$> dropReader (asks trd4) getTransitions
       dropReader (asks fst4) $ bundleTransitions trns
-    getCNFs :: NodeRef n -> ListT m [CNFQuery e s]
-    getCNFs
-      ref = lift $ dropState (asks fst4,const $ return ()) $ lookupCnfN ref
-    getQueriesC :: AnyCluster e s t n -> ListT m [CNFQuery e s]
+    getQNFs :: NodeRef n -> ListT m [QNFQuery e s]
+    getQNFs
+      ref = lift $ dropState (asks fst4,const $ return ()) $ lookupQnfN ref
+    getQueriesC :: AnyCluster e s t n -> ListT m [QNFQuery e s]
     getQueriesC = dropState (asks fst4,const $ return ()) . getQueriesFromClust

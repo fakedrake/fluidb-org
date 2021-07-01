@@ -3,7 +3,7 @@ module FluiDB.Schema.Common (annotateQuery) where
 import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Bitraversable
-import           Data.CnfQuery.Build
+import           Data.QnfQuery.Build
 import           Data.Codegen.Build
 import           Data.Codegen.Schema
 import           Data.Query.Algebra
@@ -45,4 +45,4 @@ annotateQuery cppConf q = do
        . fromJustErr)
     $ (`evalStateT` def)
     $ headListT
-    $ toCNF (fmap2 snd . tableSchema cppConf) qUniqExposed
+    $ toQNF (fmap2 snd . tableSchema cppConf) qUniqExposed

@@ -14,7 +14,7 @@
 module FluiDB.Schema.TPCH.Values
   (tpchGlobalConf
   ,toFS
-  ,toCnfTpch
+  ,toQnfTpch
   ,resourcesDir
   ,bamaFile
   ,tblFile
@@ -29,10 +29,10 @@ module FluiDB.Schema.TPCH.Values
 
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.CnfQuery.Build
-import           Data.CnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.Codegen.SchemaAssocClass
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySize
 import           Data.Query.SQL.FileSet
@@ -101,11 +101,11 @@ instance FileSetLike FilePath where toFS = DataFile . datFile . TSymbol
 instance FileSetLike (FilePath,FilePath) where
   toFS = uncurry DataAndSet . bimap (datFile . TSymbol) (datFile . TSymbol)
 
-toCnfTpch :: SqlTypeVars e s t n => Query e s -> CNFQuery e s
-toCnfTpch q = fst
+toQnfTpch :: SqlTypeVars e s t n => Query e s -> QNFQuery e s
+toQnfTpch q =
+  fst
   $ fromJustErr
   $ either (error . ashow) id
   $ (`evalStateT` def)
   $ headListT
-  $ toCNF (fmap2 snd . tableSchema (globalQueryCppConf tpchGlobalConf))
-  q
+  $ toQNF (fmap2 snd . tableSchema (globalQueryCppConf tpchGlobalConf)) q

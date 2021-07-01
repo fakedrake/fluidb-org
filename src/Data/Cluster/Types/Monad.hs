@@ -50,13 +50,13 @@ import           Control.Monad.State
 import           Data.Bipartite
 import           Data.Bits
 import           Data.Cluster.Types.Clusters
-import           Data.CnfQuery.Types
 import qualified Data.HashMap.Strict         as HM
 import qualified Data.HashSet                as HS
 import           Data.List.Extra
 import qualified Data.List.NonEmpty          as NEL
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
@@ -69,29 +69,30 @@ import           Data.Utils.Hashable
 import           GHC.Generics
 
 data ClusterError e s =
-  ClusterCNFError (CNFError e s)
+  ClusterQNFError (QNFError e s)
   | ClusterAMsg (AShowStr e s)
   | InsertingBottom s [s]
   deriving (Eq, Generic)
 instance AShowError e s (ClusterError e s)
 instance (AShowV e, AShowV s) => AShow (ClusterError e s)
+
 -- | ClusterConfig is empty in the initial stage.
 data ClusterConfig e s t n = ClusterConfig {
   -- |If this is False throw an en error when there is a bottom that
   -- does not correspond to a node.
-  cnfInsertBottoms :: Bool,
+  qnfInsertBottoms :: Bool,
   -- | All nodes of each cluster and their corresponding cluister
-  cnfToClustMap    :: HM.HashMap (CNFQuery e s) [AnyCluster e s t n],
-  nrefToCnfs       :: RefMap n [CNFQuery e s],
+  qnfToClustMap    :: HM.HashMap (QNFQuery e s) [AnyCluster e s t n],
+  nrefToQnfs       :: RefMap n [QNFQuery e s],
   -- ^ All these will be equiv: (schema, query)
-  trefToCnf        :: RefMap t (CNFQuery e s),
-  cnfTableColumns  :: s -> Maybe [e],
-  cnfNodePlans     :: RefMap n (Defaulting (QueryPlan e s)),
+  trefToQnf        :: RefMap t (QNFQuery e s),
+  qnfTableColumns  :: s -> Maybe [e],
+  qnfNodePlans     :: RefMap n (Defaulting (QueryPlan e s)),
   -- ^ The plan that we expect to find in each node.
-  cnfPropagators   :: HM.HashMap (AnyCluster e s t n) (ClustPropagators e s t n),
+  qnfPropagators   :: HM.HashMap (AnyCluster e s t n) (ClustPropagators e s t n),
   -- Update the map between nodes and queries. The same cluster is
   -- associated with multiple equivalent name translations with
-  -- equivalent cnfs. Each propagator in the list deals withy a
+  -- equivalent qnfs. Each propagator in the list deals withy a
   -- separate naming pattern.
   clustBuildCache  :: ClustBuildCache e s t n
   }
@@ -101,7 +102,7 @@ newtype ClustPropagators e s t n = ClustPropagators {
 instance Default (ClustPropagators e s t n)
 data InsPlanRes e s t n = InsPlanRes {
   insPlanRef   :: NodeRef n,
-  insPlanNCNFs :: HS.HashSet (NCNFQueryI e s),
+  insPlanNQNFs :: HS.HashSet (NQNFQueryI e s),
   insPlanQuery :: Query e (s,QueryPlan e s)
   } deriving Generic
 instance (AShowV e,AShowV s) => AShow (InsPlanRes e s t n)
@@ -111,7 +112,7 @@ data QueryForest e s = QueryForest {
   } deriving Generic
 
 -- XXX: Each tree is equivalent to each other  so calculating the
--- cnfquery we can get the hash for "free".
+-- qnfquery we can get the hash for "free".
 freeToForest :: Hashables2 e s =>
                Free (Compose NEL.NonEmpty (Query e)) (s, QueryPlan e s)
              -> QueryForest e s
@@ -129,7 +130,7 @@ instance Hashable (QueryForest e s) where
   hashWithSalt s x = (s * 16777619) `xor` qfHash x
   hash = qfHash
 data ClustBuildCache e s t n = ClustBuildCache {
-  cnfBuildCache :: CNFCache e s,
+  qnfBuildCache :: QNFCache e s,
   queriesCache  :: HM.HashMap (QueryForest e s) (InsPlanRes e s t n),
   callCount     :: HM.HashMap String Int
   } deriving Generic
@@ -231,13 +232,13 @@ type CPropagatorPlan c e s t n = CPropagator (QueryPlan e s) c e s t n
 
 instance Hashables2 e s => Default (ClusterConfig e s t n) where
   def = ClusterConfig {
-    cnfInsertBottoms = False,
-    cnfToClustMap = mempty,
-    nrefToCnfs = mempty,
-    trefToCnf = mempty,
-    cnfTableColumns = const Nothing,
-    cnfPropagators = mempty,
-    cnfNodePlans = mempty,
+    qnfInsertBottoms = False,
+    qnfToClustMap = mempty,
+    nrefToQnfs = mempty,
+    trefToQnf = mempty,
+    qnfTableColumns = const Nothing,
+    qnfPropagators = mempty,
+    qnfNodePlans = mempty,
     clustBuildCache = def
     }
 

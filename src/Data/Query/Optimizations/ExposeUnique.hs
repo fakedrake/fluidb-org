@@ -32,7 +32,7 @@ disambEq p uniqs0 = sequence uniqsPrim
         go [] = []
         go (e:es) = nub (join $ e:grp):go rst where
           (grp,rst) = span (overlaps e) es
-        eqs = toList (propCnfAnd p) >>= \case
+        eqs = toList (propQnfAnd p) >>= \case
           P0 (R2 REq (R0 (E0 x)) (R0 (E0 y))) -> [[x,y] | x /= y]
           _                                   -> []
     -- instead of each element of the uniqs group we have a list of

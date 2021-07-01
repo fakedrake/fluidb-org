@@ -109,7 +109,7 @@ normalize = qmap $ \case
           And l r -> breakP l ++ breakP r
           x       -> [x]
 
--- | Extract and-CNF terms of the form (P0 r) where exists e in r . f
+-- | Extract and-QNF terms of the form (P0 r) where exists e in r . f
 -- e. Useful for extracting exists terms.
 extractRelIf :: (e -> Bool)
               -> Prop (Rel (Expr e))

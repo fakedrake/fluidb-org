@@ -23,7 +23,7 @@ module Data.Codegen.Build.Types
   ,SizeInferenceError(..)
   ,QueryCppConf(..)) where
 
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import qualified Data.CppAst                  as CC
 import qualified Data.HashSet                 as HS
 import           Data.NodeContainers
@@ -35,13 +35,13 @@ import           Data.Utils.AShow
 import           GHC.Generics
 
 data SizeInferenceError e s t n
-  = NoCnf (NodeRef n) [NodeRef n]
-  | EmptyCnfList (NodeRef n)
+  = NoQnf (NodeRef n) [NodeRef n]
+  | EmptyQnfList (NodeRef n)
   | UnsupportedBinOp (BQOp e)
   | UnsupportedUnOp (UQOp e)
   | SIERichMsg (AShowStr e s)
     -- | UnsizedBottomNode [AnyCluster e s t n] (Query e s) (NodeRef n) (RefMap n Bool)
-  | OversizedRow (CNFQuery e s)
+  | OversizedRow (QNFQuery e s)
   | SIEAShowMsg (AShowStr e s)
     -- The plan enumerator called the non-empty
     -- version of the function rather than the

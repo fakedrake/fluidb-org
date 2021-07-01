@@ -20,11 +20,11 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
-import           Data.CnfQuery.Build
-import           Data.CnfQuery.BuildUtils
-import           Data.CnfQuery.Types
 import           Data.List.Extra
 import           Data.NodeContainers
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.BuildUtils
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
@@ -33,7 +33,7 @@ import           Data.Utils.Hashable
 import           Data.Utils.ListT
 import           Data.Utils.Tup
 
-data QRef n e s = QRef {getQRef :: NodeRef n, getNCNF :: NCNFQuery e s}
+data QRef n e s = QRef {getQRef :: NodeRef n, getNQNF :: NQNFQuery e s}
   deriving (Eq, Show)
 type PlanSymAssoc e s = [(PlanSym e s,PlanSym e s)]
 data JoinClustConfig n e s = JoinClustConfig {
@@ -51,77 +51,77 @@ data JoinClustConfig n e s = JoinClustConfig {
 
 
 -- | The JoinClustConfigs returned take all combinations of the
--- NCNFQueries to populate the jProp,assocs and ncnf aspect of qrefs
+-- NQNFQueries to populate the jProp,assocs and nqnf aspect of qrefs
 -- but the refernces should be all the same.
 mkJoinClustConfig
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
   => Prop (Rel (Expr e))
-  -> (NodeRef n,[NCNFQueryI e s],Query e s)
-  -> (NodeRef n,[NCNFQueryI e s],Query e s)
+  -> (NodeRef n,[NQNFQueryI e s],Query e s)
+  -> (NodeRef n,[NQNFQueryI e s],Query e s)
   -> CGraphBuilderT e s t n m [JoinClustConfig n e s]
-mkJoinClustConfig p (lref,lncnfs,ql) (rref,rncnfs,qr) =
+mkJoinClustConfig p (lref,lnqnfs,ql) (rref,rnqnfs,qr) =
   fmap join
   $ (`evalStateT` (Nothing,Nothing,Nothing))
-  $ forM ((,) <$> lncnfs <*> rncnfs)
-  $ \(lncnf,rncnf) -> lift (ncnfJoinC p lncnf rncnf)
-  >>= mapM (go lncnf rncnf)
+  $ forM ((,) <$> lnqnfs <*> rnqnfs)
+  $ \(lnqnf,rnqnf) -> lift (nqnfJoinC p lnqnf rnqnf)
+  >>= mapM (go lnqnf rnqnf)
   where
-    go :: NCNFQueryI e s
-       -> NCNFQueryI e s
-       -> NCNFResultI (Prop (Rel (Expr (CNFName e s,e)))) e s
+    go :: NQNFQueryI e s
+       -> NQNFQueryI e s
+       -> NQNFResultI (Prop (Rel (Expr (QNFName e s,e)))) e s
        -> StateT
          (Maybe (NodeRef n),Maybe (NodeRef n),Maybe (NodeRef n))
          (CGraphBuilderT e s t n m)
          (JoinClustConfig n e s)
-    go lncnf rncnf resO = do
-      let p' = ncnfResOrig resO
-          resLO = ncnfLeftAntijoin p' lncnf rncnf
-          resRO = ncnfRightAntijoin p' lncnf rncnf
-          ncnfLO = ncnfPutQ QLeftAntijoin $ ncnfResNCNF resLO
-          ncnfRO = ncnfPutQ QRightAntijoin $ ncnfResNCNF resRO
-          ncnfO = ncnfPutQ QJoin $ ncnfResNCNF resO
-          assocL = bimap mkP mkP <$> ncnfResInOutNames resLO
-          assocR = bimap mkP mkP <$> ncnfResInOutNames resRO
-          assocO = bimap mkP mkP <$> ncnfResInOutNames resO
-      refLO <- cachedMkRef fst3 (first3 . const . Just) (ncnfToCnf ncnfLO)
-      refO <- cachedMkRef snd3 (second3 . const . Just) (ncnfToCnf ncnfO)
-      -- Note: CNFS and nodes are inserted but until they are connected
+    go lnqnf rnqnf resO = do
+      let p' = nqnfResOrig resO
+          resLO = nqnfLeftAntijoin p' lnqnf rnqnf
+          resRO = nqnfRightAntijoin p' lnqnf rnqnf
+          nqnfLO = nqnfPutQ QLeftAntijoin $ nqnfResNQNF resLO
+          nqnfRO = nqnfPutQ QRightAntijoin $ nqnfResNQNF resRO
+          nqnfO = nqnfPutQ QJoin $ nqnfResNQNF resO
+          assocL = bimap mkP mkP <$> nqnfResInOutNames resLO
+          assocR = bimap mkP mkP <$> nqnfResInOutNames resRO
+          assocO = bimap mkP mkP <$> nqnfResInOutNames resO
+      refLO <- cachedMkRef fst3 (first3 . const . Just) (nqnfToQnf nqnfLO)
+      refO <- cachedMkRef snd3 (second3 . const . Just) (nqnfToQnf nqnfO)
+      -- Note: QNFS and nodes are inserted but until they are connected
       -- to a cluster they can't be looked up. If LO and RO are eqaul
-      -- then registerCNF can't detect that as it uses the cluisterbuild
+      -- then registerQNF can't detect that as it uses the cluisterbuild
       -- machinery. Also note that the only two nodes that can be equal
       -- here are LO and RO.
-      refRO <- if ncnfToCnf ncnfLO == ncnfToCnf ncnfRO
+      refRO <- if nqnfToQnf nqnfLO == nqnfToQnf nqnfRO
         then modify (third3 $ const $ Just refLO) >> return refLO
-        else cachedMkRef trd3 (third3 . const . Just) (ncnfToCnf ncnfRO)
+        else cachedMkRef trd3 (third3 . const . Just) (nqnfToQnf nqnfRO)
       return
         JoinClustConfig
         { assocL = assocL
          ,assocR = assocR
          ,assocO = assocO
          ,jProp = fmap3 (uncurry mkPlanSym) p'
-         ,qrefLO = QRef refLO ncnfLO
-         ,qrefO = QRef refO ncnfO
-         ,qrefRO = QRef refRO ncnfRO
-         ,qrefLI = QRef lref $ second (putIdentityCNFQ ql) lncnf
-         ,qrefRI = QRef rref $ second (putIdentityCNFQ qr) rncnf
+         ,qrefLO = QRef refLO nqnfLO
+         ,qrefO = QRef refO nqnfO
+         ,qrefRO = QRef refRO nqnfRO
+         ,qrefLI = QRef lref $ second (putIdentityQNFQ ql) lnqnf
+         ,qrefRI = QRef rref $ second (putIdentityQNFQ qr) rnqnf
         }
-    ncnfPutQ
-      :: (Prop (Rel (Expr e)) -> BQOp e) -> NCNFQueryI e s -> NCNFQuery e s
-    ncnfPutQ constr = second $ putIdentityCNFQ $ Q2 (constr p) ql qr
-    mkP :: (e,CNFCol e s) -> PlanSym e s
+    nqnfPutQ
+      :: (Prop (Rel (Expr e)) -> BQOp e) -> NQNFQueryI e s -> NQNFQuery e s
+    nqnfPutQ constr = second $ putIdentityQNFQ $ Q2 (constr p) ql qr
+    mkP :: (e,QNFCol e s) -> PlanSym e s
     mkP (e,col) = mkPlanSym (Column col 0) e
 
 -- Note: maybe we should not look for cached antijoins because join's
--- cnf is much more robust, but if we do we should be re-locating the
+-- qnf is much more robust, but if we do we should be re-locating the
 -- noderefs of the antijoins.
 putJoinClusterC :: forall e s t n m . (Hashables2 e s, Monad m) =>
                  JoinClustConfig n e s
                -> CGraphBuilderT e s t n m (JoinClust e s t n)
 putJoinClusterC jcc = do
   c <- idempotentClusterInsert constr $ putJoinClusterI jcc
-  forM_ [qrefLO jcc,qrefO jcc,qrefRO jcc] $ \ncnf -> do
-    linkCnfClust (ncnfToCnf $ getNCNF ncnf) $ JoinClustW c
+  forM_ [qrefLO jcc,qrefO jcc,qrefRO jcc] $ \nqnf -> do
+    linkQnfClust (nqnfToQnf $ getNQNF nqnf) $ JoinClustW c
   putJClustProp (assocL jcc,assocO jcc,assocR jcc) (jProp jcc) c
   return c
   where
@@ -133,36 +133,36 @@ putJoinClusterC jcc = do
       ,(joinClusterRightAntijoin,getQRef $ qrefRO jcc)]
 
 -- | This is used only for intermediate nodes that we know we wont match.
-mkCNF :: (Monad m,Hashables2 e s)
-      => Query (PlanSym e s) (NCNFQuery e s)
-      -> CGraphBuilderT e s t n m (CNFQuery e s)
-mkCNF (first planSymOrig -> q) = do
-  res <- mkNCNF q
-  let cnf = putIdentityCNFQ (cnfOrigDEBUG . snd =<< q) $ snd $ ncnfResNCNF res
-  return cnf
+mkQNF :: (Monad m,Hashables2 e s)
+      => Query (PlanSym e s) (NQNFQuery e s)
+      -> CGraphBuilderT e s t n m (QNFQuery e s)
+mkQNF (first planSymOrig -> q) = do
+  res <- mkNQNF q
+  let qnf = putIdentityQNFQ (qnfOrigDEBUG . snd =<< q) $ snd $ nqnfResNQNF res
+  return qnf
 
--- | Make an NCNF. This is for building and therefore we just drop the
+-- | Make an NQNF. This is for building and therefore we just drop the
 -- query plan.
-mkNCNF :: (Hashables2 e s,Monad m,HasCallStack)
-       => Query e (NCNFQuery e s)
-       -> CGraphBuilderT e s t n m (NCNFResultI (Query (CNFName e s,e) ()) e s)
-mkNCNF q = do
-  cnfCache <- gets $ cnfBuildCache . clustBuildCache
-  (ret,cnfCache') <- liftCnfError
+mkNQNF :: (Hashables2 e s,Monad m,HasCallStack)
+       => Query e (NQNFQuery e s)
+       -> CGraphBuilderT e s t n m (NQNFResultI (Query (QNFName e s,e) ()) e s)
+mkNQNF q = do
+  qnfCache <- gets $ qnfBuildCache . clustBuildCache
+  (ret,qnfCache') <- liftQnfError
     $ return
-    $ (`runStateT` cnfCache)
-    $ fmap (maximumOn (hash . snd . ncnfResNCNF))
+    $ (`runStateT` qnfCache)
+    $ fmap (maximumOn (hash . snd . nqnfResNQNF))
     $ runListT
-    $ toNCNFQuery
-    $ (,()) . second putEmptyCNFQ <$> q
+    $ toNQNFQuery
+    $ (,()) . second putEmptyQNFQ <$> q
   modify $ \s -> s
-    { clustBuildCache = (clustBuildCache s) { cnfBuildCache = cnfCache' } }
+    { clustBuildCache = (clustBuildCache s) { qnfBuildCache = qnfCache' } }
   return ret
 
-liftCnfError :: Monad m =>
-               m (Either (CNFError e s) a)
+liftQnfError :: Monad m =>
+               m (Either (QNFError e s) a)
              -> ExceptT (ClusterError e s) m a
-liftCnfError = ExceptT . fmap (first ClusterCNFError)
+liftQnfError = ExceptT . fmap (first ClusterQNFError)
 
 (.<~.) :: Monad m => NodeRef t -> NodeRef n -> GraphBuilderT t n m ()
 outT .<~. inN =
@@ -188,19 +188,19 @@ putJoinClusterI :: forall e s t n  m . (Hashables2 e s, Monad m) =>
                -> CGraphBuilderT e s t n m (JoinClust e s t n)
 putJoinClusterI JoinClustConfig {..} = do
   -- Node
-  let cnfO = ncnfToCnf $ getNCNF qrefO
-      cnfLO = ncnfToCnf $ getNCNF qrefLO
-      cnfRO = ncnfToCnf $ getNCNF qrefRO
-  cnfLInterm <- mkCNF
-    $ Q2 QProjQuery (Q0 $ getNCNF qrefLI) (Q0 $ getNCNF qrefO)
-  cnfRInterm <- mkCNF
-    $ Q2 QProjQuery (Q0 $ getNCNF qrefRI) (Q0 $ getNCNF qrefO)
-  tRef <- mkNodeFromCnfT cnfO
-  lSplit <- mkNodeFromCnfT cnfLO
-  rSplit <- mkNodeFromCnfT cnfRO
+  let qnfO = nqnfToQnf $ getNQNF qrefO
+      qnfLO = nqnfToQnf $ getNQNF qrefLO
+      qnfRO = nqnfToQnf $ getNQNF qrefRO
+  qnfLInterm <- mkQNF
+    $ Q2 QProjQuery (Q0 $ getNQNF qrefLI) (Q0 $ getNQNF qrefO)
+  qnfRInterm <- mkQNF
+    $ Q2 QProjQuery (Q0 $ getNQNF qrefRI) (Q0 $ getNQNF qrefO)
+  tRef <- mkNodeFromQnfT qnfO
+  lSplit <- mkNodeFromQnfT qnfLO
+  rSplit <- mkNodeFromQnfT qnfRO
   -- Intermediates should not be shared between clusters
-  lInterm <- mkNodeFormCnfNUnsafe cnfLInterm
-  rInterm <- mkNodeFormCnfNUnsafe cnfRInterm
+  lInterm <- mkNodeFormQnfNUnsafe qnfLInterm
+  rInterm <- mkNodeFormQnfNUnsafe qnfRInterm
   -- Structure
   lift2 $ do
     lSplit .<<~>. [getQRef qrefLI]
@@ -234,9 +234,9 @@ putJoinClusterI JoinClustConfig {..} = do
           }
   forM_ [getQRef qrefLI,getQRef qrefRI]
     $ \ref -> registerClusterInput ref $ JoinClustW clust
-  -- We normally link cnfs outside of the context of this function but
+  -- We normally link qnfs outside of the context of this function but
   -- these are intermediates.
-  forM_ [cnfLInterm,cnfRInterm] $ \cnf -> linkCnfClust cnf $ JoinClustW clust
+  forM_ [qnfLInterm,qnfRInterm] $ \qnf -> linkQnfClust qnf $ JoinClustW clust
   return clust
 
 -- PUTPROP

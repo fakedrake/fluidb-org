@@ -31,8 +31,8 @@ module Data.Query.QuerySchema.GetQueryPlan
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Data.Bifunctor
-import           Data.CnfQuery.Build
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.CppAst                       as CC
 import qualified Data.List.NonEmpty                as NEL
@@ -184,7 +184,7 @@ planSymConst
   => QueryPlan e s
   -> PlanSym e s
   -> Either (QueryPlanError e s) Bool
-planSymConst QueryPlan{qpSchema=sch} sym = case planSymCnfName sym of
+planSymConst QueryPlan{qpSchema=sch} sym = case planSymQnfName sym of
   NonSymbolName _ -> return True
   _ -> maybe (throwAStr $ "oops: " ++ ashow (sym,sch)) (return . columnPropsConst)
     $ lookup sym sch
@@ -350,7 +350,7 @@ getSymPlan prims symSchema s = do
   unless (any (snd . snd) schAnnotUniq)
     $ throwAStr
     $ "No unique columns: "
-    ++ ashow (s,first planSymCnfOriginal . snd <$> schAnnotUniq)
+    ++ ashow (s,first planSymQnfOriginal . snd <$> schAnnotUniq)
   maybe (throwAStr $ "No unique columns: " ++ ashow s) return
     $ mkQueryPlan schAnnotUniq
   where
@@ -361,7 +361,7 @@ getSymPlan prims symSchema s = do
         $ fmap2 snd
         $ symSchema s
       let isPrim = e `elem` pks
-          (nm,_) = ncnfSymbol es s
+          (nm,_) = nqnfSymbol es s
       planSym :: PlanSym e s
         <- either (const $ throwAStr "mkSymPlanSymNM failed") return
         $ mkSymPlanSymNM nm e

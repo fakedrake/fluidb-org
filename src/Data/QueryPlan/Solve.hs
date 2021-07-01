@@ -62,6 +62,7 @@ import           Data.Utils.HContT
 import           Data.Utils.ListT
 import           Data.Utils.Tup
 
+import           Control.Arrow
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
@@ -131,7 +132,9 @@ haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
   star :: Double <- sum . fmap (maybe 0 (fromIntegral . costAsInt))
-    <$> mapM (getCost ForceResult) frefs
+    <$> mapM
+      (getCost (\_ref _mech -> arr $ const $ BndRes 0) ForceResult)
+      frefs
   histCosts <- takeListT 5 pastCosts
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
   halt $ PlanSearchScore concreteCost (Just star)

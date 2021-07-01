@@ -58,7 +58,7 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.List
 import           Data.Query.SQL.FileSet
@@ -86,13 +86,13 @@ hoistCodeBuilderT' f = hoist (hoist (hoistCGraphBuilderT f))
 type SoftCodeBuilderT e s t n m = StateT Int (CodeBuilderT' e s t n m)
 
 -- |Embed the query cache operations to the codebuilder monad
-putQueryFile :: MonadCodeBuilder e s t n m => CNFQuery e s -> FileSet -> m ()
+putQueryFile :: MonadCodeBuilder e s t n m => QNFQuery e s -> FileSet -> m ()
 putQueryFile q f = do
   st <- getCBState
   putCBState st{
     cbQueryFileCache=putCachedFile (cbQueryFileCache st) q f}
 
-delQueryFile :: MonadCodeBuilder e s t n m => CNFQuery e s -> m ()
+delQueryFile :: MonadCodeBuilder e s t n m => QNFQuery e s -> m ()
 delQueryFile q = do
   st <- getCBState
   putCBState st{cbQueryFileCache=delCachedFile (cbQueryFileCache st) q}
@@ -105,7 +105,7 @@ delNodeFile
   => NodeRef n
   -> m ()
 delNodeFile ref =
-  dropState (ask,const $ return ()) (getNodeCnfN ref) >>= mapM_ delQueryFile
+  dropState (ask,const $ return ()) (getNodeQnfN ref) >>= mapM_ delQueryFile
 
 getNodeFile
   :: (Hashables2 e s
@@ -114,11 +114,11 @@ getNodeFile
      ,MonadReader (ClusterConfig e s t n) m)
   => NodeRef n
   -> m (Maybe FileSet)
-getNodeFile n = dropState (ask,const $ return ()) (getNodeCnfN n) >>= \case
+getNodeFile n = dropState (ask,const $ return ()) (getNodeQnfN n) >>= \case
   [] -> throwAStr $ "No file for node: " ++ ashow n
-  cnfs -> do
+  qnfs -> do
     queryToFile <- getCachedFile . cbQueryFileCache <$> getCBState
-    case nub $ queryToFile <$> cnfs of
+    case nub $ queryToFile <$> qnfs of
       [filename] -> return filename
       names
         -> throwAStr $ "Expected one filename for node: " ++ ashow (n,names)
@@ -136,24 +136,24 @@ mkNodeFile
   -> NodeRef n
   -> m FileSet
 mkNodeFile constr n =
-  dropState (ask,const $ return ()) (getNodeCnfN n) >>= \case
-    [] -> error $ "No cnfs for node " ++ show n
-    cnfs -> getNodeFile n >>= \case
-      Just fn -> throwAStr $ "Overwriting file" ++ ashow (n,cnfs,fn)
+  dropState (ask,const $ return ()) (getNodeQnfN n) >>= \case
+    [] -> error $ "No qnfs for node " ++ show n
+    qnfs -> getNodeFile n >>= \case
+      Just fn -> throwAStr $ "Overwriting file" ++ ashow (n,qnfs,fn)
       Nothing -> do
-        f <- mkFileName constr n cnfs
-        mapM_ (`putQueryFile` f) cnfs
+        f <- mkFileName constr n qnfs
+        mapM_ (`putQueryFile` f) qnfs
         return f
 
 mkFileName :: (FileSetConstructor constr, MonadCodeBuilder e s t n m,
               MonadError (CodeBuildErr e s t n) m) =>
              constr
            -> NodeRef n
-           -> [CNFQuery e s]
+           -> [QNFQuery e s]
            -> m FileSet
-mkFileName constr n cnfs = do
+mkFileName constr n qnfs = do
   qf <- getCachedFile . defaultQueryFileCache . cbQueryCppConf <$> getCBState
-  let assoc = (\cnf -> (qf cnf,cnf)) <$> cnfs
+  let assoc = (\qnf -> (qf qnf,qnf)) <$> qnfs
   fileset <- case nub $ mapMaybe fst assoc of
               []  -> return $ constructFileSet constr (runNodeRef n)
               [f] -> return f

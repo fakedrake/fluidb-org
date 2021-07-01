@@ -49,16 +49,16 @@ pushSelections' :: forall e s .
 pushSelections' eqE couldPushIn0 = freshPush
   where
     freshPush = fst . push []
-    unCnf :: [Prop (Rel (Expr e))] -> Prop (Rel (Expr e))
-    unCnf = foldl1 And
+    unQnf :: [Prop (Rel (Expr e))] -> Prop (Rel (Expr e))
+    unQnf = foldl1 And
     -- Push and keep around the leftovers
-    cnfAnd' p = fmap4 unWrapEq $ toList $ propCnfAnd $ fmap3 (WrapEq eqE) p
+    qnfAnd' p = fmap4 unWrapEq $ toList $ propQnfAnd $ fmap3 (WrapEq eqE) p
     push :: [Prop (Rel (Expr e))]
          -> Query e s
          -> (Query e s,[Prop (Rel (Expr e))])
     push r = \case
-      S p q -> push (cnfAnd' p ++ r) q
-      J p q q' -> push (cnfAnd' p ++ r) (Q2 QProd q q')
+      S p q -> push (qnfAnd' p ++ r) q
+      J p q q' -> push (qnfAnd' p ++ r) (Q2 QProd q q')
       q@(Q2 QProd q0 q1)
         -> let (r',rleftover) = partition (`couldPushIn0` q) r
                (q0',r'') = push r' q0
@@ -76,7 +76,7 @@ pushSelections' eqE couldPushIn0 = freshPush
           q' = runIdentity $ qmapA1 (Identity . freshPush) q
       in if null rq
            then (q',r)
-           else (S (unCnf rq) q',rq')
+           else (S (unQnf rq) q',rq')
     -- Decides whether we should be doing
     -- * A product
     -- * A join
@@ -87,13 +87,13 @@ pushSelections' eqE couldPushIn0 = freshPush
     --
     -- XXX: Here we ignore if the equaliy is well behaved.
     makeJoin :: [Prop (Rel (Expr e))] -> Query e s -> Query e s -> Query e s
-    makeJoin cnf =
+    makeJoin qnf =
       let isEqualityTerm = \case
             P0 (R2 REq _ _) -> True
             _ -> False
-      in case partition isEqualityTerm cnf of
+      in case partition isEqualityTerm qnf of
            ([],[]) -> Q2 QProd
-           ([],terms) -> J $ unCnf terms
-           (terms,[]) -> J $ unCnf terms
-           (eqTerms,neqTerms) -> S (unCnf neqTerms)
-             ... J (unCnf eqTerms)
+           ([],terms) -> J $ unQnf terms
+           (terms,[]) -> J $ unQnf terms
+           (eqTerms,neqTerms) -> S (unQnf neqTerms)
+             ... J (unQnf eqTerms)

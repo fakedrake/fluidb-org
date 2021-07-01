@@ -70,7 +70,7 @@ stackCmd conf scmd args = "stack" : workDir ++ rest
     rest = case scmd of
       StackBuild -> cnfStackArgs conf ++ ["build"] ++ args
       StackPath  -> "path" : args
-      StackRun   -> cnfStackArgs conf ++ "run" ++ args
+      StackRun   -> cnfStackArgs conf ++ ["run"] ++ args
 
 
 execRule :: Config -> String -> Rules FilePath

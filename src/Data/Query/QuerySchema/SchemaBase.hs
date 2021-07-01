@@ -36,8 +36,8 @@ module Data.Query.QuerySchema.SchemaBase
 
 import           Control.Monad.Reader
 import           Data.Bitraversable
-import           Data.CnfQuery.Build
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.CppAst
 import           Data.Functor.Identity
 import qualified Data.HashMap.Strict          as HM
@@ -56,26 +56,26 @@ mkLitPlanSym :: e -> PlanSym e s
 mkLitPlanSym e = mkPlanSym (NonSymbolName e) e
 
 mkSymPlanSymNM :: Hashables2 e s =>
-                 NameMap e s -> e -> Either (CNFError e s) (PlanSym e s)
+                 NameMap e s -> e -> Either (QNFError e s) (PlanSym e s)
 mkSymPlanSymNM nm e = (`mkPlanSym` e) . (`Column` 0) <$> getName nm e
 
 planSymIsSym :: PlanSym e s -> Bool
-planSymIsSym ps = case  planSymCnfName ps of
+planSymIsSym ps = case  planSymQnfName ps of
   NonSymbolName _ -> False
   _               -> True
 
 planSymOrig :: PlanSym e s -> e
-planSymOrig = planSymCnfOriginal
+planSymOrig = planSymQnfOriginal
 
-mkPlanSym :: CNFName e s -> e -> PlanSym e s
-mkPlanSym cnfn e = PlanSym{planSymCnfOriginal=e,planSymCnfName=cnfn}
+mkPlanSym :: QNFName e s -> e -> PlanSym e s
+mkPlanSym qnfn e = PlanSym{planSymQnfOriginal=e,planSymQnfName=qnfn}
 
 setPlanSymOrig :: e -> PlanSym e s -> PlanSym e s
-setPlanSymOrig e ps = ps{planSymCnfOriginal=e}
+setPlanSymOrig e ps = ps{planSymQnfOriginal=e}
 
 -- | Nothing means it's a literal.
 refersToPlan :: Hashables2 e s => PlanSym e s -> QueryPlan e s -> Maybe Bool
-refersToPlan ps plan = case planSymCnfName ps of
+refersToPlan ps plan = case planSymQnfName ps of
   NonSymbolName _ -> Nothing
   _               -> Just $ isJust $ lookupQP ps plan
 
@@ -115,7 +115,7 @@ planSymTypeSym' :: Hashables2 e s =>
                   [QueryPlan e s]
                 -> PlanSym e s
                 -> Maybe (Either e CppType)
-planSymTypeSym' plans ps = case planSymCnfName ps of
+planSymTypeSym' plans ps = case planSymQnfName ps of
   NonSymbolName e -> Just $ Left e
   _ -> Right . columnPropsCppType
     <$> listToMaybe (catMaybes $ lookupQP ps <$> plans)
@@ -221,14 +221,14 @@ translatePlanMap'' f assoc p =
   where
     symsMap = assocToMap assoc
     safeLookup :: PlanSym e s -> Either (AShowStr e s) (PlanSym e s)
-    safeLookup e = case planSymCnfName e of
+    safeLookup e = case planSymQnfName e of
       PrimaryCol{} -> undefined
       _            -> safeLookup0
       where
         safeLookup0 :: Either (AShowStr e s) (PlanSym e s)
         safeLookup0 = lookup_e `alt` asLiteral where
           asLiteral :: Either (AShowStr e s) (PlanSym e s)
-          asLiteral = case planSymCnfName e of
+          asLiteral = case planSymQnfName e of
             NonSymbolName _ -> Right e
             _               -> throwAStr $ "Expected literal:" ++ ashow e
           lookup_e :: Either (AShowStr e s) (PlanSym e s)
@@ -352,7 +352,7 @@ uniqDropConst p = fmap (\uniq -> p{qpUnique=uniq})
 planSymEqs :: Hashables2 e s =>
              Prop (Rel (Expr (PlanSym e s)))
            -> [(PlanSym e s,PlanSym e s)]
-planSymEqs p = mapMaybe asEq $ toList $ propCnfAnd p where
+planSymEqs p = mapMaybe asEq $ toList $ propQnfAnd p where
   asEq :: Prop (Rel (Expr (PlanSym e s))) -> Maybe (PlanSym e s,PlanSym e s)
   asEq = \case
     P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))) ->

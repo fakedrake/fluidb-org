@@ -18,13 +18,13 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
-import           Data.CnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.List.Extra
 import qualified Data.List.NonEmpty                as NEL
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Proxy
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
@@ -83,10 +83,10 @@ queryPlans1 refO = do
   when (null clusts) $ do
     isInterm <- dropReader get $ isIntermediateClust refO
     allClusts <- lookupClustersN refO
-    allCnfs <- lookupCnfN refO
+    allQnfs <- lookupQnfN refO
     throwAStr
       $ "NodeRef is in none of the clusters: "
-      ++ ashow (refO,fmap cnfOrigDEBUG' allCnfs,allClusts,isInterm)
+      ++ ashow (refO,fmap qnfOrigDEBUG' allQnfs,allClusts,isInterm)
   forM clusts $ \clust -> fmap (,clust) $ case clust of
     JoinClustW c       -> getQueryRecurse2 (clusterInputs clust) c
     BinClustW c        -> getQueryRecurse2 (clusterInputs clust) c
@@ -100,14 +100,14 @@ queryPlans1 refO = do
     getQueryRecurse1 inps c = case (inps,unOps) of
       ([inRef],Just ops) -> return $ (\o -> Q1' o inRef) <$> ops
       (_,Nothing) -> do
-        cnfs <- forM
+        qnfs <- forM
           [snd $ unMetaD $ unClusterPrimaryOut c
           ,snd $ unMetaD $ unClusterSecondaryOut c
           ,refO]
-          $ \x -> (x,) . cnfOrigDEBUG' . head <$> getNodeCnfN x
+          $ \x -> (x,) . qnfOrigDEBUG' . head <$> getNodeQnfN x
         throwAStr
           $ "No operators in cluster or clust does not contain the reference!!: "
-          ++ ashow (refO,cnfs,c)
+          ++ ashow (refO,qnfs,c)
       _ -> inpNumError "UnClust" $ length inps
       where
         unOps = NEL.nonEmpty $ clusterOp (Proxy :: Proxy (PlanSym e s)) refO c
@@ -285,17 +285,17 @@ mul :: Double -> Int -> Int
 mul theta = round . (* theta) . fromIntegral
 
 
-cnfAnd :: forall x . Eq x => Prop x -> NEL.NonEmpty (Prop x)
-cnfAnd = go where
+qnfAnd :: forall x . Eq x => Prop x -> NEL.NonEmpty (Prop x)
+qnfAnd = go where
   go x@(P0 _) = return x
   go x@(Not (P0 _)) = return x
   go (Not (Not x)) = go x
-  go (Not (Or x y)) = cnfAnd (Not x) <> cnfAnd (Not y)
+  go (Not (Or x y)) = qnfAnd (Not x) <> qnfAnd (Not y)
   go (Not (And x y)) = return $ Not (And x y)
-  -- go (Not (And x y)) = cnfAnd $
-  --   Or (foldr1Unsafe And $ cnfAnd $ Not x) (foldr1Unsafe And $ cnfAnd $ Not y)
-  go (And x y) = cnfAnd x <> cnfAnd y
-  go p@(Or x y) = fromMaybe (return p) $ goOr (cnfAnd x) (cnfAnd y)
+  -- go (Not (And x y)) = qnfAnd $
+  --   Or (foldr1Unsafe And $ qnfAnd $ Not x) (foldr1Unsafe And $ qnfAnd $ Not y)
+  go (And x y) = qnfAnd x <> qnfAnd y
+  go p@(Or x y) = fromMaybe (return p) $ goOr (qnfAnd x) (qnfAnd y)
     where
       goOr :: NEL.NonEmpty (Prop x)
            -> NEL.NonEmpty (Prop x)
@@ -311,7 +311,7 @@ cnfAnd = go where
   go _ = error "Unreachable, the price for using patterns."
 
 eqPairs :: Eq e => Prop (Rel (Expr e)) -> [(Expr e,Expr e)]
-eqPairs p = mapMaybe eqPair $ toList $ cnfAnd p
+eqPairs p = mapMaybe eqPair $ toList $ qnfAnd p
   where
     eqPair (P0 (R2 REq (R0 l) (R0 r))) = Just (l,r)
     eqPair _                           = Nothing

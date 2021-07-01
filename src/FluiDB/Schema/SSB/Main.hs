@@ -4,18 +4,22 @@ module FluiDB.Schema.SSB.Main (ssbMain) where
 
 
 import           Control.Monad.Except
+import           Control.Monad.Identity
 import           Control.Monad.State
 import           Data.Bipartite
+import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build
 import           Data.Codegen.Run
 import           Data.DotLatex
 import qualified Data.IntMap               as IM
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Default
+import           Data.Utils.Functors
 import           Data.Utils.Ranges
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
@@ -50,19 +54,20 @@ finallyError m hndl = do
 shouldRender Verbose = True
 shouldRender Quiet   = False
 
-runQuery :: Verbosity -> SSBQuery -> SSBGlobalSolveM ()
+runQuery :: Verbosity -> SSBQuery -> SSBGlobalSolveM [Transition T N]
 runQuery verbosity  query = do
   cppConf <- gets globalQueryCppConf
   aquery <- annotateQuerySSB cppConf query
   (transitions,_cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
-      (queryPath,pngPath,grPath) <- renderGraph query
+      (intermPath, queryPath,pngPath,grPath) <- renderGraph query
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath
+      liftIO $ putStrLn $ "The reperoire of intermediates: " ++ intermPath
   -- liftIO $ runCpp cppCode
   liftIO $ putStrLn $ ashow transitions
-  return ()
+  return transitions
 
 ssbRunGlobalSolve :: SSBGlobalSolveM a -> IO a
 ssbRunGlobalSolve m = do
@@ -71,7 +76,8 @@ ssbRunGlobalSolve m = do
 
 singleQuery :: IO ()
 singleQuery =
-  ssbRunGlobalSolve
+  void
+  $ ssbRunGlobalSolve
   $ runQuery Verbose
   $ ssbParse
   $ unwords
@@ -95,26 +101,31 @@ actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
     Nothing    -> throwAStr $ printf "No such query %d" qi
     Just query -> runQuery verbosity query
 
-
 type ImagePath = FilePath
 type QueryPath = FilePath
 type GraphPath = FilePath
-renderGraph :: SSBQuery -> SSBGlobalSolveM (QueryPath, ImagePath,GraphPath)
+type IntermediatesPath = FilePath
+renderGraph
+  :: SSBQuery
+  -> SSBGlobalSolveM (IntermediatesPath,QueryPath,ImagePath,GraphPath)
 renderGraph query = do
-  gr <- gets $ propNet . getGlobalConf
+  gr <- gets $ propNet . globalGCConfig
+  interms <- gets $ fmap3 (runIdentity . qnfOrigDEBUG') . refAssocs . nrefToQnfs . globalClusterConfig
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
         dotPath = graphBase <.> "dot"
         qPath = graphBase <.> "query"
         grPath = graphBase <.> "graph"
+        isPath = graphBase <.> "interm"
         imgPath = graphBase <.> "svg"
     writeFile grPath $ ashow gr
     writeFile qPath $ ashow query
+    writeFile isPath $ ashow interms
     writeFile dotPath $ simpleRender @T @N gr
     withFile dotPath ReadMode $ \hndl -> do
       runProc
         (mkProc "dot" ["-o" ++ imgPath, "-Tsvg"]) { std_in = UseHandle hndl }
-      return (qPath,imgPath,grPath)
+    return (isPath, qPath,imgPath,grPath)
 
 getInputNodes :: NodeRef N -> GraphBuilderT T N IO [(NodeRef T,[NodeRef N])]
 getInputNodes ref = do

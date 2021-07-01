@@ -15,7 +15,7 @@ module FluiDB.Runner.DefaultGlobal
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.CnfQuery.Build
+import           Data.QnfQuery.Build
 import           Data.Codegen.Build.Types
 import           Data.Codegen.Schema
 import           Data.CppAst.ExpressionLike
@@ -95,8 +95,8 @@ instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s),AS
   putPS _ q' = do
     cppConf <- gets globalQueryCppConf
     either (throwError . toGlobalError) (return . first (uncurry mkPlanSym))
-      $ (>>= maybe (throwAStr "No cnf found") return)
+      $ (>>= maybe (throwAStr "No qnf found") return)
       $ fmap (>>= traverse (\s -> (,s) <$> mkPlanFromTbl cppConf s) . snd)
       $ (`evalStateT` def)
-      $ listTMaxCNF fst
-      $ toCNF (fmap2 snd . tableSchema cppConf) q'
+      $ listTMaxQNF fst
+      $ toQNF (fmap2 snd . tableSchema cppConf) q'

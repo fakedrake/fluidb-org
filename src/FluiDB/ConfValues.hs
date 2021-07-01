@@ -29,8 +29,8 @@ import           Data.Cluster.InsertQuery
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
-import           Data.CnfQuery.Build
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.Codegen.SchemaAssocClass
 import           Data.CppAst
@@ -124,16 +124,16 @@ mkFileCache :: forall e s .
 mkFileCache toFileSet schemaAssoc =
   go $ HM.fromList $ catMaybes $ toAssoc <$> schemaAssoc
   where
-    toAssoc :: (s,x) -> Maybe (Either (Query e s) (CNFQuery e s),FileSet)
-    toAssoc (fn,_) = (safeCnf $ Q0 fn,) <$> toFileSet fn
-    safeCnf :: Query e s -> Either (Query e s) (CNFQuery e s)
-    safeCnf q =
+    toAssoc :: (s,x) -> Maybe (Either (Query e s) (QNFQuery e s),FileSet)
+    toAssoc (fn,_) = (safeQnf $ Q0 fn,) <$> toFileSet fn
+    safeQnf :: Query e s -> Either (Query e s) (QNFQuery e s)
+    safeQnf q =
       fmap (fst . fromJustErr)
       $ first (const q)
       $ (`evalStateT` def)
-      $ listTMaxCNF fst
-      $ toCNF (toTableColumns schemaAssoc) q
-    go :: HM.HashMap (Either (Query e s) (CNFQuery e s)) FileSet
+      $ listTMaxQNF fst
+      $ toQNF (toTableColumns schemaAssoc) q
+    go :: HM.HashMap (Either (Query e s) (QNFQuery e s)) FileSet
        -> QueryFileCache e s
     go hm =
       QueryFileCache
@@ -173,7 +173,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
   let (pair :: Either (ClusterError e s) (Bipartite t n,RefMap n s)
         ,clusterConfig :: ClusterConfig e s t n) =
         (`evalState` gbState)
-        $ (`runStateT` def { cnfTableColumns = toTableColumns pgcSchemaAssoc })
+        $ (`runStateT` def { qnfTableColumns = toTableColumns pgcSchemaAssoc })
         $ runExceptT clusterBuilt
   (propNetLocal,tableMap) <- first toGlobalError pair
   let newNodes = refKeys tableMap
@@ -210,13 +210,13 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
     clusterBuilt
       :: Monad m => CGraphBuilderT e s t n m (Bipartite t n,RefMap n s)
     clusterBuilt = do
-      modify $ \cm -> cm { cnfInsertBottoms = True }
+      modify $ \cm -> cm { qnfInsertBottoms = True }
       tableMap' <- forM pgcSchemaAssoc $ \(t,_) -> do
         n <- insertQueryPlan (literalType queryCppConf) . return . (t,)
           =<< symPlan t
         triggerClustPropagator $ NClustW $ NClust n
         return (n,t)
-      modify $ \cm -> cm { cnfInsertBottoms = False }
+      modify $ \cm -> cm { qnfInsertBottoms = False }
       (,fromRefAssocs tableMap') <$> lift2 (gets gbPropNet)
     symPlan :: Monad m => s -> CGraphBuilderT e s t n m (QueryPlan e s)
     symPlan =

@@ -1,29 +1,29 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Data.QueryPlan.Materializable
   (isMaterializable) where
 
-import Control.Arrow
-import qualified Control.Category as C
-import Data.QueryPlan.ProcTrail
-import Data.QueryPlan.MetaOp
-import Data.Utils.Functors
-import Control.Antisthenis.Types
-import Data.Utils.AShow
-import Control.Antisthenis.ATL.Transformers.Mealy
-import Data.Maybe
-import Control.Antisthenis.Zipper
-import Control.Monad.State
-import Control.Monad.Except
-import Control.Monad.Writer
-import Data.Utils.Default
-import Control.Monad.Reader
-import Data.QueryPlan.Nodes
-import Control.Monad.Identity
-import Control.Antisthenis.Bool
-import Data.List.NonEmpty as NEL
-import Data.QueryPlan.Types
-import Data.NodeContainers
+import           Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Antisthenis.Bool
+import           Control.Antisthenis.Types
+import           Control.Antisthenis.Zipper
+import           Control.Arrow
+import qualified Control.Category                           as C
+import           Control.Monad.Except
+import           Control.Monad.Identity
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Writer
+import           Data.List.NonEmpty                         as NEL
+import           Data.Maybe
+import           Data.NodeContainers
+import           Data.QueryPlan.MetaOp
+import           Data.QueryPlan.Nodes
+import           Data.QueryPlan.ProcTrail
+import           Data.QueryPlan.Types
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.Functors
 
 isMaterializable :: Monad m =>  NodeRef n -> PlanT t n m Bool
 isMaterializable ref = do
@@ -82,7 +82,8 @@ mkNewMech ref = squashMealy $ do
         | (mop,_cost) <- mops]
   let ret =
         withTrail (ErrCycle (runNodeRef ref) . runNodeSet) ref
-        $ mkEpoch (BndRes gTrue) ref >>> C.id ||| makeIsMatableProc ref mechs
+        $ mkEpoch (const $ BndRes gTrue) ref
+        >>> C.id ||| makeIsMatableProc ref mechs
   lift2 $ modify $ \gcs
     -> gcs { matableMechMap = refInsert ref ret $ matableMechMap gcs }
   return ret
@@ -96,5 +97,5 @@ planQuickRun m = do
   st0 <- get
   conf <- ask
   case runIdentity $ runExceptT $ (`runReaderT` conf) $ (`runStateT` st0) m of
-    Left e -> throwError e
+    Left e       -> throwError e
     Right (a,st) -> put st >> return a

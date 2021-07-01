@@ -18,10 +18,10 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
-import           Data.CnfQuery.BuildUtils
-import           Data.CnfQuery.Types
 import           Data.CppAst.CppType
 import           Data.NodeContainers
+import           Data.QnfQuery.BuildUtils
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.Functors
@@ -34,21 +34,21 @@ putBinCluster
   :: (Hashables2 e s,Monad m)
   => [(PlanSym e s,PlanSym e s)]
   -> BQOp (PlanSym e s)
-  -> (NodeRef n,NCNFQuery e s) -- inL
-  -> (NodeRef n,NCNFQuery e s) -- inR
-  -> (NodeRef n,NCNFQuery e s) -- Out
+  -> (NodeRef n,NQNFQuery e s) -- inL
+  -> (NodeRef n,NQNFQuery e s) -- inR
+  -> (NodeRef n,NQNFQuery e s) -- Out
   -> CGraphBuilderT e s t n m (BinClust e s t n)
-putBinCluster symAssoc op (l,_ncnfL) (r,_ncnfR) (out,ncnfO) = do
+putBinCluster symAssoc op (l,_nqnfL) (r,_nqnfR) (out,nqnfO) = do
   clust <- idempotentClusterInsert constraints mkClust
   putBClustPropagator clust symAssoc op
-  forM_ [ncnfO] $ \ncnf -> linkCnfClust (ncnfToCnf ncnf) $ BinClustW clust
+  forM_ [nqnfO] $ \nqnf -> linkQnfClust (nqnfToQnf nqnf) $ BinClustW clust
   return clust
   where
     constraints =
       [(binClusterLeftIn,l),(binClusterRightIn,r),(binClusterOut,out)]
     mkClust = do
-      let cnfO = ncnfToCnf ncnfO
-      tRef <- mkNodeFromCnfT cnfO
+      let qnfO = nqnfToQnf nqnfO
+      tRef <- mkNodeFromQnfT qnfO
       let rev = getReversibleB op
       let linkTo nref =
             linkNodes
@@ -83,8 +83,8 @@ putBClustPropagator clust assoc op = putPlanPropagator
   (BinClustW clust)
   (cPropToACProp $ binClustPropagator assoc op, assoc)
 
-planSymAssoc :: Hashables2 e s => NCNFResultDF d f a e s -> [(PlanSym e s,PlanSym e s)]
-planSymAssoc = fmap (bimap mkSym mkSym) . ncnfResInOutNames where
+planSymAssoc :: Hashables2 e s => NQNFResultDF d f a e s -> [(PlanSym e s,PlanSym e s)]
+planSymAssoc = fmap (bimap mkSym mkSym) . nqnfResInOutNames where
   mkSym (e,col) = mkPlanSym (Column col 0) e
 
 -- | Connect 3 nodes with a unary cluster. Note that it is possible
@@ -97,21 +97,21 @@ putUnCluster
   -- ^ Only the primary is required
   -> (e -> Maybe CppType)
   -> (UQOp (PlanSym e s),Maybe (UQOp (PlanSym e s)))
-  -> (NodeRef n,NCNFQuery e s)
-  -> (NodeRef n,NCNFQuery e s)
-  -> (NodeRef n,NCNFQuery e s)
+  -> (NodeRef n,NQNFQuery e s)
+  -> (NodeRef n,NQNFQuery e s)
+  -> (NodeRef n,NQNFQuery e s)
   -> CGraphBuilderT e s t n m (UnClust e s t n)
 putUnCluster
   (symAssocPrim,symAssocSec)
   literalType
   (op,coopM)
-  (inp,_ncnfI)
-  (secRef,ncnfCoO)
-  (refO,ncnfO) = do
+  (inp,_nqnfI)
+  (secRef,nqnfCoO)
+  (refO,nqnfO) = do
   c <- idempotentClusterInsert constraints mkClust
   putUnClustPropagator (Tup2 symAssocPrim symAssocSec) literalType c op
-  forM_ [ncnfO,ncnfCoO] $ \ncnf
-    -> linkCnfClust (ncnfToCnf ncnf) $ UnClustW c
+  forM_ [nqnfO,nqnfCoO] $ \nqnf
+    -> linkQnfClust (nqnfToQnf nqnf) $ UnClustW c
   return c
   where
     constraints =
@@ -119,9 +119,9 @@ putUnCluster
       ,(unClusterSecondaryOut,secRef)
       ,(unClusterPrimaryOut,refO)]
     mkClust = do
-      let cnfO = ncnfToCnf ncnfO
+      let qnfO = nqnfToQnf nqnfO
        -- The same is clustered.
-      tRef <- mkNodeFromCnfT cnfO
+      tRef <- mkNodeFromQnfT qnfO
       let rev = getReversibleU op
       let linkTo nref =
             linkNodes
@@ -162,10 +162,10 @@ putUnClustPropagator symAssocs literalType clust op =
 putNCluster
   :: (Hashables2 e s,Monad m)
   => QueryPlan e s
-  -> (NodeRef n,NCNFQuery e s)
+  -> (NodeRef n,NQNFQuery e s)
   -> CGraphBuilderT e s t n m (NClust e s t n)
-putNCluster plan (ref,ncnf) = idempotentClusterInsert [(nClustNode,ref)] $ do
-  linkCnfClust (ncnfToCnf ncnf) $ NClustW $ NClust ref
+putNCluster plan (ref,nqnf) = idempotentClusterInsert [(nClustNode,ref)] $ do
+  linkQnfClust (nqnfToQnf nqnf) $ NClustW $ NClust ref
   putPlanPropagator
     (NClustW $ NClust ref)
     (cPropToACPropN $ nClustPropagator plan,[])

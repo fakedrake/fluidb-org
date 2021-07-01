@@ -31,13 +31,13 @@ import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
-import           Data.CnfQuery.Types
 import           Data.Codegen.Build.IoFiles.MkFiles
 import           Data.Codegen.Build.IoFiles.Types
 import           Data.Codegen.Build.Monads.CodeBuilder
 import           Data.Either
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Query.QuerySchema
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
@@ -127,6 +127,6 @@ getClusterT
      ,MonadState (ClusterConfig e s t n) m
      ,MonadAShowErr e s err m)
   => NodeRef t
-  -> m (CNFQuery e s,AnyCluster e s t n)
+  -> m (QNFQuery e s,AnyCluster e s t n)
 getClusterT t =
   maybe (throwAStr $ "No cluster for: " ++ ashow t) return =<< lookupClusterT t

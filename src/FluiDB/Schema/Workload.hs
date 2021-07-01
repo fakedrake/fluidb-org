@@ -36,8 +36,6 @@ import           Data.Bifunctor
 import           Data.Bipartite
 import           Data.Cluster.InsertQuery
 import           Data.Cluster.Types.Monad
-import           Data.CnfQuery.Build
-import           Data.CnfQuery.Types
 import           Data.Codegen.Build
 import           Data.Codegen.Build.Monads
 import           Data.Codegen.Build.Monads.PlanLift
@@ -48,6 +46,8 @@ import qualified Data.HashSet                       as HS
 import qualified Data.List.NonEmpty                 as NEL
 import           Data.NodeContainers
 import           Data.Proxy
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations
 import           Data.Query.QuerySchema.SchemaBase
@@ -105,16 +105,16 @@ sqlToSolution query serializeSols getSolution = do
   -- SANITY CHECK
   when False $ wrapTrace "Sanity checking..." $ do
     ioLogMsg ioOps $ "Opt queries: [size:" ++  show (lengthF qs) ++ "]\n"
-    let toCnfs q = HS.fromList
+    let toQnfs q = HS.fromList
           $ fmap fst
           $ either undefined id
           $ (`evalStateT` def)
           $ runListT
-          $ toCNF (fmap2 snd . tableSchema cppConf) q
-    let cnfs = toList
-          $ fmap toCnfs $ fmap2 fst $ getCompose $ iterA interleaveComp qs
-    forM_ (zip [1::Int ..] $ zip cnfs $ tail cnfs) $ \(_i,(bef,aft)) ->
-      unless (bef == aft) $ throwAStr $ "UNEQUAL CNFa: "  ++ ashow (bef,aft)
+          $ toQNF (fmap2 snd . tableSchema cppConf) q
+    let qnfs = toList
+          $ fmap toQnfs $ fmap2 fst $ getCompose $ iterA interleaveComp qs
+    forM_ (zip [1::Int ..] $ zip qnfs $ tail qnfs) $ \(_i,(bef,aft)) ->
+      unless (bef == aft) $ throwAStr $ "UNEQUAL QNFa: "  ++ ashow (bef,aft)
   -- /SANITY CHECK
   hoistGlobalSolveT (serializeSols . dissolve @[])
     $ insertAndRun qs getSolution
@@ -210,7 +210,6 @@ planFrontier
       RTrigger i' _ o' -> (i <> fromNodeList i',o <> fromNodeList o')
       DelNode _        -> (i,o)
 
-
 type CppCode = String
 runSingleQuery
   :: (Hashables2 e s,AShow e,AShow s,ExpressionLike e,MonadFakeIO m)
@@ -234,9 +233,9 @@ forEachQuery
   -> [q]
   -> (Int -> Query (PlanSym e s) (QueryPlan e s,s) -> GlobalSolveT e s t n m a)
   -> m [a]
-forEachQuery modGCnf qios m =
+forEachQuery modGQnf qios m =
   runGlobalSolve
-    (modGCnf $ defGlobalConf (Proxy :: Proxy m) qios)
+    (modGQnf $ defGlobalConf (Proxy :: Proxy m) qios)
     (\x -> fail $ "No solution found: " ++ ashow x)
   $ forM (zip [1 ..] qios)
   $ \(i,qio) -> do
@@ -252,7 +251,7 @@ runWorkloadCpp
   => (GlobalConf e s t n -> GlobalConf e s t n)
   -> [q]
   -> m [([(Transition t n,Cost)],[NodeRef n])]
-runWorkloadCpp modGCnf qios = forEachQuery modGCnf qios $ \i query -> do
+runWorkloadCpp modGQnf qios = forEachQuery modGQnf qios $ \i query -> do
   (trigs,cppCode) <- runSingleQuery query
   gcc :: GCConfig t n <- gets getGlobalConf
   costTrigs <- either (throwError . toGlobalError) return
@@ -280,17 +279,9 @@ runWorkloadEvals
   (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
   => (GlobalConf e s t n -> GlobalConf e s t n)
   -> [q]
-  -> m [[Evaluation e s t n [CNFQuery e s]]]
+  -> m [[Evaluation e s t n [QNFQuery e s]]]
 runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query ->
   sqlToSolution query (return . headErr)
   $ dropReader (lift2 askStates) getEvaluations
   where
     askStates = gets (,,,) <*> lift2 get <*> lift3 get <*> lift3 ask
-
-getTpchQuery :: SqlTypeVars e s t n => Int -> IO (Query e s)
-getTpchQuery q =
-  fmap (bimap planSymOrig snd)
-  $ runGlobalSolve
-    (defGlobalConf (Proxy :: Proxy IO) ([] :: [Int]))
-    (\x -> fail $ "Couldn't get query: " ++ ashow x)
-  $ getIOQuery q

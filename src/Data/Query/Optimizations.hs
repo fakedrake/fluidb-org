@@ -16,7 +16,7 @@ module Data.Query.Optimizations
 import           Control.Monad.Except
 import           Control.Monad.Free
 import           Data.Bifunctor
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import           Data.CppAst.CppType
 import qualified Data.List.NonEmpty                     as NEL
 import           Data.Maybe
@@ -66,7 +66,7 @@ mkEmbedding (toETS,toE) =
    ,embedIsLit =
       (\case
          NonSymbolName _ -> True
-         _ -> False) . planSymCnfName . fst
+         _ -> False) . planSymQnfName . fst
   }
 
 optQuery' :: forall e' e s . Hashables2 e' s =>

@@ -53,7 +53,7 @@ import           Data.Maybe
 import           Data.Tuple
 import           Data.Query.Algebra
 import           Data.Utils.AShow
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Monads.Class
 import qualified Data.CppAst                     as CC
 import           Data.Query.QuerySchema

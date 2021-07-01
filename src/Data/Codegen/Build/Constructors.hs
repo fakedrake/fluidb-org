@@ -57,7 +57,7 @@ import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.EquiJoinUtils
 import           Data.Codegen.Build.Expression
@@ -304,8 +304,8 @@ selCall outAssoc p = do
 getQueriesFromClust
   :: (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => AnyCluster e s t n
-  -> m [CNFQuery e s]
-getQueriesFromClust clust = getNodeCnfN $ snd $ primaryNRef clust
+  -> m [QNFQuery e s]
+getQueriesFromClust clust = getNodeQnfN $ snd $ primaryNRef clust
 
 -- | get the inputs, evalQueryEnv with them and copy the queryCall
 -- stuff. The fact that we have a
@@ -353,7 +353,7 @@ clusterCall c = do
         getDef' (WMetaD (_,WMetaD (d,_))) = case getDef d of
           Nothing -> throwAStr "Found empty defaulting in getValidClustPropagator"
           Just x  -> return $ planAllSyms x
-        selem sym syms = case planSymCnfName sym of
+        selem sym syms = case planSymQnfName sym of
           NonSymbolName _ -> True
           _               -> sym `elem` syms
         checkUOp inSyms outSyms = \case
