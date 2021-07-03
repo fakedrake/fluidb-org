@@ -68,7 +68,7 @@ module Data.NodeContainers
   , nsDisjoint
   , nsIsSubsetOf
   , nsFold
-  ,refLookupMax) where
+  ,refLookupMax,nsSize) where
 
 import           Control.Arrow            (first, (***))
 import           Control.Monad.Identity
@@ -168,13 +168,15 @@ refMergeWithKeyA :: forall f n a b c .
                 -> (NodeRef n -> b -> f c)
                 -> (NodeRef n -> a -> b -> f c)
                 -> RefMap n a -> RefMap n b -> f (RefMap n c)
-refMergeWithKeyA fa fb f l r = fmap RefMap
-  $ IMM.mergeA
-  (IMM.traverseMissing (fa . NodeRef :: Key -> a -> f c))
-  (IMM.traverseMissing (fb . NodeRef  :: Key -> b -> f c))
-  (IMM.zipWithAMatched (f . NodeRef :: Key -> a -> b -> f c) :: IMM.WhenMatched f a b c)
-  (runRefMap l :: IM.IntMap a)
-  (runRefMap r :: IM.IntMap b)
+refMergeWithKeyA fa fb f l r =
+  RefMap
+  <$> IMM.mergeA
+    (IMM.traverseMissing (fa . NodeRef :: Key -> a -> f c))
+    (IMM.traverseMissing (fb . NodeRef :: Key -> b -> f c))
+    (IMM.zipWithAMatched (f . NodeRef :: Key -> a -> b -> f c)
+       :: IMM.WhenMatched f a b c)
+    (runRefMap l :: IM.IntMap a)
+    (runRefMap r :: IM.IntMap b)
 
 refUnionWithKey :: (NodeRef n -> a -> a -> a) -> RefMap n a -> RefMap n a -> RefMap n a
 refUnionWithKey f = runIdentity ... refUnionWithKeyA (\k a b -> Identity $ f k a b)
@@ -268,7 +270,7 @@ instance Default (NodeSet n)
 instance Semigroup (NodeSet b) where (<>) = NodeSet ... mappend `on` runNodeSet
 instance Monoid (NodeSet b) where mempty = NodeSet mempty
 instance Hashable (NodeSet n) where
-  hashWithSalt s = IS.foldl' (\h i -> hashWithSalt h i) s . runNodeSet
+  hashWithSalt s = IS.foldl' hashWithSalt s . runNodeSet
   {-# INLINE hashWithSalt #-}
 
 nsNull :: NodeSet a -> Bool
@@ -299,6 +301,8 @@ fromNodeList :: [NodeRef a] -> NodeSet a
 fromNodeList = NodeSet . IS.fromList . fmap runNodeRef
 nsFold :: (NodeRef n -> a -> a) -> NodeSet n -> a -> a
 nsFold f ns ini = foldr f ini $ toNodeList ns
+nsSize :: NodeSet n -> Int
+nsSize = IS.size . runNodeSet
 
 -- # /NODESTRUCT
 -- data FieldFormat = FieldFormat {

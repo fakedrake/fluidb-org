@@ -13,6 +13,7 @@ import           Control.Monad.Writer
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.QueryPlan.Types
+import           Data.Utils.AShow
 
 modTrailE
   :: Monoid (ZCoEpoch w)
@@ -30,6 +31,7 @@ modTrail :: Monoid (ZCoEpoch w)
 modTrail f = mealyLift $ fromKleisli $ \a -> do
   modify $ \nps -> nps { npsTrail = f $ npsTrail nps }
   return a
+
 withTrail
   :: Monoid (ZCoEpoch w)
   => (NTrail n -> ZErr w)
@@ -39,8 +41,11 @@ withTrail
 withTrail cycleErr ref m =
   modTrailE putRef >>> (arr BndErr ||| m) >>> modTrail (nsDelete ref)
   where
-    putRef ns =
-      if ref `nsMember` ns then Left $ cycleErr ns else Right $ nsInsert ref ns
+    putRef ns
+      | nsSize ns > 10 = error $ "Very long trail: " ++ ashow ns
+      | ref `nsMember` ns = Left $ cycleErr ns
+      | otherwise = Right $ nsInsert ref ns
+
 -- | Transfer the value of the epoch to the coepoch. The epoch of a
 -- node wrt to calculating costs is fully defined by the
 -- materialization status of the node. The arrow produced by this

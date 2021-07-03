@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 module FluiDB.Schema.SSB.Main (ssbMain) where
 
-
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.State
@@ -29,6 +28,7 @@ import           FluiDB.Types
 import           FluiDB.Utils
 import           System.FilePath
 import           System.IO
+import           System.Posix.Resource
 import           System.Process
 import           System.Timeout
 import           Text.Printf
@@ -147,6 +147,8 @@ readGraph gpath m = do
 
 ssbMain :: IO ()
 ssbMain = do
-  timeout 10000000 (actualMain Quiet [1..12]) >>= \case
+  let oneGig = ResourceLimit 1000000000
+  setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
+  timeout 3000000 (actualMain Quiet [1..12]) >>= \case
     Nothing -> putStrLn "TIMEOUT!!"
     Just () -> putStrLn "Done!"

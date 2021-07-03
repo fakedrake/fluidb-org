@@ -29,6 +29,7 @@ isMaterializable :: Monad m =>  NodeRef n -> PlanT t n m Bool
 isMaterializable ref = do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   ((res,_coepoch),_trail) <- planQuickRun
+    $ (`runReaderT` 1)
     $ (`runStateT` def)
     $ runWriterT
     $ runMech (getOrMakeMech ref)
@@ -39,7 +40,7 @@ isMaterializable ref = do
     }
   case res of
     BndRes GBool {..} -> return $ unExists gbTrue
-    BndBnd _bnd -> throwPlan $ "We forced the result but got a partial result."
+    BndBnd _bnd -> throwPlan "We forced the result but got a partial result."
     BndErr e -> throwPlan $ "antisthenis error: " ++ ashow e
 
 type OrTag n = BoolTag Or (PlanParams n)
@@ -51,7 +52,7 @@ makeIsMatableProc
   -> NodeProc t n (BoolTag Or (PlanParams n))
 makeIsMatableProc ref deps =
   procOr
-  $ lowerNodeProc andToOrConv . procAnd . fmap (liftNodeProc $ orToAndConv)
+  $ lowerNodeProc andToOrConv . procAnd . fmap (liftNodeProc orToAndConv)
   <$> deps
   where
     procAnd :: [NodeProc0 t n (OrTag n) (AndTag n)]
@@ -62,7 +63,7 @@ makeIsMatableProc ref deps =
     procOr :: [NodeProc t n (OrTag n)] -> NodeProc t n (OrTag n)
     procOr ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
       where
-        mid = ("sum:" ++ ashow ref)
+        mid = "sum:" ++ ashow ref
 
 getOrMakeMech
   :: NodeRef n -> NodeProc t n (BoolTag Or (PlanParams n))
@@ -75,7 +76,7 @@ getOrMakeMech ref =
 -- | Build AND INSERT a new mech in the mech directory.
 mkNewMech :: NodeRef n -> NodeProc t n (BoolTag Or (PlanParams n))
 mkNewMech ref = squashMealy $ do
-  mops <- lift2 $ findCostedMetaOps ref
+  mops <- lift3 $ findCostedMetaOps ref
   -- Should never see the same val twice.
   let mechs =
         [[getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
