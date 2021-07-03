@@ -10,7 +10,7 @@ module Data.Query.SQL.FileSet
   , mapFileSet
   ) where
 
-import Data.CnfQuery.Types
+import Data.QnfQuery.Types
 import           Data.Query.SQL.Types
 import           Data.Utils.AShow
 import           Data.Utils.Hashable
@@ -50,9 +50,9 @@ instance FileSetConstructor (FilePath -> FilePath -> FileSet) where
 instance FileSetConstructor (FilePath -> FileSet) where
   constructFileSet c a = c $ printf "data%s.dat" $ show a
 data QueryFileCache e s = QueryFileCache {
-  getCachedFile :: CNFQuery e s -> Maybe FileSet,
-  putCachedFile :: CNFQuery e s -> FileSet -> QueryFileCache e s,
-  delCachedFile :: CNFQuery e s -> QueryFileCache e s,
+  getCachedFile :: QNFQuery e s -> Maybe FileSet,
+  putCachedFile :: QNFQuery e s -> FileSet -> QueryFileCache e s,
+  delCachedFile :: QNFQuery e s -> QueryFileCache e s,
   showFileCache :: Maybe String
   }
 instance Symbolic FileSet where

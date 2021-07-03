@@ -1,4 +1,3 @@
-{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -9,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
@@ -21,21 +21,22 @@
 
 module Data.Query.SQL.Uncorrelate (UnnestError,unnestQuery) where
 
-import Data.Utils.Functors
-import Data.Utils.Types
-import Data.Utils.AShow
-import Data.Either
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Maybe
-import           Control.Monad.Writer                    hiding (Endo)
+import           Control.Monad.Writer       hiding (Endo)
+import           Data.Either
 import           Data.Maybe
 import           Data.Query.Algebra
 import           Data.Query.SQL.Types
-import           GHC.Base                                (Alternative (..))
+import           Data.Utils.AShow
+import           Data.Utils.Functors
+import           Data.Utils.Types
+import           Data.Utils.Unsafe
+import           GHC.Base                   (Alternative (..))
 import           GHC.Generics
 
 data UnnestError s e =
@@ -93,22 +94,22 @@ data CorrelHead e s = NoCorrel s
 normalize :: Query (NestedQueryE s e) s -> Query (NestedQueryE s e) s
 normalize = qmap $ \case
   J p a b -> S p (Q2 QProd a b)
-  S p a -> S p a
-  q -> q
+  S p a   -> S p a
+  q       -> q
   where
     -- We can only deal with one
     -- breakSel = S
     breakSel p q = ($ q) $ foldr (.) id $ fmap S $ foldP $ span isCorr $ breakP p
       where
-        foldP (correls,[]) = correls
+        foldP (correls,[])          = correls
         foldP ([correlP],noCorrels) = [foldl And correlP noCorrels]
-        foldP (correls,noCorrels) = foldr1 And noCorrels:correls
+        foldP (correls,noCorrels)   = foldr1Unsafe And noCorrels:correls
         isCorr = any (isLeft . runNestedQueryE) . toList3
         breakP = \case
           And l r -> breakP l ++ breakP r
-          x -> [x]
+          x       -> [x]
 
--- | Extract and-CNF terms of the form (P0 r) where exists e in r . f
+-- | Extract and-QNF terms of the form (P0 r) where exists e in r . f
 -- e. Useful for extracting exists terms.
 extractRelIf :: (e -> Bool)
               -> Prop (Rel (Expr e))
@@ -177,7 +178,7 @@ uncorrelInterm = \case
     coerceOp :: forall op . (HasCallStack,Traversable op,(forall x . AShow x => AShow (op x))) =>
                op (NestedQueryE s e) -> UnnestMonad e s  (op e)
     coerceOp o = case traverse coerceESym o of
-      Left _ -> throwAStr $ "Only QSel can contain correl ops: " ++ ashow o
+      Left _  -> throwAStr $ "Only QSel can contain correl ops: " ++ ashow o
       Right x -> return x
 -- | From a proposition that contains relations
 data CorrelRelation e s = CorrelRelation {
@@ -230,7 +231,7 @@ mkCorrelHead (p,restQ) =
     getTheFirst [] = return Nothing
     getTheFirst (x:xs) = x >>= \case
       Nothing -> getTheFirst xs
-      x0 -> return x0
+      x0      -> return x0
 
 -- | Given B, extract p and B0 where B ~ g (sel (p, B0)) where p is
 -- correlated.
@@ -328,7 +329,7 @@ extractQuery uncorrel doesExist p = case (doesExist, p) of
 coerceESym :: (MonadError (UnnestError s e) m,HasCallStack) =>
              NestedQueryE s e -> m e
 coerceESym = \case
-  NestedQueryE (Left q) -> throwAStr $ "Expected symbol got query: " ++ ashow q
+  NestedQueryE (Left q)  -> throwAStr $ "Expected symbol got query: " ++ ashow q
   NestedQueryE (Right x) -> return x
 
 -- | Use the uncorrelation axioms to rewrite the CorrelHead cases.
@@ -344,7 +345,7 @@ uncorrelFinal = mapTrav $ \case
       return $ a `op` b
         where
           joinOp' = \case
-            [] -> Q2 QProd
+            []   -> Q2 QProd
             p:ps -> J $ foldr And p ps
           joinOp = case (isExist, snd <$> pis) of
             (True, ps) -> return $ \a ->

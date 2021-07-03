@@ -11,24 +11,24 @@
 
 module Data.Cluster.InsertQuery (insertQueryPlan) where
 
-import Data.CnfQuery.BuildUtils
-import Data.CnfQuery.Build
 import           Control.Applicative
 import           Control.Monad.Except
-import           Control.Monad.Free
 import           Control.Monad.State
+import           Control.Utils.Free
 import           Data.Bifunctor
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.PutCluster
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.PutCluster.Join
 import           Data.Cluster.Types
-import           Data.CnfQuery.Types
 import           Data.CppAst.CppType
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.HashSet                   as HS
 import qualified Data.List.NonEmpty             as NEL
 import           Data.NodeContainers
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.BuildUtils
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
@@ -45,7 +45,7 @@ appendInsPlanRes :: Hashables2 e s =>
                  -> InsPlanRes e s t n
 appendInsPlanRes l r = InsPlanRes {
   insPlanRef=insPlanRef l,
-  insPlanNCNFs=insPlanNCNFs l <> insPlanNCNFs r,
+  insPlanNQNFs=insPlanNQNFs l <> insPlanNQNFs r,
   insPlanQuery=insPlanQuery l}
 
 insertQueryPlan
@@ -57,19 +57,18 @@ insertQueryPlan
 insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
   recur :: QueryForest e s -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
   recur forest = do
-    ret <- cachedM forest $ case qfQueries forest of
+    cachedM forest $ case qfQueries forest of
       Right s -> go0 s
       Left qs -> fmap foldInsPlanRes $ forM qs $ \case
         Q2 o l r -> go2 o (queryToForest l) (queryToForest r)
         Q1 o q   -> go1 o (queryToForest q)
         Q0 s     -> recur s
-    return ret
     where
       cachedM :: QueryForest e s
               -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
               -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
       cachedM forest' m = do
-        HM.lookup forest' . queriesCache . clustBuildCache <$> get >>= \case
+        gets (HM.lookup forest' . queriesCache . clustBuildCache) >>= \case
           Just ret -> return ret
           Nothing -> do
             ret <- m
@@ -81,28 +80,28 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
       go0 :: (s,QueryPlan e s)
           -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
       go0 (s,plan) = do
-        let ncnfS :: NCNFQuery e s = ncnfSymbol (planSymOrig <$> planAllSyms plan) s
-        ref <- mkNodeFromCnf (ncnfToCnf ncnfS) >>= \case
+        let nqnfS :: NQNFQuery e s = nqnfSymbol (planSymOrig <$> planAllSyms plan) s
+        ref <- mkNodeFromQnf (nqnfToQnf nqnfS) >>= \case
           [ref] -> return ref
-          _ -> throwAStr $ "Multiple refs for symbol " ++ ashow s
-        _ <- putNCluster plan (ref,ncnfS)
+          _     -> throwAStr $ "Multiple refs for symbol " ++ ashow s
+        _ <- putNCluster plan (ref,nqnfS)
         return InsPlanRes {
           insPlanRef=ref,
-          insPlanNCNFs=HS.singleton $ second putEmptyCNFQ ncnfS,
+          insPlanNQNFs=HS.singleton $ second putEmptyQNFQ nqnfS,
           insPlanQuery=Q0 (s,plan)}
       go1 :: UQOp e
           -> QueryForest e s
           -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
       go1 o q = fmap foldInsPlanRes $ (>>= toNEL) $ (`evalStateT` (Nothing,Nothing)) $ do
         iprQ :: InsPlanRes e s t n <- lift $ recur q
-        forM (HS.toList $ insPlanNCNFs iprQ) $ \ncnfI -> do
+        forM (HS.toList $ insPlanNQNFs iprQ) $ \nqnfI -> do
           let refIn = (insPlanRef iprQ,
-                       putIdentityCNFQ (fst <$> insPlanQuery iprQ) <$> ncnfI)
-          (refO,assocO,opO) <- expandOp cachedMkRo ncnfI o
-          let coOpM :: Maybe (UQOp e) = coUQOp o $ HM.keys $ fst ncnfI
+                       putIdentityQNFQ (fst <$> insPlanQuery iprQ) <$> nqnfI)
+          (refO,assocO,opO) <- expandOp cachedMkRo nqnfI o
+          let coOpM :: Maybe (UQOp e) = coUQOp o $ HM.keys $ fst nqnfI
           (refCoO,assocCoO,opCoOM) <- case coOpM of
-            Just coOp -> expandOp cachedMkRcoo ncnfI coOp <&> \case
-              (a,b,c) -> (a,b,Just c)
+            Just coOp -> expandOp cachedMkRcoo nqnfI coOp
+              <&> \(a,b,c) -> (a,b,Just c)
             Nothing   -> return (refIn,[],Nothing)
           void $ lift $ putUnCluster
             (assocO,assocCoO)
@@ -113,32 +112,32 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
             refO
           return InsPlanRes{
             insPlanRef=fst refO,
-            insPlanNCNFs=HS.singleton $ second putEmptyCNFQ $ snd refO,
+            insPlanNQNFs=HS.singleton $ second putEmptyQNFQ $ snd refO,
             insPlanQuery=Q1 o dbgQ}
           where
             dbgQ :: Query e (s, QueryPlan e s)
             dbgQ = forestToQuery q
             cachedMkRo = cachedMkRef snd $ second . const . Just
             cachedMkRcoo = cachedMkRef fst $ first . const . Just
-            expandOp :: (CNFQuery e s ->
+            expandOp :: (QNFQuery e s ->
                         StateT
                          (Maybe (NodeRef n), Maybe (NodeRef n))
                          (CGraphBuilderT e s t n m)
                          (NodeRef n))
-                     -> NCNFQueryI e s
+                     -> NQNFQueryI e s
                      -> UQOp e
                      -> StateT (Maybe (NodeRef n),Maybe (NodeRef n))
                      (CGraphBuilderT e s t n m)
-                     ((NodeRef n, NCNFQuery e s),
+                     ((NodeRef n, NQNFQuery e s),
                       [(PlanSym e s, PlanSym e s)],
                       UQOp (PlanSym e s))
-            expandOp cachedMkR ncnfI o' = do
-              resO <- lift $ toNCNFQueryUC o' ncnfI
-              let ncnfO = putIdentityCNFQ (fst <$> Q1 o' dbgQ) <$> ncnfResNCNF resO
-              refO <- cachedMkR (ncnfToCnf ncnfO)
-              return ((refO,ncnfO),
-                      bimap mkS mkS <$> ncnfResInOutNames resO,
-                      uncurry mkPlanSym <$> ncnfResOrig resO)
+            expandOp cachedMkR nqnfI o' = do
+              resO <- lift $ toNQNFQueryUC o' nqnfI
+              let nqnfO = putIdentityQNFQ (fst <$> Q1 o' dbgQ) <$> nqnfResNQNF resO
+              refO <- cachedMkR $ nqnfToQnf nqnfO
+              return ((refO,nqnfO),
+                      bimap mkS mkS <$> nqnfResInOutNames resO,
+                      uncurry mkPlanSym <$> nqnfResOrig resO)
       go2 :: BQOp e
           -> QueryForest e s
           -> QueryForest e s
@@ -152,33 +151,33 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
           Tup2 iprL iprR <- recur `traverse` Tup2 l r
           let refL = insPlanRef iprL
           let refR = insPlanRef iprR
-          let ncnfLR = (,)
-                <$> HS.toList (insPlanNCNFs iprL)
-                <*> HS.toList (insPlanNCNFs iprR)
+          let nqnfLR = (,)
+                <$> HS.toList (insPlanNQNFs iprL)
+                <*> HS.toList (insPlanNQNFs iprR)
           fmap foldInsPlanRes $ (>>= toNEL . join)
-            $ forM ncnfLR $ \(ncnfL,ncnfR) -> do
-              ress <- toNCNFQueryBC o ncnfL ncnfR
-              forM ress $ \resO -> case ncnfResOrig resO of
+            $ forM nqnfLR $ \(nqnfL,nqnfR) -> do
+              ress <- toNQNFQueryBC o nqnfL nqnfR
+              forM ress $ \resO -> case nqnfResOrig resO of
                 Right (MkQB mk) ->
                   recur $ queryToForest $ first snd $ mk l r
                 Left (fmap (uncurry mkPlanSym) -> opO) -> do
-                  let ncnfO = second (putIdentityCNFQ $ fst <$> dbgQ)
-                              $ ncnfResNCNF resO
-                      assoc = bimap mkS mkS <$> ncnfResInOutNames resO
-                  refO <- fmap headErr $ mkNodeFromCnf $ ncnfToCnf ncnfO
+                  let nqnfO = second (putIdentityQNFQ $ fst <$> dbgQ)
+                              $ nqnfResNQNF resO
+                      assoc = bimap mkS mkS <$> nqnfResInOutNames resO
+                  refO <- fmap headErr $ mkNodeFromQnf $ nqnfToQnf nqnfO
                   void $ putBinCluster
                     assoc
                     opO
-                    (refL,putQ dbgL ncnfL) (refR,putQ dbgR ncnfR) (refO,ncnfO)
+                    (refL,putQ dbgL nqnfL) (refR,putQ dbgR nqnfR) (refO,nqnfO)
                   return InsPlanRes{
                     insPlanRef=refO,
-                    insPlanNCNFs=HS.singleton $ second putEmptyCNFQ ncnfO,
+                    insPlanNQNFs=HS.singleton $ second putEmptyQNFQ nqnfO,
                     insPlanQuery=dbgQ}
         where
           dbgQ = Q2 o dbgL dbgR
           dbgL = forestToQuery l
           dbgR = forestToQuery r
-          putQ = second . putIdentityCNFQ . fmap fst
+          putQ = second . putIdentityQNFQ . fmap fst
           joinLike :: Prop (Rel (Expr e))
                    -> (JoinClustConfig n e s -> QRef n e s)
                    -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
@@ -188,7 +187,7 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest where
               liftA2' = join .... liftA2
               mkExtr conf = InsPlanRes {
                 insPlanRef=getQRef $ f conf,
-                insPlanNCNFs=HS.singleton $ second putEmptyCNFQ $ getNCNF $ f conf,
+                insPlanNQNFs=HS.singleton $ second putEmptyQNFQ $ getNQNF $ f conf,
                 insPlanQuery=dbgQ}
 
 toNEL :: (MonadError err m, AShowError e s err) => [a] -> m (NEL.NonEmpty a)
@@ -201,10 +200,10 @@ insertJoinLike :: forall e s t n m . (Hashables2 e s, Monad m) =>
                -> InsPlanRes e s t n
                -> CGraphBuilderT e s t n m (JoinClust e s t n,InsPlanRes e s t n)
 insertJoinLike f p l r = do
-  jcnfs <- mkJoinClustConfig p (toTriple l) (toTriple r)
-  (clusts,ress) <- fmap unzip $ forM jcnfs $ \jcnf -> do
-    clust <- putJoinClusterC jcnf
-    return (clust,f jcnf)
+  jqnfs <- mkJoinClustConfig p (toTriple l) (toTriple r)
+  (clusts,ress) <- fmap unzip $ forM jqnfs $ \jqnf -> do
+    clust <- putJoinClusterC jqnf
+    return (clust,f jqnf)
   resNel <- toNEL ress
   clust NEL.:| _ <- toNEL clusts
   return (clust,foldInsPlanRes resNel)
@@ -213,6 +212,6 @@ insertJoinLike f p l r = do
 foldInsPlanRes :: Hashables2 e s =>
                  NEL.NonEmpty (InsPlanRes e s t n) -> InsPlanRes e s t n
 foldInsPlanRes (x NEL.:| xs) = foldr (\a b -> appendInsPlanRes a b) x xs
-toTriple :: InsPlanRes e s t n -> (NodeRef n,[NCNFQueryI e s],Query e s)
+toTriple :: InsPlanRes e s t n -> (NodeRef n,[NQNFQueryI e s],Query e s)
 toTriple InsPlanRes{..} =
-  (insPlanRef,HS.toList insPlanNCNFs,fst <$> insPlanQuery)
+  (insPlanRef,HS.toList insPlanNQNFs,fst <$> insPlanQuery)

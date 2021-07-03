@@ -31,22 +31,9 @@ module Data.Codegen.Build.Classes
   , TransitionBundle(..)
   ) where
 
-import Data.Utils.MTL
-import Data.Utils.Functors
-import Data.Query.QuerySchema.Types
-import Data.QueryPlan.Types
-import Data.Utils.Hashable
-import Data.Utils.Tup
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
-import           Data.Foldable
-import           Data.List
-import           Data.Monoid
-import           Data.String
-import           Data.Tuple
-import           Data.Query.Algebra
-import           Data.Utils.AShow
 import           Data.Cluster.Types
 import           Data.Codegen.Build.Expression
 import           Data.Codegen.Build.IoFiles
@@ -54,8 +41,21 @@ import           Data.Codegen.Build.Monads
 import           Data.Codegen.Schema
 import           Data.CppAst
 import qualified Data.CppAst                   as CC
+import           Data.Foldable
+import           Data.List
+import           Data.Monoid
 import           Data.NodeContainers
-import           Prelude                                  hiding (exp)
+import           Data.Query.Algebra
+import           Data.Query.QuerySchema.Types
+import           Data.QueryPlan.Types
+import           Data.String
+import           Data.Tuple
+import           Data.Utils.AShow
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.MTL
+import           Data.Utils.Tup
+import           Prelude                       hiding (exp)
 import           Text.Printf
 
 data TransitionBundle e s t n =
@@ -84,22 +84,6 @@ mkTransitionBundle = dropState (ask,const $ return ()) . \case
     return $ ForwardTransitionBundle (Tup2 i' o') clust
   DelNode n -> return $ DeleteTransitionBundle n
 
-
-isIntermediateDeletion :: (Hashables2 e s,
-                          MonadReader (ClusterConfig e s t n) m,
-                          MonadError (CodeBuildErr e s t n) m) =>
-                         TransitionBundle e s t n -> m Bool
-isIntermediateDeletion = \case
-  DeleteTransitionBundle n -> dropState (ask,const $ return ()) $ do
-    clust <- map snd <$> getClusterN n
-    case clust of
-      -- Intermediates will not be overlapping.
-      [JoinClustW JoinClust{
-          joinClusterLeftIntermediate=WMetaD (_,li),
-          joinClusterRightIntermediate=WMetaD (_,ri)}] ->
-        return $ n == li || n == ri
-      _ -> return False
-  _ -> return False
 
 bundleTransitions
   :: forall e s t n m err .

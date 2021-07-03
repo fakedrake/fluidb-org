@@ -6,6 +6,7 @@ with nixpkgs; let
     base
     shake
     hasktags
+    profiteur
     profiterole
     floskell
     haskell-language-server
@@ -17,13 +18,16 @@ with nixpkgs; let
   });
   ssb = callPackage ./nix/ssb {};
   nixPackages = [
-    rnix
+    clang
     ssb
     ghc
     stack
+    ccls
+    graphviz
   ];
 in
 haskell.lib.buildStackProject {
+  CPATH = "${builtins.toString ./.}/bama/include";
   name = "fluidb";
   ghc = ghc;
   stack = stack;

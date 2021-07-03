@@ -3,7 +3,10 @@ module FluiDB.Bamify.DBGen (mkAllDataFiles) where
 import           Control.Monad
 import           Data.Codegen.Run
 import           Data.Query.QuerySchema.Types
-import           FluiDB.Bamify.Bamify
+import           Data.Query.QuerySize
+import           Data.Query.SQL.Types
+import           Data.Utils.Debug
+import           FluiDB.Bamify.CsvParse
 import           FluiDB.Bamify.Types
 import           FluiDB.Bamify.Unbamify
 import           System.Directory
@@ -17,21 +20,30 @@ getSchemaOrDie schemaAssoc tableName =
 
 
 -- | Runs dbgen to build all in the current directory.
-mkAllDataFiles :: DBGenConf -> IO ()
+mkAllDataFiles :: DBGenConf -> IO [(Table,TableSize)]
 mkAllDataFiles DBGenConf{..} = do
   curDir <- getCurrentDirectory
   let checkExists = dbGenConfIncremental
-  forM_ dbGenConfTables $ \DBGenTableConf{..} -> do
+  forM dbGenConfTables $ \tbl@DBGenTableConf{..} -> do
     schema <- getSchemaOrDie dbGenConfSchema dbGenTableConfFileBase
+    when (null schema) $ fail $ "Can't deal with empty schema for: " ++ ashow tbl
     let datFile = curDir </> dbGenTableConfFileBase <.> "dat"
-    withExists checkExists datFile $ \bamaDir -> do
+    let sizeFile = datFile <.> "size"
+    let readQuerySize = read <$> readFile sizeFile
+    withExists readQuerySize checkExists datFile $ tmpDir "dbgen" $ \td -> do
+      traceM $ printf "Generating: %s" dbGenTableConfFileBase
       runProc $ mkProc dbGenConfExec ["-s",show dbGenConfScale,"-T",[dbGenTableConfChar]]
-      let tblFile = curDir </> dbGenTableConfFileBase <.> "tbl"
-      let bamaFile = bamaDir </> dbGenTableConfFileBase <.> "bama"
-      mkBamaFile schema tblFile bamaFile
+      let tblFile = td </> dbGenTableConfFileBase <.> "tbl"
+      let bamaFile = td </> dbGenTableConfFileBase <.> "bama"
+      traceM $ printf "Bamify %s %s " tblFile bamaFile
+      tableSize <- bamifyFile (fst <$> schema) tblFile bamaFile
+      traceM $ printf "Unamify %s %s" bamaFile datFile
       mkDataFile schema bamaFile datFile
+      let symSize = (TSymbol dbGenTableConfFileBase,tableSize)
+      writeFile sizeFile $ show symSize
+      return symSize
   where
-    withExists False _ m = tmpDir "mkTableDat" m
-    withExists True datFile m = do
+    withExists _ False _ m = m
+    withExists a True datFile m = do
       exists <- doesFileExist datFile
-      unless exists $ tmpDir "mkTableDat" m
+      if exists then a else m

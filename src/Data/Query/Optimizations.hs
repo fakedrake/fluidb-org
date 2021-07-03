@@ -3,23 +3,22 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 module Data.Query.Optimizations
-  ( joinPermutations
-  , sanitizeQuery
-  , optQuery'
-  , mkEmbedding
-  , optQueryPlan
-  , OptimizationError(..)
-  , TightenErr(..)
-  ) where
+  (sanitizeQuery
+  ,optQuery'
+  ,mkEmbedding
+  ,optQueryPlan
+  ,OptimizationError(..)
+  ,TightenErr(..)) where
 
 import           Control.Monad.Except
-import           Control.Monad.Free
+import           Control.Utils.Free
 import           Data.Bifunctor
-import           Data.CnfQuery.Types
 import           Data.CppAst.CppType
 import qualified Data.List.NonEmpty                     as NEL
 import           Data.Maybe
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.Annotations
 import           Data.Query.Optimizations.Dates
@@ -37,9 +36,10 @@ import           Data.Utils.Compose
 import           Data.Utils.Hashable
 import           Data.Utils.Tup
 
-sanitizeQuery :: SymEmbedding (ExpTypeSym' e) s e'
-              -> Query e' s
-              -> Maybe (Query e' s)
+sanitizeQuery
+  :: SymEmbedding (ExpTypeSym' e) s e'
+  -> Query e' s
+  -> Maybe (Query e' s)
 sanitizeQuery symEmb =
   fmap
     (fixSubstringIndexOffset
@@ -49,12 +49,16 @@ sanitizeQuery symEmb =
   . squashDates symEmb
   . squashProjections (symEq symEmb)
 
-mkEmbedding :: Hashables2 e s =>
-              (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
-            -> SymEmbedding
-              (ExpTypeSym' e0)
-              (s,QueryPlan e s)
-              (PlanSym e s,(Maybe s, CppType))
+mkEmbedding
+  :: Hashables2 e s
+  => (e
+      -> ExpTypeSym' e0
+     ,ExpTypeSym' e0
+      -> e)
+  -> SymEmbedding
+    (ExpTypeSym' e0)
+    (s,QueryPlan e s)
+    (PlanSym e s,(Maybe s,CppType))
 mkEmbedding (toETS,toE) =
   SymEmbedding
   { embedLit =
@@ -66,7 +70,7 @@ mkEmbedding (toETS,toE) =
    ,embedIsLit =
       (\case
          NonSymbolName _ -> True
-         _ -> False) . planSymCnfName . fst
+         _               -> False) . planSymQnfName . fst
   }
 
 optQuery' :: forall e' e s . Hashables2 e' s =>
@@ -103,4 +107,15 @@ optQueryPlan litType etsIso q = do
     $ optQuery' (mkEmbedding etsIso)
     $ first (first snd) annotated
   return
-    $ hoistFree (Compose . fmap (first $ planSymOrig . fst) . getCompose) optq
+    $ hoistFreeTF (Compose . fmap (first $ planSymOrig . fst) . getCompose) optq
+
+hoistFreeTF
+  :: (Monad m,Functor f)
+  => (forall a . f a -> g a)
+  -> FreeT f m b
+  -> FreeT g m b
+hoistFreeTF mh = go
+  where
+    go = FreeT . fmap (\case
+                         (Pure b) -> Pure b
+                         (Free f) -> Free $ mh $ go <$> f) . runFreeT

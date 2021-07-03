@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Data.Codegen.Optimization (planSymKeysOnlySymEmbedding) where
 
-import Data.CnfQuery.Types
+import Data.QnfQuery.Types
 import Data.Maybe
 import Data.CppAst.CppType
 import Data.Query.QuerySchema.SchemaBase
@@ -22,7 +22,7 @@ planSymKeysOnlySymEmbedding QueryCppConf {..} =
    ,embedType = maybe (Just CppNat) Just . literalType . planSymOrig
     -- ^ everything is a key here
    ,embedInS = \e s -> isJust $ columnType (planSymOrig e) s
-   ,embedIsLit = \sym -> case planSymCnfName sym of
+   ,embedIsLit = \sym -> case planSymQnfName sym of
       NonSymbolName _ -> False
       _ -> True
   }

@@ -1,6 +1,6 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE Arrows                #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -8,19 +8,19 @@
 module Control.Antisthenis.ATL.Transformers.Writer
   (WriterArrow(..)) where
 
-import Data.Utils.Tup
-import Control.Monad.Writer
-import Control.Antisthenis.ATL.Class.Functorial
-import Data.Profunctor
-import           Control.Arrow
-import           Control.Category
-import           Data.Functor.Identity
 import           Control.Antisthenis.ATL.Class.Bind
+import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Class.Machine
 import           Control.Antisthenis.ATL.Class.State
 import           Control.Antisthenis.ATL.Class.Transformer
 import           Control.Antisthenis.ATL.Class.Writer
-import           Prelude                                hiding (id, (.))
+import           Control.Arrow
+import           Control.Category
+import           Control.Monad.Writer
+import           Data.Functor.Identity
+import           Data.Profunctor
+import           Data.Utils.Tup
+import           Prelude                                   hiding (id, (.))
 
 newtype WriterArrow w c x y = WriterArrow { runWriterArrow :: c x (w,y) }
 instance (Arrow c,Monoid w) => ArrowWriter (WriterArrow w c) where
@@ -79,7 +79,7 @@ instance (Monoid w,ArrowChoice c) => ArrowChoice (WriterArrow w c) where
     WriterArrow
     $ l +++ r
     >>> arr (\case
-               Left (w,x) -> (w,Left x)
+               Left (w,x)  -> (w,Left x)
                Right (w,x) -> (w,Right x))
   {-# INLINE (+++) #-}
 
@@ -105,3 +105,5 @@ instance ArrowFunctor c => ArrowFunctor (WriterArrow w c) where
     WriterT w (ArrFunctor c)
   toKleisli (WriterArrow c) = WriterT . fmap swap . toKleisli c
   fromKleisli c = WriterArrow $ fromKleisli $ fmap (fmap swap . runWriterT) c
+  {-# INLINE toKleisli #-}
+  {-# INLINE fromKleisli #-}

@@ -15,7 +15,7 @@ module FluiDB.Runner.DefaultGlobal
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.CnfQuery.Build
+import           Data.QnfQuery.Build
 import           Data.Codegen.Build.Types
 import           Data.Codegen.Schema
 import           Data.CppAst.ExpressionLike
@@ -31,6 +31,7 @@ import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           FluiDB.Classes
 import           FluiDB.ConfValues
+import           FluiDB.Schema.Common
 import           FluiDB.Schema.Graph.Joins
 import           FluiDB.Schema.Graph.Schemata
 import           FluiDB.Schema.Graph.Values
@@ -74,7 +75,7 @@ instance MonadFakeIO m
     parseTpchQuery qtext
   putPS _ q = do
     cppConf <- gets globalQueryCppConf
-    either throwError return $ putPlanSymTpch cppConf q
+    either throwError return $ annotateQuery cppConf q
 
 qgenRoot :: FilePath
 
@@ -84,9 +85,9 @@ qgenRoot = "/Users/drninjabatman/Projects/UoE/fluidb/resources/tpch-dbgen"
 
 
 -- Join-only
-instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s))
+instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s),AShowV s)
   => DefaultGlobal (s,s) s () () m [(s,s)] where
-  defGlobalConf _ = graphGlobalConf . mkGraphSchema . join
+  defGlobalConf _ x = graphGlobalConf $ mkGraphSchema $ join x
   getIOQuery js = do
     schemaAssoc <- gets globalSchemaAssoc
     putPS (Proxy :: Proxy [(s,s)])
@@ -94,8 +95,8 @@ instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s))
   putPS _ q' = do
     cppConf <- gets globalQueryCppConf
     either (throwError . toGlobalError) (return . first (uncurry mkPlanSym))
-      $ (>>= maybe (throwAStr "No cnf found") return)
+      $ (>>= maybe (throwAStr "No qnf found") return)
       $ fmap (>>= traverse (\s -> (,s) <$> mkPlanFromTbl cppConf s) . snd)
       $ (`evalStateT` def)
-      $ listTMaxCNF fst
-      $ toCNF (fmap2 snd . tableSchema cppConf) q'
+      $ listTMaxQNF fst
+      $ toQNF (fmap2 snd . tableSchema cppConf) q'

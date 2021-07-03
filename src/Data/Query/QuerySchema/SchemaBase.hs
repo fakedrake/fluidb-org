@@ -34,10 +34,10 @@ module Data.Query.QuerySchema.SchemaBase
   , translatePlanMap''
   ) where
 
-import Data.CnfQuery.Build
 import           Control.Monad.Reader
 import           Data.Bitraversable
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.CppAst
 import           Data.Functor.Identity
 import qualified Data.HashMap.Strict          as HM
@@ -56,26 +56,26 @@ mkLitPlanSym :: e -> PlanSym e s
 mkLitPlanSym e = mkPlanSym (NonSymbolName e) e
 
 mkSymPlanSymNM :: Hashables2 e s =>
-                 NameMap e s -> e -> Either (CNFError e s) (PlanSym e s)
+                 NameMap e s -> e -> Either (QNFError e s) (PlanSym e s)
 mkSymPlanSymNM nm e = (`mkPlanSym` e) . (`Column` 0) <$> getName nm e
 
 planSymIsSym :: PlanSym e s -> Bool
-planSymIsSym ps = case  planSymCnfName ps of
+planSymIsSym ps = case  planSymQnfName ps of
   NonSymbolName _ -> False
   _               -> True
 
 planSymOrig :: PlanSym e s -> e
-planSymOrig = planSymCnfOriginal
+planSymOrig = planSymQnfOriginal
 
-mkPlanSym :: CNFName e s -> e -> PlanSym e s
-mkPlanSym cnfn e = PlanSym{planSymCnfOriginal=e,planSymCnfName=cnfn}
+mkPlanSym :: QNFName e s -> e -> PlanSym e s
+mkPlanSym qnfn e = PlanSym{planSymQnfOriginal=e,planSymQnfName=qnfn}
 
 setPlanSymOrig :: e -> PlanSym e s -> PlanSym e s
-setPlanSymOrig e ps = ps{planSymCnfOriginal=e}
+setPlanSymOrig e ps = ps{planSymQnfOriginal=e}
 
 -- | Nothing means it's a literal.
 refersToPlan :: Hashables2 e s => PlanSym e s -> QueryPlan e s -> Maybe Bool
-refersToPlan ps plan = case planSymCnfName ps of
+refersToPlan ps plan = case planSymQnfName ps of
   NonSymbolName _ -> Nothing
   _               -> Just $ isJust $ lookupQP ps plan
 
@@ -96,74 +96,76 @@ querySchema plan = [(columnPropsCppType,ps)
 -- XXX: increment indices
 
 
--- Filter the unique ones
+-- | Filter the unique ones. None means there were no uniques (or the
+-- plan was empty.
 mkQueryPlan :: [(CppType,(e,Bool))] -> Maybe (QueryPlan' e)
-mkQueryPlan sch = fromSchemaQP
-  [(sym,ColumnProps {columnPropsConst=False,columnPropsCppType=ty},uniq)
-  | (ty, (sym, uniq)) <- sch]
+mkQueryPlan sch =
+  fromSchemaQP
+    [(sym
+     ,ColumnProps { columnPropsConst = False,columnPropsCppType = ty }
+     ,uniq) | (ty,(sym,uniq)) <- sch]
   where
     fromSchemaQP :: [(e,ColumnProps,Bool)] -> Maybe (QueryPlan' e)
-    fromSchemaQP sch = NEL.nonEmpty [s | (s,_,isU) <- sch, isU]
-      <&> \uniq -> QueryPlan {
-        qpSchema=[(s,prop) | (s,prop,_isU) <- sch],
-        qpUnique=return uniq}
+    fromSchemaQP
+      sch = NEL.nonEmpty [s | (s,_,isU) <- sch,isU] <&> \uniq -> QueryPlan
+      { qpSchema = [(s,prop) | (s,prop,_isU) <- sch],qpUnique = return uniq }
 
 
 planSymTypeSym' :: Hashables2 e s =>
                   [QueryPlan e s]
                 -> PlanSym e s
                 -> Maybe (Either e CppType)
-planSymTypeSym' plans ps = case planSymCnfName ps of
+planSymTypeSym' plans ps = case planSymQnfName ps of
   NonSymbolName e -> Just $ Left e
-  _               -> fmap (Right . columnPropsCppType)
-                    $ listToMaybe (catMaybes $ lookupQP ps <$> plans)
+  _ -> Right . columnPropsCppType
+    <$> listToMaybe (catMaybes $ lookupQP ps <$> plans)
 
 
-#if 0
--- MAY THIS BE A REMINDER OF THE HORRORS THAT EMERGE FROM FORMAL
--- EQUALITY OF OBJECTIVELY UNEQUALS. VIVA LA REVOLUTION.
---
--- | This is not an extremely lax version of equality that succeeds in
--- cases of normal equality but also for provenance. It is similar to
--- name equality. The only guarantee is that equal symbols will have
--- equal types.
---
--- XXX: Soft equality is broken really... It can't find equal symbols
--- on stacks of selections or projections. That's what we have in/out
--- assocs for. This is used in two places:
---
--- * Codegen -- propagators should correlate the symbols one to one
---   rather than having a black-box approach so that the C++ can be
---   created.
--- * In optimization to match symbols.
---
--- See if plansym can carry provenance information explicitly.
---
--- Reminder: We use PlanSym rather than plain symbols for two reasons:
---
--- * π Α x π Α --> π ( Α x A ) causes conflicting symbols
--- * Plan schemata are constituted by "nameless" symbols. We need to
---   be able to match between them.
--- * Names are not dependable, we want to connect subtrees regardless
---   of name
-softPlanSymEq :: (Eq e, Eq s) => PlanSym e s -> PlanSym e s -> Bool
-softPlanSymEq c c' = or $ (==) <$> nameStack c <*> nameStack c'
-  where
-    nameStack :: PlanSym e s -> [Either (e,Maybe s) (CNFCol e s)]
-    nameStack = (. planSymCnfName) $ \case
-      Column x _ -> first (fmap Just) <$> cnfColumnStack x
-      PrimaryCol e s _ -> [Left (e,Just s)]
-      NonSymbolName e -> [Left (e,Nothing)]
 
-softLookupQP :: Hashables2 e s =>
-               PlanSym e s -> QueryPlan e s -> Maybe ColumnProps
-softLookupQP ps' =
-  headSafe . fmap snd . filter (softPlanSymEq ps' . fst) . schemaQP
-  where
-    headSafe = \case
-      [] -> Nothing
-      x:_ -> Just x
-#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 hardLookupQP :: Hashables2 e s =>
                PlanSym e s -> QueryPlan e s -> Maybe ColumnProps
@@ -219,14 +221,14 @@ translatePlanMap'' f assoc p =
   where
     symsMap = assocToMap assoc
     safeLookup :: PlanSym e s -> Either (AShowStr e s) (PlanSym e s)
-    safeLookup e = case planSymCnfName e of
+    safeLookup e = case planSymQnfName e of
       PrimaryCol{} -> undefined
       _            -> safeLookup0
       where
         safeLookup0 :: Either (AShowStr e s) (PlanSym e s)
         safeLookup0 = lookup_e `alt` asLiteral where
           asLiteral :: Either (AShowStr e s) (PlanSym e s)
-          asLiteral = case planSymCnfName e of
+          asLiteral = case planSymQnfName e of
             NonSymbolName _ -> Right e
             _               -> throwAStr $ "Expected literal:" ++ ashow e
           lookup_e :: Either (AShowStr e s) (PlanSym e s)
@@ -350,7 +352,7 @@ uniqDropConst p = fmap (\uniq -> p{qpUnique=uniq})
 planSymEqs :: Hashables2 e s =>
              Prop (Rel (Expr (PlanSym e s)))
            -> [(PlanSym e s,PlanSym e s)]
-planSymEqs p = mapMaybe asEq $ toList $ propCnfAnd p where
+planSymEqs p = mapMaybe asEq $ toList $ propQnfAnd p where
   asEq :: Prop (Rel (Expr (PlanSym e s))) -> Maybe (PlanSym e s,PlanSym e s)
   asEq = \case
     P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))) ->

@@ -68,9 +68,8 @@ module Data.NodeContainers
   , nsDisjoint
   , nsIsSubsetOf
   , nsFold
-  ) where
+  ,refLookupMax,nsSize) where
 
-import Data.Utils.OptSet
 import           Control.Arrow            (first, (***))
 import           Control.Monad.Identity
 import           Data.Char
@@ -85,6 +84,7 @@ import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Function
 import           Data.Utils.Hashable
+import           Data.Utils.OptSet
 import           GHC.Generics             (Generic)
 import           Text.Printf
 
@@ -98,16 +98,16 @@ instance AShow (NodeRef n) where
   ashow' (NodeRef r) = sexp "N" [ashow' r]
 instance ARead (NodeRef n) where
   aread' = \case
-    Sub [Sym "N", r] -> N <$> aread' r
+    Sub [Sym "N", r]       -> N <$> aread' r
     Sub [Sym "NodeRef", r] -> N <$> aread' r
-    _ -> Nothing
+    _                      -> Nothing
 instance Show (NodeRef n) where
   show (NodeRef n) = "<" ++ show n ++ ">"
 instance Read (NodeRef a) where
   readsPrec _ x = if
     | "NodeRef " `isPrefixOf` norm' x -> go 8
-    | "N " `isPrefixOf` norm' x -> go 2
-    | otherwise -> []
+    | "N " `isPrefixOf` norm' x       -> go 2
+    | otherwise                       -> []
     where
       norm' = dropWhile (\a -> isSpace a || a == '(')
       go prefSize = first NodeRef <$> reads (drop prefSize x)
@@ -168,13 +168,15 @@ refMergeWithKeyA :: forall f n a b c .
                 -> (NodeRef n -> b -> f c)
                 -> (NodeRef n -> a -> b -> f c)
                 -> RefMap n a -> RefMap n b -> f (RefMap n c)
-refMergeWithKeyA fa fb f l r = fmap RefMap
-  $ IMM.mergeA
-  (IMM.traverseMissing (fa . NodeRef :: Key -> a -> f c))
-  (IMM.traverseMissing (fb . NodeRef  :: Key -> b -> f c))
-  (IMM.zipWithAMatched (f . NodeRef :: Key -> a -> b -> f c) :: IMM.WhenMatched f a b c)
-  (runRefMap l :: IM.IntMap a)
-  (runRefMap r :: IM.IntMap b)
+refMergeWithKeyA fa fb f l r =
+  RefMap
+  <$> IMM.mergeA
+    (IMM.traverseMissing (fa . NodeRef :: Key -> a -> f c))
+    (IMM.traverseMissing (fb . NodeRef :: Key -> b -> f c))
+    (IMM.zipWithAMatched (f . NodeRef :: Key -> a -> b -> f c)
+       :: IMM.WhenMatched f a b c)
+    (runRefMap l :: IM.IntMap a)
+    (runRefMap r :: IM.IntMap b)
 
 refUnionWithKey :: (NodeRef n -> a -> a -> a) -> RefMap n a -> RefMap n a -> RefMap n a
 refUnionWithKey f = runIdentity ... refUnionWithKeyA (\k a b -> Identity $ f k a b)
@@ -230,6 +232,8 @@ refAssocs :: RefMap n v -> [(NodeRef n,v)]
 refAssocs (RefMap m) = [(NodeRef k,v) | (k,v) <- IM.toAscList m]
 refRestrictKeys :: RefMap n a -> NodeSet n -> RefMap n a
 refRestrictKeys (RefMap r) (NodeSet f) = RefMap $ IM.restrictKeys r f
+refLookupMax :: RefMap n a -> Maybe (NodeRef n,a)
+refLookupMax (RefMap r) = first NodeRef <$> IM.lookupMax r
 refIsSubmapOfBy :: (a -> b -> Bool) -> RefMap n a -> RefMap n b -> Bool
 refIsSubmapOfBy f (RefMap a) (RefMap b) = IM.isSubmapOfBy f a b
 refFromAssocs :: [(NodeRef n,v)] -> RefMap n v
@@ -266,7 +270,7 @@ instance Default (NodeSet n)
 instance Semigroup (NodeSet b) where (<>) = NodeSet ... mappend `on` runNodeSet
 instance Monoid (NodeSet b) where mempty = NodeSet mempty
 instance Hashable (NodeSet n) where
-  hashWithSalt s = IS.foldl' (\h i -> hashWithSalt h i) s . runNodeSet
+  hashWithSalt s = IS.foldl' hashWithSalt s . runNodeSet
   {-# INLINE hashWithSalt #-}
 
 nsNull :: NodeSet a -> Bool
@@ -297,6 +301,8 @@ fromNodeList :: [NodeRef a] -> NodeSet a
 fromNodeList = NodeSet . IS.fromList . fmap runNodeRef
 nsFold :: (NodeRef n -> a -> a) -> NodeSet n -> a -> a
 nsFold f ns ini = foldr f ini $ toNodeList ns
+nsSize :: NodeSet n -> Int
+nsSize = IS.size . runNodeSet
 
 -- # /NODESTRUCT
 -- data FieldFormat = FieldFormat {

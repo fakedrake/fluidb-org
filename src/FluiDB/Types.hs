@@ -39,16 +39,6 @@ module FluiDB.Types
   , RunningConf(..)
   ) where
 
-import Data.Codegen.Build.Monads.Class
-import Data.Utils.MTL
-import Data.BipartiteGraph
-import Data.Query.Algebra
-import Data.Query.SQL.Types
-import Data.Codegen.SchemaAssocClass
-import Data.Utils.Default
-import Data.Cluster.Types.Monad
-import Data.CnfQuery.Types
-import Data.QueryPlan.Types
 import           Control.Monad.Cont
 import           Control.Monad.Except
 import           Control.Monad.Identity
@@ -56,14 +46,24 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import qualified Data.List.NonEmpty                       as NEL
+import           Data.Bipartite
+import           Data.Cluster.Types.Monad
+import           Data.QnfQuery.Types
+import           Data.Codegen.Build.Monads.Class
+import           Data.Codegen.SchemaAssocClass
+import qualified Data.List.NonEmpty              as NEL
+import           Data.NodeContainers
+import           Data.Query.Algebra
+import           Data.Query.Optimizations
+import           Data.Query.QuerySize
+import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.Types
+import           Data.QueryPlan.Nodes
+import           Data.QueryPlan.Types
 import           Data.String
 import           Data.Utils.AShow
-import Data.Query.SQL.FileSet
-import Data.NodeContainers
-import Data.Query.Optimizations
-import           Data.QueryPlan.Nodes
-import           Data.Query.QuerySize
+import           Data.Utils.Default
+import           Data.Utils.MTL
 import           FluiDB.SumTypes                 as ST
 import           GHC.Generics
 
@@ -75,7 +75,7 @@ data GlobalError e s t n =
   | GlobalOptimizationError (OptimizationError e s t n)
   | GlobalTightenError (TightenErr e s)
   -- | GlobalSanityError (SanityError e s)
-  | GlobalCNFError (CNFError e s)
+  | GlobalQNFError (QNFError e s)
   | GlobalClusterError (ClusterError e s)
   | CommandError String [String] Int
   | FileMissing FilePath
@@ -105,8 +105,8 @@ instance IsGlobalError e s t n (PlanSanityError t n) where
   toGlobalError = GlobalPlanSanityError
 instance IsGlobalError e s t n (CodeBuildErr e s t n) where
   toGlobalError = GlobalCodeBuildError
-instance IsGlobalError e s t n (CNFError e s) where
-  toGlobalError = GlobalCNFError
+instance IsGlobalError e s t n (QNFError e s) where
+  toGlobalError = GlobalQNFError
 instance IsGlobalError e s t n (ClusterError e s) where
   toGlobalError = GlobalClusterError
 instance (IsGlobalError e s t n a, IsGlobalError e s t n b) =>
@@ -129,7 +129,7 @@ instance Default RunningConf
 instance AShow RunningConf
 globalPopUniqueNum :: Monad m => GlobalSolveT e s t n m Int
 globalPopUniqueNum = do
-  n <- runningUniqueNumber . globalRunning <$> get
+  n <- gets (runningUniqueNumber . globalRunning)
   modify $ \gc -> gc{
     globalRunning=(globalRunning gc){
         runningUniqueNumber=1 + runningUniqueNumber (globalRunning gc)}}
@@ -200,12 +200,12 @@ class IsGlobalConf e s t n a where
   getGlobalConf :: GlobalConf e s t n -> a
 instance IsGlobalConf e s t n (GCConfig t n) where
   getGlobalConf = globalGCConfig
-  modGlobalConf x cnf = cnf{globalGCConfig=x}
+  modGlobalConf x qnf = qnf{globalGCConfig=x}
 instance IsGlobalConf e s t n (GCState t n) where
   getGlobalConf GlobalConf{..} =
     setNodeStatesToGCState globalMatNodes globalGCConfig def
-  modGlobalConf st cnf@GlobalConf{..} =
-    cnf{
+  modGlobalConf st qnf@GlobalConf{..} =
+    qnf{
     globalMatNodes=nodesInSt
       [Initial Mat, Concrete NoMat Mat, Concrete Mat Mat]
     } where
@@ -213,22 +213,22 @@ instance IsGlobalConf e s t n (GCState t n) where
     nodesInSt = runIdentity . dropReader (Identity st) . nodesInState' graph
 
 instance IsGlobalConf e s t n (GBState t n) where
-  getGlobalConf GlobalConf{..} = mempty{gbPropNet=propNet globalGCConfig}
-  modGlobalConf x cnf = cnf{globalGCConfig=(globalGCConfig cnf){
-                         propNet=gbPropNet x}}
+  getGlobalConf GlobalConf {..} = def { gbPropNet = propNet globalGCConfig }
+  modGlobalConf x qnf =
+    qnf { globalGCConfig = (globalGCConfig qnf) { propNet = gbPropNet x } }
 instance IsGlobalConf e s t n (QueryCppConf e s) where
   getGlobalConf = globalQueryCppConf
-  modGlobalConf x cnf = cnf{globalQueryCppConf=x}
+  modGlobalConf x qnf = qnf{globalQueryCppConf=x}
 instance IsGlobalConf e s t n (CBState e s t n) where
   getGlobalConf = emptyCBState . getGlobalConf
-  modGlobalConf x cnf = cnf{
+  modGlobalConf x qnf = qnf{
     globalQueryCppConf=(cbQueryCppConf x){
         defaultQueryFileCache=cbQueryFileCache x
         }
     }
 instance IsGlobalConf e s t n (ClusterConfig e s t n) where
   getGlobalConf = globalClusterConfig
-  modGlobalConf x cnf = cnf{globalClusterConfig=x}
+  modGlobalConf x qnf = qnf{globalClusterConfig=x}
 
 stateLayer :: forall m e s t n a x . (Monad m, IsGlobalConf e s t n a) =>
              a

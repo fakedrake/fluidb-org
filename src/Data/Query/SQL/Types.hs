@@ -35,10 +35,10 @@ module Data.Query.SQL.Types
   , isSymbol
   ) where
 
-import Data.CppAst.Expression
-import Data.CppAst.ExpressionLike
 import           Control.Monad.State
 import           Data.Bifunctor
+import           Data.CppAst.Expression
+import           Data.CppAst.ExpressionLike
 import           Data.Foldable
 import           Data.Maybe
 import           Data.Query.Algebra
@@ -50,7 +50,7 @@ import           Data.Utils.Hashable
 import           GHC.Generics
 
 -- | An endomorphism.
-data Table = NoTable | TSymbol String deriving (Show, Eq, Generic, Ord)
+data Table = NoTable | TSymbol String deriving (Show, Eq, Generic, Ord, Read)
 unTable :: Table -> String
 unTable (TSymbol s) = s
 unTable _           = error "No string associated with table."
@@ -136,7 +136,7 @@ instance Symbolic (ExpTypeSym' e) where
   type SymbolType (ExpTypeSym' e) = e
   asSymbol = \case
     ESym s -> Just s
-    _ -> Nothing
+    _      -> Nothing
   mkSymbol = ESym
 
 instance Symbolic Table where

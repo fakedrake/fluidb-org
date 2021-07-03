@@ -17,7 +17,7 @@ import           Data.Utils.Functors
 -- | When there is an equality between unique keys we don't need to
 -- keep both of them:
 --
--- > disambEq (foldr1 And $ [P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))) | (r,l) <- [(1,2),(2,3)]]) [1,2,3,4]
+-- > disambEq (foldr1Unsafe And $ [P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))) | (r,l) <- [(1,2),(2,3)]]) [1,2,3,4]
 -- [[1,4],[2,4],[3,4]]
 disambEq :: forall e . Eq e =>
            Prop (Rel (Expr e))
@@ -32,9 +32,9 @@ disambEq p uniqs0 = sequence uniqsPrim
         go [] = []
         go (e:es) = nub (join $ e:grp):go rst where
           (grp,rst) = span (overlaps e) es
-        eqs = toList (propCnfAnd p) >>= \case
-          P0 (R2 REq (R0 (E0 x)) (R0 (E0 y))) -> if x /= y then [[x,y]] else []
-          _ -> []
+        eqs = toList (propQnfAnd p) >>= \case
+          P0 (R2 REq (R0 (E0 x)) (R0 (E0 y))) -> [[x,y] | x /= y]
+          _                                   -> []
     -- instead of each element of the uniqs group we have a list of
     -- equivalent symbols
     uniqsPrim = nub [maybe [u] (\case {[] -> undefined;xs -> xs})
@@ -51,7 +51,7 @@ exposeUnique0 :: (Eq e, MonadPlus m) =>
               -> m (Query e s,[[e]])
 exposeUnique0 uniqSym = \case
   Left (bop,l,r) -> exposeUniqueB1 bop <$> l <*> r
-  Right (uop,q) -> exposeUniqueU1 uniqSym uop =<< q
+  Right (uop,q)  -> exposeUniqueU1 uniqSym uop =<< q
 exposeUniqueB1 :: Eq e =>
                  BQOp e
                -> (Query e s,[[e]])
@@ -120,11 +120,11 @@ exposeUniqueU1 uniqName o (q,allPrimss) = case o of
 extractAggrRemap :: (e, Expr (Aggr (Expr e0))) -> Maybe (e0, e)
 extractAggrRemap = \case
   (e,E0 (NAggr AggrFirst (E0 ei))) -> Just (ei,e)
-  _ -> Nothing
+  _                                -> Nothing
 extractProjRemap :: (e, Expr e0) -> Maybe (e0, e)
 extractProjRemap = \case
   (e,E0 ei) -> Just (ei,e)
-  _ -> Nothing
+  _         -> Nothing
 
 type Query0 e a = Either (BQOp e, a, a) (UQOp e, a)
 
@@ -132,6 +132,6 @@ type Query0 e a = Either (BQOp e, a, a) (UQOp e, a)
 -- columns.
 recQ :: (Query0 e a -> a) -> Query e a -> a
 recQ f = \case
-  Q0 a -> a
-  Q1 o q -> f $ Right $ (o, recQ f q)
+  Q0 a      -> a
+  Q1 o q    -> f $ Right $ (o, recQ f q)
   Q2 o q q' -> f $ Left $ (o, recQ f q, recQ f q')

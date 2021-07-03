@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase    #-}
 
-module Data.CnfQuery.HashBag
+module Data.QnfQuery.HashBag
   (HashBag(..)
   , bagMember
   , bagInsert

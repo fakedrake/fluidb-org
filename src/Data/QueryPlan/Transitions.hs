@@ -19,11 +19,12 @@ module Data.QueryPlan.Transitions
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import qualified Data.List.NonEmpty   as NEL
 import           Data.NodeContainers
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
+import           Data.Utils.Default
 import           Data.Utils.MTL
 import           Data.Utils.Ranges
 import           Text.Printf
@@ -35,15 +36,17 @@ mkTriggerUnsafe :: Monad  m =>
                 -> ([IsReversible], [IsReversible])
                 -> NodeRef t
                 -> PlanT t n m (Transition t n)
-mkTriggerUnsafe mkTrig (inf, outf) tref = do
-  net <- propNet <$> ask
+mkTriggerUnsafe mkTrig (inf,outf) tref = do
+  net <- asks propNet
   let getLinksFrom side dir =
         fmap toNodeList
         $ (>>= maybe (throwError $ NonExistentNode $ Left tref) return)
         $ lift
         $ evalStateT
-        (getNodeLinksL side dir tref)
-        mempty{gbPropNet=net}
+          (getNodeLinksT
+             NodeLinksFilter
+             { nlfNode = tref,nlfSide = return side,nlfIsRev = dir })
+          def { gbPropNet = net }
   inps <- getLinksFrom Inp inf
   outs <- getLinksFrom Out outf
   return $ mkTrig inps tref outs
@@ -81,10 +84,10 @@ traverseTransition :: Applicative m =>
 traverseTransition side f = \case
   RTrigger x y z -> case side of
     Inp -> (\x' -> RTrigger x' y z) <$> f x
-    Out -> (\z' -> RTrigger x y z') <$> f z
+    Out -> RTrigger x y <$> f z
   Trigger x y z -> case side of
     Inp -> (\x' -> Trigger x' y z) <$> f x
-    Out -> (\z' -> Trigger x y z') <$> f z
+    Out -> Trigger x y <$> f z
   x -> pure x
 transitionCost :: (MonadError (PlanningError t n) m,
                   MonadReader (GCConfig t n) m) =>
@@ -104,7 +107,7 @@ transitionCost = \case
       return $ Cost {costReads=r,costWrites=w}
 
 getTransitions :: MonadReader (GCState t n) m => m [Transition t n]
-getTransitions = reverse . (>>= transitions) . NEL.toList . epochs <$> ask
+getTransitions = asks (reverse .  (NEL.toList . epochs >=> transitions))
 totalTransitionCost :: Monad m => PlanT t n m Cost
 totalTransitionCost = dropReader get getTransitions
   >>= fmap mconcat . mapM transitionCost

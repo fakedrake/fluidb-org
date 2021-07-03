@@ -4,12 +4,13 @@ module FluiDB.Schema.SSB.Queries
   (ssbQueriesMap
   ,SSBField
   ,SSBTable
+  ,ssbParse
   ,ssbFldSchema
   ,ssbTpchDBGenConf
   ,ssbSchema
   ,ssbPrimKeys) where
 
-import           Control.Monad
+import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
 import           Data.Foldable
 import qualified Data.IntMap                  as IM
@@ -18,9 +19,9 @@ import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.Parser
 import           Data.Query.SQL.Types
-import           Data.String
+import           Data.Utils.AShowDebug
+import           Data.Utils.Functors
 import           FluiDB.Bamify.Types
-import           FluiDB.Schema.TPCH.Schemata
 
 data IsInTable
   = IsLiteral
@@ -47,7 +48,7 @@ type SSBTable = String
 tblPrefix :: SSBField -> String
 tblPrefix = \case
   "lineorder" -> "lo_"
-  "dwdate"    -> "d_"
+  "date"      -> "d_"
   "part"      -> "p_"
   "supplier"  -> "s_"
   "customer"  -> "c_"
@@ -77,97 +78,169 @@ ssbFldSchema = do
 
 
 -- O(n^2) but it's done once
-ssbSchema :: [(SSBTable,CppSchema)]
-ssbSchema = appendOrderLines $ do
-  (tblTpch,schTpch) <- tpchSchemaAssoc
-  guard $ tblTpch /= "lineitems" && tblTpch /= "orders"
-  (tbl,flds) <- ssbFldSchema
-  guard $ tbl /= "lineorder"
-  let ssbSch = do
-        guard $ tbl == tblTpch
-        fld <- flds
-        (tyTpch,eTpch) <- schTpch
-        guard $ eTpch == fromString fld
-        return (tyTpch,eTpch)
-  return (tbl,ssbSch)
+ssbSchema :: [(SSBTable,CppSchema' SSBField)]
+ssbSchema =
+  [("lineorder",lineorderSchema)
+  ,("date",dateSchema)
+  ,("part",partSchema)
+  ,("supplier",supplierSchema)
+  ,("customer",customerSchema)]
   where
-    appendOrderLines :: [(SSBTable,CppSchema)] -> [(SSBTable,CppSchema)]
-    appendOrderLines xs = ("lineorders",lineordersSchema) : xs
-    lineordersSchema =
+    customerSchema =
+      -- long            custkey;
+      [(CppNat,"c_custkey")
+       -- char            name[C_NAME_LEN + 1];
+      ,(strType 18,"c_name")
+       -- char            address[C_ADDR_MAX + 1];
+      ,(strType 40,"c_address")
+       -- char            city[CITY_FIX+1];
+      ,(strType 11,"c_city")
+       -- char            nation_name[C_NATION_NAME_LEN+1];
+      ,(strType 15,"c_nation")
+       -- char            region_name[C_REGION_NAME_LEN+1];
+      ,(strType 13,"c_region")
+       -- char            phone[PHONE_LEN + 1];
+      ,(strType 15,"c_phone")
+       -- char            mktsegment[MAXAGG_LEN + 1];
+      ,(strType 21,"c_mktsegment")]
+    supplierSchema =
+      -- long            suppkey;
+      [(CppNat,"s_suppkey")
+       -- char            name[S_NAME_LEN + 1];
+      ,(strType 25,"s_name")
+       -- char            address[S_ADDR_MAX + 1];
+      ,(strType 40,"s_address")
+       -- char            city[CITY_FIX +1];
+      ,(strType 16,"s_city")
+       -- char            nation_name[S_NATION_NAME_LEN+1];
+      ,(strType 16,"s_nation")
+       -- char            region_name[S_REGION_NAME_LEN+1];
+      ,(strType 13,"s_region")
+       -- char            phone[PHONE_LEN + 1];
+      ,(strType 15,"s_phone")]
+    partSchema =
+      -- long           partkey;
+      [(CppNat,"p_partkey")
+       -- char           name[P_NAME_LEN + 1];
+      ,(strType 55,"p_name")
+       -- char           mfgr[P_MFG_LEN + 1];
+      ,(strType 25,"p_mfgr")
+       -- char           category[P_CAT_LEN + 1];
+      ,(strType 7,"p_category")
+       -- char           brand[P_BRND_LEN + 1];
+      ,(strType 10,"p_brand1")
+       -- char           color[P_COLOR_MAX + 1];
+      ,(strType 11,"p_color")
+       -- char           type[P_TYPE_MAX + 1];
+      ,(strType 25,"p_type")
+       -- long            size;
+      ,(CppNat,"p_size")
+       -- char           container[P_CNTR_LEN + 1];
+      ,(strType 10,"p_container")]
+    lineorderSchema =
       [(CppNat,"lo_orderkey")
-      ,(CppNat,"lo_partkey")
-      ,(CppNat,"lo_suppkey")
+       -- int             linenumber; /*integer, constrain to max of 7*/
       ,(CppInt,"lo_linenumber")
-      ,(CppNat,"lo_quantity")
-      ,(CppDouble,"lo_extendedprice")
-      ,(CppDouble,"lo_discount")
-      ,(CppDouble,"lo_tax")
-      ,(strType 1,"lo_returnflag")
-      ,(strType 1,"lo_linestatus")
-      ,(dateType,"lo_shipdate")
-      ,(dateType,"lo_commitdate")
-      ,(dateType,"lo_receiptdate")
-      ,(strType 25,"lo_shipinstruct")
-      ,(strType 10,"lo_shipmode")
-      ,(strType 44,"lo_comment")
-      ,(CppNat,"lo_orderkey")
+       -- long            custkey;
       ,(CppNat,"lo_custkey")
-      ,(strType 1,"lo_orderstatus")
-      ,(CppDouble,"lo_totalprice")
+       -- long            partkey;
+      ,(CppNat,"lo_partkey")
+       -- long            suppkey;
+      ,(CppNat,"lo_suppkey")
+       -- char            orderdate[DATE_LEN];
       ,(dateType,"lo_orderdate")
-      ,(strType 15,"lo_orderpriority")
-      ,(strType 15,"lo_clerk")
-      ,(CppInt,"lo_shippriority")
-      ,(strType 79,"lo_comment")]
+       -- char            opriority[MAXAGG_LEN + 1];
+      ,(strType 21,"lo_opriority")
+       -- long            ship_priority;
+      ,(CppNat,"lo_ship_priority")
+       -- char            shipmode[O_SHIP_MODE_LEN + 1];
+      ,(strType 10,"lo_shipmode")
+       -- long             quantity;
+      ,(CppNat,"lo_quantity")
+       -- long           extended_price;
+      ,(CppDouble,"lo_extendedprice")
+       -- long           order_totalprice;
+      ,(CppNat,"lo_orderstatus")
+       -- long           discount;
+      ,(CppDouble,"lo_discount")
+       -- long           revenue;
+      ,(CppNat,"lo_revenue")
+       -- long           supp_cost;
+      ,(CppNat,"lo_supplycost")
+       -- long           tax;
+      ,(CppDouble,"lo_tax")
+       -- char            commit_date[DATE_LEN] ;
+      ,(strType 13,"lo_commitmedium")]
+    dateSchema =
+      [(CppNat,"d_datekey")
+      ,(strType 18,"d_date")
+      ,(strType 9,"d_dayofweek")
+      ,(strType 9,"d_month")
+      ,(CppNat,"d_year")
+      ,(CppNat,"d_yearmonthnum")
+      ,(strType 7,"d_yearmonth")
+      ,(CppNat,"d_daynuminweek")
+      ,(CppNat,"d_daynuminmonth")
+      ,(CppNat,"d_daynuminyear")
+      ,(CppNat,"d_monthnuminyear")
+      ,(CppNat,"d_weeknuminyear")
+      ,(strType 15,"d_sellingseason")
+      ,(strType 2,"d_lastdayinweekfl")
+      ,(strType 2,"d_lastdayinmonthfl")
+      ,(strType 2,"d_holidayfl")
+      ,(strType 2,"d_weekdayfl")]
 
 strType :: Int -> CppType
 strType = CppArray CppChar . LiteralSize
 dateType :: CppType
 dateType = CppNat
 
-
-
 -- | Except for the star index (which is lineorder) all other fields
 -- that end with "key" are primary keys.
 ssbPrimKeys :: [(SSBTable,[SSBField])]
-ssbPrimKeys = do
+ssbPrimKeys = traceAShow "Prim keys: " $ do
   (tbl,flds) <- ssbFldSchema
-  return (tbl,if tbl /= "lineoder" then [] else filter (isSuffixOf "key") flds)
+  return
+    (tbl
+    ,if tbl == "lineorder" then ["lo_orderkey"]
+     else filter (isSuffixOf "key") flds)
 
 ssbQueriesMap :: IM.IntMap (Query ExpTypeSym Table)
 ssbQueriesMap = IM.fromList $ zip [0 ..] ssbQueriesList
 
+ssbParse :: String -> Query ExpTypeSym Table
+ssbParse = fromRightStr . parseSQL inQuery
 ssbQueriesList :: [Query ExpTypeSym Table]
 ssbQueriesList =
   fmap
-    (fromRightStr . parseSQL inQuery . unwords)
+    (ssbParse . unwords)
     [["select sum(lo_extendedprice*lo_discount) as revenue"
-     ,"from lineorder, dwdate"
+     ,"from lineorder, date"
      ,"where lo_orderdate = d_datekey"
      ,"and d_yearmonthnum = 199401"
      ,"and lo_discount between 4 and 6"
      ,"and lo_quantity between 26 and 35"]
     ,["select sum(lo_extendedprice*lo_discount) as revenue"
-     ,"from lineorder, dwdate"
+     ,"from lineorder, date"
      ,"where lo_orderdate = d_datekey"
      ,"and d_year = 1993"
      ,"and lo_discount between 1 and 3"
      ,"and lo_quantity < 25"]
     ,["select sum(lo_extendedprice*lo_discount) as revenue"
-     ,"from lineorder, dwdate"
+     ,"from lineorder, date"
      ,"where lo_orderdate = d_datekey"
      ,"and d_yearmonthnum = 199401"
      ,"and lo_discount between 4 and 6"
      ,"and lo_quantity between 26 and 35"]
     ,["select sum(lo_extendedprice*lo_discount) as revenue"
-     ,"from lineorder, dwdate"
+     ,"from lineorder, date"
      ,"where lo_orderdate = d_datekey"
      ,"and d_weeknuminyear = 6"
      ,"and d_year = 1994"
      ,"and lo_discount between 5 and 7"
      ,"and lo_quantity between 26 and 35"]
     ,["select sum(lo_revenue), d_year, p_brand1"
-     ,"from lineorder, dwdate, part, supplier"
+     ,"from lineorder, date, part, supplier"
      ,"where lo_orderdate = d_datekey"
      ,"and lo_partkey = p_partkey"
      ,"and lo_suppkey = s_suppkey"
@@ -176,7 +249,7 @@ ssbQueriesList =
      ,"group by d_year, p_brand1"
      ,"order by d_year, p_brand1"]
     ,["select sum(lo_revenue), d_year, p_brand1"
-     ,"from lineorder, dwdate, part, supplier"
+     ,"from lineorder, date, part, supplier"
      ,"where lo_orderdate = d_datekey"
      ,"and lo_partkey = p_partkey"
      ,"and lo_suppkey = s_suppkey"
@@ -185,7 +258,7 @@ ssbQueriesList =
      ,"group by d_year, p_brand1"
      ,"order by d_year, p_brand1"]
     ,["select sum(lo_revenue), d_year, p_brand1"
-     ,"from lineorder, dwdate, part, supplier"
+     ,"from lineorder, date, part, supplier"
      ,"where lo_orderdate = d_datekey"
      ,"and lo_partkey = p_partkey"
      ,"and lo_suppkey = s_suppkey"
@@ -194,7 +267,7 @@ ssbQueriesList =
      ,"group by d_year, p_brand1"
      ,"order by d_year, p_brand1"]
     ,["select c_nation, s_nation, d_year, sum(lo_revenue) as revenue"
-     ,"from customer, lineorder, supplier, dwdate"
+     ,"from customer, lineorder, supplier, date"
      ,"where lo_custkey = c_custkey"
      ,"and lo_suppkey = s_suppkey"
      ,"and lo_orderdate = d_datekey"
@@ -203,7 +276,7 @@ ssbQueriesList =
      ,"group by c_nation, s_nation, d_year"
      ,"order by d_year, revenue desc"]
     ,["select c_city, s_city, d_year, sum(lo_revenue) as revenue"
-     ,"from customer, lineorder, supplier, dwdate"
+     ,"from customer, lineorder, supplier, date"
      ,"where lo_custkey = c_custkey"
      ,"and lo_suppkey = s_suppkey"
      ,"and lo_orderdate = d_datekey"
@@ -213,7 +286,7 @@ ssbQueriesList =
      ,"group by c_city, s_city, d_year"
      ,"order by d_year, revenue desc"]
     ,["select c_city, s_city, d_year, sum(lo_revenue) as revenue"
-     ,"from customer, lineorder, supplier, dwdate"
+     ,"from customer, lineorder, supplier, date"
      ,"where lo_custkey = c_custkey"
      ,"and lo_suppkey = s_suppkey"
      ,"and lo_orderdate = d_datekey"
@@ -223,7 +296,7 @@ ssbQueriesList =
      ,"group by c_city, s_city, d_year"
      ,"order by d_year, revenue desc"]
     ,["select c_city, s_city, d_year, sum(lo_revenue) as revenue"
-     ,"from customer, lineorder, supplier, dwdate"
+     ,"from customer, lineorder, supplier, date"
      ,"where lo_custkey = c_custkey"
      ,"and lo_suppkey = s_suppkey"
      ,"and lo_orderdate = d_datekey"
@@ -233,7 +306,7 @@ ssbQueriesList =
      ,"group by c_city, s_city, d_year"
      ,"order by d_year, revenue desc"]
     ,["select d_year, c_nation, sum(lo_revenue - lo_supplycost) as profit"
-     ,"from dwdate, customer, supplier, part, lineorder"
+     ,"from date, customer, supplier, part, lineorder"
      ,"where lo_custkey = c_custkey"
      ," and lo_suppkey = s_suppkey"
      ," and lo_partkey = p_partkey"
@@ -244,7 +317,7 @@ ssbQueriesList =
      ,"group by d_year, c_nation"
      ,"order by d_year, c_nation"]
     ,["select d_year, s_nation, p_category, sum(lo_revenue - lo_supplycost) as profit"
-     ,"from dwdate, customer, supplier, part, lineorder"
+     ,"from date, customer, supplier, part, lineorder"
      ,"where lo_custkey = c_custkey"
      ,"and lo_suppkey = s_suppkey"
      ,"and lo_partkey = p_partkey"
@@ -256,7 +329,7 @@ ssbQueriesList =
      ,"or p_mfgr = 'MFGR#2')"
      ,"group by d_year, s_nation, p_category order by d_year, s_nation, p_category"]
     ,["select d_year, s_city, p_brand1, sum(lo_revenue - lo_supplycost) as profit"
-     ,"from dwdate, customer, supplier, part, lineorder"
+     ,"from date, customer, supplier, part, lineorder"
      ,"where lo_custkey = c_custkey"
      ,"and lo_suppkey = s_suppkey"
      ,"and lo_partkey = p_partkey"
@@ -276,14 +349,17 @@ fromRightStr = \case
 inQuery :: ExpTypeSym -> Query ExpTypeSym Table -> Maybe Bool
 inQuery e = fmap and . traverse (fromIsInTable . inTable e)
 
+
+-- To build the ssb queries in the directory /tmp/fluidb-data:
+-- ssbDBGen "/tmp/fluidb-data"
 ssbTpchDBGenConf :: [SSBTable] -> DBGenConf
 ssbTpchDBGenConf tblNames =
   DBGenConf
   { dbGenConfExec = "dbgen"
    ,dbGenConfTables = mkTbl <$> tblNames
-   ,dbGenConfScale = 0.1
+   ,dbGenConfScale = 0.01
    ,dbGenConfIncremental = True
-   ,dbGenConfSchema = ssbSchema
+   ,dbGenConfSchema = fmap4 CppSymbol ssbSchema
   }
   where
     mkTbl :: String -> DBGenTableConf

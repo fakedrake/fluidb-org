@@ -16,7 +16,7 @@ module FluiDB.Schema.Graph.Main
   (graphMain) where
 
 import           Data.Cluster.Types
-import           Data.CnfQuery.BuildUtils
+import           Data.QnfQuery.BuildUtils
 import           Data.Codegen.Build
 import           Data.NodeContainers
 import           Data.Query.Algebra
@@ -60,7 +60,7 @@ actualMain wlConf = do
          => [SovledStarQ e s t n]
     vals =
       zipWith QuerySol workload
-      $ fmap3 cnfSexp
+      $ fmap3 qnfSexp
       $ fromRight
       $ runWorkloadEvals
         (\conf -> conf
@@ -69,7 +69,7 @@ actualMain wlConf = do
          })
         workload
       where
-        cnfSexp = showQ . cnfOrigDEBUG . head
+        qnfSexp = showQ . qnfOrigDEBUG . head
         fromRight = \case
           Left e  -> error e
           Right r -> r

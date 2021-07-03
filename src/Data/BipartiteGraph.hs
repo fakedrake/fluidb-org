@@ -20,67 +20,42 @@
 
 -- |NOTE: Incoming neighbors is the forward trigger input
 
--- | Bipartite graphs are graphs with two kinds of nodes. Here we
--- denote them with n and t. Roughly each n-node corresponds to a
--- relation and each t-node corresponds to a (part of an)
--- operation. Each n-node is only connected to t-nodes and visa
--- versa. Here we define the GraphBuilderT monad that we use to build
--- and maintain the graph. Each edge may be directed or
--- indirected. The n-nodes connected to a t-node are sematically split
--- in two non-empty groups: input and output nodes. Input connections
--- are n-to-t (directed) or underiected and output connections are
--- either t-to-n (directed) or undirected. We will see later that
--- plans are a trace of triggers of t-nodes whereby each trigger
--- assumes all input n-nodes are in a materialized state and which
--- materializes a subset of the output nodes. We can reverse-trigger a
--- t-node when the output nodes are all undirected (and therefore
--- reversible) in which case reverse-triggering materializes any
--- subset undirected input nodes.
+-- Bipartite graphs are graphs with two kinds of nodes. Here we denote
+-- them with n and t. Roughly each n-node corresponds to a relation
+-- and each t-node corresponds to a (part of an) operation. Each
+-- n-node is only connected to t-nodes and visa versa. Here we define
+-- the GraphBuilderT monad that we use to build and maintain the
+-- graph. Each edge may be directed or indirected. The n-nodes
+-- connected to a t-node are sematically split in two non-empty
+-- groups: input and output nodes. Input connections are n-to-t
+-- (directed) or underiected and output connections are either t-to-n
+-- (directed) or undirected. We will see later that plans are a trace
+-- of triggers of t-nodes whereby each trigger assumes all input
+-- n-nodes are in a materialized state and which materializes a subset
+-- of the output nodes. We can reverse-trigger a t-node when the
+-- output nodes are all undirected (and therefore reversible) in which
+-- case reverse-triggering materializes any subset undirected input
+-- nodes.
 
 module Data.BipartiteGraph
-  ( Bipartite(..)
-  , GraphBuilder
-  , GraphBuilderT
-  , GBState(..)
-  , GBDiff(..)
-  , NodeStruct
-  , NodeStruct'(..)
-  , toBGFunc
-  , IsReversible(..)
-  , Side(..)
-  , sanityCheck
-  , hoistGraphBuilderT
-  -- We should only be able to append neighbors
-  , getBottomNodesR
-  , allNodesR
-  , allNodesL
-  , newNodeL
-  , newNodeR
-  , mergeNodesL
-  , mergeNodesR
-  , setNodeLinksL
-  , setNodeLinksR
-  , getNodeLinksL
-  , getNodeLinksR
-  , appendNodeLinksL
-  , appendNodeLinksR
-  , flipGraphBuilderT
-  , nodeRefs
-  , flipBipartite
-  , runGraphBuilderT
-  , runGraphBuilder
-  , reprGraph
-  , NodeRepr(..)
-  , getAllLinksL
-  , getAllLinksR
-  , insertNodeRepr
-  , pathsBetweenR
-  , topNodes
-  , botNodes
-  , neighborSetR
-  , neighborSetRN
-  , depSetRN
-  ) where
+  (Bipartite
+  ,nNodes
+  ,GraphBuilderT
+  ,GBState(gbPropNet)
+  ,GBDiff(..)
+  ,IsReversible(..)
+  ,Side(..)
+  ,hoistGraphBuilderT
+  ,getBottomNodesR
+  ,newNodeL
+  ,newNodeR
+  ,getNodeLinksL
+  ,getNodeLinksR
+  ,appendNodeLinksL
+  ,appendNodeLinksR
+  ,nodeRefs
+  ,getAllLinksL
+  ,getAllLinksR) where
 
 import           Control.Applicative
 import           Control.Monad
@@ -90,6 +65,7 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
+import           Data.Coerce
 import qualified Data.IntMap               as IM
 import           Data.List
 import           Data.Maybe
@@ -97,23 +73,24 @@ import           Data.Monoid
 import           Data.NodeContainers
 import           Data.Tuple
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.ListT
 import           Data.Utils.MTL
 import           Data.Utils.Ranges
+import           Data.Utils.Unsafe
 import           GHC.Generics
 import           Prelude                   hiding (filter, lookup)
 
 -- # GRAPH
 -- |Quick information access for nodes. This is for either t or n
-newtype NodeStruct' i t a = NodeStruct {
-  -- Incoming links that are only incoming
-  nodeLinks   :: i -> (NodeSet t, NodeSet t)
+newtype NodeStruct t n = NodeStruct {
+  -- Incoming links that are only incoming (inp,outpg)
+  nodeLinks   :: IsReversible -> (NodeSet t, NodeSet t)
   } deriving (Functor, Foldable, Traversable, Generic)
+
 data IsReversible = Reversible | Irreversible
-  deriving (Show, Eq, Enum, Bounded,Generic)
+  deriving (Show, Eq, Enum, Bounded,Generic,Read)
 instance AShow IsReversible
 instance ARead IsReversible
 data Side = Inp | Out deriving (Show, Eq, Enum, Bounded)
@@ -127,10 +104,11 @@ getSide = \case
   Inp -> fst
   Out -> snd
 
-modSide :: Side
-        -> (NodeSet a -> NodeSet a)
-        -> (NodeSet a, NodeSet a)
-        -> (NodeSet a, NodeSet a)
+modSide
+  :: Side
+  -> (NodeSet a -> NodeSet a)
+  -> (NodeSet a,NodeSet a)
+  -> (NodeSet a,NodeSet a)
 modSide = \case
   Inp -> first
   Out -> second
@@ -140,21 +118,22 @@ getNodeLinks sid revs nstruct =
   mconcat [getNodeLinks1 sid rev nstruct | rev <- revs]
 getNodeLinks1 :: Side -> IsReversible -> NodeStruct l r -> NodeSet l
 getNodeLinks1 sid rev = getSide sid . ($ rev) . nodeLinks
-modNodeLinks :: Side
-             -> IsReversible
-             -> (NodeSet l -> NodeSet l)
-             -> NodeStruct l r
-             -> NodeStruct l r
-modNodeLinks sid rev f ns@NodeStruct{..} =
-  let (revVal, irrVal) =
-        (case rev of {Reversible -> first; Irreversible -> second})
-        (modSide sid f)
-        $ (nodeLinks Reversible, nodeLinks Irreversible)
-  in ns{
-    nodeLinks=(\case
-        Reversible -> revVal;
-        Irreversible -> irrVal)
-    }
+modNodeLinks
+  :: Side
+  -> IsReversible
+  -> (NodeSet l -> NodeSet l)
+  -> NodeStruct l r
+  -> NodeStruct l r
+modNodeLinks sid rev f ns@NodeStruct {..} =
+  let (revVal,irrVal) =
+        (case rev of
+           Reversible   -> first
+           Irreversible -> second)
+          (modSide sid f)
+          (nodeLinks Reversible,nodeLinks Irreversible)
+  in ns { nodeLinks = \case
+    Reversible   -> revVal
+    Irreversible -> irrVal }
 
 overNodeSetL :: Monad m =>
               NodeSet l
@@ -166,19 +145,21 @@ overNodeSetL ns f = forM_ (toNodeList ns) $ \ref -> do
   let newNodes = refAdjust f ref $ lNodes bp
   put gbs{gbPropNet=bp{lNodes=newNodes}}
 
-overNodeSetR :: Monad m =>
-               NodeSet r
-             -> (NodeStruct l r -> NodeStruct l r)
-             -> GraphBuilderT l r m ()
+overNodeSetR
+  :: Monad m
+  => NodeSet r
+  -> (NodeStruct l r -> NodeStruct l r)
+  -> GraphBuilderT l r m ()
 overNodeSetR ns f = flipGraphBuilderT $ overNodeSetL ns f
 
 -- |Query neighbors of an n-node. Treats tha n-node as if it were a
 -- t-node.
-getNodeLinksR :: Monad m =>
-                Side
-              -> [IsReversible]
-              -> NodeRef n
-              -> GraphBuilderT t n m (Maybe (NodeSet t))
+getNodeLinksR
+  :: Monad m
+  => Side
+  -> [IsReversible]
+  -> NodeRef n
+  -> GraphBuilderT t n m (Maybe (NodeSet t))
 getNodeLinksR s r = flipGraphBuilderT . getNodeLinksL s r
 {-# INLINABLE getNodeLinksR #-}
 
@@ -247,21 +228,12 @@ appendNodeLinksL side rev ref ns = do
     Nothing    -> error "Node not found."
     Just links -> setNodeLinksL side rev ref $ ns <> links
 
-deleteNodeL :: Monad m => NodeRef l -> GraphBuilderT l r m ()
-deleteNodeL ref = do
-  forM_ fullRange2 $ \(sid,rev) -> setNodeLinksL sid rev ref mempty
-  modify $ \gbs -> gbs{
-    gbPropNet=(gbPropNet gbs){
-        lNodes=refDelete ref $ lNodes (gbPropNet gbs)}}
-
-#ifdef ENABLE_DELETE_NODES
-deleteNodeR :: Monad m => NodeRef r -> GraphBuilderT l r m ()
-deleteNodeR = flipGraphBuilderT . deleteNodeL
-registerRmNodeL :: Monad m => NodeRef t -> GraphBuilderT t n m ()
-registerRmNodeL ref = modify
-  $ \gbs@GBState{ gbDiff=gbd@GBDiff{ gbDiffRmNodes=(nt, nn) }} ->
-      gbs{gbDiff=gbd{gbDiffRmNodes=(ref:nt, nn)}}
-#endif
+-- deleteNodeL :: Monad m => NodeRef l -> GraphBuilderT l r m ()
+-- deleteNodeL ref = do
+--   forM_ fullRange2 $ \(sid,rev) -> setNodeLinksL sid rev ref mempty
+--   modify $ \gbs -> gbs{
+--     gbPropNet=(gbPropNet gbs){
+--         lNodes=refDelete ref $ lNodes (gbPropNet gbs)}}
 
 registerNewNodeL :: Monad m => NodeRef t -> GraphBuilderT t n m ()
 registerNewNodeL ref = modify
@@ -270,9 +242,10 @@ registerNewNodeL ref = modify
 
 -- | Insert a node, if the node exists do nothing, if no node is
 -- provided, make a new node. True if we created it , False if we didn't
-newNodeL :: Monad m => Maybe (NodeRef t) -> GraphBuilderT t n m (Bool, NodeRef t)
+newNodeL
+  :: Monad m => Maybe (NodeRef t) -> GraphBuilderT t n m (Bool,NodeRef t)
 newNodeL mref = do
-  bp@Bipartite{lNodes=l} <- gbPropNet <$> get
+  bp@Bipartite{lNodes=l} <- gets gbPropNet
   let mrefNext = fromMaybe ((+1) $ safeLast (NodeRef 0) $ refMapKeys l) mref
   if isJust $ mrefNext `refLU` l then return (False, mrefNext) else do
     let l' = refInsert mrefNext (NodeStruct (const (mempty, mempty))) l
@@ -282,34 +255,22 @@ newNodeL mref = do
 newNodeR :: Monad m => Maybe (NodeRef n) -> GraphBuilderT t n m (Bool, NodeRef n)
 newNodeR = flipGraphBuilderT . newNodeL
 
-type NodeStruct = NodeStruct' IsReversible
-instance (AShow a, AShow i, Enum i, Bounded i) => AShow (NodeStruct' i t a) where
+instance AShow a => AShow (NodeStruct t a) where
   ashow' (NodeStruct x) = sexp "NodeStruct" [ashowCase' x]
-instance (ARead a, ARead i, Eq i) => ARead (NodeStruct' i t a) where
+instance ARead a => ARead (NodeStruct t a) where
   aread' = \case
     Sub [Sym "NodeStruct",x] -> NodeStruct <$> areadCase' x
-    _ -> Nothing
-
-instance (Show a, Show i, Enum i, Bounded i) => Show (NodeStruct' i t a) where
-  show NodeStruct{..} = printf
-                        "NodeStruct {nodeLinks=%s}"
-                        sNodeLinks
-    where
-      sNodeLinks :: String
-      sNodeLinks = printf "(\\case {%s})"
-                   $ intercalate "; "
-                   [printf "%s -> %s" (show x) (show $ nodeLinks x)
-                   | x <- fullRange]
+    _                        -> Nothing
 
 data Bipartite t n = Bipartite {
   lNodes :: RefMap t (NodeStruct n t),
   rNodes :: RefMap n (NodeStruct t n)
-  } deriving (Show, Generic)
+  } deriving (Generic)
 instance (AShow t,AShow n) => AShow (Bipartite t n)
 instance (ARead t,ARead n) => ARead (Bipartite t n)
 instance Default (Bipartite t n)
 instance Bifunctor Bipartite where
-  bimap _ _ Bipartite{} = undefined
+  bimap _ _ a = coerce a
 instance Functor (Bipartite l) where
   fmap = bimap id
 
@@ -373,7 +334,7 @@ instance Monoid (Bipartite l r) where
 
 nodeRefs :: Monad m => GraphBuilderT a b m ([NodeRef a], [NodeRef b])
 nodeRefs = do
-  (Bipartite x y) <- gbPropNet <$> get
+  (Bipartite x y) <- gets gbPropNet
   return (refKeys x, refKeys y)
 
 data GBState a b = GBState {gbPropNet :: Bipartite a b, gbDiff :: GBDiff a b}
@@ -388,6 +349,7 @@ putPropNet pn = modify $ \gbs -> gbs{gbPropNet=pn}
 
 instance Semigroup (GBState a b) where
   (GBState x y) <> (GBState x' y') = GBState (x <> x') (y <> y')
+instance Default (GBState t n) where def = mempty
 instance Monoid (GBState a b) where mempty = GBState mempty mempty
 instance Semigroup (GBDiff a b) where
   (GBDiff x y) <> (GBDiff x' y') = GBDiff (x <> x') (y <> y')
@@ -415,7 +377,7 @@ sanityCheck :: Monad m => GraphBuilderT l r m Bool
 sanityCheck = (&&) <$> sanityCheckL <*> flipGraphBuilderT sanityCheckL
   where
     sanityCheckL = do
-      allNodes <- allNodesL
+      (allNodes,_) <- nodeRefs
       everyM allNodes $ \ref -> everyM fullRange2 $ \(side, rev) -> do
         linksM <- getNodeLinksL side [rev] ref
         case linksM of
@@ -432,7 +394,7 @@ getNodeStructR :: MonadReader (GBState t n) m =>
                  NodeRef n
                -> m (Maybe (NodeStruct t n))
 getNodeStructR r = do
-  Bipartite{rNodes=rn} <- gbPropNet <$> ask
+  Bipartite{rNodes=rn} <- asks gbPropNet
   return $ r `refLU` rn
 {-# INLINE getNodeStructR #-}
 getNodeStructL :: MonadReader (GBState t n) m =>
@@ -443,22 +405,22 @@ getNodeStructL = flipReaderGBState . getNodeStructR
 
 flipReaderGBState :: MonadReader (GBState l r) m =>
                     ReaderT (GBState r l) m a -> m a
-flipReaderGBState = dropReader (flipGBState <$> ask)
+flipReaderGBState = dropReader (asks flipGBState)
 {-# INLINE flipReaderGBState #-}
 
 biapply :: (a -> b) -> (a,a) -> (b,b)
 biapply f = bimap f f
 
 allNodesL :: Monad m => GraphBuilderT l r m [NodeRef l]
-allNodesL = refKeys . lNodes . gbPropNet <$> get
+allNodesL = gets (refKeys . lNodes . gbPropNet)
 
 allNodesR :: Monad m => GraphBuilderT l r m [NodeRef r]
-allNodesR = refKeys . rNodes . gbPropNet <$> get
+allNodesR = gets (refKeys . rNodes . gbPropNet)
 
 -- | All nodes with no incoming links.
 getBottomNodesR :: GraphBuilder a b [NodeRef b]
 getBottomNodesR = do
-  Bipartite{rNodes=rn} <- gbPropNet <$> get
+  Bipartite{rNodes=rn} <- gets gbPropNet
   return $ fmap fst $ filter (hasNoIncoming . snd) $ refAssocs rn
   where
     hasNoIncoming NodeStruct{..} =
@@ -473,16 +435,6 @@ data NodeRepr t n = NodeRepr {
   } deriving (Read, Show, Generic, Eq)
 
 instance AShow (NodeRepr t n)
-
-mergeNodesR :: Monad m => NodeRef r -> NodeRef r -> GraphBuilderT l r m ()
-mergeNodesR ref1 ref2 = flipGraphBuilderT $ mergeNodesL ref1 ref2
-mergeNodesL :: Monad m => NodeRef l -> NodeRef l -> GraphBuilderT l r m ()
-mergeNodesL ref1 ref2 = forM_ fullRange2 $ \(side, ref) -> do
-  linksM <- getNodeLinksL side [ref] ref2
-  case linksM of
-    Nothing    -> error "Link not found"
-    Just links -> appendNodeLinksL side ref ref1 links
-  deleteNodeL ref2
 
 reprNode :: forall t n m . Monad m =>
            NodeRef t
@@ -501,7 +453,8 @@ reprNode nodeReprTNode = runMaybeT $ do
       $ MaybeT
       $ getNodeLinksL side [x] nodeReprTNode
 
-reprGraph :: forall t n m . Monad m => GraphBuilderT t n m (Maybe [NodeRepr t n])
+reprGraph
+  :: forall t n m . Monad m => GraphBuilderT t n m (Maybe [NodeRepr t n])
 reprGraph = do
   tns :: [NodeRef t] <- fst <$> nodeRefs
   runMaybeT $ mapM (MaybeT . reprNode) tns
@@ -524,44 +477,40 @@ insertNodeRepr nr = do
     forM_ ns $ \n -> newNodeR (Just n)
     setNodeLinksL side rev (nodeReprTNode nr) $ fromNodeList ns
 
-toBGFunc :: GraphBuilderT t n Identity a
-         -> Bipartite t n
-         -> a
-toBGFunc m net = evalState m $ GBState net mempty
-
 getAllLinksR :: Monad m => Side -> NodeRef r -> GraphBuilderT l r m (NodeSet l)
 getAllLinksR side ref = flipGraphBuilderT $ getAllLinksL side ref
 getAllLinksL :: Monad m => Side -> NodeRef l -> GraphBuilderT l r m (NodeSet r)
 getAllLinksL side ref =
   fmap mconcat $ forM fullRange $ \rev -> getNodeLinksL side [rev] ref >>= \case
     Nothing -> error "Not found"
-    Just l -> return l
+    Just l  -> return l
 
 pathsBetweenR :: forall t n m . Monad m =>
                 NodeRef n
               -> NodeRef n
               -> GraphBuilderT t n m [([NodeRef n], [NodeRef t])]
-pathsBetweenR from to = if from == to then return [([from], [])] else runListT $ do
-  (fromT, from') <- eachNeighbor Out from
-  (toT, to') <- eachNeighbor Inp to
-  (intermPathN, intermPathT) <- mkListT $ pathsBetweenR from' to'
-  return $ ([from] ++ intermPathN ++ [to], [fromT] ++ intermPathT ++ [toT])
+pathsBetweenR from to =
+  if from == to then return [([from],[])] else runListT $ do
+    (fromT,from') <- eachNeighbor Out from
+    (toT,to') <- eachNeighbor Inp to
+    (intermPathN,intermPathT) <- mkListT $ pathsBetweenR from' to'
+    return ([from] ++ intermPathN ++ [to],[fromT] ++ intermPathT ++ [toT])
   where
-    eachNeighbor :: Side
-                 -> NodeRef n
-                 -> ListT (GraphBuilderT t n m) (NodeRef t, NodeRef n)
-    eachNeighbor side ref = mkListT $ fmap (>>= sequenceA) $ neighborSetR side ref
+    eachNeighbor
+      :: Side -> NodeRef n -> ListT (GraphBuilderT t n m) (NodeRef t,NodeRef n)
+    eachNeighbor side ref = mkListT $ (>>= sequenceA) <$> neighborSetR side ref
 
 -- | (ts, ns) `in` neightborSetRN k s n means that if ALL ns were
 -- materialized we could trigger all of ts and get n. Find ns on @s@
 -- side of the computation. That means if @s@ is @Out@ then to make
 -- @n@ we would reverse trigger. k is the MINIMUM radius.
-neighborSetRN :: forall t n m .
-                Monad m =>
-                Int
-              -> Side
-              -> NodeRef n
-              -> GraphBuilderT t n m [([NodeRef t], [NodeRef n])]
+neighborSetRN
+  :: forall t n m .
+  Monad m
+  => Int
+  -> Side
+  -> NodeRef n
+  -> GraphBuilderT t n m [([NodeRef t],[NodeRef n])]
 neighborSetRN 0 _ ref = return [([], [ref])]
 neighborSetRN 1 side ref = fmap2 (first return) $ neighborSetR side ref
 neighborSetRN i side ref = fmap3 nub $ fmap uniqMerge $ runListT $ do
@@ -581,7 +530,7 @@ neighborSetRN i side ref = fmap3 nub $ fmap uniqMerge $ runListT $ do
     uniqMerge :: Ord a => [([a],b)] -> [([a],b)]
     uniqMerge = foldr insertUniq [] . sortOn fst . fmap (first sort) where
       insertUniq (x,y) = \case
-        [] -> [(x,y)]
+        []            -> [(x,y)]
         xs@((x',_):_) -> if x == x' then xs else (x,y):xs
 
 
@@ -598,9 +547,7 @@ neighborSetR side ref = runListT $ do
   where
     possibleNeighbors :: forall x y . NodeRef y
                       -> GraphBuilderT x y m [NodeRef x]
-    possibleNeighbors = fmap (>>= toNodeList)
-                        . fmap toList
-                        . getNodeLinksR side fullRange
+    possibleNeighbors = fmap (toNodeList <=< toList) . getNodeLinksR side fullRange
 
 topNodes :: Monad m => GraphBuilderT t n m [NodeRef n]
 topNodes = limitNodes Out
@@ -609,7 +556,7 @@ botNodes = limitNodes Inp
 
 limitNodes :: Monad m => Side -> GraphBuilderT t n m [NodeRef n]
 limitNodes side =
-  fmap fst
+  gets (fmap fst
   . filter (nsNull
              . mconcat
              . fmap (getSide side)
@@ -618,8 +565,7 @@ limitNodes side =
              . snd)
   . refAssocs
   . rNodes
-  . gbPropNet
-  <$> get
+  . gbPropNet)
 
 -- |Searching strictly in one direction get the possible dependency
 -- sets of a node. A dependency set is the set of t-nodes that are to
@@ -663,4 +609,6 @@ depSetRN i side ref = evalStateT (go i ref) mempty where
 
 allCombinations :: Monoid x => [[x]] -> [x]
 allCombinations [] = []
-allCombinations xs = foldr1 (liftM2 mappend) xs
+allCombinations xs = foldr1Unsafe (liftM2 mappend) xs
+nNodes :: Bipartite t n -> [NodeRef n]
+nNodes = refKeys . rNodes

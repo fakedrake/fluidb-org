@@ -1,4 +1,3 @@
-{-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE CPP                    #-}
 {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE DataKinds              #-}
@@ -9,6 +8,7 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ImpredicativeTypes     #-}
 {-# LANGUAGE InstanceSigs           #-}
 {-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
@@ -23,34 +23,34 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds -Wno-name-shadowing -Wno-orphans #-}
 
 module Data.Cluster.Types.Clusters
-  ( AnyCluster'(..)
-  , JoinClust'(..)
-  , WMetaD(..)
-  , updateCHash
-  , primaryTRef
-  , BinClust'(..)
-  , UnClust'(..)
-  , NClust'(..)
-  , AnyCluster
-  , JoinClust
-  , BinClust
-  , UnClust
-  , NClust
-  , Direction(..)
-  , SpecificCluster(..)
-  , CanPutIdentity(..)
-  , clusterInputs
-  , clusterOutputs
-  , clusterInterms
-  , traverseAnyRoles
-  , traverseJoinRoles
-  , traverseBinRoles
-  , traverseUnRoles
-  , primaryNRef
-  , allNodeRefsAnyClust
-  , allNodeRefs
-  , traverseEAnyClust
-  ) where
+  (AnyCluster'(..)
+  ,JoinClust'(..)
+  ,WMetaD(..)
+  ,destructCluster
+  ,updateCHash
+  ,primaryTRef
+  ,BinClust'(..)
+  ,UnClust'(..)
+  ,NClust'(..)
+  ,AnyCluster
+  ,JoinClust
+  ,BinClust
+  ,UnClust
+  ,NClust
+  ,Direction(..)
+  ,SpecificCluster(..)
+  ,CanPutIdentity(..)
+  ,clusterInputs
+  ,clusterOutputs
+  ,clusterInterms
+  ,traverseAnyRoles
+  ,traverseJoinRoles
+  ,traverseBinRoles
+  ,traverseUnRoles
+  ,primaryNRef
+  ,allNodeRefsAnyClust
+  ,allNodeRefs
+  ,traverseEAnyClust) where
 
 import           Control.Applicative
 import           Control.Monad.Identity
@@ -171,9 +171,9 @@ allNodeRefsAnyClust :: forall e t n .
                     -> ([NodeRef t], [NodeRef n])
 allNodeRefsAnyClust = \case
   JoinClustW x -> allNR x
-  BinClustW x -> allNR x
-  UnClustW x -> allNR x
-  NClustW x -> allNodeRefs0 x
+  BinClustW x  -> allNR x
+  UnClustW x   -> allNR x
+  NClustW x    -> allNodeRefs0 x
   where
     allNR :: forall c . SpecificCluster c =>
             c NodeRef (ComposedType c e NodeRef) t n
@@ -192,9 +192,9 @@ primaryTRef :: forall e f t n .
   AnyCluster' e f t n -> Maybe (f t)
 primaryTRef = \case
   JoinClustW x ->  Just $ binClusterT $ joinBinCluster x
-  BinClustW x -> Just $ binClusterT x
-  UnClustW x -> Just $ unClusterT x
-  NClustW _ -> Nothing
+  BinClustW x  -> Just $ binClusterT x
+  UnClustW x   -> Just $ unClusterT x
+  NClustW _    -> Nothing
 primaryNRef :: forall e f t n .
               AnyCluster' e f t n
             -> (Maybe (Either [BQOp e] [UQOp e]),f n)
@@ -225,20 +225,20 @@ data Direction = ForwardTrigger | ReverseTrigger deriving (Generic, Show, Read, 
 instance Hashable Direction
 
 clusterInputs :: AnyCluster' e f t n -> [f n]
-clusterInputs = execWriter
-                . traverseAnyRoles
-                (\x -> tell [x] >> return x) return return
-                . putIdentity
+clusterInputs =
+  execWriter
+  . traverseAnyRoles (\x -> tell [x] >> return x) return return
+  . putIdentity
 clusterOutputs :: AnyCluster' e f t n -> [f n]
-clusterOutputs = execWriter
-                . traverseAnyRoles
-                return return (\x -> tell [x] >> return x)
-                . putIdentity
+clusterOutputs =
+  execWriter
+  . traverseAnyRoles return return (\x -> tell [x] >> return x)
+  . putIdentity
 clusterInterms :: AnyCluster' e f t n -> [f n]
-clusterInterms = execWriter
-                 . traverseAnyRoles
-                 return (\x -> tell [x] >> return x) return
-                 . putIdentity
+clusterInterms =
+  execWriter
+  . traverseAnyRoles return (\x -> tell [x] >> return x) return
+  . putIdentity
 traverseAnyRoles :: forall n r t f f' e . (Traversable f, Applicative f') =>
                     (n -> f' r) -> (n -> f' r) -> (n -> f' r)
                   -> AnyCluster' e f t n
@@ -298,9 +298,9 @@ traverseJoinRoles fInput fInterm fOutput JoinClust{..} = fmap updateCHash $ Join
 instance Traversable f => Bitraversable (AnyCluster' e f) where
   bitraverse f g = \case
     JoinClustW c ->  JoinClustW <$> bitraverse f g c
-    BinClustW c -> BinClustW <$> bitraverse f g c
-    UnClustW c -> UnClustW <$> bitraverse f g c
-    NClustW c -> NClustW <$> bitraverse f g c
+    BinClustW c  -> BinClustW <$> bitraverse f g c
+    UnClustW c   -> UnClustW <$> bitraverse f g c
+    NClustW c    -> NClustW <$> bitraverse f g c
 instance (Traversable g, Traversable f) => Bitraversable (JoinClust' g f) where
   bitraverse f g JoinClust{..} = fmap updateCHash $ JoinClust
     <$> bitraverse f g joinBinCluster
@@ -331,9 +331,9 @@ instance (Traversable g, Traversable f) => Bitraversable (NClust' g f) where
 instance Foldable f => Bifoldable (AnyCluster' g f) where
   bifoldr f g x = \case
     JoinClustW c ->  bifoldr f g x c
-    BinClustW c -> bifoldr f g x c
-    UnClustW c -> bifoldr f g x c
-    NClustW c -> bifoldr f g x c
+    BinClustW c  -> bifoldr f g x c
+    UnClustW c   -> bifoldr f g x c
+    NClustW c    -> bifoldr f g x c
 instance (Foldable g, Foldable f) => Bifoldable (JoinClust' g f) where
   bifoldr :: forall f a b c. Foldable f =>
             (a -> c -> c) -> (b -> c -> c) -> c -> JoinClust' g f a b -> c
@@ -394,9 +394,9 @@ instance Traversable f => Traversable (AnyCluster' e f a) where
 instance Functor f => Bifunctor (AnyCluster' e f) where
   bimap f g = \case
     JoinClustW x -> JoinClustW $ autoBimap' f g x
-    BinClustW x -> BinClustW $ autoBimap' f g x
-    UnClustW x -> UnClustW $ autoBimap' f g x
-    NClustW x -> NClustW $ autoBimap' f g x
+    BinClustW x  -> BinClustW $ autoBimap' f g x
+    UnClustW x   -> UnClustW $ autoBimap' f g x
+    NClustW x    -> NClustW $ autoBimap' f g x
 instance (Functor g, Functor f) => Bifunctor (JoinClust' g f) where
   bimap = autoBimap'
 instance (Functor g, Functor f) => Bifunctor (UnClust' g f) where
@@ -425,14 +425,14 @@ class CanPutIdentity c c' g f | c -> c', c -> g, c -> f where
   dropIdentity :: c' (g t) (f n) -> c t n
 instance CanPutIdentity (AnyCluster' e f) (AnyCluster' e Identity) f f where
   putIdentity = \case
-    JoinClustW x -> JoinClustW $ putId' x
-    BinClustW x -> BinClustW $ putId' x
-    UnClustW x -> UnClustW $ putId' x
+    JoinClustW x       -> JoinClustW $ putId' x
+    BinClustW x        -> BinClustW $ putId' x
+    UnClustW x         -> UnClustW $ putId' x
     NClustW (NClust x) -> NClustW $ NClust $ Identity x
   dropIdentity = \case
-    JoinClustW x -> JoinClustW $ dropId' x
-    BinClustW x -> BinClustW $ dropId' x
-    UnClustW x -> UnClustW $ dropId' x
+    JoinClustW x       -> JoinClustW $ dropId' x
+    BinClustW x        -> BinClustW $ dropId' x
+    UnClustW x         -> UnClustW $ dropId' x
     NClustW (NClust x) -> NClustW $ NClust $ runIdentity x
 
 -- Type tetris here.
@@ -515,17 +515,19 @@ updateCHash c = setCHash (hash $ allNodeRefs0 c) c
 class SpecificCluster c where
   allNodeRefs0 :: c f g t n -> ([f t],[g n])
   type ComposedType c e (f :: * -> *) :: * -> *
+
   type ClusterOp c :: * -> *
-  toSpecificClust :: AnyCluster' e f t n -> Maybe (c f (ComposedType c e f) t n)
+
+  toSpecificClust
+    :: AnyCluster' e f t n -> Maybe (c f (ComposedType c e f) t n)
   fromSpecificClust :: c f (ComposedType c e f) t n -> AnyCluster' e f t n
-  extractRef :: Proxy c
-             -> Proxy e
-             -> ComposedType c e f a
-             -> ([ClusterOp c e], f a)
-  mkComposedType :: Proxy c
-                 -> Proxy e
-                 -> ([ClusterOp c e], f a)
-                 -> Maybe (ComposedType c e f a)
+  extractRef
+    :: Proxy c -> Proxy e -> ComposedType c e f a -> ([ClusterOp c e],f a)
+  mkComposedType
+    :: Proxy c
+    -> Proxy e
+    -> ([ClusterOp c e],f a)
+    -> Maybe (ComposedType c e f a)
   setCHash :: (Hashables2 (f t) (g n) => Int) -> c f g t n -> c f g t n
 
 instance SpecificCluster JoinClust' where
@@ -540,7 +542,7 @@ instance SpecificCluster JoinClust' where
   type ClusterOp JoinClust' = BQOp
   toSpecificClust = \case
     JoinClustW x -> Just x
-    _ -> Nothing
+    _            -> Nothing
   fromSpecificClust = JoinClustW
   extractRef _ _ = unMetaD
   mkComposedType _ _ = return . WMetaD
@@ -553,7 +555,7 @@ instance SpecificCluster BinClust' where
   type ClusterOp BinClust' = BQOp
   toSpecificClust = \case
     BinClustW x -> Just x
-    _ -> Nothing
+    _           -> Nothing
   fromSpecificClust = BinClustW
   extractRef _ _ = unMetaD
   mkComposedType _ _ = return . WMetaD
@@ -569,7 +571,7 @@ instance SpecificCluster UnClust' where
   type ComposedType UnClust' e f = WMetaD [UQOp e] f
   toSpecificClust = \case
     UnClustW x -> Just x
-    _ -> Nothing
+    _          -> Nothing
   fromSpecificClust = UnClustW
   type ClusterOp UnClust' = UQOp
   extractRef _ _ = unMetaD
@@ -581,7 +583,7 @@ instance SpecificCluster NClust' where
   type ComposedType NClust' e f = f
   toSpecificClust = \case
     NClustW x -> Just x
-    _ -> Nothing
+    _         -> Nothing
   type ClusterOp NClust' = Void2
   fromSpecificClust = NClustW
   extractRef _ _ r = ([], r)
@@ -642,3 +644,5 @@ traverseESpecificClust _ f =
     pe = Proxy :: Proxy e
     pc = Proxy :: Proxy c
     swap (a,b) = (b,a)
+destructCluster :: AnyCluster e s t n -> ([NodeRef n],[NodeRef n],[NodeRef n])
+destructCluster c = (clusterInputs c,clusterInterms c,clusterOutputs c)

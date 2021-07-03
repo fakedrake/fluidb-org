@@ -17,13 +17,17 @@ showSExpOneLine :: Bool -> SExp -> String
 showSExpOneLine shouldShowParen = \case
   Rec name entries -> name ++ "{" ++ expShowRecs entries ++ "}"
   Str xs -> "\"" ++ xs ++ "\""
-  Vec xs -> expShow False("[","]") "," xs
+  Case entries -> "\\case {" ++ expShowCases entries ++ "}"
+  Vec xs -> expShow False ("[","]") "," xs
   Tup xs -> expShow False ("(",")") "," xs
-  Sub xs -> expShow True (if shouldShowParen then ("(",")") else ("","")) " " xs
+  Sub xs
+    -> expShow True (if shouldShowParen then ("(",")") else ("","")) " " xs
   Sym x -> x
   where
-    expShowRecs entries = intercalate ","
-      $ entries <&> \(l,v) -> printf "%s=%s" l (showSExpOneLine False v)
+    expShowCases entries = intercalate ";" $ entries <&> \(l,v)
+      -> printf "%s->%s" l (showSExpOneLine False v)
+    expShowRecs entries = intercalate "," $ entries <&> \(l,v)
+      -> printf "%s=%s" l (showSExpOneLine False v)
     expShow :: Bool -> (String,String) -> String -> [SExp] -> String
     expShow propagate (b,e) s ls =
       b ++ intercalate s (showSExpOneLine propagate <$> ls) ++ e
@@ -47,6 +51,7 @@ showSExpOff shouldShowParen initOff off e
       case e of
         Rec name entries -> expShowRecord initOff off name entries
         Str xs -> "\"" ++ xs ++ "\""
+        Case entries -> expShowCase initOff off entries
         Vec xs -> expShowCollection initOff off "[" "]" "," xs
         Tup xs -> expShowCollection initOff off "(" ")" "," xs
         Sub xs -> expShowList initOff off paren " " xs where
@@ -87,12 +92,12 @@ expShowCollection initOff off  b e sep (l:ls) = if alignedFits
 
 allButLast :: (a -> b) -> (a -> b) -> [a] -> [b]
 allButLast f g = \case
-  [] -> []
-  [x] -> [g x]
+  []   -> []
+  [x]  -> [g x]
   x:xs -> f x:allButLast f g xs
 allButFirst :: (a -> b) -> (a -> b) -> [a] -> [b]
 allButFirst f g = \case
-  [] -> []
+  []   -> []
   x:xs -> f x:(g <$> xs)
 
 
@@ -129,31 +134,41 @@ expShowList initOff off (b, e) sep (l:ls) =
         subexp = carExpression:cdrExpressions
           where
             carExpression=showSExpOff True (initOff+1) (initOff+1) l
-            cdrExpressions=(showSExpOff True (off + 2) (off + 2) <$> ls)
+            cdrExpressions=showSExpOff True (off + 2) (off + 2) <$> ls
         pref' = replicate (off + 2) ' '
 
-expShowRecord :: Int -> Int -> String -> [(String, SExp)] -> String
-expShowRecord _ _ name [] = name ++ "{}"
-expShowRecord initOff off name alist =
-  if all (\x -> alignedOffLen + 1 + length x <= 72) oneLineFields
-  then concat
-       $ allButFirst ((name ++ "{") ++) (replicate alignedOffLen ' ' ++)
-       $ allButLast (++",\n") (++ "}")
-       oneLineFields
-  else name ++ "{\n" ++
-       concat conservativeRecordsWithFrame
-       ++ replicate off ' ' ++ "}"
+type Sep = String
+type Correl = String
+
+expShowRecord :: Int -> Int -> String -> [(String,SExp)] -> String
+expShowRecord = expShowCurly "," "="
+expShowCase :: Int -> Int -> [(String,SExp)] -> String
+expShowCase initOff off = expShowCurly ";" "->" initOff off "\\case"
+
+expShowCurly :: Sep -> Correl ->  Int -> Int -> String -> [(String, SExp)] -> String
+expShowCurly _ _ _ _ name [] = name ++ "{}"
+expShowCurly sep correl initOff off name alist =
+  if all (\x -> alignedOffLen + 1 + length x <= 72) oneLineFields then concat
+    $ allButFirst ((name ++ "{") ++) (replicate alignedOffLen ' ' ++)
+    $ allButLast (++ (sep ++ "\n")) (++ "}") oneLineFields else name
+    ++ "{\n"
+    ++ concat conservativeRecordsWithFrame
+    ++ replicate off ' '
+    ++ "}"
   where
     alignedOffLen = initOff + length name + 1
     oneLineFields :: [String]
-    oneLineFields = alist <&> \(l,v) -> printf "%s=%s" l (showSExpOneLine False v)
-    conservativeRecordsWithFrame :: [String]
+    oneLineFields = alist <&> \(l,v)
+      -> printf "%s%s%s" l correl (showSExpOneLine False v)
+    conservativeRecordsWithFrame
+      :: [String]
     conservativeRecordsWithFrame =
       (replicate (2 + off) ' ' ++)
-      <$> allButLast (++ ",\n") (++ "\n") conservativeRecords
-    conservativeRecords =
-      alist <&> \(l,v) -> printf "%s=%s" l
-                         (showSExpOff False (off + 2 + length l + 1) (off + 2) v)
+      <$> allButLast (++ (sep ++ "\n")) (++ "\n") conservativeRecords
+    conservativeRecords = alist <&> \(l,v) -> printf
+      "%s%s%s"
+      l correl
+      (showSExpOff False (off + 2 + length l + 1) (off + 2) v)
 
 ashow :: AShow a => a -> String
 ashow = showSExp . ashow'

@@ -12,7 +12,7 @@ module Data.Query.QuerySchema.Types
   ,QueryPlan
   ,ColumnProps(..)) where
 
-import Data.CnfQuery.Types
+import Data.QnfQuery.Types
 import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
 import           Data.CppAst.Expression
@@ -43,13 +43,13 @@ instance Hashables2 e s => Hashable (QueryPlan e s)
 instance (AShow e, AShow s) => AShow (QueryPlan e s)
 instance (Hashables2 e s, ARead e, ARead s) => ARead (QueryPlan e s)
 data PlanSym e s = PlanSym {
-  planSymCnfName     :: CNFName e s,
-  planSymCnfOriginal :: e
+  planSymQnfName     :: QNFName e s,
+  planSymQnfOriginal :: e
   } deriving (Show, Generic)
 -- Note: don't use the projection names as the projections are ofter
 -- nreused with different names.
 instance (Hashables2 e s, ExpressionLike e) => ExpressionLike (PlanSym e s) where
-  toExpression PlanSym{..} = case planSymCnfName of
+  toExpression PlanSym{..} = case planSymQnfName of
     Column c i       -> sym $ printf "sym_%d_%d" i (hash c)
     NonSymbolName e  -> toExpression e
     PrimaryCol e _ i -> sym $ toS e i
@@ -60,12 +60,12 @@ instance (Hashables2 e s, ExpressionLike e) => ExpressionLike (PlanSym e s) wher
       sym :: String -> Expression CodeSymbol
       sym = SymbolExpression . Symbol . CppSymbol
 instance (Eq e, Eq s) => Eq (PlanSym e s) where
-  a == b = planSymCnfName a == planSymCnfName b
+  a == b = planSymQnfName a == planSymQnfName b
 instance (AShow e, AShow s) => AShow (PlanSym e s)
 instance (Hashables2 e s, ARead e, ARead s) => ARead (PlanSym e s)
 instance Hashables2 e s => Hashable (PlanSym e s) where
-  hash = hash . planSymCnfName
-  hashWithSalt s = hashWithSalt s . planSymCnfName
+  hash = hash . planSymQnfName
+  hashWithSalt s = hashWithSalt s . planSymQnfName
 -- | We would use Int as the CppType underlying expression type but
 -- schemas are not only table but also query schema.
 type CppSchema' e = [(CppType, e)]

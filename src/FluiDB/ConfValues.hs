@@ -16,21 +16,21 @@
 
 -- | Build the values
 module FluiDB.ConfValues
-  ( mkGlobalConf
-  , mkFileCache
-  , mkQueryCppConf
-  , toTableColumns
-  , CodegenSymbol(..)
-  ) where
+  (mkGlobalConf
+  ,mkFileCache
+  ,mkQueryCppConf
+  ,PreGlobalConf(..)
+  ,toTableColumns
+  ,CodegenSymbol(..)) where
 
 import           Control.Monad.Writer
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Cluster.InsertQuery
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
-import           Data.CnfQuery.Build
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.Codegen.SchemaAssocClass
 import           Data.CppAst
@@ -57,6 +57,7 @@ import           Data.Bifunctor
 import qualified Data.HashMap.Lazy                   as HM
 import           Data.String
 import           Data.Tuple
+import           Data.Utils.AShow
 
 -- |Expr atoms that can correspond to c++ code (they have a type and a
 -- name).
@@ -91,25 +92,23 @@ instance CodegenSymbol ExpTypeSym where
     _               -> Nothing
 
 -- | Make a QueryCppConf from the type vars
-mkQueryCppConf :: forall e s .
-                 (Hashables2 e s, CodegenSymbol e) =>
-                 (Int -> e -> Maybe e)
-               -> (s -> Maybe FileSet)
-               -> [(s, [e])]
-               -> SchemaAssoc e s
-               -> QueryCppConf e s
-mkQueryCppConf asUniq relFileSet primKeyAssoc schemaAssoc = QueryCppConf {
+mkQueryCppConf
+  :: forall e0 e s .
+  (Hashables2 e s,CodegenSymbol e)
+  => PreGlobalConf e0 e s
+  -> QueryCppConf e s
+mkQueryCppConf PreGlobalConf{..} = QueryCppConf {
   literalType = codegenSymbolLiteralType,
   tableSchema = tableSchema',
   columnType = columnTypeLocal,
   toSymbol = codegenSymbolToSymbol,
-  defaultQueryFileCache = mkFileCache relFileSet schemaAssoc,
-  uniqueColumns = (`lookup` primKeyAssoc),
-  asUnique = asUniq
+  defaultQueryFileCache = mkFileCache pgcToFileSet pgcSchemaAssoc,
+  uniqueColumns = (`lookup` pgcPrimKeyAssoc),
+  asUnique = pgcToUniq
   }
   where
     tableSchema' :: s -> Maybe (CppSchema' e)
-    tableSchema' = (`lookup` schemaAssoc)
+    tableSchema' = (`lookup` pgcSchemaAssoc)
     columnTypeLocal :: e -> s -> Maybe CppType
     columnTypeLocal e s = do
       _ <- codegenSymbolToSymbol @e @String e
@@ -125,16 +124,16 @@ mkFileCache :: forall e s .
 mkFileCache toFileSet schemaAssoc =
   go $ HM.fromList $ catMaybes $ toAssoc <$> schemaAssoc
   where
-    toAssoc :: (s,x) -> Maybe (Either (Query e s) (CNFQuery e s),FileSet)
-    toAssoc (fn,_) = (safeCnf $ Q0 fn,) <$> toFileSet fn
-    safeCnf :: Query e s -> Either (Query e s) (CNFQuery e s)
-    safeCnf q =
+    toAssoc :: (s,x) -> Maybe (Either (Query e s) (QNFQuery e s),FileSet)
+    toAssoc (fn,_) = (safeQnf $ Q0 fn,) <$> toFileSet fn
+    safeQnf :: Query e s -> Either (Query e s) (QNFQuery e s)
+    safeQnf q =
       fmap (fst . fromJustErr)
       $ first (const q)
       $ (`evalStateT` def)
-      $ listTMaxCNF fst
-      $ toCNF (toTableColumns schemaAssoc) q
-    go :: HM.HashMap (Either (Query e s) (CNFQuery e s)) FileSet
+      $ listTMaxQNF fst
+      $ toQNF (toTableColumns schemaAssoc) q
+    go :: HM.HashMap (Either (Query e s) (QNFQuery e s)) FileSet
        -> QueryFileCache e s
     go hm =
       QueryFileCache
@@ -147,6 +146,17 @@ mkFileCache toFileSet schemaAssoc =
 toTableColumns :: Eq s => SchemaAssoc e s -> s -> Maybe [e]
 toTableColumns schemaAssoc = fmap2 snd . (`lookup` schemaAssoc)
 
+
+data PreGlobalConf e0 e s =
+  PreGlobalConf
+  { pgcExpIso         :: (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
+   ,pgcToUniq         :: Int -> e -> Maybe e
+   ,pgcToFileSet      :: s -> Maybe FileSet -- Embedding of tables in filesets
+   ,pgcPrimKeyAssoc   :: [(s,[e])]          -- Primary keys of each table
+   ,pgcSchemaAssoc    :: SchemaAssoc e s     -- The schema of each table
+   ,pgcTableSizeAssoc :: [(s,TableSize)]          -- Size of each table in bytes
+  }
+
 -- | When calculating the global configuration for tpch we take into
 -- account the follwoing:
 --
@@ -154,39 +164,31 @@ toTableColumns schemaAssoc = fmap2 snd . (`lookup` schemaAssoc)
 -- * As the table nodes are inserted, we are collecting the node
 --   references and using tpchTableSizes
 mkGlobalConf
-  :: forall e e0 s t n .
+  :: forall e0 e s t n .
   (Hashables2 e s,CodegenSymbol e,Ord s,t ~ (),n ~ ())
-  => (e
-      -> ExpTypeSym' e0
-     ,ExpTypeSym' e0
-      -> e)
-  -> (Int -> e -> Maybe e)
-  -> (s -> Maybe FileSet) -- Embedding of tables in filesets
-  -> [(s,[e])]          -- Primary keys of each table
-  -> SchemaAssoc e s     -- The schema of each table
-  -> [(s,TableSize)]          -- Size of each table in bytes
-  -> Maybe (GlobalConf e s t n)
-mkGlobalConf expIso toUniq toFileSet primKeyAssoc schemaAssoc tableSizeAssoc = do
-  let gbState = mempty
+  => PreGlobalConf e0 e s
+  -> Either (GlobalError e s t n) (GlobalConf e s t n)
+mkGlobalConf pgc@PreGlobalConf {..} = do
+  let gbState = def
   let (pair :: Either (ClusterError e s) (Bipartite t n,RefMap n s)
         ,clusterConfig :: ClusterConfig e s t n) =
         (`evalState` gbState)
-        $ (`runStateT` def { cnfTableColumns = toTableColumns schemaAssoc })
+        $ (`runStateT` def { qnfTableColumns = toTableColumns pgcSchemaAssoc })
         $ runExceptT clusterBuilt
-  (propNetLocal,tableMap) <- either (const Nothing) Just pair
+  (propNetLocal,tableMap) <- first toGlobalError pair
   let newNodes = refKeys tableMap
   -- nodeTableSize :: NodeRef n -> Either (Maybe s) [TableSize]
   let nodeTableSize ref = do
         tbl <- maybe (Left Nothing) return $ ref `refLU` tableMap
-        maybe (Left $ Just tbl) return2 $ tbl `lookup` tableSizeAssoc
-  nodeSizes' <- either (const Nothing) Just
+        maybe (Left $ Just tbl) return2 $ tbl `lookup` pgcTableSizeAssoc
+  nodeSizes' <- either (\x -> throwAStr $ ashow x) return
     $ traverse (\n -> (n,) . (,1) <$> nodeTableSize n) newNodes
   return
     GlobalConf
-    { globalExpTypeSymIso = expIso
+    { globalExpTypeSymIso = pgcExpIso
      ,globalRunning = def { runningConfBudgetSearch = True }
-     ,globalSchemaAssoc = schemaAssoc
-     ,globalMatNodes = refKeys $ rNodes propNetLocal
+     ,globalSchemaAssoc = pgcSchemaAssoc
+     ,globalMatNodes = nNodes propNetLocal
      ,globalQueryCppConf = queryCppConf
       -- Based on this we check if they are materialized.
      ,globalClusterConfig = clusterConfig
@@ -203,18 +205,18 @@ mkGlobalConf expIso toUniq toFileSet primKeyAssoc schemaAssoc tableSizeAssoc = d
         }
     }
   where
-    queryCppConf = mkQueryCppConf toUniq toFileSet primKeyAssoc schemaAssoc
+    queryCppConf = mkQueryCppConf pgc
     -- Left Nothing means noderef was not found.
     clusterBuilt
       :: Monad m => CGraphBuilderT e s t n m (Bipartite t n,RefMap n s)
     clusterBuilt = do
-      modify $ \cm -> cm { cnfInsertBottoms = True }
-      tableMap' <- forM schemaAssoc $ \(t,_) -> do
+      modify $ \cm -> cm { qnfInsertBottoms = True }
+      tableMap' <- forM pgcSchemaAssoc $ \(t,_) -> do
         n <- insertQueryPlan (literalType queryCppConf) . return . (t,)
           =<< symPlan t
         triggerClustPropagator $ NClustW $ NClust n
         return (n,t)
-      modify $ \cm -> cm { cnfInsertBottoms = False }
+      modify $ \cm -> cm { qnfInsertBottoms = False }
       (,fromRefAssocs tableMap') <$> lift2 (gets gbPropNet)
     symPlan :: Monad m => s -> CGraphBuilderT e s t n m (QueryPlan e s)
     symPlan =

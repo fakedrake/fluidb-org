@@ -26,7 +26,7 @@ module Data.Query.Optimizations.Types
   ) where
 
 import           Control.Monad.Except
-import           Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import           Data.Constraint        as DC
 import           Data.CppAst.CppType
 import           Data.Query.Algebra
@@ -78,7 +78,7 @@ planSymSymEmbedding toS litType = SymEmbedding {
   symEq= \(x,_) (y,_) -> planSymOrig x == planSymOrig y,
   embedType=Just . snd . snd,
   embedInS= \(_,(s0,_)) s -> Just (toS s) == s0,
-  embedIsLit= \case {NonSymbolName _ -> True; _ -> False} . planSymCnfName . fst
+  embedIsLit= \case {NonSymbolName _ -> True; _ -> False} . planSymQnfName . fst
   }
 data WrapEq e = WrapEq (e -> e -> Bool) e
 instance Eq (WrapEq e) where

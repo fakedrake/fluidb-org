@@ -2,7 +2,6 @@
 module FluiDB.Bamify.Unbamify
   (mkDataFile) where
 
-import           Data.Codegen.CppType
 import           Data.Codegen.Run
 import           Data.CppAst.Argument
 import           Data.CppAst.Class
@@ -16,30 +15,24 @@ import           Data.CppAst.LiteralCode.Codegen
 import           Data.CppAst.LiteralCode.SoftUNameCode
 import           Data.CppAst.RecordCls
 import           Data.CppAst.Statement
-import           Data.CppAst.Symbol
 import           Data.CppAst.TypeModifier
 import           Data.Query.QuerySchema.Types
 import qualified Data.Set                              as DS
 import           FluiDB.Bamify.Types
-import           System.Exit
-import           System.Posix
 
 -- | Turn a table file (csv file generated from dbgen) into a
 mkDataFile :: CppSchema -> BamaFile -> DataFile -> IO ()
+mkDataFile [] _bamaFile _dataFile =
+  error "can't make data file on an empty schema."
 mkDataFile schema bamaFile dataFile = tmpDir "mkDataFile" $ \_ -> do
   unBamifyCode schema bamaFile dataFile >>= runCpp
 
 -- | Code to read the bama file and output a paged file that is
 -- readable by fluidb plans.
 unBamifyCode :: CppSchema -> BamaFile -> DataFile -> IO CppCode
+unBamifyCode [] _bamaFile _dataFile = error "Can't unbamify an empty schema"
 unBamifyCode schema bamaFile dataFile = do
-  size <- fromIntegral . fileSize <$> getFileStatus bamaFile
-  paddings <- maybe (die "Couldn't deduce paddings for schema") return
-    $ schemaPostPaddings schema
-  sizes <- maybe (die "Couldn't deduce paddings for schema") return
-    $ traverse (cppTypeSize . fst) schema
-  let recordSize = sum sizes + sum paddings
-  let codeTroika = bamifyCode (size `div` recordSize) bamaFile dataFile schema
+  let codeTroika = bamifyCode schema bamaFile dataFile
   return $ troikaToCode codeTroika
   where
     troikaToCode :: ([Include],Class CodeSymbol,Function CodeSymbol) -> String
@@ -49,20 +42,21 @@ unBamifyCode schema bamaFile dataFile = do
       <> toCodeIndent r
       <> toCodeIndent mainCode
 
-
 bamifyCode
-  :: Int
+  :: CppSchema
   -> BamaFile
   -> DataFile
-  -> CppSchema
   -> ([Include],Class CodeSymbol,Function CodeSymbol)
-bamifyCode recNum inFile outFile schema =
+bamifyCode schema inFile outFile =
   (incs
   ,recordCls "Record" schema
   ,Function
    { functionName = "main"
     ,functionType = PrimitiveType mempty CppInt
-    ,functionBody = mainFn inFile outFile recNum
+    ,functionBody =
+       [ExpressionSt
+        $ Quote
+        $ "bama_to_dat<Record>(" <> show inFile <> "," <> show outFile <> ")"] -- mainFn inFile outFile recNum
     ,functionArguments = Argument
        <$> [Declaration
             { declarationName = "argc"
@@ -75,41 +69,4 @@ bamifyCode recNum inFile outFile schema =
     ,functionConstMember = False
    })
   where
-    incs =
-      LibraryInclude <$> ["fcntl.h","sys/stat.h","sys/types.h","codegen.hh"]
-
-
-mainFn :: BamaFile -> DataFile -> Int -> [Statement CodeSymbol]
-mainFn inFile outFile arrLen = (ExpressionSt . Quote <$> [
-  "if (argc < 2) {std::cerr << \"Too few args.\" << std::endl;}"
-  , "int fd"
-  , "std::array<Record," <> show arrLen <> "> recordsArr"
-  , "Writer<Record> w(" <> outFile <> ");"
-  , "require_neq(fd = ::open(\"" <> inFile <> "\", O_RDONLY), -1, \"failed to open file.\")"
-  ])
-  ++ [
-  "require_eq" .$ [readRecsCall, readSize, slit "Failed to read"]
-  , writeRecs
-  , mst "w" "close" []
-  , "close" .$ [sym "fd"]]
-  where
-    readSize = ilit arrLen `expMul` sizeOfRec where
-      expMul = E2ession "*"
-      sizeOfRec = FunctionAp (SimpleFunctionSymbol $ Symbol "sizeof") [] ["Record"]
-    readRecsCall =
-      FunctionAp "::read" [] [sym "fd", m "recordsArr" "data" [], readSize]
-    -- Primitives
-    sym = SymbolExpression
-    fn .$ args = ExpressionSt $ FunctionAp fn [] args
-    mst w method args = ExpressionSt
-      $ FunctionAp (InstanceMember w method) [] args
-    m w method args = FunctionAp (InstanceMember w method) [] args
-    writeRecs = ForEachBlock (autoDecl "r", sym "recordsArr")
-      [mst "w" "write" [sym "r"]]
-    autoDecl s = Declaration {
-      declarationName=s,
-      declarationType=autoType
-      }
-    autoType = ClassType mempty [] "auto"
-    ilit = LiteralIntExpression
-    slit = LiteralStringExpression
+    incs = [LibraryInclude "bamify.hh"]

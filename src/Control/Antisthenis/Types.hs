@@ -1,28 +1,25 @@
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Arrows                 #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DefaultSignatures      #-}
+{-# LANGUAGE DeriveFoldable         #-}
+{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Arrows #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE PatternSynonyms        #-}
+{-# LANGUAGE QuantifiedConstraints  #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 
 module Control.Antisthenis.Types
@@ -62,20 +59,21 @@ module Control.Antisthenis.Types
   ,capWasFinished
   ,AShowW) where
 
-import Data.Utils.OptSet
-import Data.Proxy
-import Control.Antisthenis.ATL.Transformers.Moore
-import Control.Antisthenis.ATL.Transformers.Writer
-import Data.Bifunctor
-import Data.Utils.EmptyF
-import Control.Monad.Identity
-import Control.Monad.Trans.Free
-import Control.Antisthenis.AssocContainer
-import Control.Arrow hiding (first,second)
-import Control.Antisthenis.ATL.Transformers.Mealy
-import GHC.Generics
-import Data.Utils.AShow
-import Data.Utils.Default
+import           Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Antisthenis.ATL.Transformers.Moore
+import           Control.Antisthenis.ATL.Transformers.Writer
+import           Control.Antisthenis.AssocContainer
+import           Control.Arrow                               hiding (first,
+                                                              second)
+import           Control.Monad.Identity
+import           Control.Utils.Free
+import           Data.Bifunctor
+import           Data.Proxy
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.EmptyF
+import           Data.Utils.OptSet
+import           GHC.Generics
 
 data Cap b
   = CapStruct Int -- Maximum depth NOT max steps
@@ -85,7 +83,7 @@ data Cap b
 instance AShow b => AShow (Cap b)
 capWasFinished :: Cap b -> Bool
 capWasFinished (CapStruct i) = i < 0
-capWasFinished _ = False
+capWasFinished _             = False
 
 type InitProc a = a
 type ItProc a = a
@@ -122,14 +120,14 @@ data ItInit r f a
 ashowItInit :: ItInit r f a -> SExp
 ashowItInit = \case
   CmdItInit _ _ -> sexp "CmdItInit" [Sym "<proc>",Sym "<proc>"]
-  CmdIt _ -> sexp "CmdIt" [Sym "<proc>"]
-  CmdInit _ -> sexp "CmdInit" [Sym "<proc>"]
+  CmdIt _       -> sexp "CmdIt" [Sym "<proc>"]
+  CmdInit _     -> sexp "CmdInit" [Sym "<proc>"]
   CmdFinished _ -> sexp "CmdFinished" [Sym "<res>"]
 instance Functor (ItInit r f) where
   fmap f = \case
     CmdItInit x y -> CmdItInit (\pop -> f $ x pop) $ f y
-    CmdIt x -> CmdIt $ \pop -> f $ x pop
-    CmdInit x -> CmdInit $ f x
+    CmdIt x       -> CmdIt $ \pop -> f $ x pop
+    CmdInit x     -> CmdInit $ f x
     CmdFinished r -> CmdFinished r
 
 type AShowW w =
@@ -229,8 +227,8 @@ type ArrProc' w m =
   MooreCat (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
 
 data Conf w =
-  Conf { confCap :: Cap (ZCap w)
-        ,confEpoch :: ZEpoch w
+  Conf { confCap    :: Cap (ZCap w)
+        ,confEpoch  :: ZEpoch w
         ,confTrPref :: String
        }
   deriving Generic
@@ -245,7 +243,7 @@ type LConf w = Conf w
 data ZipState w a =
   ZipState
   { bgsInits :: [InitProc a]
-   ,bgsIts :: ZItAssoc w (InitProc a,ItProc a)
+   ,bgsIts   :: ZItAssoc w (InitProc a,ItProc a)
    ,bgsCoits :: [(Either (ZErr w) (ZRes w),CoitProc a)]
   } deriving Generic
 instance (AShow (ZItAssoc w (a,a)),AShowBndR w,AShowV a)
@@ -265,9 +263,9 @@ data Zipper' w cursf (p :: *) pr =
   { zBgState :: ZipState w p
     -- The cursor has NOT been counted in the result. Its the next
     -- element to be ran. The bound provided is for the case that.
-   ,zCursor :: cursf (Maybe (ZBnd w),InitProc p,p)
-   ,zRes :: pr -- The result without the cursor.
-   ,zId :: String
+   ,zCursor  :: cursf (Maybe (ZBnd w),InitProc p,p)
+   ,zRes     :: pr -- The result without the cursor.
+   ,zId      :: String
   }
   deriving Generic
 instance Functor (Zipper' w cursf p) where
@@ -280,10 +278,10 @@ lengthZBgState ZipState {..} = (length bgsInits,length bgsIts,length bgsCoits)
 data ZLen =
   ZLen
   { zLenInits :: Int
-   ,zLenIts :: Int
+   ,zLenIts   :: Int
    ,zLenCoits :: Int
-   ,zLenCurs :: Int
-   ,zLenId :: String
+   ,zLenCurs  :: Int
+   ,zLenId    :: String
   }
   deriving Generic
 
@@ -334,7 +332,7 @@ instance NoArgError (IndexErr i) where
 pattern ArrProc c = MealyArrow (WriterArrow (Kleisli c))
 runArrProc :: ArrProc w m -> LConf w -> m (ZCoEpoch w,(ArrProc w m,BndR w))
 runArrProc (ArrProc p) conf = p conf
-runArrProc _ _ = error "unreachable"
+runArrProc _ _              = error "unreachable"
 ashowRes :: (ZRes w -> SExp) -> BndR w -> String
 ashowRes ashow'' = ashow . \case
   BndRes r ->  ashow'' r

@@ -1,44 +1,41 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Arrows                 #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE DeriveFoldable         #-}
+{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE DerivingVia            #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Arrows #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE QuantifiedConstraints  #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE StandaloneDeriving     #-}
+{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 module Control.Antisthenis.Multiply (MulTag) where
 
-import Data.Proxy
-import Control.Monad.Trans.Free
-import Data.Bifunctor
-import Control.Applicative
-import Data.Utils.Monoid
-import Data.Utils.AShow
-import Data.Maybe
-import GHC.Generics
-import Data.Utils.Functors
-import Data.Utils.Default
-import Control.Monad.Identity
-import Control.Antisthenis.AssocContainer
-import Control.Antisthenis.Types
+import           Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.Types
+import           Control.Applicative
+import           Control.Monad.Identity
+import           Control.Utils.Free
+import           Data.Bifunctor
+import           Data.Maybe
+import           Data.Proxy
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.Functors
+import           Data.Utils.Monoid
+import           GHC.Generics
 
 
 data MulTag p v
@@ -110,10 +107,10 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
      ,evolutionEmptyErr = undefined
     }
   putRes newBnd (oldRes,newZipper) = newZipper <&> \() -> case newBnd of
-    BndBnd x -> prModBnd (x,(* x)) oldRes
+    BndBnd x           -> prModBnd (x,(* x)) oldRes
     BndRes x@(Mul 0 _) -> prModRes (x,(* x)) oldRes
-    BndRes x -> oldRes { prRes = Just $ Right x }
-    BndErr e -> prSetResErr e oldRes
+    BndRes x           -> oldRes { prRes = Just $ Right x }
+    BndErr e           -> prSetResErr e oldRes
   replaceRes oldBnd newBnd (oldRes,newZipper) = do
     lackingRes <- lackingResM
     return $ putRes newBnd (lackingRes,newZipper)
@@ -134,10 +131,10 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
           _ -> CapStruct 1
         x -> x
       fromZ r x = case r of
-        Just (Left _) -> CapStruct 1
+        Just (Left _)          -> CapStruct 1
         Just (Right (Mul 0 _)) -> x
-        Just (Right _is_zero) -> CapStruct (-1) -- HERE WE BLOCK ON ZERO
-        _ -> x
+        Just (Right _is_zero)  -> CapStruct (-1) -- HERE WE BLOCK ON ZERO
+        _                      -> x
 
 -- | Keep zeroes separate so they are easily accessible and have an
 -- obvious non-empty version.
@@ -190,16 +187,16 @@ mulSolution conf z = zeroRes <|> ret
   where
     zeroRes = case prRes $ zRes z of
       Just (Right m@(Mul zs _)) -> if zs > 0 then Just $ BndRes m else Nothing
-      _ -> Nothing
+      _                         -> Nothing
     ret = case (prRes $ zRes z,confCap conf) of
       (_,CapStruct i) -> if i < 0 then return $ BndErr undefined else resM
       (_,ForceResult) -> resM >>= \case
         BndBnd _bnd -> Nothing
-        BndErr _e -> Nothing -- xxx: should check if zero is even possible.
-        x -> Just x
+        BndErr _e   -> Nothing -- xxx: should check if zero is even possible.
+        x           -> Just x
       (_,CapVal cap) -> resM >>= \case
         BndBnd bnd -> if bnd <= cap then Nothing else Just $ BndBnd bnd
-        x -> Just x
+        x          -> Just x
       where
         noInits = null $ bgsInits $ zBgState z
         resM :: Maybe (BndR (MulTag p v))
@@ -226,7 +223,7 @@ mulStrategy fin = recur
 
 malPop :: Num v => MulAssocList Identity v x -> (v,x,MulAssocList Maybe v x)
 malPop MulAssocList {malHead = Identity h,..} = case h of
-  Left x -> (fromInteger 0,x,mkMal malZ malList)
+  Left x      -> (0,x,mkMal malZ malList)
   Right (v,x) -> (v,x,mkMal malZ malList)
 mkMal :: [a] -> [(v,a)] -> MulAssocList Maybe v a
 mkMal (a:as) list =
@@ -237,7 +234,7 @@ mkMal [] [] = MulAssocList { malHead = Nothing,malZ = [],malList = [] }
 
 #if 0
 assert :: MonadFail m => Bool -> m ()
-assert True = return ()
+assert True  = return ()
 assert False = fail "assertion failed"
 
 -- | TESTING
@@ -261,6 +258,6 @@ mulTest =
     lift3 $ putStrLn $ "Result is: " ++ ashow res
     assert $ case res of
       BndRes _ -> True
-      _ -> False
+      _        -> False
     return res
 #endif

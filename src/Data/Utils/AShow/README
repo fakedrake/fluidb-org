@@ -1,0 +1,19 @@
+AShow is a library for pretty printing structures.  The most basic
+function provided is ashow :: AShow a => a -> String. AShow aims to
+produce strings that are both human readable and computer
+readable. The latter is facilitated by providing the complementary to
+AShow, ARead. ARead is the reverse, aread :: ARead a => String ->
+a. Much like other pretty-printing liraries (like Text.Pretty), AShow
+manipulates an intermediate representation, SExp (as in S-EXPression)
+to which all AShow types are translated to and all ARead types are
+translated from. The SExp values are translated to Strings
+accordingly. Both AShow and ARead can be automatically generated via
+GHC's generics mechanism. The minor but important departure from
+common pretty printing libraries that we took when building AShow was
+that SExp is itself an AShow and ARead. This allows the user of the
+library to manually translate parts of a structure and then let the
+library handle the rest. For example the type [(Int,Int -> String)]
+does not implement AShow only because Int -> String does not implement
+AShow. However if the user has an ad-hoc way of translating the
+particular set of Int -> String to SExp they can do that and leave the
+rest to the library.

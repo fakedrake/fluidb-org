@@ -1,29 +1,25 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE Arrows                    #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DeriveFoldable            #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Arrows #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE FunctionalDependencies    #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE QuantifiedConstraints     #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeApplications          #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 module Control.Antisthenis.Zipper
   (zSize
@@ -33,24 +29,23 @@ module Control.Antisthenis.Zipper
   ,mkProcId
   ,runMech) where
 
-import Data.Utils.AShow
-import Data.Utils.Const
-import Control.Antisthenis.ATL.Class.Functorial
-import Control.Monad.Writer
-import Control.Antisthenis.ATL.Common
-import Control.Antisthenis.ATL.Transformers.Writer
-import Control.Monad.Trans.Free
-import Data.Utils.EmptyF
-import Control.Monad.Identity
-import Data.Utils.Default
-import Data.Utils.Unsafe
-import Data.Foldable
-import Data.Profunctor
-import Control.Antisthenis.ATL.Transformers.Mealy
-import Control.Antisthenis.ATL.Transformers.Moore
-import Control.Antisthenis.AssocContainer
-import Control.Arrow hiding (first)
-import Control.Antisthenis.Types
+import           Control.Antisthenis.ATL.Class.Functorial
+import           Control.Antisthenis.ATL.Common
+import           Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Antisthenis.ATL.Transformers.Moore
+import           Control.Antisthenis.ATL.Transformers.Writer
+import           Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.Types
+import           Control.Arrow                               hiding (first)
+import           Control.Monad.Identity
+import           Control.Utils.Free
+import           Data.Foldable
+import           Data.Profunctor
+import           Data.Utils.AShow
+import           Data.Utils.Const
+import           Data.Utils.Default
+import           Data.Utils.EmptyF
+import           Data.Utils.Unsafe
 
 
 mkGgState :: ZipperParams w => [p] -> ZipState w p
@@ -130,7 +125,7 @@ pushIt
   Zipper
   {zCursor = Const (bnd,inip,itp),..}   -- zid (bnd,inip,itp) oldRes bgs =
   =
-  wrap
+  wrapFree
   $ Cmds { cmdItCoit = cmdItCoit'
           ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
          }
@@ -143,7 +138,7 @@ pushIt
        ,zId = zId
       }
     cmdItCoit' = DontReset $ case bgsInits zBgState of
-      [] -> CmdIt itEvolve
+      []       -> CmdIt itEvolve
       ini:inis -> CmdItInit itEvolve $ iniEvolve ini inis
     iniEvolve ini inis = return (mkZCat zipper,zipper)
       where
@@ -173,14 +168,14 @@ pushIt
            ,zId = zId
           }
         (bnd' :: ZBnd w,(inip',itp'),its') =
-          pop $ acInsert bnd (inip,itp) $ (bgsIts zBgState)
+          pop $ acInsert bnd (inip,itp) (bgsIts zBgState)
 
 pushCoit :: forall w m p .
          (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
          => EvaledZipper w p (Either (ZErr w) (ZRes w),CoitProc p)
          -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
 pushCoit Zipper {zCursor = Const newCoit,..} =
-  wrap
+  wrapFree
   $ Cmds { cmdItCoit = cmdItCoit'
           ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
          }
@@ -276,7 +271,7 @@ handleLifetimes
 handleLifetimes zid getRes =
   evalResetsArr
   . hoistMealy (WriterArrow . rmap (\(b,(a,c)) -> (a,(b,c))))
-  . mooreBatchC (Kleisli $ go)
+  . mooreBatchC (Kleisli go)
   . hoistMoore (mempty,) (rmap (\(a,(b,c)) -> (b,(a,c))) . runWriterArrow)
   where
     -- (current config,(previous global epoch, previous zipper))
@@ -293,7 +288,7 @@ handleLifetimes zid getRes =
          m
          (Either (LConf w) (ZCoEpoch w,k))
     go (globConf,(coepoch,z)) = case zLocalizeConf coepoch globConf z of
-      ShouldReset -> wrap
+      ShouldReset -> wrapFree
         Cmds { cmdReset = DoReset $ go (globConf,(coepoch,resetZ))
               ,cmdItCoit = ShouldReset
              }
@@ -332,7 +327,10 @@ evalResetsArr (MealyArrow (WriterArrow (Kleisli c0))) =
       Pure (s,(nxt,r)) -> return $ Pure (s,(evalResetsArr nxt,r))
       Free Cmds {cmdReset = DoReset rst,cmdItCoit = ShouldReset}
         -> runFreeT $ go rst
-      Free Cmds {cmdItCoit = DontReset x} -> runFreeT $ wrap $ go <$> x
+      Free Cmds {cmdItCoit = DontReset x} -> runFreeT $ wrapFree $ go <$> x
+
+wrapFree :: Monad m => f (FreeT f m x) -> FreeT f m x
+wrapFree = FreeT . return . Free
 
 mkProc :: forall m w .
        (Semigroup (ZRes w),Monad m,Ord (ZBnd w),ZipperParams w,AShowW w)

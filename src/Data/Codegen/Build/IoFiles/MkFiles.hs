@@ -9,22 +9,22 @@
 
 module Data.Codegen.Build.IoFiles.MkFiles (plansAndFiles) where
 
-import Data.Cluster.Propagators
-import Data.Utils.MTL
-import Data.Utils.Functors
-import Data.Utils.Tup
-import Data.QueryPlan.Types
-import Data.Utils.Hashable
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Data.Bitraversable
-import           Data.Void
+import           Data.Cluster.Propagators
 import           Data.Cluster.Types
 import           Data.Codegen.Build.IoFiles.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.Codegen.Build.Monads.CodeBuilder
-import           Data.Query.SQL.FileSet
 import           Data.NodeContainers
+import           Data.Query.SQL.FileSet
+import           Data.QueryPlan.Types
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.MTL
+import           Data.Utils.Tup
+import           Data.Void
 
 type MakeFilesConstr e s t n m =
   (Hashables2 e s,
@@ -43,7 +43,7 @@ plansAndFiles :: forall e s t n m . MakeFilesConstr e s t n m =>
               -> m (IOFiles e s)
 plansAndFiles = \case
   JoinClustW jclust -> JoinClustW <$> makeFilesJUnsafe jclust
-  clust -> makeFilesNaive clust
+  clust             -> makeFilesNaive clust
 makeFilesNaive :: forall e s t n m . MakeFilesConstr e s t n m =>
                  IOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
                -> m (IOFiles e s)
@@ -73,8 +73,8 @@ populateNodeRole constri constro =
 
 coerceI :: NodeRole (NodeRef n) b c -> NodeRole (NodeRef ()) b c
 coerceI = \case
-  Input a -> Input a
-  Output a -> Output a
+  Input a                  -> Input a
+  Output a                 -> Output a
   Intermediate (NodeRef i) -> Intermediate (NodeRef i)
 
 getPlanAndSet :: forall constr e s t n m .
@@ -82,10 +82,12 @@ getPlanAndSet :: forall constr e s t n m .
                 constr
               -> Maybe (NodeRef n)
               -> m (Maybe (Maybe (QueryPlan e s), FileSet))
-getPlanAndSet f = traverse $ distrib
-  (dropReader (fst <$> ask) . getNodePlanFull)
-  (\r -> dropReader (fst <$> ask) (getNodeFile r)
-        >>= maybe (dropReader (fst <$> ask) $ mkNodeFile f r) return)
+getPlanAndSet f =
+  traverse
+  $ distrib
+    (dropReader (asks fst) . getNodePlanFull)
+    (\r -> dropReader (asks fst) (getNodeFile r)
+     >>= maybe (dropReader (asks fst) $ mkNodeFile f r) return)
 
 -- | Join complements have DataSet rather than single files on the
 -- complements. This does not check the existance of input/output
@@ -105,7 +107,7 @@ makeFilesJUnsafe jclust = do
     (joinClusterRightIntermediate jclust)
   jbClust <- makeFilesNaive (BinClustW $ joinBinCluster jclust) <&> \case
     BinClustW c -> c
-    _ -> error "Unreachable"
+    _           -> error "Unreachable"
   return $ updateCHash JoinClust{
     joinClusterLeftAntijoin=jclAntijoin,
     joinClusterRightAntijoin=jcrAntijoin,
@@ -127,7 +129,7 @@ makeFilesJUnsafe jclust = do
                  (Maybe (Maybe (QueryPlan e s), FileSet)))
     coerce' = \case
       Intermediate (NodeRef a) -> return $ Intermediate $ NodeRef a
-      _ -> error "oops non-interm role for interm node"
+      _                        -> error "oops non-interm role for interm node"
 
 tritraverse :: Functor f =>
               (a -> f a')
@@ -136,8 +138,8 @@ tritraverse :: Functor f =>
             -> NodeRole a  b c
             -> f (NodeRole a' b' c')
 tritraverse im i o = \case
-  Input a -> Input <$> i a
-  Output a -> Output <$> o a
+  Input a        -> Input <$> i a
+  Output a       -> Output <$> o a
   Intermediate a -> Intermediate <$> im a
 
 

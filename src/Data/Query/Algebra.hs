@@ -44,7 +44,7 @@ module Data.Query.Algebra
   , AggrFunction(..)
   , ElemFunction(..)
   , Aggr(..)
-  , propCnfAnd
+  , propQnfAnd
   , querySchemaNaive
   , foldSchema
   , unAggr
@@ -127,7 +127,7 @@ import           Data.Proxy
 import           GHC.TypeLits
 
 -- Note that if a BQOp exposes columns on both sides except, QJoin and
--- QProd, the CNFQuery break.
+-- QProd, the QNFQuery break.
 data BQOp es =
   QProd
   | QJoin (Prop (Rel (Expr es)))
@@ -996,15 +996,15 @@ instance IsCode code => Codegen UEOp code where
 
 instance IsCode code => Codegen UPOp code where
   toCode PNot = "!"
-propCnfAnd :: forall x . Eq x => Prop x -> NEL.NonEmpty (Prop x)
-propCnfAnd = go where
+propQnfAnd :: forall x . Eq x => Prop x -> NEL.NonEmpty (Prop x)
+propQnfAnd = go where
   go x@(P0 _) = return x
   go x@(Not (P0 _)) = return x
   go (Not (Not x)) = go x
   go (Not (Or x y)) = go (Not x) <> go (Not y)
   go (Not (And x y)) = return $ Not (And x y)
   -- go (Not (And x y)) = go $
-  --   Or (foldr1 And $ go $ Not x) (foldr1 And $ go $ Not y)
+  --   Or (foldr1Unsafe And $ go $ Not x) (foldr1Unsafe And $ go $ Not y)
   go (And x y) = go x <> go y
   go p@(Or x y) = fromMaybe (return p) $ goOr (go x) (go y)
     where

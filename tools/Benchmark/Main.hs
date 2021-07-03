@@ -1,6 +1,6 @@
 module Main (main) where
 
-import FluiDB.Schema.Graph.Main
+import           FluiDB.Schema.SSB.Main
 
 main :: IO ()
-main = graphMain
+main = ssbMain

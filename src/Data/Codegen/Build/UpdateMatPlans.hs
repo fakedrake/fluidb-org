@@ -8,16 +8,16 @@ module Data.Codegen.Build.UpdateMatPlans
   , triggerCluster
   ) where
 
-import Data.Utils.MTL
-import Data.Utils.Functors
-import Data.Utils.Hashable
 import           Control.Monad.State
-import           Data.Utils.AShow
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types
 import           Data.Codegen.Build.Monads
-import           Data.Utils.Debug
 import           Data.NodeContainers
+import           Data.Utils.AShow
+import           Data.Utils.Debug
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.MTL
 
 getMatPlan :: (Hashables2 e s, Monad m) =>
              NodeRef n -> CodeBuilderT e s t n m (QueryPlan e s)

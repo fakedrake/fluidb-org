@@ -32,6 +32,7 @@ import           Data.String
 import           Data.Utils.AShow
 import           Data.Utils.Function
 import           Data.Utils.Functors
+import           Data.Utils.Unsafe
 import           GHC.Stack
 import           Text.Printf
 
@@ -342,7 +343,7 @@ parseRel :: (HasCallStack,MonadParse p) => p a -> p (Prop (Rel a))
 parseRel rM =  do
   l <- R0 <$> rM
   select (parseBetween l rM) $ select (parsePropIn l rM) $ flip select (return $ P0 l) $ do
-    op <- foldr1 select [
+    op <- foldr1Unsafe select [
       word "<=" >> return (P0 ... R2 RLe),
       word ">=" >> return (P0 ... R2 RGe),
       word "<>" >> return ((P1 PNot . P0) ... R2 REq),
@@ -357,7 +358,7 @@ parsePropIn :: (HasCallStack,MonadParse p) => Rel a -> p a -> p (Prop (Rel a))
 parsePropIn ex eM = do
   p <- fmap (maybe id (const $ P1 PNot)) $ parseMaybe $ word "not"
   xs <- word "in" >> parens (sep1 (word ",") $ R0 <$> eM)
-  return $ p $ foldr1 Or (P0 . R2 REq ex <$> xs)
+  return $ p $ foldr1Unsafe Or (P0 . R2 REq ex <$> xs)
 parseBetween :: (HasCallStack,MonadParse p) => Rel a -> p a -> p (Prop (Rel a))
 parseBetween ex rM = do
   word "between"
@@ -389,7 +390,7 @@ relToExpr = \case
 parseExpr :: forall p a . (HasCallStack,MonadParse p) => p (Expr a) -> p (Expr a)
 parseExpr prsSym = tokTree prsTerm prsBOps where
   prsTerm :: HasCallStack => p (Expr a)
-  prsTerm = foldr1 (<|>)
+  prsTerm = foldr1Unsafe (<|>)
     [parens $ parseExpr prsSym,prsEFun,prsCond,prsNeg,prsSym]
     where
       -- case when p then x else y
@@ -409,9 +410,9 @@ parseExpr prsSym = tokTree prsTerm prsBOps where
   prsBOps = [
     E2 <$> select (char '*' >> return EMul) (char '/' >> return EDiv),
     E2 <$> select (char '+' >> return EAdd) (char '-' >> return ESub)]
-  prsEFun = foldr1 select [prsSubStr,prsDateExtr] where
+  prsEFun = foldr1Unsafe select [prsSubStr,prsDateExtr] where
     prsDateExtr = (word "extract" >>) $ parens $ do
-      fn <- foldr1 select [
+      fn <- foldr1Unsafe select [
         word "year" >> return ExtractYear,
         word "month" >> return ExtractMonth,
         word "month" >> return ExtractMonth]
@@ -445,7 +446,7 @@ tokTree p1 pops = do
 
 -- | Replace "count(*)" with "sum(1)" on the fly
 parseAggr :: (HasCallStack,MonadParse p) => p a -> p (Aggr a)
-parseAggr aM = foldr1 select [
+parseAggr aM = foldr1Unsafe select [
   countDistinct,
   countStar,
   prsF "sum" AggrSum,
@@ -489,7 +490,7 @@ runRK :: Applicative m => RK m a -> m a
 runRK (RK f) = f pure
 
 parseExpTypeSym :: (HasCallStack,MonadParse p) => p ExpTypeSym
-parseExpTypeSym = foldr1 select [
+parseExpTypeSym = foldr1Unsafe select [
   EDate <$> parseDate,
   EInterval <$> parseInterval,
   EFloat <$> parseFloat,

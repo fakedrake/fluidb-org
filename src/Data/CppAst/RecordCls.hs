@@ -19,24 +19,25 @@ import           Data.List
 import qualified Data.Set                 as DS
 import           Data.Tuple
 import           Data.Utils.Function
+import           Data.Utils.Unsafe
 
 
-recordCls :: Symbol CodeSymbol -> [(CppType, CodeSymbol)] -> Class CodeSymbol
+recordCls :: Symbol CodeSymbol -> [(CppType,CodeSymbol)] -> Class CodeSymbol
 recordCls name sch =
   Class
   { className = name
    ,classConstructors =
       [Constructor
-         { constructorBody = []
-          ,constructorMemberConstructors = constructorCalls
-          ,constructorArguments = constructorArgs
-         }
+       { constructorBody = []
+        ,constructorMemberConstructors = constructorCalls
+        ,constructorArguments = constructorArgs
+       }
        -- Empty rectord
       ,Constructor
-         { constructorBody = []
-          ,constructorMemberConstructors = []
-          ,constructorArguments = []
-         }]
+       { constructorBody = []
+        ,constructorMemberConstructors = []
+        ,constructorArguments = []
+       }]
    ,classPublicFunctions =
       [showRecord
       ,overloadOperator "&&" "<"
@@ -61,8 +62,7 @@ recordCls name sch =
       Function
       { functionName = Symbol $ CppLiteralSymbol $ "operator " ++ op
        ,functionType = PrimitiveType mempty CppBool
-       ,functionArguments =
-          let recSym = Symbol $ CppSymbol "otherRec"
+       ,functionArguments = let recSym = Symbol $ CppSymbol "otherRec"
           in [Argument
                 Declaration
                 { declarationName = recSym
@@ -71,7 +71,9 @@ recordCls name sch =
                 }]
        ,functionConstMember = True
        ,functionBody =
-          [ReturnSt $ foldr1 bin $ expr1 . declarationNameRef <$> memberDecls]
+          [ReturnSt
+           $ foldr1Unsafe bin
+           $ expr1 . declarationNameRef <$> memberDecls]
       }
       where
         bin :: Expression CodeSymbol
@@ -93,13 +95,11 @@ recordCls name sch =
        ,functionBody =
           [DeclarationSt
              Declaration
-             { declarationName = "o"
-              ,declarationType = "std::stringstream"
-             }
+             { declarationName = "o",declarationType = "std::stringstream" }
              Nothing
           ,StreamSt "o"
-             $ intersperse (LiteralStringExpression " | ")
-             $ wrapArr <$> memberDecls
+           $ intersperse (LiteralStringExpression " | ")
+           $ wrapArr <$> memberDecls
           ,ReturnSt $ FunctionAp (InstanceMember "o" "str") [] []]
       }
     wrapArr d@Declaration {..} = case declarationType of

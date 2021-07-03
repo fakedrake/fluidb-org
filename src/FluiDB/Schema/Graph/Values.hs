@@ -16,34 +16,33 @@ module FluiDB.Schema.Graph.Values
   , graphRelationColumns
   ) where
 
-import Data.Query.SQL.Types
-import FluiDB.Types
-import FluiDB.Schema.Graph.Schemata
-import FluiDB.ConfValues
-import Control.Monad
+import           Control.Monad
 import           Data.Hashable
+import           Data.Query.SQL.Types
+import           Data.Utils.AShow
+import           Data.Utils.Unsafe
+import           FluiDB.ConfValues
+import           FluiDB.Schema.Graph.Schemata
+import           FluiDB.Types
 
 -- | graphGlobalConf $ mkGraphSchema [[(1,2)]]
 graphGlobalConf
   :: forall e s t n .
-  (CodegenSymbol s,Ord s,Hashable s,GraphTypeVars e s t n)
+  (CodegenSymbol s,Ord s,Hashable s,GraphTypeVars e s t n,AShowV s,AShowV e)
   => GraphSchema e s
   -> GlobalConf e s t n
 graphGlobalConf sch =
-  fromJust'
+  fromRightErr
   $ mkGlobalConf
+  $ PreGlobalConf
     (ESym,\case
       ESym a -> a
-      e -> error $ "Graph has only syms: " ++ show (void e))
+      e      -> error $ "Graph has only syms: " ++ show (void e))
     (\_ _ -> Nothing)
     (graphToFileSet sch)
     (graphPrimKeys sch)
     (graphSchemaAssoc sch)
     (graphTableBytes sch)
-  where
-    fromJust' = \case
-      Nothing -> error "Couldn't make a GlobalConf"
-      Just x -> x
 
 graphRelationColumns :: GraphTypeVars e s t n => GraphSchema e s -> s -> Maybe [e]
 graphRelationColumns GraphSchema{..} sym = do

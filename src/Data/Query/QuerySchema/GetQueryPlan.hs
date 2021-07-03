@@ -28,10 +28,12 @@ module Data.Query.QuerySchema.GetQueryPlan
   , QueryPlanError
   ) where
 
-import Data.CnfQuery.Build
-import Data.CnfQuery.Types
 import           Control.Monad.Except
 import           Control.Monad.Extra
+import           Data.Bifunctor
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
+import           Data.Codegen.Build.Types
 import           Data.CppAst                       as CC
 import qualified Data.List.NonEmpty                as NEL
 import           Data.Maybe
@@ -63,18 +65,18 @@ exprCppTypeBinGeneric o l r = do
       ESub -> True
       EMul -> True
       EDiv -> True
-      _ -> False
+      _    -> False
     prec :: CppTypeF c -> Maybe Integer
     prec = \case
-      CC.CppNat -> Just 1
-      CC.CppInt -> Just 2
+      CC.CppNat    -> Just 1
+      CC.CppInt    -> Just 2
       CC.CppDouble -> Just 3
-      _ -> Nothing
+      _            -> Nothing
     addSize = curry $ \case
       (CC.LiteralSize x, CC.LiteralSize y) -> CC.LiteralSize $ x + y
       (x, y) -> CC.SizeOf $ CC.E2ession "+" (toExpre x) $ toExpre y where
         toExpre = \case
-          CC.SizeOf x' -> x'
+          CC.SizeOf x'      -> x'
           CC.LiteralSize x' -> CC.LiteralIntExpression x'
 
 -- Array type of length i and throw error if it's the argument
@@ -148,7 +150,7 @@ exprColumnProps litType plans expr = do
   ty <- exprCppType litType plans expr
   cnst <- either (const Nothing) return
     $ allM
-      (either (const $ return True) (\s -> anyM (\p -> planSymConst p s) plans))
+      (either (const $ return True) (\s -> anyM (`planSymConst` s) plans))
     $ toList expr
   return
     ColumnProps
@@ -182,7 +184,7 @@ planSymConst
   => QueryPlan e s
   -> PlanSym e s
   -> Either (QueryPlanError e s) Bool
-planSymConst QueryPlan{qpSchema=sch} sym = case planSymCnfName sym of
+planSymConst QueryPlan{qpSchema=sch} sym = case planSymQnfName sym of
   NonSymbolName _ -> return True
   _ -> maybe (throwAStr $ "oops: " ++ ashow (sym,sch)) (return . columnPropsConst)
     $ lookup sym sch
@@ -245,7 +247,7 @@ getQueryPlanGrp litType proj es qplan = do
           ++ ashow (proj,ioAssoc,toList <$> toList uniqCandidates)
         Right uniq -> return
           QueryPlan { qpSchema = sch
-                     ,qpUnique = deoverlap $ uniq
+                     ,qpUnique = deoverlap uniq
                     }
   where
     deoverlap =
@@ -263,11 +265,11 @@ getQueryPlanGrp litType proj es qplan = do
     grpSymsM =
       traverse (\case
                   E0 e -> Just e
-                  _ -> Nothing) =<< NEL.nonEmpty es
+                  _    -> Nothing) =<< NEL.nonEmpty es
     ioAssoc :: [(PlanSym e s,PlanSym e s)]
     ioAssoc = mapMaybe (\case
                           (o,E0 (NAggr AggrFirst (E0 i))) -> Just (i,o)
-                          _ -> Nothing) proj
+                          _                               -> Nothing) proj
     aexpProps :: Aggr (Expr (PlanSym e s))
               -> Either (QueryPlanError e s) ColumnProps
     aexpProps agg = do
@@ -309,7 +311,7 @@ getQueryPlanPrj litType proj qplan = do
   where
     ioAssoc = mapMaybe (\case
                           (o,E0 i) -> Just (i,o)
-                          _ -> Nothing) proj
+                          _        -> Nothing) proj
     go :: PlanSym e s -> Either (QueryPlanError e s) ColumnProps
     go e = do
       ty <- planSymType' litType [qplan] e
@@ -340,11 +342,17 @@ getSymPlan
   -> (s -> Maybe (CppSchema' e))
   -> s
   -> m (QueryPlan e s)
-getSymPlan prims symSchema s =
-  maybe
-    (throwAStr "No schema for table")
-    ((>>= maybe (throwAStr "oops") return . mkQueryPlan) . traverse2 makeSym)
-  $ symSchema s
+getSymPlan prims symSchema s = do
+  sch :: CppSchema' e <- maybe (throwAStr "No schema for table") return
+    $ symSchema s
+  schAnnotUniq :: [(CppType,(PlanSym e s,Bool))] <- traverse2 makeSym sch
+  when (null schAnnotUniq) $ throwAStr $ "Table has empty schema: " ++ ashow s
+  unless (any (snd . snd) schAnnotUniq)
+    $ throwAStr
+    $ "No unique columns: "
+    ++ ashow (s,first planSymQnfOriginal . snd <$> schAnnotUniq)
+  maybe (throwAStr $ "No unique columns: " ++ ashow s) return
+    $ mkQueryPlan schAnnotUniq
   where
     makeSym :: Monad m => e -> m (PlanSym e s,Bool)
     makeSym e = do
@@ -353,7 +361,7 @@ getSymPlan prims symSchema s =
         $ fmap2 snd
         $ symSchema s
       let isPrim = e `elem` pks
-          (nm,_) = ncnfSymbol es s
+          (nm,_) = nqnfSymbol es s
       planSym :: PlanSym e s
         <- either (const $ throwAStr "mkSymPlanSymNM failed") return
         $ mkSymPlanSymNM nm e

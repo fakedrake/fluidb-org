@@ -1,4 +1,3 @@
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -6,24 +5,29 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Data.Codegen.Build.Types
   (QueryPlan
+  ,PrimKeys
+  ,StringSymbol
+  ,LiteralType
+  ,ColumnType
+  ,Uniquified
   ,ScopeEnv(..)
   ,CodeBuildErr(..)
   ,CBState(..)
   ,SizeInferenceError(..)
   ,QueryCppConf(..)) where
 
-import Data.CnfQuery.Types
+import           Data.QnfQuery.Types
 import qualified Data.CppAst                  as CC
 import qualified Data.HashSet                 as HS
 import           Data.NodeContainers
 import           Data.Query.Algebra
-import           Data.Query.QuerySchema
 import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.FileSet
 import           Data.String
@@ -31,13 +35,13 @@ import           Data.Utils.AShow
 import           GHC.Generics
 
 data SizeInferenceError e s t n
-  = NoCnf (NodeRef n) [NodeRef n]
-  | EmptyCnfList (NodeRef n)
+  = NoQnf (NodeRef n) [NodeRef n]
+  | EmptyQnfList (NodeRef n)
   | UnsupportedBinOp (BQOp e)
   | UnsupportedUnOp (UQOp e)
   | SIERichMsg (AShowStr e s)
     -- | UnsizedBottomNode [AnyCluster e s t n] (Query e s) (NodeRef n) (RefMap n Bool)
-  | OversizedRow (CNFQuery e s)
+  | OversizedRow (QNFQuery e s)
   | SIEAShowMsg (AShowStr e s)
     -- The plan enumerator called the non-empty
     -- version of the function rather than the
@@ -126,13 +130,20 @@ data CBState e s t n = CBState {
   cbQueryFileCache :: QueryFileCache e s
   }
 
-data QueryCppConf e s = QueryCppConf {
-  literalType           :: e -> Maybe CC.CppType,
-  tableSchema           :: s -> Maybe (CppSchema' e),
-  columnType            :: e -> s -> Maybe CC.CppType,
-  -- |The c++ variables we are going to make.
-  toSymbol              :: e -> Maybe String,
-  defaultQueryFileCache :: QueryFileCache e s,
-  uniqueColumns         :: s -> Maybe [e],
-  asUnique              :: Int -> e -> Maybe e
+type PrimKeys e = [e]
+type StringSymbol = Maybe String
+type LiteralType = CC.CppType
+type ColumnType = CC.CppType
+type Uniquified e = e
+
+data QueryCppConf e s =
+  QueryCppConf
+  { literalType           :: e -> Maybe LiteralType
+   ,tableSchema           :: s -> Maybe (CppSchema' e)
+   ,columnType            :: e -> s -> Maybe ColumnType
+    -- |The c++ variables we are going to make.
+   ,toSymbol              :: e -> StringSymbol
+   ,defaultQueryFileCache :: QueryFileCache e s
+   ,uniqueColumns         :: s -> Maybe (PrimKeys e)
+   ,asUnique              :: Int -> e -> Maybe (Uniquified e)
   }

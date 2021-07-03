@@ -1,9 +1,9 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies     #-}
 module Control.Antisthenis.ATL.Class.Functorial
   (ArrowFunctor(..)) where
 
-import Control.Arrow
+import           Control.Arrow
 
 -- | A functor corresponding to an arrow.
 class Functor (ArrFunctor c) => ArrowFunctor c where
@@ -17,3 +17,5 @@ instance Functor m => ArrowFunctor (Kleisli m) where
   type ArrFunctor (Kleisli m) = m
   toKleisli (Kleisli c) = c
   fromKleisli = Kleisli
+  {-# INLINE toKleisli #-}
+  {-# INLINE fromKleisli #-}

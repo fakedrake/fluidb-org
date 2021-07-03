@@ -33,9 +33,7 @@ module Data.QueryPlan.Solve
   , isDeletable
   ) where
 
-import Data.QueryPlan.History
-import Control.Antisthenis.Types
-import Data.QueryPlan.NodeProc
+import           Control.Antisthenis.Types
 import           Control.Monad.Cont
 import           Control.Monad.Except
 import           Control.Monad.Extra
@@ -43,7 +41,7 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer
-import           Data.BipartiteGraph
+import           Data.Bipartite
 import           Data.Functor.Identity
 import qualified Data.HashSet                as HS
 import           Data.List.Extra
@@ -53,7 +51,9 @@ import           Data.NodeContainers
 import           Data.Query.QuerySize
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Dependencies
+import           Data.QueryPlan.History
 import           Data.QueryPlan.MetaOpCache
+import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Transitions
 import           Data.Utils.Debug
@@ -62,10 +62,14 @@ import           Data.Utils.HContT
 import           Data.Utils.ListT
 import           Data.Utils.Tup
 
+import           Control.Arrow
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
+import           Data.Utils.Default
 
+
+-- | run a bunch of common stuff to make the following more responsive.
 warmupCache :: forall t n m . Monad m => NodeRef n -> PlanT t n m ()
 warmupCache node = do
   trM "Warming up cache..."
@@ -82,12 +86,12 @@ warmupCache node = do
       when (any (nsNull . fst) xs) $ throwPlan
         $ printf "Empty depset for %n: %s" node (ashow xs)
       trM $ printf "Deps of %n: %s" node $ ashow xs
-      mapM_ findMetaOps =<< refKeys . nodeSizes <$> ask
+      mapM_ findMetaOps =<< asks (refKeys . nodeSizes)
 
 setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
 setNodeMaterialized node = wrapTraceT "setNodeMaterialized" $ do
   -- Populate the metaop cache
-  warmupCache node
+  when False $ warmupCache node
   setNodeStateSafe node Mat
   cost <- totalTransitionCost
   trM $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
@@ -114,7 +118,7 @@ makeMaterializable ref =
     isConcreteMat =
       fmap (\case
               Concrete _ Mat -> True
-              _ -> False) . getNodeState
+              _              -> False) . getNodeState
 
 haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
@@ -125,13 +129,15 @@ haltPlan matRef mop = do
 
 haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
-  frefs <- toNodeList . frontier <$> get
+  frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
   star :: Double <- sum . fmap (maybe 0 (fromIntegral . costAsInt))
-    <$> mapM (getCost ForceResult) frefs
+    <$> mapM
+      (getCost (\_ref _mech -> arr $ const $ BndRes 0) ForceResult)
+      frefs
   histCosts <- takeListT 5 pastCosts
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
-  halt $ PlanSearchScore concreteCost (Just $ star)
+  halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
 
 -- | Make a plan for a node to be concrete.
@@ -153,11 +159,11 @@ setNodeStateSafe' getFwdOp node goalState =
         (show goalState)
     case curState of
       Concrete _ Mat -> case goalState of
-        Mat -> top
+        Mat   -> top
         NoMat -> bot "Tried to set concrete"
       Concrete _ NoMat -> case goalState of
         NoMat -> top
-        Mat -> bot "Tried to set concrete"
+        Mat   -> bot "Tried to set concrete"
       Initial NoMat -> case goalState of
         NoMat -> node `setNodeStateUnsafe` Concrete NoMat NoMat
         Mat       -- just materialize
@@ -183,7 +189,7 @@ setNodeStateSafe' getFwdOp node goalState =
                 prevState' <- getNodeState ni
                 let prevState = case prevState' of
                       Concrete _ r -> r
-                      Initial r -> r
+                      Initial r    -> r
                 ni `setNodeStateUnsafe` Concrete prevState Mat
               -- Deal with sibling materializability: what we actually
               -- want is to be able to reverse.
@@ -206,14 +212,13 @@ setNodesMatSafe deps = do
   hbM <- getHardBudget
   (matDeps,unMatDeps) <- partitionM isMaterialized deps
   forM_ deps $ \n -> setNodeStateSafe n Mat
-  ret
-    <- fmap (reverse . sortOn (\(_,x,_) -> 0 - x)) $ forM unMatDeps $ \dep -> do
-      pgs <- totalNodePages dep
-      -- Unless it's already materialized mat.
-      fp <- maybe (bot $ printf "No metaops for %n" dep) metaOpNeededPages
-        . listToMaybe
-        =<< findTriggerableMetaOps dep
-      return (pgs,fp,dep)
+  ret <- fmap (sortOn (\(_,x,_) -> x)) $ forM unMatDeps $ \dep -> do
+    pgs <- totalNodePages dep
+    -- Unless it's already materialized mat.
+    fp <- maybe (bot $ printf "No metaops for %n" dep) metaOpNeededPages
+      . listToMaybe
+      =<< findTriggerableMetaOps dep
+    return (pgs,fp,dep)
   case hbM of
     Nothing -> top
     Just hb -> guardl ("no valid trigger sequence for deps: " ++ show ret)
@@ -269,8 +274,8 @@ makeTriggerableUnsafe mop = wrapTrM ("makeTriggerableUnsafe " ++ showMetaOp mop)
 setConcreteMat :: MonadLogic m => NodeRef n -> PlanT t n m ()
 setConcreteMat ref = getNodeState ref >>= \case
   Concrete _ NoMat -> bot "setConcreteMat"
-  Concrete _ Mat -> top
-  Initial m -> setNodeStateUnsafe ref $ Concrete m Mat
+  Concrete _ Mat   -> top
+  Initial m        -> setNodeStateUnsafe ref $ Concrete m Mat
 
 -- |Remove equivalent metaops from list
 nubMops :: [MetaOp t n] -> [MetaOp t n]
@@ -345,12 +350,12 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
     preReport = do
       nsize <- sum <$> traverse totalNodePages ns
       totalSize <- getDataSize
-      budget <- maybe "<unboundend>" show . budget <$> ask
+      budget <- asks $ maybe "<unboundend>" show . budget
       nsmap <- forM ns $ \n -> (n,) <$> totalNodePages n
       trM $ printf "Starting GC to make (%d / %s) %s: %d"
         totalSize budget (show nsmap) nsize
     withGC m = do
-      isGC <- garbageCollecting <$> get
+      isGC <- gets garbageCollecting
       if isGC then bot "nested GCs" else do
         setGC True
         -- Check that gc is possiblex
@@ -372,7 +377,7 @@ nodesFit ns = do
            =<< filterM (fmap (> 0) . getNodeProtection)
            =<< nodesInState [Concrete NoMat Mat,Concrete Mat Mat]
   size <- sum <$> traverse totalNodePages ns
-  budg <- budget <$> ask
+  budg <- asks budget
   trM $ printf "Needed node size: %d, budget: %s, protec: %d"
     size (show budg) protec
   return $ maybe True (size + protec <=) budg
@@ -471,17 +476,10 @@ planSanityCheck :: forall t n m . MonadLogic m =>
                   PlanT t n m (Either (PlanSanityError t n) ())
 planSanityCheck = runExceptT $ do
   conf <- ask
-  let (_,nRefs) =
-        nodeRefs
-        `evalState` mempty
-        { gbPropNet = propNet conf
-        }
-  checkTbl nRefs MissingSize $ fmap2 fst nodeSizes
+  let (_,nRefs) = nodeRefs `evalState` def { gbPropNet = propNet conf }
+  checkTbl (toNodeList nRefs) MissingSize $ fmap2 fst nodeSizes
   let localBotNodes =
-        getBottomNodesR
-        `evalState` mempty
-        { gbPropNet = propNet conf
-        }
+        getBottomNodesN `evalState` def { gbPropNet = propNet conf }
   st <- lift (get :: PlanT t n m (GCState t n))
   lift $ forM_ localBotNodes makeMaterializable
   lift $ put st
@@ -500,7 +498,7 @@ planSanityCheck = runExceptT $ do
 isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
 isDeletable ref = getNodeState ref >>= \case
   Concrete _ Mat -> return False
-  _ -> withNoMat ref $ isMaterializable ref
+  _              -> withNoMat ref $ isMaterializable ref
 
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a
 withNoMat = withNodeState (Concrete Mat NoMat) . return
