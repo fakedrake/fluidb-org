@@ -33,8 +33,8 @@ import           Control.Antisthenis.Zipper
 import           Control.Applicative
 import           Control.Monad.Identity
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Free
 import           Control.Monad.Writer
+import           Control.Utils.Free
 import           Data.Foldable
 import qualified Data.IntSet                        as IS
 import qualified Data.List.NonEmpty                 as NEL

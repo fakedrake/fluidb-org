@@ -13,8 +13,8 @@ module Data.Cluster.InsertQuery (insertQueryPlan) where
 
 import           Control.Applicative
 import           Control.Monad.Except
-import           Control.Monad.Free
 import           Control.Monad.State
+import           Control.Utils.Free
 import           Data.Bifunctor
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.PutCluster

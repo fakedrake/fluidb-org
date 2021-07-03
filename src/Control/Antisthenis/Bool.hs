@@ -1,17 +1,17 @@
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RoleAnnotations #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveFoldable        #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE RoleAnnotations       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.Bool
   (interpretBExp
   ,BoolOp(..)
@@ -23,29 +23,29 @@ module Control.Antisthenis.Bool
   ,orToAndConv
   ,andToOrConv) where
 
-import Control.Antisthenis.Convert
-import Control.Antisthenis.ATL.Class.Functorial
-import Data.Proxy
-import qualified Data.IntSet as IS
-import Control.Antisthenis.Test
-import Control.Antisthenis.ATL.Transformers.Mealy
-import Control.Monad.State
-import qualified Data.IntMap as IM
-import Control.Monad.Reader
-import Control.Antisthenis.VarMap
-import Data.Foldable
-import Data.Utils.AShow
-import Data.Maybe
-import Control.Monad.Trans.Free
-import Data.Coerce
-import Data.Profunctor
-import Control.Monad.Identity
-import qualified Data.List.NonEmpty as NEL
-import Data.Utils.Default
-import Control.Antisthenis.AssocContainer
-import Control.Antisthenis.Types
-import Control.Antisthenis.Zipper
-import GHC.Generics
+import           Control.Antisthenis.ATL.Class.Functorial
+import           Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.Convert
+import           Control.Antisthenis.Test
+import           Control.Antisthenis.Types
+import           Control.Antisthenis.VarMap
+import           Control.Antisthenis.Zipper
+import           Control.Monad.Identity
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Utils.Free
+import           Data.Coerce
+import           Data.Foldable
+import qualified Data.IntMap                                as IM
+import qualified Data.IntSet                                as IS
+import qualified Data.List.NonEmpty                         as NEL
+import           Data.Maybe
+import           Data.Profunctor
+import           Data.Proxy
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           GHC.Generics
 
 -- The bound here is a pair of values which are monotonically
 -- increasing functions to the MINIMUM number of steps required if the
@@ -149,7 +149,7 @@ zFinished :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bo
 zFinished z = case zRes z of
   Just (Right x) -> case elemType x of
     AbsorbingElem -> True
-    NormalElem -> False
+    NormalElem    -> False
   _ -> False
 
 
@@ -185,19 +185,19 @@ combBoolBndR
 combBoolBndR newRes oldRes = case (newRes,oldRes) of
   (BndRes r,Left e) -> case elemType r of
     AbsorbingElem -> Right r
-    NormalElem -> Left e
+    NormalElem    -> Left e
   (BndRes r,Right r') -> Right $ r <> r'
   (BndErr e,Right r) -> case elemType r of
     AbsorbingElem -> Right r
-    NormalElem -> Left e
+    NormalElem    -> Left e
   (BndErr e,Left _) -> Left e
   (BndBnd _,x) -> x
 
 data CountingAssoc f g a b =
   CountingAssoc
   { assocMinKey :: g a
-   ,assocSize :: !Int
-   ,assocData :: SimpleAssoc f a b
+   ,assocSize   :: !Int
+   ,assocData   :: SimpleAssoc f a b
   }
   deriving (Functor,Foldable,Generic)
 
@@ -210,7 +210,7 @@ assocMinCost
   -> Maybe (GAbsorbing Cost)
 assocMinCost assoc =
   let SimpleAssoc l = assocData assoc in case toGAbsorbing . fst <$> l of
-    [] -> Nothing
+    []   -> Nothing
     x:xs -> Just $ foldl' (<>) x xs
 
 instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
@@ -280,7 +280,7 @@ instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
       bnd <- assocMinKey $ bgsIts $ zBgState z
       gcap <- case confCap conf of
         CapVal cap -> Just cap
-        _ -> Nothing
+        _          -> Nothing
       return $ min bnd gcap }
 
 
@@ -304,7 +304,7 @@ boolEvolutionStrategy fin = recur
           $ it (error "Unimpl: function to select the cheapest")
         CmdInit ini -> recur ini
         CmdFinished (ExZipper z) -> return
-          (fin,fromMaybe (BndErr undefined) $ either BndErr BndRes <$> zRes z)
+          (fin,maybe (BndErr undefined) (either BndErr BndRes) (zRes z))
 
 -- | Return Just when we have a result the could be the restult of the
 -- poperator. This decides when to stop working.
@@ -316,8 +316,8 @@ boolEvolutionControl
   -> Maybe (BndR (BoolTag op p))
 boolEvolutionControl conf z = case confCap conf of
   CapStruct i -> if
-    | i < 0 -> return $ BndErr undefined
-    | i == 0 -> localRes
+    | i < 0     -> return $ BndErr undefined
+    | i == 0    -> localRes
     | otherwise -> either BndErr BndRes <$> zRes z
   ForceResult -> zRes z >>= \case
     Left _e -> Nothing -- xxx: should check if zero is even possible.
@@ -342,7 +342,7 @@ zIsAbsorbing
 zIsAbsorbing z = case zRes z of
   Just (Right r) -> case elemType r of
     AbsorbingElem -> True
-    NormalElem -> False
+    NormalElem    -> False
   _ -> False
 
 -- | The problem is that there is no w type in Conf w, just ZCap w so
@@ -400,21 +400,21 @@ interpretBExp = recur
     convAnd = convBool
 
 
-#if 0
-test :: BndR (BoolTag AnyOp TestParams)
-test =
-  fst
-  $ fst
-  $ (`runReader` (mempty,IM.fromList vars))
-  $ (`runFixStateT` vaexprs)
-  $ runWriterT
-  $ do
-    runMech (interpretBExp $ BEVar 1) def
-  where
-    vaexprs = VarMap (IM.fromList $ fmap2 interpretBExp exprs)
-    vars = [(0,True),(1,True)]
-    exprs = [(0,BLVar 1 :/\: BLVar 0),(1,BEVar 1 :\/: BEVar 0),(3,undefined)]
-#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 -- TOWRITE:
 -- AND and OR are both absorbing/identity groups
 -- Boolean expressions can be summarized as

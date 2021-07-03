@@ -44,9 +44,10 @@ module Data.Cluster.Types.Monad
 
 import           Control.Applicative
 import           Control.Monad.Except
-import           Control.Monad.Free
+import           Control.Monad.Identity
 import           Control.Monad.Morph
 import           Control.Monad.State
+import           Control.Utils.Free
 import           Data.Bipartite
 import           Data.Bits
 import           Data.Cluster.Types.Clusters
@@ -117,9 +118,9 @@ freeToForest :: Hashables2 e s =>
                Free (Compose NEL.NonEmpty (Query e)) (s, QueryPlan e s)
              -> QueryForest e s
 freeToForest = \case
-  Free (Compose a) -> let v = fmap2 freeToForest a
+  FreeT (Identity (Free (Compose a))) -> let v = fmap2 freeToForest a
     in QueryForest {qfHash=hash v,qfQueries=Left v}
-  Pure a -> QueryForest {qfHash=hash a,qfQueries=Right a}
+  FreeT (Identity (Pure a)) -> QueryForest {qfHash=hash a,qfQueries=Right a}
 forestToQuery :: QueryForest e s -> Query e (s, QueryPlan e s)
 forestToQuery = either (forestToQuery <=<  NEL.head) Q0 . qfQueries
 queryToForest :: Hashables2 e s => Query e (QueryForest e s) -> QueryForest e s

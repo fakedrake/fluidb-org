@@ -30,7 +30,6 @@ module Data.Utils.AShow.Common
   , ashowCase'
   ) where
 
-import           Control.Monad.Free
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy     as HM
 import qualified Data.HashSet          as HS
@@ -175,7 +174,6 @@ instance (AShowList (VecType a) a, AShow a) => AShow (DS.Set a) where
 instance AShow a => AShow (Sum a)
 instance AShow b => AShow (CoConst a b)
 instance AShow a => AShow (Tup2 a)
-instance (AShow a,AShow (f (Free f a))) => AShow (Free f a)
 instance AShowV a => AShow (NEL.NonEmpty a) where
   ashow' (h NEL.:| hs) = ashow' $ h:hs
 instance AShow Void where ashow' = undefined

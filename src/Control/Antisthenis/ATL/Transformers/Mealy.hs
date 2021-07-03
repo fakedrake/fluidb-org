@@ -1,10 +1,10 @@
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE Arrows                #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -20,22 +20,22 @@ module Control.Antisthenis.ATL.Transformers.Mealy
   ,yieldMB
   ,finishMB) where
 
-import Control.Antisthenis.ATL.Class.Functorial
-import Control.Monad.Fix
-import Data.Void
-import Control.Monad.Trans.Free
-import Data.Bifunctor (bimap)
-import Data.Profunctor
-import           Control.Arrow                     hiding ((>>>))
-import           Control.Category                  hiding ((>>>))
-import           Data.Maybe
 import           Control.Antisthenis.ATL.Class.Bind
+import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Class.Machine
 import           Control.Antisthenis.ATL.Class.Reader
 import           Control.Antisthenis.ATL.Class.State
 import           Control.Antisthenis.ATL.Class.Writer
-import Control.Antisthenis.ATL.Common
-import Prelude hiding ((.),id)
+import           Control.Antisthenis.ATL.Common
+import           Control.Arrow                            hiding ((>>>))
+import           Control.Category                         hiding ((>>>))
+import           Control.Monad.Fix
+import           Control.Utils.Free
+import           Data.Bifunctor                           (bimap)
+import           Data.Maybe
+import           Data.Profunctor
+import           Data.Void
+import           Prelude                                  hiding (id, (.))
 
 -- | Note that this is not a transformer because it is not isomorphic
 -- to c.
@@ -179,7 +179,7 @@ instance Profunctor c => Profunctor (MealyArrow c) where
       go (MealyArrow c) = MealyArrow $ dimap f (bimap go g) c
 
 -- | Constructing monadic xmealy arrows
-data MealyF a b x = MealyF (a -> x,b)
+newtype MealyF a b x = MealyF (a -> x,b)
 instance Functor (MealyF a b) where
   fmap f (MealyF x) = MealyF $ first (f .) x
 
@@ -187,9 +187,9 @@ type MB a b = FreeT (MealyF a b)
 
 
 yieldMB :: Monad m => b -> MB a b m a
-yieldMB b = wrap $ MealyF $ (return,b)
+yieldMB b = FreeT $ return $ Free $ MealyF (return,b)
 finishMB ::Monad m => b -> MB a b m Void
-finishMB b = fix $ (yieldMB b >>)
+finishMB b = fix (yieldMB b >>)
 
 
 -- | Use yieldMB and finishMB and yieldMB and make sure to never

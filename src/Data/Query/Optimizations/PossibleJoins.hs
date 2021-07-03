@@ -7,7 +7,8 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Data.Query.Optimizations.PossibleJoins (joinPermutations) where
 
-import           Control.Monad.Free
+import           Control.Monad.Identity
+import           Control.Utils.Free
 import           Data.Bifunctor
 import           Data.Bitraversable
 import           Data.List
@@ -55,12 +56,12 @@ productPermutations emb (ps0,ts0) = go (ps',ts')
           (Int,Query e' (Free (Compose NEL.NonEmpty (Query e')) s))
     ts' = NEL.zip (0 NEL.:| [1 ..]) ts0
     asQ :: Free (Compose NEL.NonEmpty (Query e')) s -> Query e' s
-    asQ = NEL.head . getCompose . retract
+    asQ = NEL.head . getCompose . lowerFree
     go :: ([([Int],Prop (Rel (Expr e')))]
           ,NEL.NonEmpty
              (Int,Query e' (Free (Compose NEL.NonEmpty (Query e')) s)))
        -> Maybe (Free (Compose NEL.NonEmpty (Query e')) s)
-    go = fmap (Free . Compose) . \case
+    go = fmap (FreeT . return . Free . Compose) . \case
       ([],(_,q') NEL.:| []) -> Just $ pure q'
       (ps,(_,q') NEL.:| [])
         -> Just $ return $ S (foldr1Unsafe And $ snd <$> ps) q'
@@ -79,6 +80,11 @@ productPermutations emb (ps0,ts0) = go (ps',ts')
 
 -- | Non-deterministically keep the ones that refer to a single
 -- column.
+
+lowerFree :: Monad m => Free m s -> m s
+lowerFree (FreeT (Identity (Pure s))) = return s
+lowerFree (FreeT (Identity (Free m))) = m >>= lowerFree
+
 partitionPushable
   :: NEL.NonEmpty Int
   -> [([Int],prop)]
@@ -133,6 +139,6 @@ joinPermutations emb = recur . pushSelections emb
     dropLayerAndRecur = \case
       Q2 o l r -> q2 o <$> recur l <*> recur r
       Q1 o q   -> q1 o <$> recur q
-      Q0 s     -> Just $ Q0 $ Pure s
+      Q0 s     -> Just $ Q0 $ return s
     q2 o l r = Q2 o (Q0 l) (Q0 r)
     q1 o q = Q1 o $ Q0 q

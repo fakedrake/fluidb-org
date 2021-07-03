@@ -1,28 +1,27 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.Sum (SumTag) where
 
-import Data.Utils.Tup
-import Control.Monad.Identity
-import GHC.Generics
-import Data.Utils.Default
-import Data.Utils.AShow
-import Data.Proxy
-import Control.Monad.Trans.Free
-import Control.Antisthenis.Types
-import Data.Utils.Monoid
-import Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.Types
+import           Control.Monad.Identity
+import           Control.Utils.Free
+import           Data.Proxy
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.Monoid
+import           Data.Utils.Tup
+import           GHC.Generics
 
 data SumTag p v
 
@@ -47,11 +46,11 @@ instance (AShow a,AShow (ZErr (SumTag p v)))
   => AShow (SumPartialRes p v a)
 instance Applicative (SumPartialRes p v) where
   pure = SumPart
-  SumPart f <*> SumPart x = SumPart $ f x
-  SumPart _ <*> SumPartInit = SumPartInit
+  SumPart f <*> SumPart x    = SumPart $ f x
+  SumPart _ <*> SumPartInit  = SumPartInit
   SumPart _ <*> SumPartErr e = SumPartErr e
-  SumPartErr x <*> _ = SumPartErr x
-  SumPartInit <*> _ = SumPartInit
+  SumPartErr x <*> _         = SumPartErr x
+  SumPartInit <*> _          = SumPartInit
 instance Default (SumPartialRes p v a) where
   def = SumPartInit
 
@@ -81,15 +80,15 @@ instance (AShow v
       add SumPartInit bnd = toPartial bnd
       add e@(SumPartErr _) _ = e
       add (SumPart v0) bnd = case bnd of
-        BndBnd v -> SumPart $ v + v0 -- will be registered as it.
-        BndRes (Sum Nothing) -> SumPart v0
+        BndBnd v              -> SumPart $ v + v0 -- will be registered as it.
+        BndRes (Sum Nothing)  -> SumPart v0
         BndRes (Sum (Just v)) -> SumPart $ (+) v <$> v0
-        BndErr e -> SumPartErr e
+        BndErr e              -> SumPartErr e
       toPartial = \case
-        BndBnd v -> SumPart v
-        BndRes (Sum Nothing) -> SumPartInit
+        BndBnd v              -> SumPart v
+        BndRes (Sum Nothing)  -> SumPartInit
         BndRes (Sum (Just i)) -> SumPart $ Min' i
-        BndErr e -> SumPartErr e
+        BndErr e              -> SumPartErr e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
     Just $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
   zLocalizeConf coepoch conf z =
@@ -100,7 +99,7 @@ instance (AShow v
         SumPartErr _ -> CapStruct (-1)
         SumPartInit -> case confCap conf of
           CapStruct s -> CapStruct $ s - 1
-          x -> x
+          x           -> x
         SumPart r -> case confCap conf of
           CapVal c -> CapVal cap'
             where
@@ -123,13 +122,11 @@ sumEvolutionControl conf z = case zRes z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     CapStruct i -> if i < 0 then Nothing else Just $ BndBnd 0
-    CapVal bnd -> if bnd < 0 then Just $ BndBnd 0 else Nothing
-    _ -> Nothing
+    CapVal bnd  -> if bnd < 0 then Just $ BndBnd 0 else Nothing
+    _           -> Nothing
   SumPart bound -> case confCap conf of
-    CapVal cap -> if cap < bound then Just $ BndBnd bound else Nothing
-    CapStruct i -> if
-      | i >= 0 -> Nothing
-      | otherwise -> Just $ BndBnd bound
+    CapVal cap  -> if cap < bound then Just $ BndBnd bound else Nothing
+    CapStruct i -> if i >= 0 then Nothing else Just $ BndBnd bound
     ForceResult -> Nothing
 
 sumEvolutionStrategy
@@ -150,8 +147,8 @@ sumEvolutionStrategy fin = recur
         CmdInit ini -> recur ini
         CmdFinished (ExZipper z) -> return (fin,case zRes z of
           SumPart (Min' bnd) -> BndRes $ Sum $ Just bnd
-          SumPartInit -> BndRes $ Sum Nothing
-          SumPartErr e -> BndErr e)
+          SumPartInit        -> BndRes $ Sum Nothing
+          SumPartErr e       -> BndErr e)
 
 #if 0
 sumToMin :: Sum v -> Min v

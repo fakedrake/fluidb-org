@@ -28,10 +28,11 @@ module FluiDB.Schema.Workload
   ,runSingleQuery) where
 
 import           Control.Monad.Except
-import           Control.Monad.Free
+import           Control.Monad.Identity
 import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Control.Utils.Free
 import           Data.Bifunctor
 import           Data.Bipartite
 import           Data.Cluster.InsertQuery
@@ -84,8 +85,8 @@ type ICodeBuilder e s t n a =
 
 lengthF :: (Foldable f,Functor t,Foldable t) => Free (Compose t f) x -> Int
 lengthF = \case
-  Pure _            -> 1
-  Free (Compose xs) -> sum $ foldr ((*) . lengthF) 1 <$> xs
+  FreeT (Identity (Pure _))            -> 1
+  FreeT (Identity (Free (Compose xs))) -> sum $ foldr ((*) . lengthF) 1 <$> xs
 
 -- type BacktrackMonad = ListT (State Int)
 -- | try to build the c++ file

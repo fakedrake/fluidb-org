@@ -294,11 +294,12 @@ replaceQId eq rs q = foldl replaceQ1 q rs where
 replaceQSec :: (Bifunctor p, Foldable t) =>
               (c -> c -> Bool) -> t (c, c) -> p a c -> p a c
 replaceQSec eq r = second $ replaceQId eq r
-replaceQBoth :: (Foldable t, Bifunctor p1, Bifunctor p2, Bifunctor p3) =>
-               (c -> c -> Bool)
-             -> t (c, c)
-             -> p1 (p2 a1 c) (p3 a2 c)
-             -> p1 (p2 a1 c) (p3 a2 c)
+replaceQBoth
+  :: (Foldable t,Bifunctor p1,Bifunctor p2,Bifunctor p3)
+  => (c -> c -> Bool)
+  -> t (c,c)
+  -> p1 (p2 a1 c) (p3 a2 c)
+  -> p1 (p2 a1 c) (p3 a2 c)
 replaceQBoth eq r = replaceQSec eq r `bimap` replaceQSec eq r
 
 
