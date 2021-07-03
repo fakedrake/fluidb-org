@@ -454,9 +454,10 @@ type NTrail = NodeSet
 -- | NodeProc t n ()
 type NodeProc t n w = NodeProc0 t n w w
 
+type Scaling = Double
 -- | A node process. The outer
 type NodeProc0 t n w w0 =
-  ArrProc w0 (StateT (NodeProcSt n w) (PlanT t n Identity))
+  ArrProc w0 (StateT (NodeProcSt n w) (ReaderT Scaling (PlanT t n Identity)))
 
 lowerNodeProc
   :: ZCoEpoch w0 ~ ZCoEpoch w

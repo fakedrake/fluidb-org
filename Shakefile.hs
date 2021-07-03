@@ -68,7 +68,7 @@ stackCmd conf scmd args = "stack" : workDir ++ rest
   where
     workDir = maybe [] (\x -> ["--work-dir",x]) $ cnfStackRoot conf
     rest = case scmd of
-      StackBuild -> cnfStackArgs conf ++ ["build"] ++ args
+      StackBuild -> ["build"] ++ cnfStackArgs conf ++ args
       StackPath  -> "path" : args
       StackRun   -> cnfStackArgs conf ++ ["run"] ++ args
 

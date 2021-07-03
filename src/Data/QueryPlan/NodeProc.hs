@@ -18,7 +18,6 @@ import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.Zipper
 import           Control.Arrow                              hiding ((>>>))
-import qualified Control.Category                           as C
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
@@ -35,7 +34,6 @@ import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.Monoid
-
 
 
 -- | depset has a constant part that is the cost of triggering and a
@@ -81,7 +79,7 @@ mkNewMech
   -> NodeRef n
   -> NodeProc t n (CostParams n)
 mkNewMech noMatProc ref = squashMealy $ do
-  mops <- lift2 $ findCostedMetaOps ref
+  mops <- lift3 $ findCostedMetaOps ref
   -- Should never see the same val twice.
   let mechs =
         [DSetR { dsetConst = Sum $ Just cost
@@ -123,6 +121,7 @@ getCost
 getCost noMatProc cap ref = do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   ((res,_coepoch),_trail) <- planQuickRun
+    $ (`runReaderT` 1)
     $ (`runStateT` def)
     $ runWriterT
     $ runMech (getOrMakeMech noMatProc ref)

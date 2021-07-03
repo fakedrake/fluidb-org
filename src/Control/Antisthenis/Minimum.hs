@@ -1,56 +1,52 @@
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Arrows                 #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE DeriveFoldable         #-}
+{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE DerivingVia            #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Arrows #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE MultiWayIf             #-}
+{-# LANGUAGE QuantifiedConstraints  #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE StandaloneDeriving     #-}
+{-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Control.Antisthenis.Minimum
   (minTest,MinTag) where
 
-import Control.Monad.Identity
-import Control.Monad.Writer
-import Data.Proxy
-import Data.Utils.FixState
-import Control.Monad.Trans.Free
-import GHC.Generics
-import Data.Utils.Functors
-import Data.Utils.Monoid
-import Control.Antisthenis.Test
-import Data.Utils.Tup
-import Data.Utils.AShow
-import Data.Foldable
-import qualified Data.List.NonEmpty as NEL
-import qualified Data.IntSet as IS
-import Control.Antisthenis.VarMap
-import Control.Monad.Reader
-import Data.Maybe
-import Data.Utils.Default
-import Control.Antisthenis.AssocContainer
-import Control.Antisthenis.Types
-import Control.Antisthenis.Zipper
+import           Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.Test
+import           Control.Antisthenis.Types
+import           Control.Antisthenis.VarMap
+import           Control.Antisthenis.Zipper
+import           Control.Applicative
+import           Control.Monad.Identity
+import           Control.Monad.Reader
+import           Control.Monad.Trans.Free
+import           Control.Monad.Writer
+import           Data.Foldable
+import qualified Data.IntSet                        as IS
+import qualified Data.List.NonEmpty                 as NEL
+import           Data.Maybe
+import           Data.Proxy
+import           Data.Utils.AShow
+import           Data.Utils.Default
+import           Data.Utils.FixState
+import           Data.Utils.Functors
+import           Data.Utils.Monoid
+import           Data.Utils.Tup
+import           GHC.Generics
 
 data MinTag p v
 
@@ -67,7 +63,7 @@ emptyConcreteVal = OnlyErrors []
 -- 10 elements so we are good.
 data MinAssocList f w a =
   MinAssocList
-  { malElements :: (f (ZBnd w,a))
+  { malElements :: f (ZBnd w,a)
     -- | The concrete value has the following states:
     -- * we have encountered only errors
     -- * we have encountered at least one concrete result
@@ -93,19 +89,17 @@ malMinBound
   -> MinAssocList f w a
   -> SecondaryBound w
 malMinBound lessThan mal = case malConcrete mal of
-  OnlyErrors _ -> case elemBnd of
-    Nothing -> NoSec
-    Just bnd -> SecSoft bnd
+  OnlyErrors _ -> maybe NoSec SecSoft elemBnd
   FoundResult firstRes -> case (\b -> (b,lessThan firstRes b)) <$> elemBnd of
     Just (_bnd,True) -> SecConcrete firstRes -- the first result is better than the best case of
                                            -- the next.
     Just (bnd,False) -> SecSoft bnd
-    Nothing -> SecConcrete firstRes -- there are no other results.
+    Nothing          -> SecConcrete firstRes -- there are no other results.
   where
-    elemBnd = foldl' go Nothing $ fmap fst $ malElements mal
+    elemBnd = foldl' go Nothing $ fst <$> malElements mal
       where
         go :: Maybe (ZBnd w) -> ZBnd w -> Maybe (ZBnd w)
-        go Nothing r = Just r
+        go Nothing r   = Just r
         go (Just r0) r = Just $ min r0 r
 
 zModConcrete
@@ -127,13 +121,13 @@ instance AssocContainer (MinAssocList [] w) where
     MinAssocList (NEL.toList m) a
   acEmpty = MinAssocList [] emptyConcreteVal
   acNonEmpty (MinAssocList mal x) =
-    (\mal' -> MinAssocList mal' x) <$> NEL.nonEmpty mal
+    (`MinAssocList` x) <$> NEL.nonEmpty mal
 
 
 barrel :: NEL.NonEmpty a -> NEL.NonEmpty (NEL.NonEmpty a)
 barrel x@(a0 NEL.:| as0) = x NEL.:| go [] a0 as0
   where
-    go _pref _a [] = []
+    go _pref _a []    = []
     go pref a (a':as) = (a' NEL.:| (a : pref)) : go (a : pref) a' as
 
 minimumOn :: Ord b => NEL.NonEmpty (b,a) -> a
@@ -192,12 +186,12 @@ instance (AShow a
     where
       -- Only put error if there is no concrete solution.
       putError e = \case
-        OnlyErrors es -> OnlyErrors $ e : es
+        OnlyErrors es     -> OnlyErrors $ e : es
         r@(FoundResult _) -> r
       -- Drop any possible errors and replace them with the
       -- result. Otherwise combine the results.
       putResult r = \case
-        OnlyErrors _ -> FoundResult r
+        OnlyErrors _   -> FoundResult r
         FoundResult r0 -> FoundResult $ r <> r0
   -- Remove the bound from the result and insert the new one. Here we
   -- do not need to remove anything since the value of the bound is
@@ -219,11 +213,10 @@ instance (AShow a
       (NoSec,_) -> conf
       (_,CapStruct i) -> conf { confCap = CapStruct $ i - 1 }
       (SecConcrete res,CapVal c) -> if res
-        <= c then undefined else conf { confCap = CapVal $ min res c }
-      (SecSoft bnd
-        ,CapVal c) -> conf { confCap = CapVal $ min bnd c }
-      (SecConcrete res
-        ,ForceResult) -> conf { confCap = CapVal res }
+        <= c then error "the secondary bound should be smaller than the cap"
+        else conf { confCap = CapVal $ min res c }
+      (SecSoft bnd,CapVal c) -> conf { confCap = CapVal $ min bnd c }
+      (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
       (SecSoft bnd,ForceResult) -> conf { confCap = CapVal bnd }
     where
       secondaryBound = malMinBound (<) $ bgsIts $ zBgState z
@@ -238,29 +231,27 @@ minEvolutionControl
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
 minEvolutionControl conf z = case confCap conf of
-  CapStruct i -> if
-    | i >= 0 -> res
-    | otherwise -> maybe (Just $ BndBnd 0) Just res
+  CapStruct i -> if i >= 0 then res else res <|> Just (BndBnd 0)
   ForceResult -> res >>= \case
     BndBnd _bnd -> Nothing
-    x -> return x
+    x           -> return x
   CapVal cap -> res >>= \case
     BndBnd bnd -> if cap < bnd then Just $ BndBnd bnd else Nothing
-    x -> return x
+    x          -> return x
   where
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
       Just r -> Just $ BndBnd r
       Nothing -> case malMinBound (<) $ bgsIts $ zBgState z of
-        NoSec -> Nothing
+        NoSec         -> Nothing
         SecConcrete r -> Just $ BndRes r
-        SecSoft b -> Just $ BndBnd b
+        SecSoft b     -> Just $ BndBnd b
 
 minBndR :: Ord v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
 minBndR = curry $ \case
-  (_,e@(BndErr _)) -> e
-  (e@(BndErr _),_) -> e
+  (_,e@(BndErr _))    -> e
+  (e@(BndErr _),_)    -> e
   (BndBnd a,BndBnd b) -> BndBnd $ min a b
   (BndRes a,BndRes b) -> BndRes $ min a b
   (BndRes a,BndBnd b) -> if a < b then BndRes a else BndBnd b
@@ -280,20 +271,18 @@ zFullResultMin
   :: (Foldable f,AShow v,Ord v)
   => Zipper' (MinTag p v) f r x
   -> Maybe (BndR (MinTag p v))
-zFullResultMin z = case curs `minBndR'` softBound `minBndR'` hardBound of
-  Nothing -> Nothing
-  Just x -> Just x
+zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
   where
-    minBndR' Nothing Nothing = Nothing
-    minBndR' x Nothing = x
-    minBndR' Nothing y = y
+    minBndR' Nothing Nothing   = Nothing
+    minBndR' x Nothing         = x
+    minBndR' Nothing y         = y
     minBndR' (Just x) (Just y) = Just $ minBndR x y
     curs = BndBnd <$> (>>= fst3) (listToMaybe $ toList $ zCursor z)
     softBound = BndBnd . topMinAssocList <$> acNonEmpty (bgsIts $ zBgState z)
     hardBound = case malConcrete $ bgsIts $ zBgState z of
-      OnlyErrors [] -> Nothing
+      OnlyErrors []    -> Nothing
       OnlyErrors (e:_) -> if zIsFinished z then Just $ BndErr e else Nothing
-      FoundResult r -> Just $ BndRes r
+      FoundResult r    -> Just $ BndRes r
 
 minStrategy
   :: (AShow v,Ord v,Monad m,AShow (ExtError p))
@@ -309,10 +298,10 @@ minStrategy fin = recur
       Pure a -> return a
       Free f -> case f of
         CmdItInit _it ini -> recur ini
-        CmdIt it -> recur $ it $ popMinAssocList
+        CmdIt it -> recur $ it popMinAssocList
         CmdInit ini -> recur ini
         CmdFinished (ExZipper x) -> return
-          (fin,fromMaybe (undefined) $ zFullResultMin x)
+          (fin,fromMaybe undefined $ zFullResultMin x)
 
 minTest :: IO (BndR (MinTag TestParams Integer))
 minTest =
