@@ -33,6 +33,7 @@ import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
 import           Data.Utils.Compose
+import           Data.Utils.Debug
 import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
@@ -211,7 +212,7 @@ insertJoinLike f p l r = do
 
 foldInsPlanRes :: Hashables2 e s =>
                  NEL.NonEmpty (InsPlanRes e s t n) -> InsPlanRes e s t n
-foldInsPlanRes (x NEL.:| xs) = foldr (\a b -> appendInsPlanRes a b) x xs
+foldInsPlanRes (x NEL.:| xs) = foldr appendInsPlanRes x xs
 toTriple :: InsPlanRes e s t n -> (NodeRef n,[NQNFQueryI e s],Query e s)
 toTriple InsPlanRes{..} =
   (insPlanRef,HS.toList insPlanNQNFs,fst <$> insPlanQuery)

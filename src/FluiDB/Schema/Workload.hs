@@ -185,7 +185,10 @@ insertAndRun queries postSolution = do
         matNodes <- lift materializedNodes
         traceM $ "Mat nodes: " ++ ashow matNodes
         when (null matNodes) $ throwAStr "No ground truth"
-      nOptqRef :: NodeRef n <- lift3 $ insertQueryPlan literalType queries
+      nOptqRef :: NodeRef n <- wrapTraceT
+        ("insertQueryPlan" ++ show (lengthF queries))
+        $ lift3
+        $ insertQueryPlan literalType queries
       lift4 clearClustBuildCache
       -- lift $ reportGraph >> reportClusterConfig/
       nodeNum <- asks (length . nNodes . propNet)
@@ -195,7 +198,9 @@ insertAndRun queries postSolution = do
           nodeNum
           nOptqRef
           (lengthF queries)
+      traceTM $ "pre-lift: " ++ show nOptqRef
       (_qcost,conf) <- lift $ planLiftCB $ do
+        traceTM $ "post-lift: " ++ show nOptqRef
         setNodeMaterialized nOptqRef
         fmap mconcat $ mapM transitionCost =<< dropReader get getTransitions
       (,pushHistory nOptqRef conf) <$> lift (local (const conf) postSolution)

@@ -88,9 +88,10 @@ instance (Functor f, Monad m) => Applicative (FreeT f m) where
 instance (Functor f,Monad m) => Monad (FreeT f m) where
   return = pure
   {-# INLINE return #-}
-  FreeT m >>= f = FreeT $ m >>= \case
-    Pure a -> runFreeT (f a)
-    Free w -> return (Free (fmap (>>= f) w))
+  m0 >>= f = go m0 where
+    go (FreeT m) = FreeT $ m >>= \case
+      Pure a -> runFreeT (f a)
+      Free w -> return (Free (go <$> w))
   {-# INLINE (>>=) #-}
 
 instance (Functor f, Fail.MonadFail m) => Fail.MonadFail (FreeT f m) where

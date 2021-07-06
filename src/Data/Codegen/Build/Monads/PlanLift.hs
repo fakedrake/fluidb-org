@@ -35,11 +35,11 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.FoldPlans
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
-import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Monads.CodeBuilder
 import           Data.Codegen.Build.Types
 import           Data.Functor.Identity
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Query.QuerySize
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
@@ -62,7 +62,7 @@ planLiftCB
 planLiftCB plan = do
   graph <- lift4 $ gets gbPropNet
   cConf <- lift2 get
-  gcConfE <- asks (updateAll graph cConf)
+  gcConfE <- asks $ updateAll graph cConf
   case gcConfE of
     Left (Left e)  -> throwError $ CBESizeInferenceError e
     Left (Right e) -> lift4 $ throwError e
@@ -89,10 +89,10 @@ updateAll
   -> Either
     (Either (SizeInferenceError e s t n) (PlanningError t n))
     (GCConfig t n)
-updateAll graph cConf =
-  return . updateIntermediates cConf
-  <=< updateSizes cConf
-  <=< return . updateGraph graph
+updateAll graph cConf gcConf = do
+  let gr = updateGraph graph gcConf
+  gcConf' <- updateSizes cConf gr
+  return $ updateIntermediates cConf gcConf'
 
 updateGraph :: Bipartite t n -> GCConfig t n -> GCConfig t n
 updateGraph graph gcConf = gcConf{propNet=graph}
@@ -105,23 +105,22 @@ updateSizes
   -> Either
     (Either (SizeInferenceError e s t n) (PlanningError t n))
     (GCConfig t n)
-updateSizes cConf =
-  updateConf (\gcConf s -> gcConf{nodeSizes=s}) $ do
-    unsizedNodes <- lift missingSizes
-    oldSizes <- lift2 $ asks nodeSizes
-    let runMonads m = runExceptT $ (`execStateT` (cConf,Just <$> oldSizes)) m
-    runMonads (filterInterms unsizedNodes >>= mapM (fmap fst . querySize))
-      >>= \case
+updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
+  unsizedNodes <- lift missingSizes
+  oldSizes <- lift2 $ asks nodeSizes
+  let runMonads m = runExceptT $ (`execStateT` (cConf,Just <$> oldSizes)) m
+  runMonads (filterInterms unsizedNodes >>= mapM (fmap fst . querySize))
+    >>= \case
       Left e -> throwError e
-      Right (_,rmap) -> lift $ traverse
-        (maybe
-         (error "planLift1 (in querySize) did not finish the recursion")
-         return) rmap
+      Right (_,rmap) -> lift
+        $ traverse
+          (maybe
+             (error "planLift1 (in querySize) did not finish the recursion")
+             return)
+          rmap
 
-updateIntermediates :: Hashables2 e s =>
-                      ClusterConfig e s t n
-                    -> GCConfig t n
-                    -> GCConfig t n
+updateIntermediates
+  :: Hashables2 e s => ClusterConfig e s t n -> GCConfig t n -> GCConfig t n
 updateIntermediates cConf gcConf =
   gcConf
   { intermediates = fromNodeList

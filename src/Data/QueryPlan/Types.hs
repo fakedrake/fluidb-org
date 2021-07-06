@@ -146,23 +146,23 @@ provenanceAsBool = \case
 
 
 type IsMatable = Bool
-data GCState t n = GCState {
-  frontier          :: NodeSet n,
-  gcMechMap         :: RefMap n (NodeProc t n (SumTag (PlanParams n) Cost)),
-  matableMechMap    :: RefMap n (NodeProc t n (BoolTag Or (PlanParams n))),
-  gcCache           :: GCCache (MetaOp t n) t n,
-  epochs            :: NEL.NonEmpty (GCEpoch t n),
-
-
-
-  -- | Nodes with nonzero protection are not demoted when the epoch changes
-  nodeProtection    :: RefMap n Count,
-  epochFilter       :: HS.HashSet (GCEpoch t n, RefMap n Count),
-  provenance        :: [ProvenanceAtom],
-  traceDebug        :: [String],
-  -- aStarScores       :: RefMap n Double,
-  garbageCollecting :: Bool
-  } deriving Generic
+data GCState t n =
+  GCState
+  { frontier :: NodeSet n
+   ,gcMechMap :: RefMap n (NodeProc t n (SumTag (PlanParams n) (PlanCost n)))
+   ,gcHistMechMap :: RefMap n (NodeProc t n (SumTag (PlanParams n) Cost))
+   ,matableMechMap :: RefMap n (NodeProc t n (BoolTag Or (PlanParams n)))
+   ,gcCache :: GCCache (MetaOp t n) t n
+   ,epochs :: NEL.NonEmpty (GCEpoch t n)
+    -- | Nodes with nonzero protection are not demoted when the epoch changes
+   ,nodeProtection :: RefMap n Count
+   ,epochFilter :: HS.HashSet (GCEpoch t n,RefMap n Count)
+   ,provenance :: [ProvenanceAtom]
+   ,traceDebug :: [String]
+    -- aStarScores       :: RefMap n Double,
+   ,garbageCollecting :: Bool
+  }
+  deriving Generic
 
 type Certainty = Double
 newtype QueryHistory n =

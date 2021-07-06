@@ -40,7 +40,7 @@ import           Control.Monad.Extra
 import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Writer
+import           Control.Monad.Writer        hiding (Sum)
 import           Data.Bipartite
 import           Data.Functor.Identity
 import qualified Data.HashSet                as HS
@@ -60,6 +60,7 @@ import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.HContT
 import           Data.Utils.ListT
+import           Data.Utils.Monoid
 import           Data.Utils.Tup
 
 import           Control.Arrow
@@ -122,6 +123,7 @@ makeMaterializable ref =
 
 haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
+  -- From the frontier replace matRef with it's dependencies.
   modify $ \gcs -> gcs{
     frontier=nsDelete matRef (frontier gcs) <> metaOpIn mop}
   extraCost <- metaOpCost [matRef] mop
@@ -131,20 +133,38 @@ haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
-  star :: Double <- sum . fmap (maybe 0 (fromIntegral . costAsInt))
-    <$> mapM
-      (getCost (\_ref _mech -> arr $ const $ BndRes 0) ForceResult)
-      frefs
-  histCosts <- takeListT 5 pastCosts
+  (costs,extraNodes) <- runWriterT
+    $ forM frefs
+    $ lift . getCost plennedCostConf mempty ForceResult >=> \case
+      Nothing -> return 0
+      Just c -> do
+        tell $ pcPlan c
+        return $ pcCost c
+  let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
+  histCosts <- takeListT 5 $ pastCosts extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
   halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
 
 -- | Make a plan for a node to be concrete.
+
+plennedCostConf :: MechConf t n (PlanCost n)
+plennedCostConf =
+  MechConf
+  { mcIsMatProc = const $ const $ arr $ const $ BndRes $ Sum $ Just mempty
+   ,mcMechMapLens = lens
+   ,mcMkCost = \ref cost -> PlanCost { pcPlan = nsSingleton ref,pcCost = cost }
+  }
+  where
+    lens = Lens { getL = gcMechMap,modL = \f gsc
+      -> gsc { gcMechMap = f $ gcMechMap gsc } }
+
 setNodeStateSafe :: MonadLogic m =>
                    NodeRef n -> IsMat -> PlanT t n m ()
 setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
 {-# INLINE setNodeStateSafe' #-}
+{-# OPTIONS_GHC -Wno-deferred-type-errors #-}
+{-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 setNodeStateSafe' :: MonadLogic m =>
                     PlanT t n m (MetaOp t n)
                   -> NodeRef n -> IsMat -> PlanT t n m ()

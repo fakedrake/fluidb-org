@@ -21,8 +21,8 @@ import           Data.Utils.Functors
 import           Data.Utils.Unsafe
 
 -- | Make an equijoin and a selection.
-selAndJoin :: NEL.NonEmpty (Prop (Rel (Expr e')))
-           -> q -> q -> NEL.NonEmpty (Query e' q)
+selAndJoin
+  :: NEL.NonEmpty (Prop (Rel (Expr e'))) -> q -> q -> NEL.NonEmpty (Query e' q)
 selAndJoin ps l r = case partition isEq $ toList ps of
   (eqs,[]) -> return $ J (foldl1 And eqs) (Q0 l) (Q0 r)
   ([],nonEqs) -> return $ J (foldl1 And nonEqs) (Q0 l) (Q0 r)
@@ -70,13 +70,23 @@ productPermutations emb (ps0,ts0) = go (ps',ts')
         -- Partition subqs
         (l,r) <- possibleSplits ts
         -- Partition props
-        (onLeft,rest) <- partitionPushable (fst <$> l) ps
-        (onRight,onJListM) <- partitionPushable (fst <$> r) rest
-        -- Dont push down ALL the lefts all the time. Definitely push
-        -- the equalities. The rest either push them or don't.
-        onJList <- maybe [] return $ NEL.nonEmpty onJListM
+        let canPush qs (refs,_prop) =
+              refs `isSubsequenceOf` toList (fst <$> qs)
+        let (singleVar0,multiVar0) = partition ((<= 1) . length . fst) ps
+            (onLeftSingle,restSingle) = partition (canPush l) singleVar0
+            (onRightSingle,unpushableSingle) = partition (canPush l) restSingle
+            (onLeftMulti,restMulti) = partition (canPush l) multiVar0
+            (onRightMulti,unpushableMultiM) = partition (canPush r) restMulti
+        unless (null unpushableSingle) []
+        unpushableMulti <- maybe [] return $ NEL.nonEmpty unpushableMultiM
+        (noPushL,onLeft)
+          <- [([],onLeftMulti ++ onLeftSingle),(onLeftSingle,onLeftMulti)]
+        (noPushR,onRight)
+          <- [([],onRightMulti ++ onRightSingle),(onRightSingle,onRightMulti)]
+        let noPushList = noPushL <> noPushR <> unpushableMulti
         toList2
-          $ selAndJoin (snd <$> onJList) <$> go (onLeft,l) <*> go (onRight,r)
+          $ selAndJoin (snd <$> noPushList) <$> go (onLeft,l)
+          <*> go (onRight,r)
 
 -- | Non-deterministically keep the ones that refer to a single
 -- column.
@@ -85,6 +95,8 @@ lowerFree :: Monad m => Free m s -> m s
 lowerFree (FreeT (Identity (Pure s))) = return s
 lowerFree (FreeT (Identity (Free m))) = m >>= lowerFree
 
+-- | Partition into pushable and non-pushable. The single-variable
+-- predicates have special treatment.
 partitionPushable
   :: NEL.NonEmpty Int
   -> [([Int],prop)]
@@ -93,10 +105,10 @@ partitionPushable qs ps = do
   let (pushable,nonPushable) =
         partition ((`isSubsequenceOf` toList qs) . fst) ps
   case partition ((<= 1) . length . fst) pushable of
-    ([],connecting) -> return (connecting,nonPushable)
-    (single,connecting)
-      -> [(connecting ++ single,nonPushable)
-         ,(connecting,nonPushable ++ single)]
+    ([],multiVar) -> return (multiVar,nonPushable)
+    (singleVar,multiVar)
+      -> [(multiVar ++ singleVar,nonPushable)
+         ,(multiVar,nonPushable ++ singleVar)]
 
 -- At least one on each side
 possibleSplits :: NEL.NonEmpty a -> [(NEL.NonEmpty a,NEL.NonEmpty a)]

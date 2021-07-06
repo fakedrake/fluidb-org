@@ -243,7 +243,7 @@ pushCoit Zipper {zCursor = Const newCoit,..} =
 -- result.
 mkMachine
   :: forall m w k .
-  (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w,AShowW w)
+  (Monad m,ZipperParams w,AShowW w)
   => String
   -> (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> [ArrProc w m]
@@ -260,7 +260,7 @@ mkMachine zid getRes =
 -- lifespans more globally.
 handleLifetimes
   :: forall m w k .
-  (Monad m,Semigroup (ZRes w),Ord (ZBnd w),ZipperParams w)
+  (Monad m,ZipperParams w)
   => String
   -> (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> Arr
@@ -333,14 +333,14 @@ wrapFree :: Monad m => f (FreeT f m x) -> FreeT f m x
 wrapFree = FreeT . return . Free
 
 mkProc :: forall m w .
-       (Semigroup (ZRes w),Monad m,Ord (ZBnd w),ZipperParams w,AShowW w)
+       (Monad m,ZipperParams w,AShowW w)
        => [ArrProc w m]
        -> ArrProc w m
 mkProc = mkProcId "no-id"
 
 mkProcId
   :: forall m w .
-  (Semigroup (ZRes w),Monad m,Ord (ZBnd w),ZipperParams w,AShowW w)
+  (Monad m,ZipperParams w,AShowW w)
   => String
   -> [ArrProc w m]
   -> ArrProc w m

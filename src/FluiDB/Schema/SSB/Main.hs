@@ -17,6 +17,7 @@ import           Data.Query.Algebra
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.Ranges
@@ -149,6 +150,8 @@ ssbMain :: IO ()
 ssbMain = do
   let oneGig = ResourceLimit 1000000000
   setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
-  timeout 3000000 (actualMain Quiet [1..12]) >>= \case
-    Nothing -> putStrLn "TIMEOUT!!"
+  let secs = 4
+  traceTM "Starting!"
+  timeout (secs * 1000000) (actualMain Verbose [5..12]) >>= \case
+    Nothing -> putStrLn $ printf  "TIMEOUT after %ds" secs
     Just () -> putStrLn "Done!"

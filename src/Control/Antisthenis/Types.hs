@@ -24,6 +24,9 @@
 
 module Control.Antisthenis.Types
   (IndexErr(..)
+  ,Ord2(..)
+  ,omin
+  ,ifLt
   ,ashowItInit
   ,runArrProc
   ,ashowRes
@@ -72,6 +75,7 @@ import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
+import           Data.Utils.Monoid
 import           Data.Utils.OptSet
 import           GHC.Generics
 
@@ -306,7 +310,7 @@ instance (AShow (ZItAssoc w (p,p)),AShowBndR w,AShowV p,AShow pr)
 type FinZipper w p = Zipper' w EmptyF p (ZPartialRes w)
 type Zipper w p = Zipper' w Identity p (ZPartialRes w)
 instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
-  bimap f g (Zipper {..}) =
+  bimap f g Zipper {..} =
     Zipper
     { zBgState = fmap f zBgState
      ,zCursor = (\(a,b,c) -> (a,f b,f c)) <$> zCursor
@@ -342,3 +346,36 @@ ashowRes ashow'' = ashow . \case
 mapCursor :: (forall a . f a -> g a) -> Zipper' w f p r -> Zipper' w g p r
 mapCursor f Zipper {..} =
   Zipper { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
+
+
+-- | Ordered set where we can find the better of two values without
+-- worying about the substitutive law of equality. This way we can
+-- find the minimum have annotated values without defining an ordering
+-- that accounts for the equality of the annotations.
+class Ord2 a b where
+  compare2 :: a -> b -> Ordering
+  default compare2 :: (Ord a,a ~ b) => a -> b -> Ordering
+  compare2 = compare
+
+instance Ord2 Int Int
+instance Ord2 Integer Integer
+instance Ord2 Float Float
+instance Ord2 Char Char
+instance Ord2 a b => Ord2 (Min' a) (Min' b) where
+  compare2 (Min' a) (Min' b) = compare2 a b
+instance Ord2 a b => Ord2 (Sum a) (Sum b) where
+  compare2 (Sum Nothing) (Sum Nothing)   = EQ
+  compare2 (Sum Nothing) (Sum (Just _))  = GT
+  compare2 (Sum (Just _)) (Sum Nothing)  = LT
+  compare2 (Sum (Just a)) (Sum (Just b)) = compare2 a b
+
+omin :: Ord2 a a => a -> a -> a
+omin a b = case compare2 a b of
+  GT -> b
+  _  -> a
+{-# INLINE omin #-}
+ifLt :: Ord2 a b => a -> b -> c -> c -> c
+ifLt a b t e = case compare2 a b of
+  LT -> t
+  _  -> e
+{-# INLINE ifLt #-}

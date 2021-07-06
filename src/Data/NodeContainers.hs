@@ -52,6 +52,7 @@ module Data.NodeContainers
   , refUnionWithKey
   , refUnionWithKeyA
   , refAlter
+  , nsToRef
   , nsNull
   , nsMap
   , nsInsert
@@ -303,7 +304,8 @@ nsFold :: (NodeRef n -> a -> a) -> NodeSet n -> a -> a
 nsFold f ns ini = foldr f ini $ toNodeList ns
 nsSize :: NodeSet n -> Int
 nsSize = IS.size . runNodeSet
-
+nsToRef :: (NodeRef n -> a) -> NodeSet n -> RefMap n a
+nsToRef f (NodeSet ns) = RefMap $ IM.fromSet (f . NodeRef) ns
 -- # /NODESTRUCT
 -- data FieldFormat = FieldFormat {
 --   fmtWidth     :: Maybe Int,       -- ^ Total width of the field.

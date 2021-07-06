@@ -8,19 +8,33 @@ import           Control.Antisthenis.Types
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.NodeContainers
+import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.ListT
 import           Data.Utils.Monoid
 
+historicalCostConf :: MechConf t n Cost
+historicalCostConf =
+  MechConf
+  { mcMechMapLens = histMapLens
+   ,mcMkCost = justCost
+   ,mcIsMatProc = noMatCost
+   ,mcIsFrontierProc = undefined
+  }
+  where
+    justCost = \_ref cost -> cost
+    histMapLens = Lens { getL = gcHistMechMap,modL = \f gc
+      -> gc { gcHistMechMap = f $ gcHistMechMap gc } }
+
 -- | The expected cost of the next query.
-pastCosts :: Monad m => ListT (PlanT t n m) (Maybe Cost)
-pastCosts = do
+pastCosts :: Monad m => NodeSet n -> ListT (PlanT t n m) (Maybe Cost)
+pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return qs
-  lift $ getCost noMatCost ForceResult q
+  lift $ getCost historicalCostConf extraMat ForceResult q
 
 -- | noMatCost is the cost of a non-materialized node. Each time it is
 -- calculated it imposes a multiplication cap. As this means an
@@ -32,21 +46,18 @@ noMatCost
   :: NodeRef n
   -> NodeProc t n (SumTag (PlanParams n) Cost)
   -> NodeProc t n (SumTag (PlanParams n) Cost)
-
 noMatCost _ref matCost = recur
   where
     recur = MealyArrow $ fromKleisli $ \conf -> do
       scale <- ask
-      if scale < 0.01 then return (recur,BndRes 0) else local (* factor)
+      if scale < 0.1 then return (recur,BndRes 0) else local (* factor)
         $ second changeBound
         <$> toKleisli (runMealyArrow matCost) (changeCap conf)
-    lowerThresh = 10
     factor = 0.5
     changeBound = \case
-      BndBnd (Min' b) -> if b
-        > lowerThresh then BndBnd $ Min' $ scaleCost factor b else BndRes 0
-      BndRes r -> BndRes $ scaleCost 0.5 <$> r
-      e@(BndErr _) -> e
+      BndBnd (Min' b) -> BndBnd $ Min' $ scaleCost factor b
+      BndRes r        -> BndRes $ scaleCost factor <$> r
+      e@(BndErr _)    -> e
     changeCap conf = conf { confCap = case confCap conf of
       CapVal c    -> CapVal $ scaleCost (1 / factor) <$> c
       ForceResult -> ForceResult

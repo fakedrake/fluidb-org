@@ -33,7 +33,7 @@ import           Control.Antisthenis.Zipper
 import           Control.Applicative
 import           Control.Monad.Identity
 import           Control.Monad.Reader
-import           Control.Monad.Writer
+import           Control.Monad.Writer               hiding (Sum)
 import           Control.Utils.Free
 import           Data.Foldable
 import qualified Data.IntSet                        as IS
@@ -84,23 +84,23 @@ instance (AShow (ZRes w),AShow (ZBnd w))
   => AShow (SecondaryBound w)
 malMinBound
   :: forall f w a .
-  (Ord (ZBnd w),Foldable f,Functor f,Num (ZBnd w))
-  => (ZRes w -> ZBnd w -> Bool)
-  -> MinAssocList f w a
+  (Foldable f
+  ,Functor f
+  ,Ord2 (ZRes w) (ZBnd w)
+  ,Ord2 (ZBnd w) (ZBnd w))
+  => MinAssocList f w a
   -> SecondaryBound w
-malMinBound lessThan mal = case malConcrete mal of
+malMinBound mal = case malConcrete mal of
   OnlyErrors _ -> maybe NoSec SecSoft elemBnd
-  FoundResult firstRes -> case (\b -> (b,lessThan firstRes b)) <$> elemBnd of
-    Just (_bnd,True) -> SecConcrete firstRes -- the first result is better than the best case of
-                                           -- the next.
-    Just (bnd,False) -> SecSoft bnd
-    Nothing          -> SecConcrete firstRes -- there are no other results.
+  FoundResult firstRes -> case elemBnd of
+    Just bnd -> ifLt firstRes bnd (SecConcrete firstRes) (SecSoft bnd)
+    Nothing  -> SecConcrete firstRes -- there are no other results.
   where
     elemBnd = foldl' go Nothing $ fst <$> malElements mal
       where
         go :: Maybe (ZBnd w) -> ZBnd w -> Maybe (ZBnd w)
         go Nothing r   = Just r
-        go (Just r0) r = Just $ min r0 r
+        go (Just r0) r = Just $ omin r0 r
 
 zModConcrete
   :: (ZItAssoc w ~ MinAssocList [] w)
@@ -130,24 +130,24 @@ barrel x@(a0 NEL.:| as0) = x NEL.:| go [] a0 as0
     go _pref _a []    = []
     go pref a (a':as) = (a' NEL.:| (a : pref)) : go (a : pref) a' as
 
-minimumOn :: Ord b => NEL.NonEmpty (b,a) -> a
+minimumOn :: Ord2 b b => NEL.NonEmpty (b,a) -> a
 minimumOn ((b,a) NEL.:| as) =
-  snd
-  $ foldl' (\(b0,a0) (b1,a1) -> if b0 > b1 then (b1,a1) else (b0,a0)) (b,a) as
+  snd $ foldl' (\(b0,a0) (b1,a1) -> ifLt b0 b1 (b0,a0) (b1,a1)) (b,a) as
 
 -- | Return the minimum of the list.
 popMinAssocList
-  :: (Ord (ZBnd w),AShowV (ZBnd w))
+  :: (Ord2 (ZBnd w) (ZBnd w),AShowV (ZBnd w))
   => MinAssocList NEL.NonEmpty w a
   -> (ZBnd w,a,MinAssocList [] w a)
 popMinAssocList (MinAssocList m c) = (v,a,MinAssocList vs c)
   where
     (v,a) NEL.:| vs = minimumOn $ (\a' -> (fst $ NEL.head a',a')) <$> barrel m
 
-topMinAssocList :: Ord (ZBnd w) => MinAssocList NEL.NonEmpty w a -> ZBnd w
+topMinAssocList
+  :: Ord2 (ZBnd w) (ZBnd w) => MinAssocList NEL.NonEmpty w a -> ZBnd w
 topMinAssocList mal = elemBnd
   where
-    elemBnd = let x NEL.:| xs = fst <$> malElements mal in foldl' min x xs
+    elemBnd = let x NEL.:| xs = fst <$> malElements mal in foldl' omin x xs
 
 instance BndRParams (MinTag p a) where
   type ZErr (MinTag p a) = ExtError p
@@ -155,9 +155,8 @@ instance BndRParams (MinTag p a) where
   type ZRes (MinTag p a) = Min' a
 
 instance (AShow a
-         ,Eq a
-         ,Ord a
-         ,Num a
+         ,Ord2 a a
+         ,Monoid a -- we only need mempty from this
          ,ExtParams p
          ,NoArgError (ExtError p)
          ,AShow (ExtError p)) => ZipperParams (MinTag p a) where
@@ -192,7 +191,7 @@ instance (AShow a
       -- result. Otherwise combine the results.
       putResult r = \case
         OnlyErrors _   -> FoundResult r
-        FoundResult r0 -> FoundResult $ r <> r0
+        FoundResult r0 -> FoundResult $ omin r r0
   -- Remove the bound from the result and insert the new one. Here we
   -- do not need to remove anything since the value of the bound is
   -- directly inferrable from the container of intermediates. Remember
@@ -212,50 +211,49 @@ instance (AShow a
     $ case (secondaryBound,confCap conf) of
       (NoSec,_) -> conf
       (_,CapStruct i) -> conf { confCap = CapStruct $ i - 1 }
-      (SecConcrete res,CapVal c) -> if res
-        <= c then error "the secondary bound should be smaller than the cap"
-        else conf { confCap = CapVal $ min res c }
-      (SecSoft bnd,CapVal c) -> conf { confCap = CapVal $ min bnd c }
+      (SecConcrete res,CapVal c) -> ifLt c res (conf { confCap = CapVal c })
+        $ error "the secondary bound should be smaller than the cap"
+      (SecSoft bnd,CapVal c) -> conf { confCap = CapVal $ omin bnd c }
       (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
       (SecSoft bnd,ForceResult) -> conf { confCap = CapVal bnd }
     where
-      secondaryBound = malMinBound (<) $ bgsIts $ zBgState z
+      secondaryBound = malMinBound $ bgsIts $ zBgState z
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
 -- the zipper should keep evolving to get to a proper resilt.
 minEvolutionControl
   :: forall v p r x .
-  (Ord v,AShow v,AShow (ExtError p),Num v)
+  (Ord2 v v,AShow v,AShow (ExtError p),Monoid v)
   => Conf (MinTag p v)
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
 minEvolutionControl conf z = case confCap conf of
-  CapStruct i -> if i >= 0 then res else res <|> Just (BndBnd 0)
+  CapStruct i -> if i >= 0 then res else res <|> Just (BndBnd $ Min' mempty)
   ForceResult -> res >>= \case
     BndBnd _bnd -> Nothing
     x           -> return x
   CapVal cap -> res >>= \case
-    BndBnd bnd -> if cap < bnd then Just $ BndBnd bnd else Nothing
+    BndBnd bnd -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
     x          -> return x
   where
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
       Just r -> Just $ BndBnd r
-      Nothing -> case malMinBound (<) $ bgsIts $ zBgState z of
+      Nothing -> case malMinBound $ bgsIts $ zBgState z of
         NoSec         -> Nothing
         SecConcrete r -> Just $ BndRes r
         SecSoft b     -> Just $ BndBnd b
 
-minBndR :: Ord v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
+minBndR :: Ord2 v v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
 minBndR = curry $ \case
   (_,e@(BndErr _))    -> e
   (e@(BndErr _),_)    -> e
-  (BndBnd a,BndBnd b) -> BndBnd $ min a b
-  (BndRes a,BndRes b) -> BndRes $ min a b
-  (BndRes a,BndBnd b) -> if a < b then BndRes a else BndBnd b
-  (BndBnd a,BndRes b) -> if a < b then BndBnd a else BndRes b
+  (BndBnd a,BndBnd b) -> BndBnd $ omin a b
+  (BndRes a,BndRes b) -> BndRes $ omin a b
+  (BndRes a,BndBnd b) -> ifLt a b (BndRes a) (BndBnd b)
+  (BndBnd a,BndRes b) -> ifLt a b (BndBnd a) (BndRes b)
 
 
 zIsFinished :: Zipper' (MinTag p v) f r x -> Bool
@@ -268,7 +266,7 @@ zIsFinished z =
 -- XXX: if the cap is DoNothing we shoudl return the minimum
 -- bound. even if Nothing is encountered.
 zFullResultMin
-  :: (Foldable f,AShow v,Ord v)
+  :: (Foldable f,AShow v,Ord2 v v)
   => Zipper' (MinTag p v) f r x
   -> Maybe (BndR (MinTag p v))
 zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
@@ -285,7 +283,7 @@ zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
       FoundResult r    -> Just $ BndRes r
 
 minStrategy
-  :: (AShow v,Ord v,Monad m,AShow (ExtError p))
+  :: (AShow v,Ord2 v v,Monad m,AShow (ExtError p))
   => k
   -> FreeT
     (ItInit (ExZipper (MinTag p v)) (ZItAssoc (MinTag p v)))
@@ -303,7 +301,7 @@ minStrategy fin = recur
         CmdFinished (ExZipper x) -> return
           (fin,fromMaybe undefined $ zFullResultMin x)
 
-minTest :: IO (BndR (MinTag TestParams Integer))
+minTest :: IO (BndR (MinTag TestParams (Sum Integer)))
 minTest =
   fmap (fst . fst)
   $ (`runReaderT` mempty)

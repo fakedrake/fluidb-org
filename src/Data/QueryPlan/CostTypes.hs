@@ -5,32 +5,71 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeFamilies        #-}
 module Data.QueryPlan.CostTypes
   (GCCache(..)
   ,StarScore(..)
   ,MatCache(..)
   ,Frontiers(..)
   ,Cost(..)
+  ,PlanCost(..)
   ,mkStarScore
   ,costAsInt
 ) where
 
+import           Control.Antisthenis.Types
 import           Data.Foldable
-import qualified Data.HashMap.Strict as HM
-import qualified Data.HashSet        as HS
+import qualified Data.HashMap.Strict       as HM
+import qualified Data.HashSet              as HS
 import           Data.NodeContainers
 import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Hashable
+import           Data.Utils.Monoid
 import           GHC.Generics
 
+
+data PlanCost n = PlanCost { pcPlan :: NodeSet n,pcCost :: Cost }
+  deriving (Show,Generic)
+instance AShow (PlanCost n)
+
+instance Ord2 (PlanCost n) (PlanCost n) where
+  compare2 c1 c2 = compare2 (pcCost c1) (pcCost c2)
+  {-# INLINE compare2 #-}
+
+instance Semigroup (PlanCost n) where
+  c1 <> c2 =
+    PlanCost { pcPlan = pcPlan c1 <> pcPlan c1,pcCost = pcCost c1 + pcCost c2 }
+instance Monoid (PlanCost n) where
+  mempty = PlanCost { pcCost = mempty,pcPlan = mempty }
+
+newtype NegCost c = NegCost { unNegCost :: c}
+instance Invertible (PlanCost n) where
+  type Inverse (PlanCost n) = NegCost (PlanCost n)
+  inv = NegCost
+  uninv = unNegCost
+  imappend c (NegCost i) =
+    PlanCost { pcPlan = pcPlan c `nsDifference` pcPlan i
+              ,pcCost = pcCost c `imappend` inv (pcCost i)
+             }
 
 data Cost = Cost { costReads :: Int,costWrites :: Int }
   deriving (Show,Eq,Generic)
 -- XXX: Here we are INCONSISTENT in assuming that reads and writes
 -- cost the same.
-instance Ord Cost where
-  compare (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
+instance Ord2 Cost Cost where
+  compare2 (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
+  {-# INLINE compare2 #-}
+
+instance Invertible Cost where
+  type Inverse Cost = NegCost Cost
+  inv = NegCost
+  uninv = unNegCost
+  imappend c (NegCost i) =
+    Cost { costReads = costReads c - costReads i
+          ,costWrites = costWrites c - costWrites i
+         }
+
 instance Num Cost where
   signum (Cost a b) = Cost (signum a) (signum b)
   abs (Cost a b) = Cost (abs a) (abs b)

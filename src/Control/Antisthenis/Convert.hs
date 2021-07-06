@@ -1,10 +1,10 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE DataKinds #-}
 module Control.Antisthenis.Convert
   (Conv(..)
   ,GenericConv(..)
@@ -13,21 +13,21 @@ module Control.Antisthenis.Convert
   ,coerceConv
   ,convArrProc) where
 
-import Control.Antisthenis.Minimum
-import Control.Antisthenis.Sum
-import Control.Antisthenis.Types
-import Data.Utils.Monoid
-import Data.Coerce
-import Data.Profunctor
-import qualified Control.Category as C
+import           Control.Antisthenis.Minimum
+import           Control.Antisthenis.Sum
+import           Control.Antisthenis.Types
+import qualified Control.Category            as C
+import           Data.Coerce
+import           Data.Profunctor
+import           Data.Utils.Monoid
 
 data Conv w w' =
   Conv
   { convEpoch :: ZEpoch w' -> ZEpoch w
-   ,convCap :: ZCap w' -> ZCap w
-   ,convRes :: ZRes w -> ZRes w'
-   ,convBnd :: ZBnd w -> ZBnd w'
-   ,convErr :: ZErr w -> ZErr w'
+   ,convCap   :: ZCap w' -> ZCap w
+   ,convRes   :: ZRes w -> ZRes w'
+   ,convBnd   :: ZBnd w -> ZBnd w'
+   ,convErr   :: ZErr w -> ZErr w'
   }
 
 instance C.Category Conv where
@@ -82,12 +82,14 @@ convBndR Conv{..} = \case
   BndRes r -> BndRes $ convRes r
   BndBnd b -> BndBnd $ convBnd b
   BndErr e -> BndErr $ convErr e
-convSumMin :: Num v => Conv (SumTag p v) (MinTag p v)
+
+-- We only need mempty from this monoid
+convSumMin :: Monoid v => Conv (SumTag p v) (MinTag p v)
 convSumMin =
   Conv
   { convEpoch = id
    ,convCap = coerce
-   ,convRes = \case {Sum Nothing -> Min' 0; Sum (Just x) -> Min' x}
+   ,convRes = \case {Sum Nothing -> Min' mempty; Sum (Just x) -> Min' x}
    ,convBnd = coerce
    ,convErr = coerce
   }

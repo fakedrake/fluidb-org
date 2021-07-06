@@ -55,8 +55,8 @@ instance Default (SumPartialRes p v a) where
   def = SumPartInit
 
 instance (AShow v
-         ,Ord v
-         ,Num v
+         ,Ord2 v v
+         ,Invertible v
          ,ExtParams p
          ,AShow (ExtError p)
          ,AShow (ExtEpoch p)
@@ -79,10 +79,10 @@ instance (AShow v
     where
       add SumPartInit bnd = toPartial bnd
       add e@(SumPartErr _) _ = e
-      add (SumPart v0) bnd = case bnd of
-        BndBnd v              -> SumPart $ v + v0 -- will be registered as it.
-        BndRes (Sum Nothing)  -> SumPart v0
-        BndRes (Sum (Just v)) -> SumPart $ (+) v <$> v0
+      add (SumPart partRes) bnd = case bnd of
+        BndBnd b              -> SumPart $ addMin b partRes -- will be registered as it.
+        BndRes (Sum Nothing)  -> SumPart partRes
+        BndRes (Sum (Just r)) -> SumPart $ (<>) r <$> partRes
         BndErr e              -> SumPartErr e
       toPartial = \case
         BndBnd v              -> SumPart v
@@ -90,7 +90,7 @@ instance (AShow v
         BndRes (Sum (Just i)) -> SumPart $ Min' i
         BndErr e              -> SumPartErr e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
-    Just $ putRes newBnd ((\x -> x - oldBnd) <$> oldRes,newZipper)
+    Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
@@ -105,28 +105,33 @@ instance (AShow v
             where
               cap' =
                 maybe
-                  (c - r)
-                  (\b0 -> c - r + b0)
+                  (c `subMin` r)
+                  (\b0 -> (c `subMin` r) `addMin` b0)
                   (fst3 $ runIdentity $ zCursor z)
           CapStruct s -> CapStruct $ s - 1
           ForceResult -> ForceResult
 
+subMin :: Invertible v => Min' v -> Min' v -> Min' v
+subMin (Min' a) (Min' b) = Min' $ a `imappend` inv b
+addMin :: Semigroup v => Min' v -> Min' v -> Min' v
+addMin (Min' a) (Min' b) = Min' $ a <> b
 -- | Return the result expected or Nothing if there is more evolving
 -- that needs to happen. This can only return bounds.
 sumEvolutionControl
-  :: (Num v,Ord v,AShow v,AShow (ExtError p))
+  :: forall v p m . (Invertible v,Ord2 v v,AShow v,AShow (ExtError p))
   => GConf (SumTag p v)
   -> Zipper (SumTag p v) (ArrProc (SumTag p v) m)
   -> Maybe (BndR (SumTag p v))
 sumEvolutionControl conf z = case zRes z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
-    CapStruct i -> if i < 0 then Nothing else Just $ BndBnd 0
-    CapVal bnd  -> if bnd < 0 then Just $ BndBnd 0 else Nothing
-    _           -> Nothing
+    CapStruct i -> ifLt i (0 :: Int) Nothing (Just $ BndBnd $ Min' mempty)
+    CapVal bnd
+      -> ifLt bnd (Min' mempty :: Min' v) (Just $ BndBnd $ Min' mempty) Nothing
+    _ -> Nothing
   SumPart bound -> case confCap conf of
-    CapVal cap  -> if cap < bound then Just $ BndBnd bound else Nothing
-    CapStruct i -> if i >= 0 then Nothing else Just $ BndBnd bound
+    CapVal cap  -> ifLt cap bound (Just $ BndBnd bound) Nothing
+    CapStruct i -> ifLt (0 :: Int) i (Just $ BndBnd bound) Nothing
     ForceResult -> Nothing
 
 sumEvolutionStrategy
@@ -149,28 +154,3 @@ sumEvolutionStrategy fin = recur
           SumPart (Min' bnd) -> BndRes $ Sum $ Just bnd
           SumPartInit        -> BndRes $ Sum Nothing
           SumPartErr e       -> BndErr e)
-
-#if 0
-sumToMin :: Sum v -> Min v
-sumToMin (Sum v) = Min v
-minToSum :: Min v -> Sum v
-minToSum (Min v) = Sum v
-
-sumTest :: IO (BndR (SumTag TestParams Integer))
-sumTest =
-  fmap (fst . fst)
-  $ (`runReaderT` mempty)
-  $ (`runFixStateT` def)
-  $ runWriterT
-  $ do
-    putMech 1 $ incrTill "1" ((+ 1),minToSum) 3
-    putMech 2 $ incrTill "2" ((+ 1),minToSum) 1
-    putMech 3 $ incrTill "3" ((+ 1),minToSum) 2
-    res <- runMech (mkProc $ getMech <$> [1,2,3]) def
-    lift3 $ putStrLn $ "Result: " ++ ashow res
-    return res
-  where
-    insTrail k tr =
-      if k `IS.member` tr then Left $ ErrCycle k tr else Right $ IS.insert k tr
-    getMech i = withTrail (insTrail i) $ getUpdMech (BndErr $ ErrMissing i) i
-#endif
