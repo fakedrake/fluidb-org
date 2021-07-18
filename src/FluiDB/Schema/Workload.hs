@@ -198,9 +198,9 @@ insertAndRun queries postSolution = do
           nodeNum
           nOptqRef
           (lengthF queries)
-      traceTM $ "pre-lift: " ++ show nOptqRef
+      traceTM $ "Updating sizes(and other stuff): " ++ show nOptqRef
       (_qcost,conf) <- lift $ planLiftCB $ do
-        traceTM $ "post-lift: " ++ show nOptqRef
+        traceTM $ "sizes updated: " ++ show nOptqRef
         setNodeMaterialized nOptqRef
         fmap mconcat $ mapM transitionCost =<< dropReader get getTransitions
       (,pushHistory nOptqRef conf) <$> lift (local (const conf) postSolution)

@@ -21,7 +21,6 @@ historicalCostConf =
   { mcMechMapLens = histMapLens
    ,mcMkCost = justCost
    ,mcIsMatProc = noMatCost
-   ,mcIsFrontierProc = undefined
   }
   where
     justCost = \_ref cost -> cost

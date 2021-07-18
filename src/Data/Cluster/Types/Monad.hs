@@ -124,7 +124,8 @@ freeToForest = \case
 forestToQuery :: QueryForest e s -> Query e (s, QueryPlan e s)
 forestToQuery = either (forestToQuery <=<  NEL.head) Q0 . qfQueries
 queryToForest :: Hashables2 e s => Query e (QueryForest e s) -> QueryForest e s
-queryToForest q = let v = return q in QueryForest {qfHash=hash v,qfQueries=Left v}
+queryToForest q =
+  let v = return q in QueryForest { qfHash = hash v,qfQueries = Left v }
 
 instance Eq (QueryForest e s) where a == b = qfHash a == qfHash b
 instance Hashable (QueryForest e s) where

@@ -98,10 +98,9 @@ mkNewMech mc@MechConf {..} ref = squashMealy $ do
 
 data MechConf t n v =
   MechConf
-  { mcMechMapLens    :: GCState t n :>: RefMap n (NodeProc t n (CostParams n v))
-   ,mcMkCost         :: NodeRef n -> Cost -> v
-   ,mcIsMatProc      :: NoMatProc t n v
-   ,mcIsFrontierProc :: SumTag (PlanParams n) v
+  { mcMechMapLens :: GCState t n :>: RefMap n (NodeProc t n (CostParams n v))
+   ,mcMkCost      :: NodeRef n -> Cost -> v
+   ,mcIsMatProc   :: NoMatProc t n v
   }
 
 data a :>:  b = Lens { getL :: a -> b,modL :: (b -> b) -> a -> a }

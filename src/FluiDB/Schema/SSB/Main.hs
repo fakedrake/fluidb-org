@@ -15,11 +15,13 @@ import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.SQL.Types
+import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
+import           Data.Utils.MTL
 import           Data.Utils.Ranges
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
@@ -29,10 +31,8 @@ import           FluiDB.Types
 import           FluiDB.Utils
 import           System.FilePath
 import           System.IO
-import           System.Posix.Resource
 import           System.Process
 import           System.Timeout
-import           Text.Printf
 
 type AnnotQuery =
   Query (PlanSym ExpTypeSym Table) (QueryPlan ExpTypeSym Table,Table)
@@ -99,8 +99,12 @@ actualMain :: Verbosity -> [Int] -> IO ()
 actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
   liftIO $ putStrLn $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
-    Nothing    -> throwAStr $ printf "No such query %d" qi
-    Just query -> runQuery verbosity query
+    Nothing -> throwAStr $ printf "No such query %d" qi
+    Just query -> do
+      _transitions <- runQuery verbosity query
+      pgs <- dropExcept (throwError . toGlobalError)
+        $ dropReader (gets globalGCConfig) totalUsedPages
+      lift2 $ putStrLn $ "Pages used: " ++ show pgs
 
 type ImagePath = FilePath
 type QueryPath = FilePath
@@ -111,7 +115,11 @@ renderGraph
   -> SSBGlobalSolveM (IntermediatesPath,QueryPath,ImagePath,GraphPath)
 renderGraph query = do
   gr <- gets $ propNet . globalGCConfig
-  interms <- gets $ fmap3 (runIdentity . qnfOrigDEBUG') . refAssocs . nrefToQnfs . globalClusterConfig
+  interms <- gets
+    $ fmap3 (runIdentity . qnfOrigDEBUG')
+    . refAssocs
+    . nrefToQnfs
+    . globalClusterConfig
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
         dotPath = graphBase <.> "dot"
@@ -122,11 +130,11 @@ renderGraph query = do
     writeFile grPath $ ashow gr
     writeFile qPath $ ashow query
     writeFile isPath $ ashow interms
-    writeFile dotPath $ simpleRender @T @N gr
+    writeFile dotPath $ simpleRender gr
     withFile dotPath ReadMode $ \hndl -> do
       runProc
-        (mkProc "dot" ["-o" ++ imgPath, "-Tsvg"]) { std_in = UseHandle hndl }
-    return (isPath, qPath,imgPath,grPath)
+        (mkProc "dot" ["-o" ++ imgPath,"-Tsvg"]) { std_in = UseHandle hndl }
+    return (isPath,qPath,imgPath,grPath)
 
 getInputNodes :: NodeRef N -> GraphBuilderT T N IO [(NodeRef T,[NodeRef N])]
 getInputNodes ref = do
@@ -148,10 +156,10 @@ readGraph gpath m = do
 
 ssbMain :: IO ()
 ssbMain = do
-  let oneGig = ResourceLimit 1000000000
-  setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
-  let secs = 4
+  -- let oneGig = ResourceLimit 1000000000
+  -- setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
+  let secs = 15
   traceTM "Starting!"
-  timeout (secs * 1000000) (actualMain Verbose [5..12]) >>= \case
+  timeout (secs * 1000000) (actualMain Quiet [1..12]) >>= \case
     Nothing -> putStrLn $ printf  "TIMEOUT after %ds" secs
     Just () -> putStrLn "Done!"

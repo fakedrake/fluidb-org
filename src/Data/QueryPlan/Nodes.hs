@@ -26,7 +26,7 @@ module Data.QueryPlan.Nodes
   ,unprotect
   ,protect
   ,getNodeProtection
-  ,isMaterialized) where
+  ,isMaterialized,totalUsedPages) where
 
 -- import Data.QueryPlan.Frontiers
 import           Control.Monad.Except
@@ -149,6 +149,18 @@ getDataSize = do
           (maybe "<unbounded>" show budgetM)
           (ashow matNodes)
     else return ret
+
+
+totalUsedPages
+  :: (MonadError (PlanningError t n) m
+     ,MonadReader (GCConfig t n) m)
+  => m PageNum
+totalUsedPages = do
+  let pageSize = 4096
+  sizes <- asks $ toList . nodeSizes >=> fst
+  fmap sum $ forM sizes $ \size -> case pageNum pageSize size of
+    Nothing    -> throwPlan "oops"
+    Just pgNum -> return pgNum
 
 
 totalNodePages :: (MonadError (PlanningError t n) m,

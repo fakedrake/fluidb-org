@@ -3,12 +3,11 @@
 {-# LANGUAGE TypeFamilies        #-}
 
 module Data.Cluster.PutCluster
-  ( putBinCluster
-  , putUnCluster
-  , putNCluster
-  , idempotentClusterInsert
-  , planSymAssoc
-  ) where
+  (putBinCluster
+  ,putUnCluster
+  ,putNCluster
+  ,idempotentClusterInsert
+  ,planSymAssoc) where
 
 import           Control.Applicative
 import           Control.Monad

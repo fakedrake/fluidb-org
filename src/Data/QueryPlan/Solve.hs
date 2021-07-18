@@ -90,7 +90,7 @@ warmupCache node = do
       mapM_ findMetaOps =<< asks (refKeys . nodeSizes)
 
 setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
-setNodeMaterialized node = wrapTraceT "setNodeMaterialized" $ do
+setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
   -- Populate the metaop cache
   when False $ warmupCache node
   setNodeStateSafe node Mat
