@@ -25,6 +25,7 @@ module Data.Utils.Functors
   ,lift4
   ,lift5
   ,bitraverse2
+  ,cofmap
   ,(<&>)) where
 
 import           Control.Monad
@@ -133,3 +134,6 @@ any2 = any . any
 
 any3 :: (Foldable t1, Foldable t2, Foldable t3) => (m -> Bool) -> t1 (t2 (t3 m)) -> Bool
 any3 = any . any . any
+
+cofmap :: (forall a . f a -> f' a) -> f x -> f' x
+cofmap = id
