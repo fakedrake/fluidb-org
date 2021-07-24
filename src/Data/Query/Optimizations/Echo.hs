@@ -14,7 +14,11 @@ import           Data.Utils.Default
 -- | A tunnel network that has not yet been
 newtype EchoNetEden = EchoNetEden { unEchoNetEden :: IM.IntMap IS.IntSet}
 type EchoId = IM.Key
-data EchoSide = TEntry EchoId | TExit EchoId | NoEcho
+data EchoSide
+  = TEntry EchoId
+  | TExit EchoId
+  | NoEcho
+  deriving Eq
 instance Default EchoSide where
   def = NoEcho
 -- | Echo marked query
@@ -22,6 +26,7 @@ data TQuery e s =
   TQuery { tqQuery :: Either (Query e (TQuery e s)) (Query e s)
           ,tqEcho  :: EchoSide
          }
+  deriving Eq
 
 instance Functor (TQuery e) where
   fmap f = go where go tq  = tq { tqQuery = bimap (fmap go) (fmap f) $ tqQuery tq}

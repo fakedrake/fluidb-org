@@ -14,6 +14,7 @@ module Data.Utils.Functors
   ,toList2
   ,toList3
   ,toList4
+  ,toList5
   ,all2
   ,all3
   ,any2
@@ -116,6 +117,12 @@ return3 = return . return2
 toList4 :: (Foldable t1, Foldable t2, Foldable t3, Foldable t4) =>
           t1 (t2 (t3 (t4 m))) -> [m]
 toList4 = toList >=> toList >=> toList >=> toList
+
+toList5 :: (Foldable t1,Foldable t2,Foldable t3,Foldable t4,Foldable t5)
+        => t1 (t2 (t3 (t4 (t5 m))))
+        -> [m]
+toList5 = toList >=> toList >=> toList >=> toList >=> toList
+
 
 toList3 :: (Foldable t1, Foldable t2, Foldable t3) => t1 (t2 (t3 m)) -> [m]
 toList3 = toList >=> toList >=> toList

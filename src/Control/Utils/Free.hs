@@ -66,6 +66,9 @@ instance Traversable f => Bitraversable (FreeF f) where
 newtype FreeT f m a = FreeT { runFreeT :: m (FreeF f a (FreeT f m a)) }
   deriving Generic
 
+instance Eq (m (FreeF f a (FreeT f m a))) => Eq (FreeT f m a) where
+  FreeT a == FreeT b = a == b
+
 -- | The \"free monad\" for a functor @f@.
 type Free f = FreeT f Identity
 
