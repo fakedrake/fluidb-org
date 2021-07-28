@@ -16,15 +16,16 @@ import           Control.Monad.Except
 import           Control.Utils.Free
 import           Data.Bifunctor
 import           Data.CppAst.CppType
-import qualified Data.List.NonEmpty                     as NEL
+import qualified Data.List.NonEmpty                    as NEL
 import           Data.Maybe
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.Annotations
 import           Data.Query.Optimizations.Dates
+import           Data.Query.Optimizations.Echo
+import           Data.Query.Optimizations.EchoingJoins
 import           Data.Query.Optimizations.Likes
 import           Data.Query.Optimizations.Misc
-import           Data.Query.Optimizations.PossibleJoins
 import           Data.Query.Optimizations.Projections
 import           Data.Query.Optimizations.Sort
 import           Data.Query.Optimizations.Types
@@ -73,10 +74,12 @@ mkEmbedding (toETS,toE) =
          _               -> False) . planSymQnfName . fst
   }
 
-optQuery' :: forall e' e s . Hashables2 e' s =>
-           SymEmbedding (ExpTypeSym' e) s e'
-         -> Query e' s
-         -> Maybe (Free (Compose NEL.NonEmpty (Query e')) s)
+optQuery'
+  :: forall e' e s .
+  Hashables2 e' s
+  => SymEmbedding (ExpTypeSym' e) s e'
+  -> Query e' s
+  -> Maybe (Free (Compose NEL.NonEmpty (TQuery e')) s)
 optQuery'  symEmb q0 = do
   saneq <- sanitizeQuery symEmb q0
   -- Actual optimizations
@@ -97,7 +100,7 @@ optQueryPlan
      ,ExpTypeSym' e0
       -> e)
   -> Query (PlanSym e s) (QueryPlan e s,s)
-  -> m (Free (Compose NEL.NonEmpty (Query e)) (s,QueryPlan e s))
+  -> m (Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryPlan e s))
 optQueryPlan litType etsIso q = do
   annotated <-
     annotateQueryPlan litType

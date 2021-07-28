@@ -6,10 +6,12 @@ module Data.Query.Optimizations.Echo
   ,tunnelQuery) where
 import           Control.Monad
 import           Data.Bifunctor
-import qualified Data.IntMap        as IM
-import qualified Data.IntSet        as IS
+import qualified Data.IntMap         as IM
+import qualified Data.IntSet         as IS
 import           Data.Query.Algebra
 import           Data.Utils.Default
+import           Data.Utils.Hashable
+import           GHC.Generics
 
 -- | A tunnel network that has not yet been
 newtype EchoNetEden = EchoNetEden { unEchoNetEden :: IM.IntMap IS.IntSet}
@@ -18,7 +20,7 @@ data EchoSide
   = TEntry EchoId
   | TExit EchoId
   | NoEcho
-  deriving Eq
+  deriving (Generic,Eq)
 instance Default EchoSide where
   def = NoEcho
 -- | Echo marked query
@@ -26,7 +28,16 @@ data TQuery e s =
   TQuery { tqQuery :: Either (Query e (TQuery e s)) (Query e s)
           ,tqEcho  :: EchoSide
          }
-  deriving Eq
+  deriving (Generic,Eq)
+
+instance Bifunctor TQuery where
+  bimap f g = go
+    where
+      go TQuery {..} =
+        TQuery
+        { tqQuery = bimap (bimap f go) (bimap f g) tqQuery,tqEcho = tqEcho }
+instance Hashables2 e s => Hashable (TQuery e s)
+instance Hashable EchoSide
 
 instance Functor (TQuery e) where
   fmap f = go where go tq  = tq { tqQuery = bimap (fmap go) (fmap f) $ tqQuery tq}

@@ -24,6 +24,7 @@ import           Data.Bifoldable
 import           Data.Bifunctor
 import           Data.Bitraversable
 import           Data.Functor.Identity
+import           Data.Hashable
 import           GHC.Generics
 
 -- | The base functor for a free monad.
@@ -31,6 +32,9 @@ data FreeF f a b
   = Pure a
   | Free (f b)
   deriving (Eq,Ord,Show,Read,Generic,Generic1)
+
+instance (Hashable (f b),Hashable a)
+  => Hashable (FreeF f a b)
 
 instance Functor f => Functor (FreeF f a) where
   fmap _ (Pure a)  = Pure a
@@ -66,6 +70,8 @@ instance Traversable f => Bitraversable (FreeF f) where
 newtype FreeT f m a = FreeT { runFreeT :: m (FreeF f a (FreeT f m a)) }
   deriving Generic
 
+instance Hashable (m (FreeF f a (FreeT f m a))) => Hashable (FreeT f m a) where
+  hashWithSalt s (FreeT v) = hashWithSalt s v
 instance Eq (m (FreeF f a (FreeT f m a))) => Eq (FreeT f m a) where
   FreeT a == FreeT b = a == b
 
