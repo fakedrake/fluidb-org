@@ -150,7 +150,7 @@ quarantine m = do
 
 -- | Make a reference to a QNF unless the qnf is already there.
 cachedMkRef
-  :: (Hashables2 e s,Monad m)
+  :: (HasCallStack,Hashables2 e s,Monad m)
   => (c -> Maybe (NodeRef n))
   -> (NodeRef n -> c -> c)
   -> QNFQuery e s
@@ -167,32 +167,34 @@ cachedMkRef fromCache toCache qnf = gets fromCache >>= \case
       refs
         -> throwAStr $ "Expected exactly one ref per qnf: " ++ ashow (refs,qnf)
 
-runQnfCache :: Monad m =>
-              ListT (QNFBuild e s) a
-            -> CGraphBuilderT e s t n m [a]
-runQnfCache v =
-  gets (runStateT (runListT v) . qnfBuildCache . clustBuildCache) >>= \case
-    Left err -> throwAStr $ ashow err
-    Right (x,c) -> do
-      modify $ \cc -> cc{clustBuildCache=(clustBuildCache cc){qnfBuildCache=c}}
-      return x
-nqnfJoinC :: (Monad m,Hashables2 e s) =>
-            Prop (Rel (Expr e))
-          -> NQNFQueryI e s
-          -> NQNFQueryI e s
-          -> CGraphBuilderT e s t n m
-          [NQNFResultI (Prop (Rel (Expr (QNFName e s, e)))) e s]
+runQnfCache
+  :: Monad m => ListT (QNFBuild e s) a -> CGraphBuilderT e s t n m [a]
+runQnfCache
+  v = gets (runStateT (runListT v) . qnfBuildCache . clustBuildCache) >>= \case
+  Left err -> throwAStr $ ashow err
+  Right (x,c) -> do
+    modify $ \cc -> cc
+      { clustBuildCache = (clustBuildCache cc) { qnfBuildCache = c } }
+    return x
+nqnfJoinC
+  :: (Monad m,Hashables2 e s) =>
+  Prop (Rel (Expr e))
+  -> NQNFQueryI e s
+  -> NQNFQueryI e s
+  -> CGraphBuilderT e s t n m
+  [NQNFResultI (Prop (Rel (Expr (QNFName e s, e)))) e s]
 nqnfJoinC p l r = runQnfCache $ nqnfJoin p l r
-toNQNFQueryUC :: (Hashables2 e s, Monad m) =>
-                UQOp e
-              -> NQNFQueryI e s
-              -> CGraphBuilderT e s t n m
-              (NQNFResultI (UQOp (QNFName e s, e)) e s)
+toNQNFQueryUC
+  :: (Hashables2 e s,Monad m)
+  => UQOp e
+  -> NQNFQueryI e s
+  -> CGraphBuilderT e s t n m (NQNFResultI (UQOp (QNFName e s,e)) e s)
 toNQNFQueryUC o l = fmap headErr $ runQnfCache $ lift $ toNQNFQueryU o l
-toNQNFQueryBC :: (Hashables2 e s,Monad m) =>
-                BQOp e
-              -> NQNFQueryI e s
-              -> NQNFQueryI e s
-              -> CGraphBuilderT e s t n m
-              [NQNFResultI (Either (BQOp (QNFName e s, e)) (MkQB e s)) e s]
+toNQNFQueryBC
+  :: (Hashables2 e s,Monad m) =>
+  BQOp e
+  -> NQNFQueryI e s
+  -> NQNFQueryI e s
+  -> CGraphBuilderT e s t n m
+  [NQNFResultI (Either (BQOp (QNFName e s, e)) (MkQB e s)) e s]
 toNQNFQueryBC o l r = runQnfCache $ toNQNFQueryB o l r

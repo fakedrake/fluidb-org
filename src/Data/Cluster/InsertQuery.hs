@@ -21,15 +21,18 @@ import           Data.Cluster.PutCluster
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.PutCluster.Join
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Monad
 import           Data.CppAst.CppType
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.HashSet                   as HS
+import qualified Data.IntMap                    as IM
 import qualified Data.List.NonEmpty             as NEL
 import           Data.NodeContainers
 import           Data.QnfQuery.Build
 import           Data.QnfQuery.BuildUtils
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
+import           Data.Query.Optimizations.Echo
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
 import           Data.Utils.Compose
@@ -39,20 +42,33 @@ import           Data.Utils.Hashable
 import           Data.Utils.Tup
 import           Data.Utils.Unsafe
 
-appendInsPlanRes :: Hashables2 e s =>
-                   InsPlanRes e s t n
-                 -> InsPlanRes e s t n
-                 -> InsPlanRes e s t n
+appendInsPlanRes
+  :: Hashables2 e s
+  => InsPlanRes e s t n
+  -> InsPlanRes e s t n
+  -> InsPlanRes e s t n
 appendInsPlanRes l r = InsPlanRes {
   insPlanRef=insPlanRef l,
   insPlanNQNFs=insPlanNQNFs l <> insPlanNQNFs r,
   insPlanQuery=insPlanQuery l}
 
+registerEcho :: Monad m => NodeRef n -> EchoSide -> CGraphBuilderT e s t n m ()
+registerEcho n = \case
+  NoEcho -> return ()
+  TEntry i -> modify $ \cgs -> cgs
+    { qnfTunels = IM.adjust (\tun -> tun { tEntrys = n : tEntrys tun }) i
+        $ qnfTunels cgs
+    }
+  TExit i -> modify $ \cgs -> cgs
+    { qnfTunels = IM.adjust (\tun -> tun { tExits = n : tExits tun }) i
+        $ qnfTunels cgs
+    }
+
 insertQueryPlan
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
   => (e -> Maybe CppType)
-  -> Free (Compose NEL.NonEmpty (Query e)) (s,QueryPlan e s)
+  -> Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryPlan e s)
   -> CGraphBuilderT e s t n m (NodeRef n)
 insertQueryPlan litType = fmap insPlanRef . recur . freeToForest
   where
@@ -60,11 +76,21 @@ insertQueryPlan litType = fmap insPlanRef . recur . freeToForest
     recur forest = do
       cachedM forest $ case qfQueries forest of
         Right s -> go0 s
-        Left qs -> fmap foldInsPlanRes $ forM qs $ \case
-          Q2 o l r -> go2 o (queryToForest l) (queryToForest r)
-          Q1 o q   -> go1 o (queryToForest q)
-          Q0 s     -> recur s
+        Left qs -> foldInsPlanRes <$> forM qs recurTQ
       where
+        q2f = queryToForest . fmap tqueryToForest
+        recurTQ q0 = do
+          res <- case tqQuery q0 of
+            Left q  -> case q of
+              Q1 o q'  -> go1 o $ q2f q'
+              Q2 o l r -> go2 o (q2f l) (q2f r)
+              Q0 q'    -> recur $ tqueryToForest q'
+            Right x -> case x of
+              Q1 o q   -> go1 o $ queryToForest q
+              Q2 o l r -> go2 o (queryToForest l) (queryToForest r)
+              Q0 q     -> recur q
+          registerEcho (insPlanRef res) (tqEcho q0)
+          return res
         cachedM :: QueryForest e s
                 -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
                 -> CGraphBuilderT e s t n m (InsPlanRes e s t n)

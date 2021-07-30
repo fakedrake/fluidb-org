@@ -30,6 +30,7 @@ module Data.Utils.AShow.Common
   , ashowCase'
   ) where
 
+import           Control.Utils.Free
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy     as HM
 import qualified Data.HashSet          as HS
@@ -180,3 +181,6 @@ instance AShow Void where ashow' = undefined
 ashowCase' :: (Enum a,Bounded a,Show a,AShow b) => (a -> b) -> SExp
 ashowCase' f = Case [(show x,ashow' $ f x) | x <- fullRange]
 instance AShow a => AShow (Min a)
+instance AShow (m (FreeF f a (FreeT f m a))) => AShow (FreeT f m a)
+instance (AShow (f b),AShow a)
+  => AShow (FreeF f a b)

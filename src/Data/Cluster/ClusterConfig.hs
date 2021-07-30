@@ -211,7 +211,7 @@ registerClusterInput ref clust = do
 
 linkNRefQnf
   :: forall e s t n m .
-  (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
+  (HasCallStack,Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => NodeRef n
   -> QNFQuery e s
   -> m ()

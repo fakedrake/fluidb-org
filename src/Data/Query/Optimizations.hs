@@ -102,15 +102,19 @@ optQueryPlan
   -> Query (PlanSym e s) (QueryPlan e s,s)
   -> m (Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryPlan e s))
 optQueryPlan litType etsIso q = do
-  annotated <-
-    annotateQueryPlan litType
+  annotated <- annotateQueryPlan litType
     $ first (\s -> (planSymOrig s,s))
     $ fmap swap q
-  optq <- maybe (throwAStr "optQuery' failed.") return
+  optq <- maybe
+    (throwAStr
+     $ "optQuery' failed: " ++ ashow (bimap (fst . fst) fst annotated))
+    return
     $ optQuery' (mkEmbedding etsIso)
     $ first (first snd) annotated
   return
-    $ hoistFreeTF (Compose . fmap (first $ planSymOrig . fst) . getCompose) optq
+    $ hoistFreeTF
+      (Compose . fmap (first $ planSymOrig . fst) . getCompose)
+      optq
 
 hoistFreeTF
   :: (Monad m,Functor f)

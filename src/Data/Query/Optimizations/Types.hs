@@ -26,9 +26,9 @@ module Data.Query.Optimizations.Types
   ) where
 
 import           Control.Monad.Except
-import           Data.QnfQuery.Types
 import           Data.Constraint        as DC
 import           Data.CppAst.CppType
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Query.SQL.Types
@@ -87,11 +87,12 @@ unWrapEq :: WrapEq e -> e
 unWrapEq (WrapEq _ e) = e
 
 eqSymEmbedding :: Eq e => SymEmbedding e [e] e
-eqSymEmbedding = SymEmbedding {
-  embedLit=id,
-  unEmbed=id,
-  symEq=(==),
-  embedType=const $ Just CppNat,
-  embedInS=elem,
-  embedIsLit=const False
+eqSymEmbedding =
+  SymEmbedding
+  { embedLit = id
+   ,unEmbed = id
+   ,symEq = (==)
+   ,embedType = const $ Just CppNat
+   ,embedInS = elem
+   ,embedIsLit = const False
   }

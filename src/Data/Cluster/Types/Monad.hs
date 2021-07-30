@@ -27,6 +27,8 @@ module Data.Cluster.Types.Monad
   ,PropCluster
   ,Defaulting
   ,CPropagatorPlan
+  ,Tunnel(..)
+  ,tqueryToForest
   ,forestToQuery
   ,queryToForest
   ,freeToForest
@@ -51,14 +53,16 @@ import           Control.Utils.Free
 import           Data.Bipartite
 import           Data.Bits
 import           Data.Cluster.Types.Clusters
-import qualified Data.HashMap.Strict         as HM
-import qualified Data.HashSet                as HS
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as HS
+import qualified Data.IntMap                   as IM
 import           Data.List.Extra
-import qualified Data.List.NonEmpty          as NEL
+import qualified Data.List.NonEmpty            as NEL
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
+import           Data.Query.Optimizations.Echo
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
 import           Data.Utils.Compose
@@ -77,25 +81,30 @@ data ClusterError e s =
 instance AShowError e s (ClusterError e s)
 instance (AShowV e, AShowV s) => AShow (ClusterError e s)
 
+data Tunnel n = Tunnel { tExits :: [NodeRef n],tEntrys :: [NodeRef n] }
+
 -- | ClusterConfig is empty in the initial stage.
-data ClusterConfig e s t n = ClusterConfig {
-  -- |If this is False throw an en error when there is a bottom that
-  -- does not correspond to a node.
-  qnfInsertBottoms :: Bool,
-  -- | All nodes of each cluster and their corresponding cluister
-  qnfToClustMap    :: HM.HashMap (QNFQuery e s) [AnyCluster e s t n],
-  nrefToQnfs       :: RefMap n [QNFQuery e s],
-  -- ^ All these will be equiv: (schema, query)
-  trefToQnf        :: RefMap t (QNFQuery e s),
-  qnfTableColumns  :: s -> Maybe [e],
-  qnfNodePlans     :: RefMap n (Defaulting (QueryPlan e s)),
-  -- ^ The plan that we expect to find in each node.
-  qnfPropagators   :: HM.HashMap (AnyCluster e s t n) (ClustPropagators e s t n),
-  -- Update the map between nodes and queries. The same cluster is
-  -- associated with multiple equivalent name translations with
-  -- equivalent qnfs. Each propagator in the list deals withy a
-  -- separate naming pattern.
-  clustBuildCache  :: ClustBuildCache e s t n
+data ClusterConfig e s t n =
+  ClusterConfig
+  { qnfTunels :: IM.IntMap (Tunnel n)
+    -- |If this is False throw an en error when there is a bottom that
+    -- does not correspond to a node.
+   ,qnfInsertBottoms :: Bool
+    -- | All nodes of each cluster and their corresponding cluister
+   ,qnfToClustMap :: HM.HashMap (QNFQuery e s) [AnyCluster e s t n]
+   ,nrefToQnfs :: RefMap n [QNFQuery e s]
+    -- ^ All these will be equiv: (schema, query)
+   ,trefToQnf :: RefMap t (QNFQuery e s)
+   ,qnfTableColumns :: s -> Maybe [e]
+   ,qnfNodePlans :: RefMap n (Defaulting (QueryPlan e s))
+    -- ^ The plan that we expect to find in each node.
+   ,qnfPropagators
+      :: HM.HashMap (AnyCluster e s t n) (ClustPropagators e s t n)
+    -- Update the map between nodes and queries. The same cluster is
+    -- associated with multiple equivalent name translations with
+    -- equivalent qnfs. Each propagator in the list deals withy a
+    -- separate naming pattern.
+   ,clustBuildCache :: ClustBuildCache e s t n
   }
 newtype ClustPropagators e s t n = ClustPropagators {
   planPropagators :: [ACPropagatorAssoc e s t n]
@@ -107,24 +116,36 @@ data InsPlanRes e s t n = InsPlanRes {
   insPlanQuery :: Query e (s,QueryPlan e s)
   } deriving Generic
 instance (AShowV e,AShowV s) => AShow (InsPlanRes e s t n)
-data QueryForest e s = QueryForest {
-  qfHash :: Int,
-  qfQueries :: Either (NEL.NonEmpty (Query e (QueryForest e s))) (s,QueryPlan e s)
-  } deriving Generic
+data QueryForest e s =
+  QueryForest
+  { qfHash :: Int
+   ,qfQueries
+      :: Either (NEL.NonEmpty (TQuery e (QueryForest e s))) (s,QueryPlan e s)
+  }
+  deriving Generic
 
 -- XXX: Each tree is equivalent to each other  so calculating the
 -- qnfquery we can get the hash for "free".
-freeToForest :: Hashables2 e s =>
-               Free (Compose NEL.NonEmpty (Query e)) (s, QueryPlan e s)
-             -> QueryForest e s
+freeToForest
+  :: Hashables2 e s
+  => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryPlan e s)
+  -> QueryForest e s
 freeToForest = \case
   FreeT (Identity (Free (Compose a))) -> let v = fmap2 freeToForest a
     in QueryForest {qfHash=hash v,qfQueries=Left v}
   FreeT (Identity (Pure a)) -> QueryForest {qfHash=hash a,qfQueries=Right a}
-forestToQuery :: QueryForest e s -> Query e (s, QueryPlan e s)
-forestToQuery = either (forestToQuery <=<  NEL.head) Q0 . qfQueries
+forestToQuery :: Hashables2 e s => QueryForest e s -> Query e (s,QueryPlan e s)
+forestToQuery =
+  either
+    (forestToQuery <=< either (fmap tqueryToForest) id . tqQuery . NEL.head)
+    Q0
+  . qfQueries
+
 queryToForest :: Hashables2 e s => Query e (QueryForest e s) -> QueryForest e s
-queryToForest q =
+queryToForest = tqueryToForest . tunnelQuery
+
+tqueryToForest :: Hashables2 e s => TQuery e (QueryForest e s) -> QueryForest e s
+tqueryToForest q =
   let v = return q in QueryForest { qfHash = hash v,qfQueries = Left v }
 
 instance Eq (QueryForest e s) where a == b = qfHash a == qfHash b
@@ -233,15 +254,17 @@ type CPropagator a c e s t n =
 type CPropagatorPlan c e s t n = CPropagator (QueryPlan e s) c e s t n
 
 instance Hashables2 e s => Default (ClusterConfig e s t n) where
-  def = ClusterConfig {
-    qnfInsertBottoms = False,
-    qnfToClustMap = mempty,
-    nrefToQnfs = mempty,
-    trefToQnf = mempty,
-    qnfTableColumns = const Nothing,
-    qnfPropagators = mempty,
-    qnfNodePlans = mempty,
-    clustBuildCache = def
+  def =
+    ClusterConfig
+    { qnfTunels = mempty
+     ,qnfInsertBottoms = False
+     ,qnfToClustMap = mempty
+     ,nrefToQnfs = mempty
+     ,trefToQnf = mempty
+     ,qnfTableColumns = const Nothing
+     ,qnfPropagators = mempty
+     ,qnfNodePlans = mempty
+     ,clustBuildCache = def
     }
 
 type CGraphBuilderT e s t n m =

@@ -51,6 +51,7 @@ import           Data.QnfQuery.Build
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations
+import           Data.Query.Optimizations.Echo
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.QueryPlan.Nodes
@@ -104,7 +105,8 @@ sqlToSolution query serializeSols getSolution = do
   -- traceM $ ashow $ first planSymOrig query
   qs <- optQueryPlan @e @s (literalType cppConf) symIso query
   -- SANITY CHECK
-  when False $ wrapTrace "Sanity checking..." $ do
+#if 0
+  wrapTrace "Sanity checking..." $ do
     ioLogMsg ioOps $ "Opt queries: [size:" ++  show (lengthF qs) ++ "]\n"
     let toQnfs q = HS.fromList
           $ fmap fst
@@ -116,6 +118,7 @@ sqlToSolution query serializeSols getSolution = do
           $ fmap toQnfs $ fmap2 fst $ getCompose $ iterA interleaveComp qs
     forM_ (zip [1::Int ..] $ zip qnfs $ tail qnfs) $ \(_i,(bef,aft)) ->
       unless (bef == aft) $ throwAStr $ "UNEQUAL QNFa: "  ++ ashow (bef,aft)
+#endif
   -- /SANITY CHECK
   hoistGlobalSolveT (serializeSols . dissolve @[])
     $ insertAndRun qs getSolution
@@ -166,7 +169,7 @@ insertAndRun
   ,MonadPlus m
   ,BotMonad m
   ,HValue m ~ PlanSearchScore)
-  => Free (Compose NEL.NonEmpty (Query e)) (s,QueryPlan e s)
+  => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryPlan e s)
   -> CodeBuilderT e s t n m a
   -> GlobalSolveT e s t n m a
 insertAndRun queries postSolution = do

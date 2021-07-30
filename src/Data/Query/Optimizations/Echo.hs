@@ -9,6 +9,7 @@ import           Data.Bifunctor
 import qualified Data.IntMap         as IM
 import qualified Data.IntSet         as IS
 import           Data.Query.Algebra
+import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Hashable
 import           GHC.Generics
@@ -23,12 +24,19 @@ data EchoSide
   deriving (Generic,Eq)
 instance Default EchoSide where
   def = NoEcho
+instance AShow EchoSide
 -- | Echo marked query
 data TQuery e s =
   TQuery { tqQuery :: Either (Query e (TQuery e s)) (Query e s)
           ,tqEcho  :: EchoSide
          }
   deriving (Generic,Eq)
+
+instance (AShow s,AShow e) => AShow (TQuery e s)
+instance Foldable (TQuery s) where
+  foldr f ini TQuery{tqQuery=q0} = case q0 of
+    Left q  -> foldr (flip $ foldr f) ini q
+    Right q -> foldr f ini q
 
 instance Bifunctor TQuery where
   bimap f g = go

@@ -2,6 +2,7 @@
 {-# LANGUAGE PatternSynonyms      #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns         #-}
+{-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 module Data.Query.Optimizations.EchoingJoins
   (joinPermutations) where
 
@@ -87,6 +88,7 @@ queryToJoinSet emb = go
     recur ps prims todo = \case
       S p q -> recur (ps ++ toList (propQnfAnd p)) prims todo q
       J p q1 q2 -> recur (ps ++ toList (propQnfAnd p)) prims (q2 : todo) q1
+      Q2 QProd q1 q2 -> recur ps prims (q2 : todo) q1
       Q2 o l r -> fin
         ps
         (Q2 o (Q0 $ Right $ go l) (Q0 $ Right $ go r) NEL.:| prims)
@@ -130,25 +132,26 @@ data SepProps e =
   SepProps
   { spLeftNonEq,spRightNonEq,spLeftEq,spRightEq,spConnEq,spConnNonEq
       :: [JProp e]
-  }
+  } deriving Generic
+instance AShow e => AShow (SepProps e)
 
 mkSepProps :: L1 QId -> L1 QId -> [JProp e] -> SepProps e
 mkSepProps lIds rIds ps =
   let (eqP_,nonEqP_) = partition isEquality ps
-      (spRightEq,eqP__) = partition (isPushable lIds) eqP_
-      (spLeftEq,spConnEq) = partition (isPushable rIds) eqP__
+      (spRightEq,eqP__) = partition (isPushable rIds) eqP_
+      (spLeftEq,spConnEq) = partition (isPushable lIds) eqP__
       (spLeftNonEq,nonEqP__) = partition (isPushable lIds) nonEqP_
       (spRightNonEq,spConnNonEq) = partition (isPushable rIds) nonEqP__
   in SepProps { .. }
 
 pattern JoinSetSingleQuery qid q <-
   JoinSet { jsProps = [],jsQs = (qid,q) NEL.:| [], jsUid=_ }
-pattern JoinSetSelectSingle p ps qid q =
+pattern JoinSetSelectSingle p ps qid q <-
   JoinSet { jsProps = p:ps,jsQs = (qid,q) NEL.:| [] }
-pattern JoinSetProduct qid q qs =
+pattern JoinSetProduct qid q qs <-
   JoinSet { jsProps = [],jsQs = (qid,q) NEL.:| qs }
-pattern JoinSetAtLeast2 ps q0 q1 qs =
-  JoinSet { jsProps = ps,jsQs = q0 NEL.:| (q1 : qs) }
+pattern JoinSetAtLeast2 ps q0 q1 qs <-
+  JoinSet { jsProps = ps,jsQs = q0 NEL.:| (q1 : qs),jsUid = _}
 
 data PJState e s =
   PJState { pjsEchoId :: EchoId
@@ -165,9 +168,10 @@ joinQ :: EchoSide
       -> [JProp e]
       -> FuzzyQuery e s
       -> FuzzyQuery e s
-      -> FuzzyQuery e s
+      -> Maybe (FuzzyQuery e s)
+joinQ _echo [] _q1 _q2 = Nothing
 joinQ echo p q1 q2 =
-  wrapFuzzy echo $ J (fmap3 snd $ foldl1' And p) (Q0 q1) (Q0 q2)
+  Just $ wrapFuzzy echo $ J (fmap3 snd $ foldl1' And p) (Q0 q1) (Q0 q2)
 
 
 -- Partitiion toi the following categories:
@@ -185,7 +189,7 @@ joinQ echo p q1 q2 =
 
 isPushable :: L1 QId -> Prop (Rel (Expr (Maybe QId, e))) -> Bool
 isPushable as (toList5 . fmap3 swap -> p) =
-  all (`elem` p) as
+  all (`elem` as) p
 
 isEquality :: Prop (Rel (Expr e')) -> Bool
 isEquality (P0 (R2 REq (R0 (E0 _)) (R0 (E0 _)))) = True
@@ -196,7 +200,6 @@ isEquality _                                     = False
 -- queries and the pure equijoin query. This is a heuristic that
 -- assumes that the particular query is useful to be considered when
 -- considering andy of the queries in question.
-
 onEitherSide :: L0 (L1 a,L1 a) -> a -> L0 (L1 a,L1 a)
 onEitherSide res q = do
   (ls,rs) <- res
@@ -229,7 +232,7 @@ echoingJoins recur echoId = \case
   JoinSetSelectSingle p ps _qid q -> onlyWrap
     $ S (fmap3 snd $ foldl' And p ps) q
   JoinSetProduct {} -> mzero
-  JoinSetAtLeast2 ps l0 r0 qs -> fmap (foldl1 combFuzz) $ runListT $ do
+  JoinSetAtLeast2 ps l0 r0 qs -> (>>= combFuzzM) $ runListT $ do
     (ls,rs) <- mkListT $ return $ foldl' onEitherSide [(pure l0,pure r0)] qs
     let SepProps {..} = mkSepProps (fst <$> ls) (fst <$> rs) ps
     -- Build the tunnels.
@@ -239,13 +242,21 @@ echoingJoins recur echoId = \case
         pr = spRightEq
     simplestLeft <- lift $ recur $ mkJoinSet pl ls
     simplestRight <- lift $ recur $ mkJoinSet pr rs
-    optimalLeft <- lift $ recur $ mkJoinSet pr rs
+    optimalLeft <- lift $ recur $ mkJoinSet pr ls
     optimalRight <- lift $ recur $ mkJoinSet pr rs
-    let simplestJoin = joinQ (TExit echoId) mustJoin simplestLeft simplestRight
-        optimalJoin = joinQ (TEntry echoId) mustJoin optimalLeft optimalRight
-    return $ selQ (TEntry echoId) canSel simplestJoin `combFuzz` optimalJoin
+    let simplestJoinM =
+          joinQ (TExit echoId) mustJoin simplestLeft simplestRight
+        optimalJoinM = joinQ (TEntry echoId) mustJoin optimalLeft optimalRight
+    case (simplestJoinM,optimalJoinM) of
+      (Nothing,Nothing) -> mzero
+      (Just simplestJoin,Just optimalJoin) -> return
+        $ selQ (TEntry echoId) canSel simplestJoin `combFuzz` optimalJoin
+      _ -> error
+        "joinQ should return Just or Nothing only based on the value of mustJoin"
   _ -> error "unreachable"
   where
+    combFuzzM [] = mzero
+    combFuzzM xs = return $ foldl1 combFuzz xs
     onlyWrap q =
       wrapFuzzy NoEcho . fmap (either return id) <$> traverse2 recur q
 
@@ -258,3 +269,60 @@ joinPermutations emb q =
   (`evalStateT` def)
   $ cachedJoin (echoingJoins $ fix $ \f -> echoingJoins f def)
   $ queryToJoinSet emb q
+
+
+#if 1
+
+-- | Remove the noise and tunnels from FuzzQuery and just show that.
+ashowFuzz :: forall e s . (AShow e,AShow s) => FuzzyQuery e s -> SExp
+ashowFuzz (FreeT (Identity (Pure x))) = ashow' x
+ashowFuzz (FreeT (Identity (Free (Compose m)))) =
+  ashow' $ ashowTQ . fmap ashowFuzz <$> toList m
+  where
+    ashowTQ :: TQuery e SExp -> SExp
+    ashowTQ = either ashow' ashow' . tqQuery
+
+-- SHould be Just..
+testJe =
+  ashowFuzz
+  <$> joinPermutations
+    eqSymEmbedding
+    (Q1
+       (QGroup
+          [("revenue"
+           ,E0
+              (NAggr
+                 AggrSum
+                 (E2 EMul (E0 ("lo_extendedprice")) (E0 ("lo_discount")))))]
+          [])
+       (S
+          (P2
+             PAnd
+             (P2
+                PAnd
+                (P2
+                   PAnd
+                   (P0
+                      (R2
+                         REq
+                         (R0 (E0 ("lo_orderdate")))
+                         (R0 (E0 ("d_datekey")))))
+                   (P0 (R2 REq (R0 (E0 ("d_year"))) (R0 (E0 ("d_year"))))))
+                (P2
+                   PAnd
+                   (P0
+                      (R2
+                         RLe
+                         (R0 (E0 ("lo_discount")))
+                         (R0 (E0 ("lo_discount")))))
+                   (P0
+                      (R2
+                         RLe
+                         (R0 (E0 ("lo_discount")))
+                         (R0 (E0 ("lo_discount")))))))
+             (P0 (R2 RLt (R0 (E0 ("lo_quantity"))) (R0 (E0 ("lo_quantity"))))))
+          (Q2
+             QProd
+             (Q0 (["lo_orderdate","lo_discount","lo_quantity"]))
+             (Q0 (["d_year","d_datekey"])))))
+#endif
