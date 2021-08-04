@@ -225,7 +225,8 @@ linkNRefQnf ref qnf = do
     Just qnfs -> error
       $ "already linked "
       ++ ashow
-        (bimap (fmap hash) hash . qnfToQuery <$> qnfs
+        (ref
+        ,bimap (fmap hash) hash . qnfToQuery <$> qnfs
         ,bimap (fmap hash) hash $ qnfToQuery qnf)
     Nothing -> return ()
   modify $ \r -> r

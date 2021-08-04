@@ -245,13 +245,16 @@ insertQueryPlan1
     dbgQ :: Query e (s,QueryPlan e s)
     dbgQ = forestToQuery q
     cachedMkRo
-      :: QNFQuery e s
+      :: HasCallStack
+      => QNFQuery e s
       -> StateT (a,Maybe (NodeRef n)) (CGraphBuilderT e s t n m) (NodeRef n)
-    cachedMkRo = cachedMkRef snd $ second . const . Just
+    cachedMkRo qnf = do
+      cachedMkRef snd (second . const . Just) qnf
     cachedMkRcoo
       :: QNFQuery e s
       -> StateT (Maybe (NodeRef n),a) (CGraphBuilderT e s t n m) (NodeRef n)
-    cachedMkRcoo = cachedMkRef fst $ first . const . Just
+    cachedMkRcoo qnf = do
+      cachedMkRef fst (first . const . Just) qnf
     -- | Calculate the output and insert it.
     expandOp
       :: (QNFQuery e s

@@ -204,6 +204,7 @@ onEitherSide :: L0 (L1 a,L1 a) -> a -> L0 (L1 a,L1 a)
 onEitherSide res q = do
   (ls,rs) <- res
   [(pure q <> ls,rs),(ls,pure q <> rs)]
+
 cachedJoin
   :: (Monad m,Hashables2 e s)
   => (EchoId -> JoinSet e s -> StateT (PJState e s) m (FuzzyQuery e s))
@@ -221,6 +222,9 @@ cachedJoin f js = do
       modify $ \pjs -> pjs { pjsCache = HM.insert js ret $ pjsCache pjs }
       return ret
 
+-- | From all the possible separations of the the joinset prune the
+-- ones that are invalid (ie contain products) and create fuzzy
+-- queries with the rest.
 echoingJoins
   :: MonadPlus m
   => (JoinSet e s -> m (FuzzyQuery e s))
@@ -236,21 +240,23 @@ echoingJoins recur echoId = \case
     (ls,rs) <- mkListT $ return $ foldl' onEitherSide [(pure l0,pure r0)] qs
     let SepProps {..} = mkSepProps (fst <$> ls) (fst <$> rs) ps
     -- Build the tunnels.
-    let canSel = spLeftNonEq <> spRightNonEq <> spConnNonEq
-        mustJoin = spConnEq
-        pl = spLeftEq
-        pr = spRightEq
-    simplestLeft <- lift $ recur $ mkJoinSet pl ls
-    simplestRight <- lift $ recur $ mkJoinSet pr rs
-    optimalLeft <- lift $ recur $ mkJoinSet pr ls
-    optimalRight <- lift $ recur $ mkJoinSet pr rs
-    let simplestJoinM =
-          joinQ (TExit echoId) mustJoin simplestLeft simplestRight
-        optimalJoinM = joinQ (TEntry echoId) mustJoin optimalLeft optimalRight
-    case (simplestJoinM,optimalJoinM) of
+    let allNonEq = spLeftNonEq <> spRightNonEq <> spConnNonEq
+        spLeftAll = spLeftEq <> spLeftNonEq
+        spRightAll = spRightEq <> spRightNonEq
+    -- Push down as few props as possible to make general purpose IR.
+    eqJoinLeft <- lift $ recur $ mkJoinSet spLeftEq ls
+    eqJoinRight <- lift $ recur $ mkJoinSet spRightEq rs
+    -- Push down as many props as possible to make optimal IR.
+    optimalLeft <- lift $ recur $ mkJoinSet spLeftAll ls
+    optimalRight <- lift $ recur $ mkJoinSet spRightAll rs
+    -- XXX: we have S noEq (J eq optL optR) but not J (eq /\ noEq) optL optR.
+    let fullEqJoinM = joinQ (TExit echoId) spConnEq eqJoinLeft eqJoinRight
+        optimalJoinM = joinQ (TEntry echoId) spConnEq optimalLeft optimalRight
+    case (fullEqJoinM,optimalJoinM) of
       (Nothing,Nothing) -> mzero
-      (Just simplestJoin,Just optimalJoin) -> return
-        $ selQ (TEntry echoId) canSel simplestJoin `combFuzz` optimalJoin
+      (Just fullEqJoin,Just optimalJoin) -> return
+        $ selQ (TEntry echoId) allNonEq fullEqJoin
+        `combFuzz` selQ (TEntry echoId) spConnNonEq optimalJoin
       _ -> error
         "joinQ should return Just or Nothing only based on the value of mustJoin"
   _ -> error "unreachable"

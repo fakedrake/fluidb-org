@@ -96,7 +96,7 @@ type CoitProc a = a
 -- | Error related to indexes
 data IndexErr i
   = ErrMissing i
-  | ErrCycle i (OptSet i)
+  | ErrCycle {ecConflictingNode :: i, ecCycleTrail :: OptSet i}
   | NoArguments
   deriving Generic
 instance (AShow i,AShow (OptSet i))
