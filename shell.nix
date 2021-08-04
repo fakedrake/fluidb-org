@@ -2,8 +2,10 @@
 with nixpkgs; let
   haskellPackages = haskell.packages.ghc8104;
   # Haskell tools
-  ghc = haskellPackages.ghcWithPackages (ps: with ps; [
+  ghc = haskell.packages.ghc8104.ghcWithPackages (ps: with ps; [
+    template-haskell
     base
+    czipwith
     shake
     hasktags
     profiteur

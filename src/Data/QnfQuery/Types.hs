@@ -90,7 +90,6 @@ import           Data.Utils.Const
 import           Data.Utils.Hashable
 import           GHC.Generics
 
-
 data QNFError e s = QNFErrorMsg (AShowStr e s)
   | QNFProjNameMapOverAggrQnf
   | QNFUnknownSymbol e [e]
@@ -167,11 +166,14 @@ _qnfSelNameSane = either (const True) $ projSane . qnfColumns where
   projSane = \case
     Const (Identity (E0 _)) -> True
     _ -> False
+
+-- |Selection name refers to a version of the current QNF that has all
+-- fields erased except the projection.
 type QNFSelName e s = Either e (QNFQuerySPDCF EmptyF EmptyF EmptyF Const Identity e s)
 type QNFProd e s = HS.HashSet (Query (QNFName e s) (Either s (QNFQueryI e s)))
 type QNFSel e s =  Prop (Rel (Expr (QNFSelName e s)))
 type QNFProj f e s = f (Expr (QNFName e s))
-type QNFAggr f e s = (f (Aggr (Expr (QNFName e s))), HS.HashSet (Expr (QNFName e s)))
+type QNFAggr f e s = (f (Aggr (QNFName e s)), HS.HashSet (Expr (QNFName e s)))
 type QNFQueryI = QNFQueryF HashBag
 type QNFQuery = QNFQueryDCF Identity Either HashBag
 type QNFQueryF = QNFQueryCF Either
@@ -180,7 +182,7 @@ type QNFQueryAggr = QNFQueryCF CoConst HashBag
 type QNFQueryProjF = QNFQueryCF Const
 type QNFQueryProj = QNFQueryCF Const HashBag
 type QNFQueryCF = QNFQueryDCF EmptyF
-type QNFQueryDCF = QNFQuerySPDCF HS.HashSet HashBag
+type QNFQueryDCF = QNFQuerySPDCF {- sel_f -} HS.HashSet {- prod_f -} HashBag
 data QNFQuerySPDCF sel_f prod_f dbg_f col_f f e s =
   QNFQuery
   { qnfColumns :: col_f (QNFProj f e s) (QNFAggr f e s)
@@ -205,6 +207,8 @@ data QNFQuerySPDCF sel_f prod_f dbg_f col_f f e s =
     -- don't recompute hashes of unchanged fields after each operation.
   }
   deriving Generic
+
+
 type QNFConstr (co :: * -> Constraint) sel_f prod_f col_f f e s =
   (co (col_f (QNFProj f e s) (QNFAggr f e s)),
    co (prod_f (QNFProd e s)),
@@ -288,7 +292,7 @@ instance (QNFSemigroup b) => QNFSemigroup (CoConst a b) where
   colAppend a b = fmap CoConst $ getCoConst a `colAppend` getCoConst b
 instance QNFSemigroup a => QNFSemigroup (Identity a) where
   colAppend a b = fmap Identity $ runIdentity a `colAppend` runIdentity b
-instance (Eq e, Eq s, QNFSemigroup (f (Aggr (Expr (QNFName e s))))) =>
+instance (Eq e, Eq s, QNFSemigroup (f (Aggr ((QNFName e s))))) =>
          QNFSemigroup (QNFAggr f e s) where
   colAppend (l,e) (r,e') = if e == e'
                            then (,e) <$> colAppend l r
@@ -338,12 +342,13 @@ data QNFCache e s = QNFCache {
   } deriving Generic
 instance Default (QNFCache e s)
 type QNFBuild e s = StateT (QNFCache e s) (Either (QNFError e s))
-qnfCached :: Hashables1 k =>
-            (QNFCache e s -> k :-> v)
-          -> (QNFCache e s -> k :-> v -> QNFCache e s)
-          -> k
-          -> Either (QNFError e s) v
-          -> QNFBuild e s v
+qnfCached
+  :: Hashables1 k
+  => (QNFCache e s -> k :-> v)
+  -> (QNFCache e s -> k :-> v -> QNFCache e s)
+  -> k
+  -> Either (QNFError e s) v
+  -> QNFBuild e s v
 qnfCached get_cache put_cache key mkRet = do
   cache <- get_cache <$> get
   let lrLu = HM.lookup key cache

@@ -27,10 +27,11 @@ module Data.Utils.Functors
   ,lift5
   ,bitraverse2
   ,cofmap
-  ,(<&>)) where
+  ,(<&>),bivoid) where
 
 import           Control.Monad
 import           Control.Monad.Trans
+import           Data.Bifunctor
 import           Data.Bitraversable
 import           Data.Foldable
 import           Data.Utils.Function
@@ -144,3 +145,6 @@ any3 = any . any . any
 
 cofmap :: (forall a . f a -> f' a) -> f x -> f' x
 cofmap = id
+
+bivoid :: Bifunctor f => f a b -> f () ()
+bivoid = bimap (const ()) (const ())

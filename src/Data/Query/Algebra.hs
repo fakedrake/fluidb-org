@@ -124,6 +124,7 @@ import           Data.Maybe
 import           Data.Utils.Hashable
 
 import           Data.Proxy
+import           GHC.Exts
 import           GHC.TypeLits
 
 -- Note that if a BQOp exposes columns on both sides except, QJoin and
@@ -176,12 +177,20 @@ data Query es qs = Q2 (BQOp es) !(Query es qs) !(Query es qs)
   | Q1 (UQOp es) !(Query es qs)
   | Q0 qs
   deriving (Generic, Generic1, Eq, Show, Functor,Foldable,Traversable)
+
+-- Convienience class for easy testing
+instance IsList (Query e [s]) where
+  type Item (Query e [s]) = s
+  fromList = Q0
+  toList =
+    error "Queries are not *really* lists. IsList is used for syntactic sugar."
+
 instance Eq e => Eq1 (Query e) where
   liftEq eq = curry $ \case
     (Q2 o l r,Q2 o' l' r') -> o == o' && liftEq eq l l' && liftEq eq r r'
-    (Q1 o q,Q1 o' q') -> o == o' && liftEq eq q q'
-    (Q0 s,Q0 s') -> eq s s'
-    _ -> False
+    (Q1 o q,Q1 o' q')      -> o == o' && liftEq eq q q'
+    (Q0 s,Q0 s')           -> eq s s'
+    _                      -> False
 pattern J :: Prop (Rel (Expr e)) -> Query e s -> Query e s -> Query e s
 pattern J p q q' = Q2 (QJoin p) q q'
 pattern S :: Prop (Rel (Expr e)) -> Query e s -> Query e s
@@ -189,28 +198,28 @@ pattern S p q = Q1 (QSel p) q
 instance (AShow e, AShow s) => AShow (Query e s) where
   ashow' = \case
     J p q q' -> sexp "J" [ashow' p, ashow' q, ashow' q']
-    S p q -> sexp "S" [ashow' p, ashow' q]
-    q -> genericAShow' q
+    S p q    -> sexp "S" [ashow' p, ashow' q]
+    q        -> genericAShow' q
 
 instance (ARead e, ARead (Prop (Rel (Expr e))), ARead s) => ARead (Query e s) where
   aread' = \case
     Sub [Sym "J", p, l, r] -> J <$> aread' p <*> aread' l <*> aread' r
-    Sub [Sym "S", p, q] -> S <$> aread' p <*> aread' q
-    q -> genericARead' q
+    Sub [Sym "S", p, q]    -> S <$> aread' p <*> aread' q
+    q                      -> genericARead' q
 
 
 instance Bifoldable Query where
   bifoldr fe fs c = \case
     Q2 o l r -> bifoldr fe fs (foldr fe (bifoldr fe fs c r) o) l
-    Q1 o q -> bifoldr fe fs (foldr fe c o) q
-    Q0 s -> fs s c
+    Q1 o q   -> bifoldr fe fs (foldr fe c o) q
+    Q0 s     -> fs s c
 
 instance Bitraversable Query where
   bitraverse fe fs = go where
     go = \case
       Q2 o l r -> Q2 <$> traverse fe o <*> go l <*> go r
-      Q1 o q -> Q1 <$> traverse fe o <*> go q
-      Q0 s -> Q0 <$> fs s
+      Q1 o q   -> Q1 <$> traverse fe o <*> go q
+      Q0 s     -> Q0 <$> fs s
 
 instance (Hashable es, Hashable qs) => Hashable (Query es qs)
 instance Bifunctor Query where
@@ -817,13 +826,13 @@ subAlg :: Applicative m =>
 subAlg f fe fa fr fp = \case
   Q2 o q0 q1 -> Q2 <$> bqop o <*> recur q0 <*> recur q1 where
     bqop = \case
-      QProd -> pure QProd
-      QUnion -> pure QUnion
-      QJoin p -> QJoin <$> fp p
-      QLeftAntijoin p -> QLeftAntijoin <$> fp p
+      QProd            -> pure QProd
+      QUnion           -> pure QUnion
+      QJoin p          -> QJoin <$> fp p
+      QLeftAntijoin p  -> QLeftAntijoin <$> fp p
       QRightAntijoin p -> QRightAntijoin <$> fp p
-      QProjQuery -> pure QProjQuery
-      QDistinct -> pure QDistinct
+      QProjQuery       -> pure QProjQuery
+      QDistinct        -> pure QDistinct
   Q1 o q  -> Q1 <$> uqop o <*> recur q where
     uqop = \case
       QSel p -> QSel <$> fp p
@@ -938,38 +947,38 @@ querySchemaNaive = \case
 -- | Codegen
 instance IsCode code => Codegen BEOp code where
   toCode = \case
-    EAdd -> "+"
-    ESub -> "-"
-    EMul -> "*"
-    EDiv -> "/"
-    EEq -> "=="
-    ENEq -> "!="
-    EAnd -> "&&"
-    EOr -> "||"
+    EAdd  -> "+"
+    ESub  -> "-"
+    EMul  -> "*"
+    EDiv  -> "/"
+    EEq   -> "=="
+    ENEq  -> "!="
+    EAnd  -> "&&"
+    EOr   -> "||"
     ELike -> error "Like should be handled higher up"
 
 instance IsCode code => Codegen BROp code where
   toCode = \case
-    REq -> "=="
-    RGt -> ">"
-    RLt -> "<"
-    RGe -> ">="
-    RLe -> "<="
-    RLike -> "like"
+    REq        -> "=="
+    RGt        -> ">"
+    RLt        -> "<"
+    RGe        -> ">="
+    RLe        -> "<="
+    RLike      -> "like"
     RSubstring -> "substring"
 
 instance IsCode code => Codegen BPOp code where
   toCode = \case
     PAnd -> "&&"
-    POr -> "||"
+    POr  -> "||"
 
 instance IsCode code => Codegen AggrFunction code where
   toCode = \case
-    AggrSum -> "sum"
+    AggrSum   -> "sum"
     AggrCount -> "count"
-    AggrAvg -> "avg"
-    AggrMin -> "min"
-    AggrMax -> "max"
+    AggrAvg   -> "avg"
+    AggrMin   -> "min"
+    AggrMax   -> "max"
     AggrFirst -> "first"
 
 -- instance (IsCode code, Codegen e code) => Codegen (Aggr e) code where
@@ -988,11 +997,11 @@ instance IsCode code => Codegen ElemFunction code where
 
 instance IsCode code => Codegen UEOp code where
   toCode = \case
-    ENeg -> "-"
-    ENot -> "!"
+    ENeg   -> "-"
+    ENot   -> "!"
     EFun f -> toCode f
-    EAbs -> "abs"
-    ESig -> "sig"
+    EAbs   -> "abs"
+    ESig   -> "sig"
 
 instance IsCode code => Codegen UPOp code where
   toCode PNot = "!"

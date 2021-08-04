@@ -72,7 +72,7 @@ library:
     - time >= 1.6.0.1
     - transformers >= 0.5.2.0
     - unix >= 2.7.2.1
-    - constraints
+    - constraints >= 0.12
     - unordered-containers >= 0.2.9.0
     - profunctors
     - groups

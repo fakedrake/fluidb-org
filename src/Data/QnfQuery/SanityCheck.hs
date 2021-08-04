@@ -12,11 +12,11 @@ module Data.QnfQuery.SanityCheck (sanityCheckRes) where
 
 import           Control.Monad.Except
 import           Data.Bitraversable
+import           Data.List.Extra
+import           Data.Maybe
 import           Data.QnfQuery.BuildUtils
 import           Data.QnfQuery.HashBag
 import           Data.QnfQuery.Types
-import           Data.List.Extra
-import           Data.Maybe
 import           Data.Query.Algebra
 import           Data.Utils.AShow
 import           Data.Utils.Compose
@@ -75,20 +75,20 @@ sanityCheckQnf :: forall e s d f m err c .
 sanityCheckQnf msg qnf = void $ assertOk $ qnfColumns qnf where
   assertOk = bitraverse
     (mapM_ (uncurry assertInProd) . mapMaybe fromCol . toList2)
-    (mapM_ (uncurry assertInProd) . mapMaybe fromCol . toList3 . fst)
+    (mapM_ (uncurry assertInProd) . mapMaybe fromCol . toList2 . fst)
   assertInProd :: Int -> Either s (QNFCol e s) -> m ()
   assertInProd i s = unless (isInProd i s)
     $ throwAStr $ "SANITY: (" ++ msg ++ "): "
     ++ ashow (i,s) ++ " not in " ++ ashow prods
   isInProd :: Int -> Either s (QNFCol e s) -> Bool
   isInProd i = \case
-    Left s -> i < prodMultiplicitySym s
+    Left s    -> i < prodMultiplicitySym s
     Right col -> i < prodMultiplicityCol col
   prods = (>>= toList2) $ bagToList $ qnfProd qnf
   fromCol = \case
-    Column c i -> Just (i,Right c)
+    Column c i       -> Just (i,Right c)
     PrimaryCol _ s i -> Just (i,Left s)
-    _ -> Nothing
+    _                -> Nothing
   prodMultiplicity f =
     maybe 0 snd . listToMaybe . filter (any2 f . fst) $ bagToAssoc $ qnfProd qnf
   prodMultiplicityCol col = prodMultiplicity $ either (const False) (qnfIsColOf col)
@@ -124,18 +124,18 @@ class Functor op => IOOp op where
 instance IOOp BQOp where
   ashowOp = ashow'
   opInOutSyms = \case
-    QLeftAntijoin _ -> ([],[])
+    QLeftAntijoin _  -> ([],[])
     QRightAntijoin _ -> ([],[])
-    o -> ([],toList o)
+    o                -> ([],toList o)
 instance IOOp op => IOOp (Compose Maybe op) where
   ashowOp = ashow' . fmap ashowOp . getCompose
   opInOutSyms = maybe ([],[]) opInOutSyms . getCompose
 instance IOOp UQOp where
   ashowOp = ashow'
   opInOutSyms = \case
-    QProj p -> (toList2 $ snd <$> p, fst <$> p)
+    QProj p     -> (toList2 $ snd <$> p, fst <$> p)
     QGroup p es -> (toList2 es ++ toList2 (toList3 . snd <$> p), fst <$> p)
-    x -> ([],toList x)
+    x           -> ([],toList x)
 
 sanityCheckInOut :: (AShowError e s err, MonadError err m, Hashables2 e s) =>
                    [((e, QNFCol e s), (e, QNFCol e s))] -> m ()
@@ -153,18 +153,20 @@ sanityCheckHash (nm,qnf) = do
   where
     sanityCheckName = \case
       Column col _ -> sanityCheckQNFHash col
-      _ -> return ()
-    sanityCheckQNFHash :: (Foldable f, Hashable (Either (QNFProj f e s) (QNFAggr f e s)))  =>
-                         QNFQueryF f e s -> m ()
+      _            -> return ()
+    sanityCheckQNFHash
+      :: (Foldable f,Hashable (Either (QNFProj f e s) (QNFAggr f e s)))
+      => QNFQueryF f e s
+      -> m ()
     sanityCheckQNFHash qnf0 = do
-      aassert (qnfHash qnf0 == (hash $ qnfColumns qnf0,
-                               hash $ qnfSel qnf0,
-                               hash $ qnfProd qnf0))
+      aassert
+        (qnfHash qnf0
+         == (hash $ qnfColumns qnf0,hash $ qnfSel qnf0,hash $ qnfProd qnf0))
         "Hashing error."
       mapM_ sanityCheckQNFHash $ toList4 $ qnfProd qnf0
       mapM_ sanityCheckName $ case qnfColumns qnf0 of
-        Left x      ->  toList2 x
-        Right (p,g) -> toList3 p ++ toList2 g
+        Left x      -> toList2 x
+        Right (p,g) -> toList2 p ++ toList2 g
 
 #if 0
 sanityCheckRes :: (AShowError e s err, MonadError err m, HasCallStack,

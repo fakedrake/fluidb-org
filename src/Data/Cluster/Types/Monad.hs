@@ -144,7 +144,8 @@ forestToQuery =
 queryToForest :: Hashables2 e s => Query e (QueryForest e s) -> QueryForest e s
 queryToForest = tqueryToForest . tunnelQuery
 
-tqueryToForest :: Hashables2 e s => TQuery e (QueryForest e s) -> QueryForest e s
+tqueryToForest
+  :: Hashables2 e s => TQuery e (QueryForest e s) -> QueryForest e s
 tqueryToForest q =
   let v = return q in QueryForest { qfHash = hash v,qfQueries = Left v }
 

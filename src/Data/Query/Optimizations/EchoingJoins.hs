@@ -270,7 +270,6 @@ joinPermutations emb q =
   $ cachedJoin (echoingJoins $ fix $ \f -> echoingJoins f def)
   $ queryToJoinSet emb q
 
-
 #if 1
 
 -- | Remove the noise and tunnels from FuzzQuery and just show that.

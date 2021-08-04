@@ -24,13 +24,13 @@ import           Control.Monad.Except
 import           Control.Monad.Morph
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.QnfQuery.BuildUtils
-import           Data.QnfQuery.HashBag
-import           Data.QnfQuery.Types
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy        as HM
 import qualified Data.HashSet             as HS
 import           Data.Maybe
+import           Data.QnfQuery.BuildUtils
+import           Data.QnfQuery.HashBag
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Utils.AShow
 import           Data.Utils.Const
@@ -207,7 +207,7 @@ mapProjAggr :: (Bifunctor c, Functor f, Hashables2 e s) =>
               (QNFName e s -> QNFName e s)
             -> c (QNFProj f e s) (QNFAggr f e s)
             -> c (QNFProj f e s) (QNFAggr f e s)
-mapProjAggr f = bimap (fmap2 f) (bimap (fmap3 f) (HS.map $ fmap f))
+mapProjAggr f = bimap (fmap2 f) (bimap (fmap2 f) (HS.map $ fmap f))
 
 type SelProdClass s p = (s ~ HS.HashSet, p ~ HashBag)
 -- | If a prod in the bag matches the column of the name increment by
@@ -228,7 +228,7 @@ qnfNameIncrementProdsE bag =
     go (q,i) rest n = do
       newName <- qnfNameIncrementProd (\x -> put True >> return (i + x)) q n
       get >>= \case
-        True -> return newName
+        True  -> return newName
         False -> rest n
 
 -- | Look for a qnf in product that matches and stop when (if) you find it.
@@ -247,7 +247,7 @@ qnfNameIncrementProd f qs = (`evalStateT` False) . foldr go return qs where
   go q rest n = do
     newName <- qnfNameIncrementProd1 (\x -> put True >> lift (f x)) q n
     get >>= \case
-      True -> return newName
+      True  -> return newName
       False -> rest n
 
 -- | When name matches increment it.
@@ -291,7 +291,7 @@ qnfNameIncrementAtom :: (Applicative f,
 qnfNameIncrementAtom f = \case
   Left s -> \case
     x@(PrimaryCol e s' i) -> if s == s' then PrimaryCol e s' <$> f i else pure x
-    x -> pure x
+    x                     -> pure x
   Right qnf -> \case
     x@(Column col i) -> if col `qnfIsColOf` qnf
       then Column col <$> f i
