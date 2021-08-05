@@ -132,10 +132,11 @@ instance Hashable (Transition t n)
 instance Hashable (GCEpoch t n)
 
 type Count = Int
-data ProvenanceAtom = EitherLeft
-                    | EitherRight
-                    | SplitLeft
-                    | SplitRight
+data ProvenanceAtom
+  = EitherLeft
+  | EitherRight
+  | SplitLeft
+  | SplitRight
   deriving Show
 provenanceAsBool :: ProvenanceAtom -> Bool
 provenanceAsBool = \case
@@ -143,7 +144,6 @@ provenanceAsBool = \case
   SplitLeft   -> False
   EitherRight -> True
   SplitRight  -> True
-
 
 type IsMatable = Bool
 data GCState t n =
@@ -191,16 +191,7 @@ instance Default (GCEpoch t n)
 instance Default (GCState t n)
 
 trM :: Monad m => String -> PlanT t n m ()
-
-
-
-
-
-
-
-
 trM = const $ return ()
-
 {-# INLINE trM #-}
 
 
@@ -339,9 +330,11 @@ type MonadHaltD m = (HValue m ~ PlanSearchScore, MonadHalt m)
 type PlanT t n m =
   StateT (GCState t n) (ReaderT (GCConfig t n) (ExceptT (PlanningError t n) m))
 
-hoistPlanT :: (m (Either (PlanningError t n) (a,GCState t n)) ->
-              g (Either (PlanningError t n) (a,GCState t n)))
-           -> PlanT t n m a -> PlanT t n g a
+hoistPlanT
+  :: (m (Either (PlanningError t n) (a,GCState t n))
+      -> g (Either (PlanningError t n) (a,GCState t n)))
+  -> PlanT t n m a
+  -> PlanT t n g a
 hoistPlanT f = hoistStateT $ hoistReaderT $ hoistExceptT f
   where
     hoistStateT :: (m (a, s) -> g (a, s)) -> StateT s m a -> StateT s g a

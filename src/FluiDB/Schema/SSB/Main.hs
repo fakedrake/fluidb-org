@@ -61,6 +61,7 @@ runQuery verbosity  query = do
   aquery <- annotateQuerySSB cppConf query
   (transitions,_cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
+      -- XXX:  we don't salvage the graph state in the case of PlanT error.
       (intermPath, queryPath,pngPath,grPath) <- renderGraph query
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
