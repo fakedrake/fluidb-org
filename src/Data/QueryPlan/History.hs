@@ -49,9 +49,13 @@ noMatCost _ref matCost = recur
   where
     recur = MealyArrow $ fromKleisli $ \conf -> do
       scale <- ask
-      if scale < 0.1 then return (recur,BndRes 0) else local (* factor)
-        $ second changeBound
-        <$> toKleisli (runMealyArrow matCost) (changeCap conf)
+      if scale < 0.1 then return (recur,BndRes 0) else do
+        (nxt,ret) <- local (* factor)
+          $ second changeBound
+          <$> toKleisli (runMealyArrow matCost) (changeCap conf)
+        return (nxt,case ret of
+          BndErr _ -> BndRes 0
+          _        -> ret)
     factor = 0.5
     changeBound = \case
       BndBnd (Min' b) -> BndBnd $ Min' $ scaleCost factor b

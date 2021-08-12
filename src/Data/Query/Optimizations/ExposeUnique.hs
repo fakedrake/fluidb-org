@@ -19,9 +19,7 @@ import           Data.Utils.Functors
 --
 -- > disambEq (foldr1Unsafe And $ [P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))) | (r,l) <- [(1,2),(2,3)]]) [1,2,3,4]
 -- [[1,4],[2,4],[3,4]]
-disambEq :: forall e . Eq e =>
-           Prop (Rel (Expr e))
-         -> [e] -> [[e]]
+disambEq :: forall e . Eq e => Prop (Rel (Expr e)) -> [e] -> [[e]]
 disambEq p uniqs0 = sequence uniqsPrim
   where
     -- eqGrps are groups of symbols that are equal to each
@@ -41,22 +39,24 @@ disambEq p uniqs0 = sequence uniqsPrim
                      $ find (elem u) eqGrps
                     | u <- uniqs0]
 
-exposeUnique :: (MonadPlus m, Eq e) =>
-               (e -> m e) -> Query e (s,[e]) -> m (Query e s,[[e]])
+exposeUnique
+  :: (MonadPlus m,Eq e) => (e -> m e) -> Query e (s,[e]) -> m (Query e s,[[e]])
 exposeUnique mkUniq = recQ (exposeUnique0 mkUniq)
   . fmap (return . bimap Q0 return)
-exposeUnique0 :: (Eq e, MonadPlus m) =>
-                (e -> m e)
-              -> Query0 e (m (Query e s,[[e]]))
-              -> m (Query e s,[[e]])
+exposeUnique0
+  :: (Eq e,MonadPlus m)
+  => (e -> m e)
+  -> Query0 e (m (Query e s,[[e]]))
+  -> m (Query e s,[[e]])
 exposeUnique0 uniqSym = \case
   Left (bop,l,r) -> exposeUniqueB1 bop <$> l <*> r
   Right (uop,q)  -> exposeUniqueU1 uniqSym uop =<< q
-exposeUniqueB1 :: Eq e =>
-                 BQOp e
-               -> (Query e s,[[e]])
-               -> (Query e s,[[e]])
-               -> (Query e s,[[e]])
+exposeUniqueB1
+  :: Eq e
+  => BQOp e
+  -> (Query e s,[[e]])
+  -> (Query e s,[[e]])
+  -> (Query e s,[[e]])
 exposeUniqueB1 o (ql,esl) (qr,esr) = (Q2 o ql qr,) $ case o of
   -- Note: n case of a join that is a foreign key join, we have the
   -- opportunity to drop one completely. This is implemented in the

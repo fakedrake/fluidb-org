@@ -9,6 +9,7 @@ module Data.Query.Optimizations.EchoingJoins
 
 import           Control.Monad.Identity
 import           Control.Monad.State
+import           Control.Monad.Trans.Maybe
 import           Control.Utils.Free
 import           Data.Foldable
 import qualified Data.HashMap.Strict            as HM
@@ -32,34 +33,61 @@ data L2 a = L2 a (L1 a)
   deriving (Functor,Traversable,Foldable)
 type QId = Int
 
+type Compose3 f g h = Compose (Compose f g) h
+data Cardinality e s = Cardinality | CardQ s deriving Generic
+instance AShow2 e s => AShow (Cardinality e s)
+instance Default (Cardinality e s) where
+  def = Cardinality
 
 -- | Only the joinset needs to be annotated with query ids.
-type FuzzyQuery e s = Free (Compose L1 (TQuery e)) s
-wrapFuzzy :: EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
-wrapFuzzy e x =
+type FuzzyQuery e s = Free (Compose3 ((,) (Cardinality e s)) L1 (TQuery e)) s
+wrapFuzzy
+  :: EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
+wrapFuzzy echo  q = wrapFuzzy' (getCardinality q) echo
+
+wrapFuzzy'
+  :: Cardinality e s -> EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
+wrapFuzzy' card e x =
   FreeT
   $ Identity
   $ Free
   $ Compose
+  $ Compose
+  $ (card,)
   $ return
   $ TQuery { tqQuery = Right x,tqEcho = e }
 
-pattern FuzzyQueryF :: f (g (FreeT (Compose f g) Identity a))
-                    -> FreeT (Compose f g) Identity a
-pattern FuzzyQueryF a = FreeT (Identity (Free (Compose a)))
+getCardinality :: Query e (FuzzyQuery e s) -> Cardinality  e s
+getCardinality q = case q of
+  Q2 o l r                  -> _
+  Q1 o q                    -> _
+  Q0 (FuzzyQueryF (card,_)) -> card
+  Q0 (FuzzyQueryP s)        -> CardQ s
+
+pattern FuzzyQueryF :: f (g (h (FreeT (Compose3 f g h) Identity a)))
+                    -> FreeT (Compose3 f g h) Identity a
+pattern FuzzyQueryF a = FreeT (Identity (Free (Compose (Compose a))))
 pattern FuzzyQueryP :: a -> FreeT f Identity a
 pattern FuzzyQueryP s = FreeT (Identity (Pure s))
 
+-- XXX: Create the echo area
+setEcho :: EchoSide -> FuzzyQuery e s -> FuzzyQuery e s
+setEcho NoEcho fq = fq
+setEcho echo  fq  = wrapFuzzy echo $ Q0 fq
+
+-- | Prioritize the left hand side cardinality
 combFuzz :: FuzzyQuery e s -> FuzzyQuery e s -> FuzzyQuery e s
-combFuzz (FuzzyQueryF qs) (FuzzyQueryF qs') = FuzzyQueryF $ qs <> qs'
-combFuzz (FuzzyQueryF qs) (FuzzyQueryP s) =
-  FuzzyQueryF $ qs <> pure (tunnelQuery $ Q0 $ return s)
-combFuzz (FuzzyQueryP s) (FuzzyQueryF qs) =
-  FuzzyQueryF $ pure (tunnelQuery $ Q0 $ return s) <> qs
+combFuzz (FuzzyQueryF (card,qs)) (FuzzyQueryF (_card',qs')) =
+  FuzzyQueryF (card,qs <> qs')
+combFuzz (FuzzyQueryF (card,qs)) (FuzzyQueryP s) =
+  FuzzyQueryF (card,qs <> pure (tunnelQuery $ Q0 $ return s))
+combFuzz (FuzzyQueryP s) (FuzzyQueryF (card,qs)) =
+  FuzzyQueryF (card,pure (tunnelQuery $ Q0 $ return s) <> qs)
 combFuzz (FuzzyQueryP s) (FuzzyQueryP s') =
   FuzzyQueryF
-  $ pure (tunnelQuery $ Q0 $ return s)
-  <> pure (tunnelQuery $ Q0 $ return s')
+    (CardQ s
+    ,pure (tunnelQuery $ Q0 $ return s)
+     <> pure (tunnelQuery $ Q0 $ return s'))
 combFuzz _ _ = error "Unreachable!"
 
 data JoinSet e s =
@@ -129,10 +157,10 @@ type JProp e = Prop (Rel (Expr (Maybe QId,e)))
 
 -- | Props separated according to left and right.
 data SepProps e =
-  SepProps
-  { spLeftNonEq,spRightNonEq,spLeftEq,spRightEq,spConnEq,spConnNonEq
-      :: [JProp e]
-  } deriving Generic
+  SepProps { spLeftNonEq,spRightNonEq,spLeftEq,spRightEq,spConnEq,spConnNonEq
+               :: [JProp e]
+           }
+  deriving Generic
 instance AShow e => AShow (SepProps e)
 
 mkSepProps :: L1 QId -> L1 QId -> [JProp e] -> SepProps e
@@ -162,7 +190,8 @@ instance Default (PJState e s)
 
 selQ :: EchoSide -> [JProp e] -> FuzzyQuery e s -> FuzzyQuery e s
 selQ echo p q =
-  if null p then q else wrapFuzzy echo $ S (fmap3 snd $ foldl1' And p) $ Q0 q
+  if null p then setEcho echo q
+  else wrapFuzzy (SelCard card $ ) echo $ S (fmap3 snd $ foldl1' And p) $ Q0 q
 
 joinQ :: EchoSide
       -> [JProp e]
@@ -195,21 +224,16 @@ isEquality :: Prop (Rel (Expr e')) -> Bool
 isEquality (P0 (R2 REq (R0 (E0 _)) (R0 (E0 _)))) = True
 isEquality _                                     = False
 
---
--- Finally we create echo tunnels between each of the resulting
--- queries and the pure equijoin query. This is a heuristic that
--- assumes that the particular query is useful to be considered when
--- considering andy of the queries in question.
 onEitherSide :: L0 (L1 a,L1 a) -> a -> L0 (L1 a,L1 a)
 onEitherSide res q = do
   (ls,rs) <- res
   [(pure q <> ls,rs),(ls,pure q <> rs)]
 
 cachedJoin
-  :: (Monad m,Hashables2 e s)
-  => (EchoId -> JoinSet e s -> StateT (PJState e s) m (FuzzyQuery e s))
+  :: Hashables2 e s
+  => (EchoId -> JoinSet e s -> MaybeT (State (PJState e s)) (FuzzyQuery e s))
   -> JoinSet e s
-  -> StateT (PJState e s) m (FuzzyQuery e s)
+  -> MaybeT (State (PJState e s)) (FuzzyQuery e s)
 cachedJoin f js = do
   gets (HM.lookup js . pjsCache) >>= \case
     Just x -> return x
@@ -222,21 +246,24 @@ cachedJoin f js = do
       modify $ \pjs -> pjs { pjsCache = HM.insert js ret $ pjsCache pjs }
       return ret
 
+
 -- | From all the possible separations of the the joinset prune the
 -- ones that are invalid (ie contain products) and create fuzzy
 -- queries with the rest.
+--
+-- What is going on with
 echoingJoins
-  :: MonadPlus m
-  => (JoinSet e s -> m (FuzzyQuery e s))
+  :: Monad m
+  => (JoinSet e s -> MaybeT m (FuzzyQuery e s))
   -> EchoId
   -> JoinSet e s
-  -> m (FuzzyQuery e s)
+  -> MaybeT m (FuzzyQuery e s)
 echoingJoins recur echoId = \case
   JoinSetSingleQuery _qid q -> onlyWrap q
   JoinSetSelectSingle p ps _qid q -> onlyWrap
     $ S (fmap3 snd $ foldl' And p ps) q
   JoinSetProduct {} -> mzero
-  JoinSetAtLeast2 ps l0 r0 qs -> (>>= combFuzzM) $ runListT $ do
+  JoinSetAtLeast2 ps l0 r0 qs -> commitFuzz $ do
     (ls,rs) <- mkListT $ return $ foldl' onEitherSide [(pure l0,pure r0)] qs
     let SepProps {..} = mkSepProps (fst <$> ls) (fst <$> rs) ps
     -- Build the tunnels.
@@ -244,11 +271,11 @@ echoingJoins recur echoId = \case
         spLeftAll = spLeftEq <> spLeftNonEq
         spRightAll = spRightEq <> spRightNonEq
     -- Push down as few props as possible to make general purpose IR.
-    eqJoinLeft <- lift $ recur $ mkJoinSet spLeftEq ls
-    eqJoinRight <- lift $ recur $ mkJoinSet spRightEq rs
+    eqJoinLeft <- liftL $ recur $ mkJoinSet spLeftEq ls
+    eqJoinRight <- liftL $ recur $ mkJoinSet spRightEq rs
     -- Push down as many props as possible to make optimal IR.
-    optimalLeft <- lift $ recur $ mkJoinSet spLeftAll ls
-    optimalRight <- lift $ recur $ mkJoinSet spRightAll rs
+    optimalLeft <- liftL $ recur $ mkJoinSet spLeftAll ls
+    optimalRight <- liftL $ recur $ mkJoinSet spRightAll rs
     -- XXX: we have S noEq (J eq optL optR) but not J (eq /\ noEq) optL optR.
     let fullEqJoinM = joinQ (TExit echoId) spConnEq eqJoinLeft eqJoinRight
         optimalJoinM = joinQ (TEntry echoId) spConnEq optimalLeft optimalRight
@@ -261,10 +288,20 @@ echoingJoins recur echoId = \case
         "joinQ should return Just or Nothing only based on the value of mustJoin"
   _ -> error "unreachable"
   where
-    combFuzzM [] = mzero
-    combFuzzM xs = return $ foldl1 combFuzz xs
+    liftL :: Monad m => MaybeT m a -> ListT m a
+    liftL m = lift (runMaybeT m) >>= maybe mzero return
     onlyWrap q =
       wrapFuzzy NoEcho . fmap (either return id) <$> traverse2 recur q
+
+
+-- | Transform a ListT of FuzzQueries into a single FuzzQuery that is
+-- the combination of all fuzzes. If the ListT monad is empty then the
+-- output monad is also empty.
+commitFuzz :: Monad m => ListT m (FuzzyQuery e s) -> MaybeT m (FuzzyQuery e s)
+commitFuzz m = lift (runListT m) >>= \case
+  [] -> mzero
+  xs -> return $ foldl1 combFuzz xs
+
 
 joinPermutations
   :: Hashables2 e s
@@ -272,17 +309,18 @@ joinPermutations
   -> Query e s
   -> Maybe (FuzzyQuery e s)
 joinPermutations emb q =
-  (`evalStateT` def)
+  (`evalState` def)
+  $ runMaybeT
   $ cachedJoin (echoingJoins $ fix $ \f -> echoingJoins f def)
   $ queryToJoinSet emb q
 
-#if 1
+
 
 -- | Remove the noise and tunnels from FuzzQuery and just show that.
 ashowFuzz :: forall e s . (AShow e,AShow s) => FuzzyQuery e s -> SExp
 ashowFuzz (FreeT (Identity (Pure x))) = ashow' x
-ashowFuzz (FreeT (Identity (Free (Compose m)))) =
-  ashow' $ ashowTQ . fmap ashowFuzz <$> toList m
+ashowFuzz (FreeT (Identity (Free (Compose (Compose (card,m)))))) =
+  ashow' (card,ashowTQ . fmap ashowFuzz <$> toList m)
   where
     ashowTQ :: TQuery e SExp -> SExp
     ashowTQ = either ashow' ashow' . tqQuery
@@ -292,42 +330,81 @@ testJe =
   ashowFuzz
   <$> joinPermutations
     eqSymEmbedding
-    (Q1
-       (QGroup
-          [("revenue"
-           ,E0
-              (NAggr
-                 AggrSum
-                 (E2 EMul (E0 ("lo_extendedprice")) (E0 ("lo_discount")))))]
-          [])
-       (S
-          (P2
-             PAnd
-             (P2
-                PAnd
-                (P2
-                   PAnd
-                   (P0
-                      (R2
-                         REq
-                         (R0 (E0 ("lo_orderdate")))
-                         (R0 (E0 ("d_datekey")))))
-                   (P0 (R2 REq (R0 (E0 ("d_year"))) (R0 (E0 ("d_year"))))))
-                (P2
-                   PAnd
-                   (P0
-                      (R2
-                         RLe
-                         (R0 (E0 ("lo_discount")))
-                         (R0 (E0 ("lo_discount")))))
-                   (P0
-                      (R2
-                         RLe
-                         (R0 (E0 ("lo_discount")))
-                         (R0 (E0 ("lo_discount")))))))
-             (P0 (R2 RLt (R0 (E0 ("lo_quantity"))) (R0 (E0 ("lo_quantity"))))))
+    (mkQ
+       [("lo_orderdate","d_datekey")
+       ,("lo_partkey","p_partkey")
+       ,("lo_suppkey","s_suppkey")])
+
+
+mkQ x = S p $ prod p where p = mkP x
+mkP = foldl1' And . fmap (\(l,r) -> P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))))
+prod :: Prop (Rel (Expr String)) -> Query String [String]
+prod = foldl1' (Q2 QProd) . fmap Q0 . groupBy commonPrefix . sort . toList3
+  where
+    commonPrefix [] []           = True
+    commonPrefix ('_':_) ('_':_) = True
+    commonPrefix (l:ls) (r:rs)   = if l == r then commonPrefix ls rs else False
+    commonPrefix _ _             = False
+
+q1 =
+  (((S
+       (((P2
+            PAnd
+            (P2
+               PAnd
+               (P0 (R2 REq (R0 (E0 ("lo_orderdate"))) (R0 (E0 ("d_datekey")))))
+               (P0 (R2 REq (R0 (E0 ("lo_partkey"))) (R0 (E0 ("p_partkey"))))))
+            (P0 (R2 REq (R0 (E0 ("lo_suppkey"))) (R0 (E0 ("s_suppkey"))))))))
+       (Q2
+          QProd
           (Q2
              QProd
-             (Q0 (["lo_orderdate","lo_discount","lo_quantity"]))
-             (Q0 (["d_year","d_datekey"])))))
-#endif
+             (Q2
+                QProd
+                (Q0 ["lo_orderdate","lo_partkey","lo_suppkey","lo_revenue"])
+                (Q0 ["d_datekey","d_year"]))
+             (Q0 ["p_category","p_partkey","p_brand1"]))
+          (Q0 ["s_region","s_suppkey"])))))
+
+q0 =
+  (Q1
+     (QSort [E0 ("d_year"),E0 ("p_brand1")])
+     (Q1
+        (QGroup
+           [("tmpSym0",E0 (NAggr AggrSum (E0 ("lo_revenue"))))
+           ,("d_year",E0 (NAggr AggrFirst (E0 ("d_year"))))
+           ,("p_brand1",E0 (NAggr AggrFirst (E0 ("p_brand1"))))]
+           [E0 ("d_year"),E0 ("p_brand1")])
+        (S
+           (P2
+              PAnd
+              (P2
+                 PAnd
+                 (P2
+                    PAnd
+                    (P2
+                       PAnd
+                       (P0
+                          (R2
+                             REq
+                             (R0 (E0 ("lo_orderdate")))
+                             (R0 (E0 ("d_datekey")))))
+                       (P0
+                          (R2
+                             REq
+                             (R0 (E0 ("lo_partkey")))
+                             (R0 (E0 ("p_partkey"))))))
+                    (P0
+                       (R2 REq (R0 (E0 ("lo_suppkey"))) (R0 (E0 ("s_suppkey"))))))
+                 (P0 (R2 REq (R0 (E0 ("p_category"))) (R0 (E0 ("p_category"))))))
+              (P0 (R2 REq (R0 (E0 ("s_region"))) (R0 (E0 ("s_region"))))))
+           (Q2
+              QProd
+              (Q2
+                 QProd
+                 (Q2
+                    QProd
+                    (Q0 ["lo_orderdate","lo_partkey","lo_suppkey","lo_revenue"])
+                    (Q0 ["d_datekey","d_year"]))
+                 (Q0 ["p_category","p_partkey","p_brand1"]))
+              (Q0 ["s_region","s_suppkey"])))))

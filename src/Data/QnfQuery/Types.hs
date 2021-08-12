@@ -155,7 +155,7 @@ type NQNFQueryF f e s = NQNFQueryCF Either f e s
 type NQNFQueryProjF f e s = NQNFQueryCF Const f e s
 type NQNFQueryAggrF f e s = NQNFQueryCF CoConst f e s
 type QNFColSPC s p c = QNFQuerySPDCF s p EmptyF c Identity
-type QNFColC (c :: * -> * -> *) = (QNFQueryCF c Identity :: * -> * -> *)
+type QNFColC col_f = QNFQueryCF col_f {- f: -} Identity
 type QNFCol = QNFColC Either
 type QNFColProj = QNFColC Const
 type QNFColAggr = QNFColC CoConst
@@ -174,15 +174,18 @@ type QNFProd e s = HS.HashSet (Query (QNFName e s) (Either s (QNFQueryI e s)))
 type QNFSel e s =  Prop (Rel (Expr (QNFSelName e s)))
 type QNFProj f e s = f (Expr (QNFName e s))
 type QNFAggr f e s = (f (Aggr (QNFName e s)), HS.HashSet (Expr (QNFName e s)))
-type QNFQueryI = QNFQueryF HashBag
-type QNFQuery = QNFQueryDCF Identity Either HashBag
-type QNFQueryF = QNFQueryCF Either
-type QNFQueryAggrF = QNFQueryCF CoConst
-type QNFQueryAggr = QNFQueryCF CoConst HashBag
-type QNFQueryProjF = QNFQueryCF Const
-type QNFQueryProj = QNFQueryCF Const HashBag
-type QNFQueryCF = QNFQueryDCF EmptyF
-type QNFQueryDCF = QNFQuerySPDCF {- sel_f -} HS.HashSet {- prod_f -} HashBag
+
+-- Variants of the query:
+type QNFQueryI = QNFQueryF {- f: -} HashBag
+type QNFQuery =
+  QNFQueryDCF {- dbg_f: -} Identity {- col_f: -} Either {- f: -} HashBag
+type QNFQueryF = QNFQueryCF {- col_f: -} Either
+type QNFQueryAggrF = QNFQueryCF {- col_f: -} CoConst
+type QNFQueryAggr = QNFQueryAggrF {- f: -} HashBag
+type QNFQueryProjF = QNFQueryCF {- col_f -} Const
+type QNFQueryProj = QNFQueryCF {- col_f: -} Const {- f: -} HashBag
+type QNFQueryCF = QNFQueryDCF {- dbg_f: -} EmptyF
+type QNFQueryDCF = QNFQuerySPDCF {- sel_f: -} HS.HashSet {- prod_f: -} HashBag
 data QNFQuerySPDCF sel_f prod_f dbg_f col_f f e s =
   QNFQuery
   { qnfColumns :: col_f (QNFProj f e s) (QNFAggr f e s)

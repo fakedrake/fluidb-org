@@ -61,7 +61,6 @@ runQuery verbosity  query = do
   aquery <- annotateQuerySSB cppConf query
   (transitions,_cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
-      -- XXX:  we don't salvage the graph state in the case of PlanT error.
       (intermPath, queryPath,pngPath,grPath) <- renderGraph query
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
@@ -163,6 +162,6 @@ ssbMain = do
   -- setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
   let secs = 15
   traceTM "Starting!"
-  timeout (secs * 1000000) (actualMain Verbose [1..12]) >>= \case
+  timeout (secs * 1000000) (actualMain Quiet [1..12]) >>= \case
     Nothing -> putStrLn $ printf  "TIMEOUT after %ds" secs
     Just () -> putStrLn "Done!"
