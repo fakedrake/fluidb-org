@@ -34,8 +34,19 @@ data L2 a = L2 a (L1 a)
 type QId = Int
 
 type Compose3 f g h = Compose (Compose f g) h
-data Cardinality e s = Cardinality | CardQ s deriving Generic
-instance AShow2 e s => AShow (Cardinality e s)
+data Cardinality e s
+  = Cardinality
+  | EqCard [e] (Cardinality e s) (Cardinality e s)
+  | CardProd (Cardinality e s) (Cardinality e s)
+  | CardSel (Cardinality e s)
+  | CardEq (Cardinality e s)
+  | CardUnion (Cardinality e s) (Cardinality e s)
+  | CardGrp (Cardinality e s)
+  | CardLim Int
+  | CardDrop Int (Cardinality e s)
+  | CardQ s
+  deriving Generic
+instance AShowV2 e s => AShow (Cardinality e s)
 instance Default (Cardinality e s) where
   def = Cardinality
 
@@ -43,7 +54,7 @@ instance Default (Cardinality e s) where
 type FuzzyQuery e s = Free (Compose3 ((,) (Cardinality e s)) L1 (TQuery e)) s
 wrapFuzzy
   :: EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
-wrapFuzzy echo  q = wrapFuzzy' (getCardinality q) echo
+wrapFuzzy echo q = wrapFuzzy' (getCardinality q) echo q
 
 wrapFuzzy'
   :: Cardinality e s -> EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
@@ -59,10 +70,25 @@ wrapFuzzy' card e x =
 
 getCardinality :: Query e (FuzzyQuery e s) -> Cardinality  e s
 getCardinality q = case q of
-  Q2 o l r                  -> _
-  Q1 o q                    -> _
+  Q2 o l r -> case o of
+    QProd -> CardProd (getCardinality l) (getCardinality r)
+    (QJoin _pr) -> CardSel (CardProd (getCardinality l) (getCardinality r))
+    (QLeftAntijoin _pr) -> CardSel
+      (getCardinality l)
+    (QRightAntijoin _pr) -> CardSel
+      (getCardinality r)
+    QUnion -> CardUnion (getCardinality l) (getCardinality r)
+    QProjQuery -> getCardinality r
+    QDistinct -> getCardinality r
+  Q1 o q -> case o of
+    (QSel pr)       -> CardSel (getCardinality q)
+    (QGroup x0 exs) -> CardGrp (getCardinality q)
+    (QProj x0)      -> getCardinality q
+    (QSort exs)     -> getCardinality q
+    (QLimit n)      -> CardLim n
+    (QDrop n)       -> CardDrop n (getCardinality q)
   Q0 (FuzzyQueryF (card,_)) -> card
-  Q0 (FuzzyQueryP s)        -> CardQ s
+  Q0 (FuzzyQueryP s) -> CardQ s
 
 pattern FuzzyQueryF :: f (g (h (FreeT (Compose3 f g h) Identity a)))
                     -> FreeT (Compose3 f g h) Identity a
@@ -191,16 +217,19 @@ instance Default (PJState e s)
 selQ :: EchoSide -> [JProp e] -> FuzzyQuery e s -> FuzzyQuery e s
 selQ echo p q =
   if null p then setEcho echo q
-  else wrapFuzzy (SelCard card $ ) echo $ S (fmap3 snd $ foldl1' And p) $ Q0 q
+  else wrapFuzzy echo $ S (fmap3 snd $ foldl1' And p) $ Q0 q
 
-joinQ :: EchoSide
-      -> [JProp e]
-      -> FuzzyQuery e s
-      -> FuzzyQuery e s
-      -> Maybe (FuzzyQuery e s)
-joinQ _echo [] _q1 _q2 = Nothing
-joinQ echo p q1 q2 =
-  Just $ wrapFuzzy echo $ J (fmap3 snd $ foldl1' And p) (Q0 q1) (Q0 q2)
+eqJoinQ
+  :: EchoSide
+  -> [JProp e] -- Must  be equalities.
+  -> FuzzyQuery e s
+  -> FuzzyQuery e s
+  -> Maybe (FuzzyQuery e s)
+eqJoinQ _echo [] _q1 _q2 = Nothing
+eqJoinQ echo p q1 q2 =
+  Just
+  $ wrapFuzzy' (eqJoinCard (toList5 p) q1 q2) echo
+  $ J (fmap3 snd $ foldl1' And p) (Q0 q1) (Q0 q2)
 
 
 -- Partitiion toi the following categories:
@@ -215,6 +244,10 @@ joinQ echo p q1 q2 =
 -- * We always push eqj
 -- * We never pish conn
 -- * We non-deterministically push or don't push the [pl ++ pr]
+
+eqJoinCard
+  :: [e] -> FuzzyQuery e s -> FuzzyQuery e s -> Cardinality e s
+eqJoinCard a l r = EqCard a (getCardinality $ Q0 l) (getCardinality $ Q0 r)
 
 isPushable :: L1 QId -> Prop (Rel (Expr (Maybe QId, e))) -> Bool
 isPushable as (toList5 . fmap3 swap -> p) =
@@ -277,15 +310,15 @@ echoingJoins recur echoId = \case
     optimalLeft <- liftL $ recur $ mkJoinSet spLeftAll ls
     optimalRight <- liftL $ recur $ mkJoinSet spRightAll rs
     -- XXX: we have S noEq (J eq optL optR) but not J (eq /\ noEq) optL optR.
-    let fullEqJoinM = joinQ (TExit echoId) spConnEq eqJoinLeft eqJoinRight
-        optimalJoinM = joinQ (TEntry echoId) spConnEq optimalLeft optimalRight
+    let fullEqJoinM = eqJoinQ (TExit echoId) spConnEq eqJoinLeft eqJoinRight
+        optimalJoinM = eqJoinQ (TEntry echoId) spConnEq optimalLeft optimalRight
     case (fullEqJoinM,optimalJoinM) of
       (Nothing,Nothing) -> mzero
       (Just fullEqJoin,Just optimalJoin) -> return
         $ selQ (TEntry echoId) allNonEq fullEqJoin
         `combFuzz` selQ (TEntry echoId) spConnNonEq optimalJoin
       _ -> error
-        "joinQ should return Just or Nothing only based on the value of mustJoin"
+        "eqJoinQ should return Just or Nothing only based on the value of mustJoin"
   _ -> error "unreachable"
   where
     liftL :: Monad m => MaybeT m a -> ListT m a
@@ -314,10 +347,8 @@ joinPermutations emb q =
   $ cachedJoin (echoingJoins $ fix $ \f -> echoingJoins f def)
   $ queryToJoinSet emb q
 
-
-
 -- | Remove the noise and tunnels from FuzzQuery and just show that.
-ashowFuzz :: forall e s . (AShow e,AShow s) => FuzzyQuery e s -> SExp
+ashowFuzz :: forall e s . (AShowV2 e s) => FuzzyQuery e s -> SExp
 ashowFuzz (FreeT (Identity (Pure x))) = ashow' x
 ashowFuzz (FreeT (Identity (Free (Compose (Compose (card,m)))))) =
   ashow' (card,ashowTQ . fmap ashowFuzz <$> toList m)
