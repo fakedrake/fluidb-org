@@ -36,14 +36,14 @@ module Data.Query.QuerySchema.SchemaBase
 
 import           Control.Monad.Reader
 import           Data.Bitraversable
-import           Data.QnfQuery.Build
-import           Data.QnfQuery.Types
 import           Data.CppAst
 import           Data.Functor.Identity
 import qualified Data.HashMap.Strict          as HM
 import           Data.List
 import qualified Data.List.NonEmpty           as NEL
 import           Data.Maybe
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
 import           Data.Tuple
@@ -90,11 +90,10 @@ planAllSyms :: QueryPlan e s -> [PlanSym e s]
 planAllSyms = fmap fst . schemaQP
 
 querySchema :: QueryPlan e s -> CppSchema' (PlanSym e s)
-querySchema plan = [(columnPropsCppType,ps)
-                   | (ps,ColumnProps{..}) <- schemaQP plan]
+querySchema
+  plan = [(columnPropsCppType,ps) | (ps,ColumnProps {..}) <- schemaQP plan]
 
 -- XXX: increment indices
-
 
 -- | Filter the unique ones. None means there were no uniques (or the
 -- plan was empty.

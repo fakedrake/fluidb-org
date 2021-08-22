@@ -31,12 +31,12 @@ module Data.Query.QuerySchema.GetQueryPlan
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Data.Bifunctor
-import           Data.QnfQuery.Build
-import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.CppAst                       as CC
 import qualified Data.List.NonEmpty                as NEL
 import           Data.Maybe
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
@@ -232,9 +232,7 @@ getQueryPlanGrp litType proj es qplan = do
     (_,Nothing) -> throwAStr $ "Empty group projection: " ++ ashow (proj,es)
     ([],Just nelProj) -> return
       QueryPlan
-      { qpSchema = [(e
-                    ,p { columnPropsConst = True
-                       }) | (e,p) <- sch]
+      { qpSchema = [(e,p { columnPropsConst = True }) | (e,p) <- sch]
        ,qpUnique = return . fst <$> nelProj
       }
     _ -> do
@@ -245,10 +243,8 @@ getQueryPlanGrp litType proj es qplan = do
         Left _ -> throwAStr
           $ "LU fail: "
           ++ ashow (proj,ioAssoc,toList <$> toList uniqCandidates)
-        Right uniq -> return
-          QueryPlan { qpSchema = sch
-                     ,qpUnique = deoverlap uniq
-                    }
+        Right
+          uniq -> return QueryPlan { qpSchema = sch,qpUnique = deoverlap uniq }
   where
     deoverlap =
       go
@@ -275,11 +271,7 @@ getQueryPlanGrp litType proj es qplan = do
     aexpProps agg = do
       ty <- aggrType litType qplan agg
       cnst <- allM (planSymConst qplan) $ toList2 agg
-      return
-        ColumnProps
-        { columnPropsCppType = ty
-         ,columnPropsConst = cnst
-        }
+      return ColumnProps { columnPropsCppType = ty,columnPropsConst = cnst }
 
 mapMaybeNEL :: HasCallStack =>
               (NEL.NonEmpty a -> Maybe (NEL.NonEmpty b))

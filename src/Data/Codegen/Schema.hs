@@ -42,23 +42,23 @@ module Data.Codegen.Schema
   , planAllSyms
   ) where
 
-import Data.Utils.Functors
-import Data.Query.QuerySchema.Types
-import Data.Utils.Hashable
 import           Control.Monad.Identity
+import           Data.Codegen.Build.Monads.Class
+import qualified Data.CppAst                         as CC
 import           Data.Foldable
 import           Data.Function
 import           Data.List
 import           Data.Maybe
-import           Data.Tuple
-import           Data.Query.Algebra
-import           Data.Utils.AShow
 import           Data.QnfQuery.Types
-import           Data.Codegen.Build.Monads.Class
-import qualified Data.CppAst                     as CC
+import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Query.QuerySchema.GetQueryPlan
-import           Prelude                                    hiding (exp)
+import           Data.Query.QuerySchema.Types
+import           Data.Tuple
+import           Data.Utils.AShow
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Prelude                             hiding (exp)
 
 type CppTypeExprConstraints c e s t n m = (
   Hashables2 e s,
@@ -101,10 +101,11 @@ aggrSchema :: forall c e s t n m .
            -> m (CppSchema' (PlanSym e s))
 aggrSchema = anySchema ashow' $ fmap Right . unAggr
 
-projSchema :: forall c e s t n m .
-             CppTypeExprConstraints c e s t n m =>
-             [(PlanSym e s, Expr (Either CC.CppType (PlanSym e s)))]
-           -> m (CppSchema' (PlanSym e s))
+projSchema
+  :: forall c e s t n m .
+  CppTypeExprConstraints c e s t n m
+  => [(PlanSym e s,Expr (Either CC.CppType (PlanSym e s)))]
+  -> m (CppSchema' (PlanSym e s))
 projSchema = anySchema ashow' return
 
 keysToProj :: ExprLike e a => [e] -> [(e, a)]
@@ -124,19 +125,21 @@ exprCppTypeErr :: forall c e s t n m .
                  Expr (PlanSym e s)
                -> m CC.CppType
 exprCppTypeErr exp = do
-  QueryCppConf{..} <- cbQueryCppConf <$> getCBState
+  QueryCppConf {..} <- cbQueryCppConf <$> getCBState
   plans <- toList <$> getQueries
   let planType planSym = case planSymType literalType plans planSym of
-        Nothing -> throwAStr $ "exprCppTypeErr: Can't find type for: "
-          ++ ashow (planSym,
-                    querySchema <$> plans,
-                    lookup planSym . fmap swap . querySchema <$> plans,
-                    exp)
-        Just ty  -> return (planSymOrig planSym, ty)
+        Nothing -> throwAStr
+          $ "exprCppTypeErr: Can't find type for: "
+          ++ ashow
+            (planSym
+            ,querySchema <$> plans
+            ,lookup planSym . fmap swap . querySchema <$> plans
+            ,exp)
+        Just ty -> return (planSymOrig planSym,ty)
   expT <- traverse planType exp
   case exprCppType' $ snd <$> expT of
-   Just ty -> return ty
-   Nothing -> throwAStr $ "exprCppTypeErr " ++ ashow expT
+    Just ty -> return ty
+    Nothing -> throwAStr $ "exprCppTypeErr " ++ ashow expT
 
 cppSchema
   :: forall e s t n m .

@@ -4,7 +4,7 @@
 {-# LANGUAGE ViewPatterns         #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 module Data.Query.Optimizations.EchoingJoins
-  (joinPermutations) where
+  (joinPermutations,FuzzyQuery) where
 
 
 import           Control.Monad.Identity
@@ -37,6 +37,7 @@ type Compose3 f g h = Compose (Compose f g) h
 data Cardinality e s
   = Cardinality
   | EqCard [e] (Cardinality e s) (Cardinality e s)
+  -- ^ the
   | CardProd (Cardinality e s) (Cardinality e s)
   | CardSel (Cardinality e s)
   | CardEq (Cardinality e s)

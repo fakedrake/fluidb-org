@@ -79,7 +79,7 @@ optQuery'
   Hashables2 e' s
   => SymEmbedding (ExpTypeSym' e) s e'
   -> Query e' s
-  -> Maybe (Free (Compose NEL.NonEmpty (TQuery e')) s)
+  -> Maybe (FuzzyQuery e' s)
 optQuery'  symEmb q0 = do
   saneq <- sanitizeQuery symEmb q0
   -- Actual optimizations
@@ -105,12 +105,13 @@ optQueryPlan litType etsIso q = do
   annotated <- annotateQueryPlan litType
     $ first (\s -> (planSymOrig s,s))
     $ fmap swap q
-  optq <- maybe
-    (throwAStr
-     $ "optQuery' failed: " ++ ashow (bimap (fst . fst) fst annotated))
-    return
-    $ optQuery' (mkEmbedding etsIso)
-    $ first (first snd) annotated
+  let guardOptQFail =
+        throwAStr
+        $ "optQuery' failed: " ++ ashow (bimap (fst . fst) fst annotated)
+      optQAnnotated =
+        optQuery' (mkEmbedding etsIso)
+        $ first (first snd) annotated
+  (optq,_card) <- guardOptQFail $ _ optQAnnotated
   return
     $ hoistFreeTF
       (Compose . fmap (first $ planSymOrig . fst) . getCompose)
