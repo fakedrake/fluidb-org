@@ -3,6 +3,7 @@ module Data.Query.Optimizations.Echo
   ,EchoId
   ,EchoNetEden(..)
   ,EchoSide(..)
+  ,unTunnelQuery
   ,tunnelQuery) where
 import           Control.Monad
 import           Data.Bifunctor
@@ -63,3 +64,5 @@ instance Applicative (TQuery e) where
 
 tunnelQuery :: Query e s -> TQuery e s
 tunnelQuery q = TQuery { tqQuery = Right q, tqEcho = def }
+unTunnelQuery :: TQuery e s -> Query e s
+unTunnelQuery = either (>>= unTunnelQuery) id . tqQuery

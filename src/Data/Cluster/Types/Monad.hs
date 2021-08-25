@@ -23,10 +23,10 @@ module Data.Cluster.Types.Monad
   ,CGraphBuilderT
   ,CPropagator
   ,ACPropagator
-  ,PlanCluster
+  ,ShapeCluster
   ,PropCluster
   ,Defaulting
-  ,CPropagatorPlan
+  ,CPropagatorShape
   ,Tunnel(..)
   ,tqueryToForest
   ,forestToQuery
@@ -96,8 +96,8 @@ data ClusterConfig e s t n =
     -- ^ All these will be equiv: (schema, query)
    ,trefToQnf :: RefMap t (QNFQuery e s)
    ,qnfTableColumns :: s -> Maybe [e]
-   ,qnfNodePlans :: RefMap n (Defaulting (QueryPlan e s))
-    -- ^ The plan that we expect to find in each node.
+   ,qnfNodeShapes :: RefMap n (Defaulting (QueryShape e s))
+    -- ^ The shape that we expect to find in each node.
    ,qnfPropagators
       :: HM.HashMap (AnyCluster e s t n) (ClustPropagators e s t n)
     -- Update the map between nodes and queries. The same cluster is
@@ -107,20 +107,20 @@ data ClusterConfig e s t n =
    ,clustBuildCache :: ClustBuildCache e s t n
   }
 newtype ClustPropagators e s t n = ClustPropagators {
-  planPropagators :: [ACPropagatorAssoc e s t n]
+  shapePropagators :: [ACPropagatorAssoc e s t n]
   } deriving Generic
 instance Default (ClustPropagators e s t n)
 data InsPlanRes e s t n = InsPlanRes {
   insPlanRef   :: NodeRef n,
   insPlanNQNFs :: HS.HashSet (NQNFQueryI e s),
-  insPlanQuery :: Query e (s,QueryPlan e s)
+  insPlanQuery :: Query e (s,QueryShape e s)
   } deriving Generic
 instance (AShowV e,AShowV s) => AShow (InsPlanRes e s t n)
 data QueryForest e s =
   QueryForest
   { qfHash :: Int
    ,qfQueries
-      :: Either (NEL.NonEmpty (TQuery e (QueryForest e s))) (s,QueryPlan e s)
+      :: Either (NEL.NonEmpty (TQuery e (QueryForest e s))) (s,QueryShape e s)
   }
   deriving Generic
 
@@ -128,13 +128,13 @@ data QueryForest e s =
 -- qnfquery we can get the hash for "free".
 freeToForest
   :: Hashables2 e s
-  => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryPlan e s)
+  => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryShape e s)
   -> QueryForest e s
 freeToForest = \case
   FreeT (Identity (Free (Compose a))) -> let v = fmap2 freeToForest a
     in QueryForest {qfHash=hash v,qfQueries=Left v}
   FreeT (Identity (Pure a)) -> QueryForest {qfHash=hash a,qfQueries=Right a}
-forestToQuery :: Hashables2 e s => QueryForest e s -> Query e (s,QueryPlan e s)
+forestToQuery :: Hashables2 e s => QueryForest e s -> Query e (s,QueryShape e s)
 forestToQuery =
   either
     (forestToQuery <=< either (fmap tqueryToForest) id . tqQuery . NEL.head)
@@ -180,13 +180,14 @@ regCall call = modify $ \cc -> cc{
 
 -- | (Propagator,In :-> Out sym)
 type ACPropagatorAssoc e s t n =
-  (ACPropagator (QueryPlan e s) e s t n,[(PlanSym e s,PlanSym e s)])
+  (ACPropagator (QueryShape e s) e s t n,[(ShapeSym e s,ShapeSym e s)])
 -- | A value that either has a default value or defaults.
-data Defaulting a = DefaultingEmpty
-                  | DefaultingDef a
-                  | DefaultingFull a a
-                  -- ^ DefaultingFull default_value actual_value
-  deriving (Eq, Generic, Show, Read, Functor, Traversable, Foldable)
+data Defaulting a
+  = DefaultingEmpty
+  | DefaultingDef a
+  | DefaultingFull a a
+    -- ^ DefaultingFull default_value actual_value
+  deriving (Eq,Generic,Show,Read,Functor,Traversable,Foldable)
 instance Hashable a => Hashable (Defaulting a)
 instance Applicative Defaulting where
   pure = DefaultingDef
@@ -246,13 +247,15 @@ ifDefaultingEmpty p isEmpty isntEmpty = case p of
 
 instance AShow a => AShow (Defaulting a)
 type PropCluster a f e s t n =
-  AnyCluster' (PlanSym e s) (WMetaD (Defaulting a) f) t n
-type PlanCluster f e s t n = PropCluster (QueryPlan e s) f e s t n
+  AnyCluster' (ShapeSym e s) (WMetaD (Defaulting a) f) t n
+type ShapeCluster f e s t n = PropCluster (QueryShape e s) f e s t n
 type EndoE e s x = x -> Either (AShowStr e s) x
+
+
 type ACPropagator a e s t n = EndoE e s (PropCluster a NodeRef e s t n)
 type CPropagator a c e s t n =
   EndoE e s (c EmptyF (WMetaD (Defaulting a) NodeRef) t n)
-type CPropagatorPlan c e s t n = CPropagator (QueryPlan e s) c e s t n
+type CPropagatorShape c e s t n = CPropagator (QueryShape e s) c e s t n
 
 instance Hashables2 e s => Default (ClusterConfig e s t n) where
   def =
@@ -264,7 +267,7 @@ instance Hashables2 e s => Default (ClusterConfig e s t n) where
      ,trefToQnf = mempty
      ,qnfTableColumns = const Nothing
      ,qnfPropagators = mempty
-     ,qnfNodePlans = mempty
+     ,qnfNodeShapes = mempty
      ,clustBuildCache = def
     }
 

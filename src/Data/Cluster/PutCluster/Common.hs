@@ -43,15 +43,15 @@ noopRef :: Alternative f => NodeRef n -> WMetaD (f a) NodeRef n
 noopRef r = WMetaD (empty, r)
 -- XXX: it's not a column, it's a name
 withOpRef :: (Hashables2 e s, Applicative f, Traversable op) =>
-            op (PlanSym e s)
+            op (ShapeSym e s)
           -> NodeRef n
-          -> WMetaD (f (op (PlanSym e s))) NodeRef n
+          -> WMetaD (f (op (ShapeSym e s))) NodeRef n
 withOpRef = withOpRefM . pure
 
 withOpRefM :: (Hashables2 e s,Traversable op) =>
-             f (op (PlanSym e s))
+             f (op (ShapeSym e s))
            -> NodeRef n
-           -> WMetaD (f (op (PlanSym e s))) NodeRef n
+           -> WMetaD (f (op (ShapeSym e s))) NodeRef n
 withOpRefM op r = WMetaD (op, r)
 
 putRet
@@ -63,9 +63,9 @@ putRet
   ,CanPutIdentity (c NodeRef f) (c Identity Identity) NodeRef f
   ,Bitraversable (c Identity Identity)
   ,Zip2 (c Identity Identity)
-  ,f ~ ComposedType c (PlanSym e s) NodeRef)
-  => c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n
-  -> c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n
+  ,f ~ ComposedType c (ShapeSym e s) NodeRef)
+  => c NodeRef (ComposedType c (ShapeSym e s) NodeRef) t n
+  -> c NodeRef (ComposedType c (ShapeSym e s) NodeRef) t n
   -> CGraphBuilderT e s t n m (c NodeRef f t n)
 putRet ret c = do
   clust'' <- fmap dropIdentity
@@ -77,7 +77,7 @@ putRet ret c = do
   replaceCluster retAny oldAny
   return clust''
   where
-    combOps :: ComposedType c (PlanSym e s) NodeRef n
+    combOps :: ComposedType c (ShapeSym e s) NodeRef n
             -> f n
             -> CGraphBuilderT e s t n m (f n)
     combOps l r = case (extractRef pc pe l,extractRef pc pe r) of
@@ -87,7 +87,7 @@ putRet ret c = do
           Nothing -> throwAStr "oops"
       where
         pc = Proxy :: Proxy c
-        pe = Proxy :: Proxy (PlanSym e s)
+        pe = Proxy :: Proxy (ShapeSym e s)
 
 
 
@@ -109,7 +109,7 @@ idempotentClusterInsert
   ,Bitraversable (c Identity Identity)
   ,Zip2 (c Identity Identity)
   ,Hashable (c NodeRef f t n)
-  ,f ~ ComposedType c (PlanSym e s) NodeRef)
+  ,f ~ ComposedType c (ShapeSym e s) NodeRef)
   => [(c NodeRef f t n
        -> f n
       ,NodeRef n)]
@@ -131,10 +131,10 @@ idempotentClusterInsert constraints m = do
   where
     toSpecificClustLocal
       :: AnyCluster e s t n
-      -> Maybe (c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n)
+      -> Maybe (c NodeRef (ComposedType c (ShapeSym e s) NodeRef) t n)
     toSpecificClustLocal = toSpecificClust
-    extrRef :: f n -> ([ClusterOp c (PlanSym e s)],NodeRef n)
-    extrRef = extractRef (Proxy :: Proxy c) (Proxy :: Proxy (PlanSym e s))
+    extrRef :: f n -> ([ClusterOp c (ShapeSym e s)],NodeRef n)
+    extrRef = extractRef (Proxy :: Proxy c) (Proxy :: Proxy (ShapeSym e s))
 
 -- The exceptions are real, the state is dropped.
 quarantine

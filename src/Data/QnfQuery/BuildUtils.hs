@@ -42,7 +42,6 @@ import           Data.Query.Algebra
 import           Data.Utils.AShow
 import           Data.Utils.Const
 import           Data.Utils.EmptyF
-import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.Tup

@@ -47,7 +47,7 @@ instance Bifoldable (NodeRole x) where
 
 -- | The input/output files of an operation.
 type IOFiles e s =
-  IOFilesG (NodeRef ()) (Maybe (QueryPlan e s),FilePath) (Maybe (QueryPlan e s),FileSet)
+  IOFilesG (NodeRef ()) (Maybe (QueryShape e s),FilePath) (Maybe (QueryShape e s),FileSet)
 -- | If a file has Nothing in the filename, it means we should not be
 -- making it.
 type IOFilesG interm inp out = IOFilesGF MaybeBuild interm inp out

@@ -9,7 +9,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns         #-}
 
-module Data.Cluster.InsertQuery (insertQueryPlan) where
+module Data.Cluster.InsertQuery (insertQueryForest) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -65,59 +65,59 @@ registerEcho n = \case
         $ qnfTunels cgs
     }
 
-insertQueryPlan
+insertQueryForest
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
   => (e -> Maybe CppType)
-  -> Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryPlan e s)
+  -> Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryShape e s)
   -> CGraphBuilderT e s t n m (NodeRef n)
-insertQueryPlan
-  litType = fmap insPlanRef . insertQueryPlan' litType . freeToForest
+insertQueryForest
+  litType = fmap insPlanRef . insertQueryForest' litType . freeToForest
 
-mkS :: (e,QNFColSPC HS.HashSet HashBag Either e s) -> PlanSym e s
-mkS (e,c) = mkPlanSym (Column c 0) e
+mkS :: (e,QNFColSPC HS.HashSet HashBag Either e s) -> ShapeSym e s
+mkS (e,c) = mkShapeSym (Column c 0) e
 
 -- |Insert a symbol.
-insertQueryPlan0
+insertQueryForest0
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
-  => (s,QueryPlan e s)
+  => (s,QueryShape e s)
   -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
-insertQueryPlan0 (s,plan) = do
-  let nqnfS :: NQNFQuery e s = nqnfSymbol (planSymOrig <$> planAllSyms plan) s
+insertQueryForest0 (s,shape) = do
+  let nqnfS :: NQNFQuery e s = nqnfSymbol (shapeSymOrig <$> shapeAllSyms shape) s
   ref <- mkNodeFromQnf (nqnfToQnf nqnfS) >>= \case
     [ref] -> return ref
     _     -> throwAStr $ "Multiple refs for symbol " ++ ashow s
-  _ <- putNCluster plan (ref,nqnfS)
+  _ <- putNCluster shape (ref,nqnfS)
   return
     InsPlanRes
     { insPlanRef = ref
      ,insPlanNQNFs = HS.singleton $ second putEmptyQNFQ nqnfS
-     ,insPlanQuery = Q0 (s,plan)
+     ,insPlanQuery = Q0 (s,shape)
     }
 
-insertQueryPlan'
+insertQueryForest'
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
   => (e -> Maybe CppType)
   -> QueryForest e s
   -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
-insertQueryPlan' litType forest = do
+insertQueryForest' litType forest = do
   cachedM forest $ case qfQueries forest of
-    Right s -> insertQueryPlan0 s
+    Right s -> insertQueryForest0 s
     Left qs -> foldInsPlanRes <$> forM qs recurTQ
   where
     q2f = queryToForest . fmap tqueryToForest
     recurTQ q0 = do
       res <- case tqQuery q0 of
         Left q -> case q of
-          Q1 o q'  -> insertQueryPlan1 litType o $ q2f q'
-          Q2 o l r -> insertQueryPlan2 litType o (q2f l) (q2f r)
-          Q0 q'    -> insertQueryPlan' litType $ tqueryToForest q'
+          Q1 o q'  -> insertQueryForest1 litType o $ q2f q'
+          Q2 o l r -> insertQueryForest2 litType o (q2f l) (q2f r)
+          Q0 q'    -> insertQueryForest' litType $ tqueryToForest q'
         Right x -> case x of
-          Q1 o q   -> insertQueryPlan1 litType o $ queryToForest q
-          Q2 o l r -> insertQueryPlan2 litType o (queryToForest l) (queryToForest r)
-          Q0 q     -> insertQueryPlan' litType q
+          Q1 o q   -> insertQueryForest1 litType o $ queryToForest q
+          Q2 o l r -> insertQueryForest2 litType o (queryToForest l) (queryToForest r)
+          Q0 q     -> insertQueryForest' litType q
       registerEcho (insPlanRef res) (tqEcho q0)
       return res
     cachedM :: QueryForest e s
@@ -136,7 +136,7 @@ insertQueryPlan' litType forest = do
             }
           return ret
 
-insertQueryPlan2
+insertQueryForest2
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
   => (e -> Maybe CppType)
@@ -144,13 +144,13 @@ insertQueryPlan2
   -> QueryForest e s
   -> QueryForest e s
   -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
-insertQueryPlan2 litType o l r = case o of
+insertQueryForest2 litType o l r = case o of
   QProd -> throwAStr "We shouldn't be adding products..."
   QJoin p -> joinLike p qrefO
   QLeftAntijoin p -> joinLike p qrefLO
   QRightAntijoin p -> joinLike p qrefRO
   _ -> do
-    Tup2 iprL iprR <- insertQueryPlan' litType `traverse` Tup2 l r
+    Tup2 iprL iprR <- insertQueryForest' litType `traverse` Tup2 l r
     let refL = insPlanRef iprL
     let refR = insPlanRef iprR
     let nqnfLR =
@@ -160,8 +160,8 @@ insertQueryPlan2 litType o l r = case o of
       ress <- toNQNFQueryBC o nqnfL nqnfR
       forM ress $ \resO -> case nqnfResOrig resO of
         Right (MkQB mk)
-          -> insertQueryPlan' litType $ queryToForest $ first snd $ mk l r
-        Left (fmap (uncurry mkPlanSym) -> opO) -> do
+          -> insertQueryForest' litType $ queryToForest $ first snd $ mk l r
+        Left (fmap (uncurry mkShapeSym) -> opO) -> do
           let nqnfO =
                 second (putIdentityQNFQ $ fst <$> dbgQ) $ nqnfResNQNF resO
               assoc = bimap mkS mkS <$> nqnfResInOutNames resO
@@ -191,8 +191,8 @@ insertQueryPlan2 litType o l r = case o of
       snd
       <$> liftA2'
         (insertJoinLike mkExtr p)
-        (insertQueryPlan' litType l)
-        (insertQueryPlan' litType r)
+        (insertQueryForest' litType l)
+        (insertQueryForest' litType r)
       where
         liftA2' = join .... liftA2
         mkExtr conf =
@@ -206,19 +206,19 @@ insertQueryPlan2 litType o l r = case o of
 -- | Inserting the in
 --
 -- We use a cache, the (Maybe outRef, Maybe coOutRef)
-insertQueryPlan1
+insertQueryForest1
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
   => (e -> Maybe CppType)
   -> UQOp e
   -> QueryForest e s
   -> CGraphBuilderT e s t n m (InsPlanRes e s t n)
-insertQueryPlan1
+insertQueryForest1
   litType
   o
   q = fmap foldInsPlanRes $ (>>= toNEL) $ (`evalStateT` (Nothing,Nothing)) $ do
   -- insert the input query.
-  iprQ :: InsPlanRes e s t n <- lift $ insertQueryPlan' litType q
+  iprQ :: InsPlanRes e s t n <- lift $ insertQueryForest' litType q
   -- For each possible nqnf that the input can correspond to, insert a
   -- query on top of it. Remember that we get multiple NQNFs because
   -- producs are non-deterministic.
@@ -242,7 +242,7 @@ insertQueryPlan1
        ,insPlanQuery = Q1 o dbgQ
       }
   where
-    dbgQ :: Query e (s,QueryPlan e s)
+    dbgQ :: Query e (s,QueryShape e s)
     dbgQ = forestToQuery q
     cachedMkRo
       :: HasCallStack
@@ -268,8 +268,8 @@ insertQueryPlan1
         (Maybe (NodeRef n),Maybe (NodeRef n))
         (CGraphBuilderT e s t n m)
         ((NodeRef n,NQNFQuery e s)
-        ,[(PlanSym e s,PlanSym e s)]
-        ,UQOp (PlanSym e s))
+        ,[(ShapeSym e s,ShapeSym e s)]
+        ,UQOp (ShapeSym e s))
     expandOp cachedMkR nqnfI o' = do
       resO <- lift $ toNQNFQueryUC o' nqnfI
       let nqnfO = putIdentityQNFQ (fst <$> Q1 o' dbgQ) <$> nqnfResNQNF resO
@@ -277,7 +277,7 @@ insertQueryPlan1
       return
         ((refO,nqnfO)
         ,bimap mkS mkS <$> nqnfResInOutNames resO
-        ,uncurry mkPlanSym <$> nqnfResOrig resO)
+        ,uncurry mkShapeSym <$> nqnfResOrig resO)
 
 toNEL :: (MonadError err m, AShowError e s err) => [a] -> m (NEL.NonEmpty a)
 toNEL = \case
@@ -298,7 +298,7 @@ insertJoinLike f p l r = do
   resNel <- toNEL ress
   clust NEL.:| _ <- toNEL clusts
   return (clust,foldInsPlanRes resNel)
-  -- return $ nubOn (allNodeRefs (Proxy :: Proxy (PlanSym e s))) . reverse <$> x
+  -- return $ nubOn (allNodeRefs (Proxy :: Proxy (ShapeSym e s))) . reverse <$> x
 
 foldInsPlanRes :: Hashables2 e s =>
                  NEL.NonEmpty (InsPlanRes e s t n) -> InsPlanRes e s t n

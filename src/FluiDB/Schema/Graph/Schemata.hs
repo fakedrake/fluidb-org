@@ -90,8 +90,8 @@ graphToFileSet = graphSchemaTableToFileSet
 graphTableBytes :: GraphSchema e s -> [(s, TableSize)]
 graphTableBytes GraphSchema {..} =
   fmap2 (\GraphTable {..} -> TableSize
-         { tableSizeRows = graphTableRows
-          ,tableSizeRowSize = (1 + length graphTableForeignKeys) * 4
+         { tsRows = graphTableRows
+          ,tsRowSize = (1 + length graphTableForeignKeys) * 4
          }) graphSchemaConnections
 
 graphSchemaAssoc :: GraphSchema e s -> SchemaAssoc e s

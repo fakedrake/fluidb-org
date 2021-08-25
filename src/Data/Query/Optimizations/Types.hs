@@ -18,7 +18,7 @@ module Data.Query.Optimizations.Types
   , TightenConf(..)
   , TightenErr(..)
   , SymEmbedding(..)
-  , planSymSymEmbedding
+  , shapeSymSymEmbedding
   , mapAStr
   , WrapEq(..)
   , eqSymEmbedding
@@ -68,17 +68,17 @@ mapAStr :: ((AShowV e,AShowV s) DC.:- (AShowV e',AShowV s'))
 mapAStr sub (AShowStr f) = AShowStr
   $ \d -> f $ DC.mapDict sub d
 
-planSymSymEmbedding :: Hashables2 e s =>
+shapeSymSymEmbedding :: Hashables2 e s =>
                       (s' -> s)
                     -> (e -> CppType)
-                    -> SymEmbedding e s' (PlanSym e s,(Maybe s,CppType))
-planSymSymEmbedding toS litType = SymEmbedding {
-  embedLit= \e -> (mkLitPlanSym e,(Nothing,litType e)),
-  unEmbed=planSymOrig . fst,
-  symEq= \(x,_) (y,_) -> planSymOrig x == planSymOrig y,
+                    -> SymEmbedding e s' (ShapeSym e s,(Maybe s,CppType))
+shapeSymSymEmbedding toS litType = SymEmbedding {
+  embedLit= \e -> (mkLitShapeSym e,(Nothing,litType e)),
+  unEmbed=shapeSymOrig . fst,
+  symEq= \(x,_) (y,_) -> shapeSymOrig x == shapeSymOrig y,
   embedType=Just . snd . snd,
   embedInS= \(_,(s0,_)) s -> Just (toS s) == s0,
-  embedIsLit= \case {NonSymbolName _ -> True; _ -> False} . planSymQnfName . fst
+  embedIsLit= \case {NonSymbolName _ -> True; _ -> False} . shapeSymQnfName . fst
   }
 data WrapEq e = WrapEq (e -> e -> Bool) e
 instance Eq (WrapEq e) where

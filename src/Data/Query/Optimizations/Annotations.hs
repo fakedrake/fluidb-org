@@ -20,29 +20,29 @@ import           Data.List
 import           Data.Maybe
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
-import           Data.Query.QuerySchema.GetQueryPlan
+import           Data.Query.QuerySchema.GetQueryShape
 import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.Unsafe
 
--- | We use unwrapped e symbols because PlanSym contains information
+-- | We use unwrapped e symbols because ShapeSym contains information
 -- about the position of a symbol in the query and we are about to
 -- move them all around.
 annotateQueryPlan
   :: (MonadError err m,AShowError e s err,Hashables2 e s)
   => (e -> Maybe CppType)
-  -> Query (e,uid) (s,QueryPlan e s)
-  -> m (Query ((e,uid),(Maybe s,CppType)) (s,QueryPlan e s))
+  -> Query (e,uid) (s,QueryShape e s)
+  -> m (Query ((e,uid),(Maybe s,CppType)) (s,QueryShape e s))
 annotateQueryPlan litType =
   fmap (first (\((x,y),z) -> (x, (fmap fst z,y)))
         . annotateTables
         (\((e,_),_) (_,qp) ->
-           isJust $ lookup e (first planSymOrig <$> qpSchema qp)))
+           isJust $ lookup e (first shapeSymOrig <$> qpSchema qp)))
   . annotateTypes
   ((==) `on` fst)
   (\(e,_) (_,qp) ->
-     columnPropsCppType <$> lookup e (first planSymOrig <$> qpSchema qp))
+     columnPropsCppType <$> lookup e (first shapeSymOrig <$> qpSchema qp))
   (litType . fst)
 
 -- | Annotate e with types

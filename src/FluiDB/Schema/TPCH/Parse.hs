@@ -50,11 +50,11 @@ inQ isLit e q = if isLit e then Nothing else Just $ recur q
         QRightAntijoin _ -> recur r
 
 
--- | Parse, expose unique columns and transform e into PlanSyms
+-- | Parse, expose unique columns and transform e into ShapeSyms
 parseTpchQuery :: forall e s t n m .
                  (MonadFakeIO m,SqlTypeVars e s t n) =>
                  String
-               -> GlobalSolveT e s t n m (Query (PlanSym e s) (QueryPlan e s,s))
+               -> GlobalSolveT e s t n m (Query (ShapeSym e s) (QueryShape e s,s))
 parseTpchQuery qtext = do
   cppConf :: QueryCppConf e s <- gets globalQueryCppConf
   (>>= either throwError return . annotateQuery cppConf)

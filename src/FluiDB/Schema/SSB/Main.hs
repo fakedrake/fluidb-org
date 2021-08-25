@@ -35,7 +35,7 @@ import           System.Process
 import           System.Timeout
 
 type AnnotQuery =
-  Query (PlanSym ExpTypeSym Table) (QueryPlan ExpTypeSym Table,Table)
+  Query (ShapeSym ExpTypeSym Table) (QueryShape ExpTypeSym Table,Table)
 type SSBQuery = Query ExpTypeSym Table
 type SSBGlobalSolveM = GlobalSolveT ExpTypeSym Table T N IO
 

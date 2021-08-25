@@ -35,12 +35,12 @@ import           Data.Utils.Tup
 
 data QRef n e s = QRef {getQRef :: NodeRef n, getNQNF :: NQNFQuery e s}
   deriving (Eq, Show)
-type PlanSymAssoc e s = [(PlanSym e s,PlanSym e s)]
+type ShapeSymAssoc e s = [(ShapeSym e s,ShapeSym e s)]
 data JoinClustConfig n e s = JoinClustConfig {
-  assocL :: PlanSymAssoc e s,
-  assocR :: PlanSymAssoc e s,
-  assocO :: PlanSymAssoc e s,
-  jProp  :: Prop (Rel (Expr (PlanSym e s))),
+  assocL :: ShapeSymAssoc e s,
+  assocR :: ShapeSymAssoc e s,
+  assocO :: ShapeSymAssoc e s,
+  jProp  :: Prop (Rel (Expr (ShapeSym e s))),
   qrefLO :: QRef n e s,
   qrefO  :: QRef n e s,
   qrefRO :: QRef n e s,
@@ -99,7 +99,7 @@ mkJoinClustConfig p (lref,lnqnfs,ql) (rref,rnqnfs,qr) =
         { assocL = assocL
          ,assocR = assocR
          ,assocO = assocO
-         ,jProp = fmap3 (uncurry mkPlanSym) p'
+         ,jProp = fmap3 (uncurry mkShapeSym) p'
          ,qrefLO = QRef refLO nqnfLO
          ,qrefO = QRef refO nqnfO
          ,qrefRO = QRef refRO nqnfRO
@@ -109,8 +109,8 @@ mkJoinClustConfig p (lref,lnqnfs,ql) (rref,rnqnfs,qr) =
     nqnfPutQ
       :: (Prop (Rel (Expr e)) -> BQOp e) -> NQNFQueryI e s -> NQNFQuery e s
     nqnfPutQ constr = second $ putIdentityQNFQ $ Q2 (constr p) ql qr
-    mkP :: (e,QNFCol e s) -> PlanSym e s
-    mkP (e,col) = mkPlanSym (Column col 0) e
+    mkP :: (e,QNFCol e s) -> ShapeSym e s
+    mkP (e,col) = mkShapeSym (Column col 0) e
 
 -- Note: maybe we should not look for cached antijoins because join's
 -- qnf is much more robust, but if we do we should be re-locating the
@@ -134,9 +134,9 @@ putJoinClusterC jcc = do
 
 -- | This is used only for intermediate nodes that we know we wont match.
 mkQNF :: (Monad m,Hashables2 e s)
-      => Query (PlanSym e s) (NQNFQuery e s)
+      => Query (ShapeSym e s) (NQNFQuery e s)
       -> CGraphBuilderT e s t n m (QNFQuery e s)
-mkQNF (first planSymOrig -> q) = do
+mkQNF (first shapeSymOrig -> q) = do
   res <- mkNQNF q
   let qnf = putIdentityQNFQ (qnfOrigDEBUG . snd =<< q) $ snd $ nqnfResNQNF res
   return qnf
@@ -241,12 +241,12 @@ putJoinClusterI JoinClustConfig {..} = do
 
 -- PUTPROP
 putJClustProp :: (HasCallStack,Hashables2 e s, Monad m) =>
-                ([(PlanSym e s,PlanSym e s)],
-                 [(PlanSym e s,PlanSym e s)],
-                 [(PlanSym e s,PlanSym e s)])
-              -> Prop (Rel (Expr (PlanSym e s)))
+                ([(ShapeSym e s,ShapeSym e s)],
+                 [(ShapeSym e s,ShapeSym e s)],
+                 [(ShapeSym e s,ShapeSym e s)])
+              -> Prop (Rel (Expr (ShapeSym e s)))
               -> JoinClust e s t n
               -> CGraphBuilderT e s t n m ()
-putJClustProp assocs@(l,o,r) prop clust = putPlanPropagator
+putJClustProp assocs@(l,o,r) prop clust = putShapePropagator
     (JoinClustW clust)
     (cPropToACProp $ joinClustPropagator assocs prop,l ++ o ++ r)

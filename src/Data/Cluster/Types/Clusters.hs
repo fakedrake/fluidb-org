@@ -82,17 +82,17 @@ instance Eq (f b) => Eq (WMetaD a f b) where
 -- node. Note that the shape of the cluster is useful even if it does
 -- not contain NodeRefs. For example we may want to have a mask of
 -- which nodes in a cluster are materialized.
-type AnyCluster e s = AnyCluster' (PlanSym e s) NodeRef
+type AnyCluster e s = AnyCluster' (ShapeSym e s) NodeRef
 data AnyCluster' e f t n =
   JoinClustW (JoinClust' f (ComposedType JoinClust' e f) t n)
   | BinClustW (BinClust' f (ComposedType BinClust' e f) t n)
   | UnClustW (UnClust' f (ComposedType UnClust' e f) t n)
   | NClustW (NClust' f (ComposedType NClust' e f) t n)
   deriving (Eq, Generic)
-type JoinClust e s = JoinClust' NodeRef (ComposedType JoinClust' (PlanSym e s) NodeRef)
-type BinClust e s = BinClust' NodeRef (ComposedType BinClust' (PlanSym e s) NodeRef)
-type UnClust e s = UnClust' NodeRef (ComposedType UnClust' (PlanSym e s) NodeRef)
-type NClust e s = NClust' NodeRef (ComposedType NClust' (PlanSym e s) NodeRef)
+type JoinClust e s = JoinClust' NodeRef (ComposedType JoinClust' (ShapeSym e s) NodeRef)
+type BinClust e s = BinClust' NodeRef (ComposedType BinClust' (ShapeSym e s) NodeRef)
+type UnClust e s = UnClust' NodeRef (ComposedType UnClust' (ShapeSym e s) NodeRef)
+type NClust e s = NClust' NodeRef (ComposedType NClust' (ShapeSym e s) NodeRef)
 
 instance (Hashables2 (f n) (g t), AShow (g t), AShow (f n)) =>  AShow (JoinClust' g f t n) where
   ashow' JoinClust{..} = Rec "JoinClust" [

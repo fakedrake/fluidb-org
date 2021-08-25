@@ -23,22 +23,22 @@ module Data.Codegen.Build.EquiJoinUtils
   , mkEquiJoinPred
   ) where
 
-import Data.Utils.ListT
-import Data.Utils.Tup
 import           Control.Monad.Identity
 import           Control.Monad.Trans
-import           Data.List
-import           Data.Maybe
-import           Data.Monoid
-import           Data.String
-import           Data.Query.Algebra
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.Expression
 import           Data.Codegen.Build.Monads
 import           Data.Codegen.Schema
 import qualified Data.CppAst                   as CC
+import           Data.List
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Query.Algebra
 import           Data.Query.QuerySchema
-import           Prelude                                  hiding (exp)
+import           Data.String
+import           Data.Utils.ListT
+import           Data.Utils.Tup
+import           Prelude                       hiding (exp)
 
 -- An equivalence class between two indexed queries
 data QueryEquivClass e = QueryEquivClass {
@@ -61,7 +61,7 @@ data EquiJoinPred = EquiJoinPred {
 mkEquiJoinPred :: forall e s t n m .
                  (MonadCodeCheckpoint e s t n m,
                   MonadSchemaScope Tup2 e s m) =>
-                 [QueryEquivClass (PlanSym e s)]
+                 [QueryEquivClass (ShapeSym e s)]
                -> m EquiJoinPred
 mkEquiJoinPred qeCls = do
   sch <- forM (zip [0::Int ..] qeCls) $ \(i, QueryEquivClass{..}) -> do
@@ -89,16 +89,16 @@ mkEquiJoinPred qeCls = do
 equiJoinPred :: forall e s t n m .
                (MonadSchemaScope Tup2 e s m,
                 MonadCodeBuilder e s t n m, MonadCodeError e s t n m) =>
-               Prop (Rel (Expr (PlanSym e s)))
-             -> m (Maybe [QueryEquivClass (PlanSym e s)])
+               Prop (Rel (Expr (ShapeSym e s)))
+             -> m (Maybe [QueryEquivClass (ShapeSym e s)])
 equiJoinPred p = maybe (return Nothing) (fmap sequenceA . mapM go) $ eqPairs p
   where
-    go :: (Expr (PlanSym e s), Expr (PlanSym e s))
-       -> m (Maybe (QueryEquivClass (PlanSym e s)))
+    go :: (Expr (ShapeSym e s), Expr (ShapeSym e s))
+       -> m (Maybe (QueryEquivClass (ShapeSym e s)))
     go (e1,e2) = headListT $ do
       Tup2 pl pr <- lift $ getQueries @Tup2 @e @s
       (el,er) <- mkListT $ return [(e1,e2),(e2,e1)]
-      let refsTo e p = all (fromMaybe True . (`refersToPlan` p)) e
+      let refsTo e p = all (fromMaybe True . (`refersToShape` p)) e
       guard $ el `refsTo` pl && er `refsTo` pr
         -- Make sure we aren't actually dealing with literals or sth.
         && not (el `refsTo` pr || er `refsTo` pl)

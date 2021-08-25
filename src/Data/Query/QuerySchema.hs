@@ -1,39 +1,38 @@
 module Data.Query.QuerySchema
-  ( querySchema
-  , isUniqueSel
-  , primKeys
-  , planSymEqs
-  , joinPlans
-  , planProject
-  , refersToPlan
-  , planSymOrig
-  , mkPlanSym
-  , setPlanSymOrig
-  , mkSymPlanSymNM
-  , planSymIsSym
-  , planSymTypeSym'
-  , getQueryPlanPrj
-  , getQueryPlanGrp
-  , exprColumnProps
-  , planAllSyms
-  , complementProj
-  , exprCppType
-  , mkLitPlanSym
-  , planSymType
-  , mkQueryPlan
-  , getSymPlan
-  , schemaQP
-  , translatePlan
-  , translatePlan'
-  , translatePlanMap''
-  , lookupQP
-  , PlanSym(..)
-  , QueryPlan'(..)
-  , QueryPlan
-  , ColumnProps(..)
-  ) where
+  (querySchema
+  ,isUniqueSel
+  ,primKeys
+  ,shapeSymEqs
+  ,joinShapes
+  ,shapeProject
+  ,refersToShape
+  ,shapeSymOrig
+  ,mkShapeSym
+  ,setShapeSymOrig
+  ,mkSymShapeSymNM
+  ,shapeSymIsSym
+  ,shapeSymTypeSym'
+  ,getQueryShapePrj
+  ,getQueryShapeGrp
+  ,exprColumnProps
+  ,shapeAllSyms
+  ,complementProj
+  ,exprCppType
+  ,mkLitShapeSym
+  ,shapeSymType
+  ,mkQueryShape
+  ,getSymShape
+  ,schemaQP
+  ,translateShape
+  ,translateShape'
+  ,translateShapeMap''
+  ,lookupQP
+  ,ShapeSym(..)
+  ,QueryShape'(..)
+  ,QueryShape
+  ,ColumnProps(..)) where
 
 
-import           Data.Query.QuerySchema.GetQueryPlan
+import           Data.Query.QuerySchema.GetQueryShape
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types

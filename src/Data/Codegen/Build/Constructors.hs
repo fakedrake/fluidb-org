@@ -57,7 +57,6 @@ import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types
-import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.EquiJoinUtils
 import           Data.Codegen.Build.Expression
@@ -71,6 +70,7 @@ import           Data.List
 import           Data.Maybe
 import           Data.Monoid
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Query.QuerySchema.Types
@@ -92,11 +92,11 @@ tmplClass = CC.TypeArg . CC.ClassType mempty [] . CC.className
 projCall :: forall e s t n m .
            (MonadCodeCheckpoint e s t n m,
             MonadSchemaScope Identity e s m) =>
-           [(PlanSym e s, Expr (PlanSym e s))]
+           [(ShapeSym e s, Expr (ShapeSym e s))]
          -> m Constr
 projCall pr = do
-  Identity plan <- getQueries
-  coPr <- withPrimKeys $ complementProj plan pr
+  Identity shape <- getQueries
+  coPr <- withPrimKeys $ complementProj shape pr
   primFn <- projToFn $ fmap3 Right pr
   coFn <- projToFn $ fmap3 Right coPr
   return ("mkProjection", tmplClass <$> [primFn, coFn])
@@ -105,8 +105,8 @@ projCall pr = do
 sortCall :: forall e s t n m .
            (MonadCodeCheckpoint e s t n m,
             MonadSchemaScope Identity e s m) =>
-           [(PlanSym e s,PlanSym e s)]
-         -> [Expr (PlanSym e s)]
+           [(ShapeSym e s,ShapeSym e s)]
+         -> [Expr (ShapeSym e s)]
          -> m Constr
 sortCall outAssoc sr = do
   -- XXX: here we call any schema at some point
@@ -133,8 +133,8 @@ sortCall outAssoc sr = do
 groupCall :: forall e s t n m .
             (MonadCodeCheckpoint e s t n m,
              MonadSchemaScope Identity e s m) =>
-            [(PlanSym e s, Expr (Aggr (Expr (PlanSym e s))))]
-          -> [Expr (PlanSym e s)]
+            [(ShapeSym e s, Expr (Aggr (Expr (ShapeSym e s))))]
+          -> [Expr (ShapeSym e s)]
           -> m Constr
 groupCall pr g = do
   codomainCls <- tellRecordCls =<< cppSchema =<< aggrSchema @Identity @e @s pr
@@ -173,26 +173,26 @@ dropCall i = first (const "mkDrop") <$> limitCall i
 unProjCall :: forall e s t n m .
              (MonadCodeCheckpoint e s t n m,
               MonadSchemaScope Identity e s m) =>
-             ([(PlanSym e s, PlanSym e s)],QueryPlan e s)
-           -> [(PlanSym e s, Expr (PlanSym e s))]
+             ([(ShapeSym e s, ShapeSym e s)],QueryShape e s)
+           -> [(ShapeSym e s, Expr (ShapeSym e s))]
            -> m Constr
--- idAssocAndPlan is the input plan and also id associations.
-unProjCall idAssocAndOutPlan pr = do
-  Identity inPlan <- getQueries @Identity @e @s -- unProj
+-- idAssocAndShape is the input shape and also id associations.
+unProjCall idAssocAndOutShape pr = do
+  Identity inShape <- getQueries @Identity @e @s -- unProj
   litType <- literalType <$> getQueryCppConf
   primPrj <- withPrimKeys []
-  complPrj <- evalQueryEnv (Identity inPlan)
+  complPrj <- evalQueryEnv (Identity inShape)
     $ withPrimKeys
-    $ complementProj inPlan pr
+    $ complementProj inShape pr
   let handleErr = maybe (throwCodeErrStr "unProjCall") return
-  prPlan <- handleErr $ planProject (exprColumnProps litType) (fmap3 Right pr) inPlan
-  prComplPlan <- handleErr $ planProject (exprColumnProps litType) (fmap3 Right complPrj) inPlan
-  extrFn <- evalQueryEnv [prPlan]
+  prShape <- handleErr $ shapeProject (exprColumnProps litType) (fmap3 Right pr) inShape
+  prComplShape <- handleErr $ shapeProject (exprColumnProps litType) (fmap3 Right complPrj) inShape
+  extrFn <- evalQueryEnv [prShape]
     $ projToFn primPrj
-  extrFn' <- evalQueryEnv [prComplPlan]
+  extrFn' <- evalQueryEnv [prComplShape]
     $ projToFn primPrj
-  combFn <- evalQueryEnv (Tup2 prPlan prComplPlan)
-    $ combinerClass idAssocAndOutPlan
+  combFn <- evalQueryEnv (Tup2 prShape prComplShape)
+    $ combinerClass idAssocAndOutShape
   let tmpl = tmplClass <$> [extrFn, extrFn', combFn]
   return ("mkJoin", tmpl)
 
@@ -207,16 +207,16 @@ unProjCall idAssocAndOutPlan pr = do
 joinCall
   :: forall e s t n m .
   (MonadCodeCheckpoint e s t n m,MonadSchemaScope Tup2 e s m)
-  => ([(PlanSym e s,PlanSym e s)],QueryPlan e s)
-  -> Prop (Rel (Expr (PlanSym e s)))
+  => ([(ShapeSym e s,ShapeSym e s)],QueryShape e s)
+  -> Prop (Rel (Expr (ShapeSym e s)))
   -> m Constr
--- idAssocAndPlan is the output plan and id associations for
+-- idAssocAndShape is the output shape and id associations for
 -- all syms.
-joinCall outAssocAndPlan p = do
+joinCall outAssocAndShape p = do
   -- Note: A `Rantij` A == A `Lantij` A makes duplicate output columns
   -- so don't expect output symbols to be unique within the list.
-  combFn <- combinerClass outAssocAndPlan
-  pInSyms <- traverse3 (translateSym $ swap <$> fst outAssocAndPlan) p
+  combFn <- combinerClass outAssocAndShape
+  pInSyms <- traverse3 (translateSym $ swap <$> fst outAssocAndShape) p
   joinPred <- equiJoinPred pInSyms
   fmap3 tmplClass $ case joinPred of
     Just eqClss -> do
@@ -228,7 +228,7 @@ joinCall outAssocAndPlan p = do
 
 extractClass :: (MonadCodeCheckpoint e s t n m,
                 MonadSchemaScope Identity e s m) =>
-               QueryPlan e s
+               QueryShape e s
              -> m [CC.TmplInstArg CC.CodeSymbol]
 extractClass q =
   snd <$> projCall (keysToProj $ snd <$> querySchema q)
@@ -246,26 +246,26 @@ unJoinCall = fmap ("mkUnJoin",)
 unionCall :: forall e s t n m .
             (MonadCodeCheckpoint e s t n m,
              MonadSchemaScope Tup2 e s m) =>
-            ([(PlanSym e s, PlanSym e s)],QueryPlan e s)
+            ([(ShapeSym e s, ShapeSym e s)],QueryShape e s)
           -> m Constr
 unionCall (assoc,_) = do
-  Tup2 planL planR <- getQueries @Tup2 @e @s
-  Tup2 projL projR0 <- traverse (symsProj . querySchema) $ Tup2 planL planR
+  Tup2 shapeL shapeR <- getQueries @Tup2 @e @s
+  Tup2 projL projR0 <- traverse (symsProj . querySchema) $ Tup2 shapeL shapeR
   aassert (isSubsetOf (fst <$> projR0) (fst <$> projL))
     "Union should be extending the second with nulls."
   let projR = fmap3 Right projR0
         ++ [(e,E0 $ Left ty)
           | e@(_,ty) <- setDiff (fst <$> projL) (fst <$> projR0)]
-  fromL <- evalQueryEnv (Identity planL) $ projToFn $ first fst <$> fmap3 Right projL
-  fromR <- evalQueryEnv (Identity planR) $ projToFn $ first fst <$> projR
+  fromL <- evalQueryEnv (Identity shapeL) $ projToFn $ first fst <$> fmap3 Right projL
+  fromR <- evalQueryEnv (Identity shapeR) $ projToFn $ first fst <$> projR
   return ("mkUnion", tmplClass <$> [fromL,fromR])
   where
     setDiff :: Eq a => [a] -> [a] -> [a]
     setDiff xs ys = filter (`notElem` ys) xs
     isSubsetOf :: Eq a => [a] -> [a] -> Bool
     isSubsetOf xs ys = all (`elem` ys) xs
-    symsProj :: [(CC.CppType,PlanSym e s)]
-             -> m [((PlanSym e s,CC.CppType),Expr (PlanSym e s))]
+    symsProj :: [(CC.CppType,ShapeSym e s)]
+             -> m [((ShapeSym e s,CC.CppType),Expr (ShapeSym e s))]
     symsProj = mapM $ \(ty,s) -> case lookup s assoc of
       Nothing   -> throwAStr $ "Missing assoc for symbol: " ++ ashow (s,assoc)
       Just sOut -> return ((sOut,ty),E0 s)
@@ -274,9 +274,9 @@ unionCall (assoc,_) = do
 prodCall :: forall e s t n m .
            (MonadCodeCheckpoint e s t n m,
             MonadSchemaScope Tup2 e s m) =>
-           ([(PlanSym e s, PlanSym e s)],QueryPlan e s) -> m Constr
-prodCall outAssocAndPlan = do
-  combFn <- combinerClass outAssocAndPlan
+           ([(ShapeSym e s, ShapeSym e s)],QueryShape e s) -> m Constr
+prodCall outAssocAndShape = do
+  combFn <- combinerClass outAssocAndShape
   return ("mkProduct", [tmplClass combFn])
 
 unProdCall :: forall e s t n m .
@@ -293,8 +293,8 @@ selCall :: forall c e s t n m .
           (MonadCodeCheckpoint e s t n m,
            Traversable c,
            MonadSchemaScope c e s m) =>
-          [(PlanSym e s,PlanSym e s)]
-        -> Prop (Rel (Expr (PlanSym e s)))
+          [(ShapeSym e s,ShapeSym e s)]
+        -> Prop (Rel (Expr (ShapeSym e s)))
         -> m Constr
 selCall outAssoc p = do
   propCls <- propCallClass =<< traverse3 (translateSym $ fmap swap outAssoc) p
@@ -314,55 +314,60 @@ clusterCall :: forall e s t n m .
                MonadCodeCheckpoint e s t n m) =>
               AnyCluster e s t n -> m Constr
 clusterCall c = do
-  ((_,assoc),planClust) <- getValidClustPropagator c
-  go planClust assoc c
+  ((_,assoc),shapeClust) <- getValidClustPropagator c
+  go shapeClust assoc c
   where
-    go :: PlanCluster NodeRef e s t n
-       -> [(PlanSym e s, PlanSym e s)]
+    go :: ShapeCluster NodeRef e s t n
+       -> [(ShapeSym e s,ShapeSym e s)]
        -> AnyCluster e s t n
        -> m Constr
-    go planClust assoc = \case
-      JoinClustW c -> case planClust of
+    go shapeClust assoc = \case
+      JoinClustW c -> case shapeClust of
         JoinClustW pc -> go (BinClustW $ joinBinCluster pc) assoc
-                        $ BinClustW $ joinBinCluster c
-        _ -> throwAStr $ "Expected join planclust but got: " ++ ashow planClust
-      BinClustW BinClust{..} -> do
-        outSyms <- case planClust of
-          BinClustW BinClust{..} -> getDef' binClusterOut
-          _ -> throwAStr $ "Expected bin planclust but got: " ++ ashow planClust
+          $ BinClustW
+          $ joinBinCluster c
+        _ -> throwAStr $ "Expected join shapeclust but got: " ++ ashow shapeClust
+      BinClustW BinClust {..} -> do
+        outSyms <- case shapeClust of
+          BinClustW BinClust {..} -> getDef' binClusterOut
+          _ -> throwAStr
+            $ "Expected bin shapeclust but got: " ++ ashow shapeClust
         op <- selectOp (ashow . (,assoc)) (checkBOp outSyms) binClusterOut
-        l <- provenancePlan' binClusterLeftIn
-        r <- provenancePlan' binClusterRightIn
-        outPlan <- provenancePlan' binClusterOut
-        evalQueryEnv (Tup2 l r) $ bopQueryCall (assoc,outPlan) op
-      UnClustW UnClust{..} -> do
-        (inSyms,outSyms) <- case planClust of
-          UnClustW UnClust{..} -> (,)
-            <$> getDef' unClusterIn
-            <*> getDef' unClusterPrimaryOut
-          _ -> throwAStr $ "Expected un planclust but got: " ++ ashow planClust
-        op <- selectOp (ashow . (,assoc)) (checkUOp inSyms outSyms) unClusterPrimaryOut
-        inPlan <- provenancePlan' unClusterIn
+        l <- provenanceShape' binClusterLeftIn
+        r <- provenanceShape' binClusterRightIn
+        outShape <- provenanceShape' binClusterOut
+        evalQueryEnv (Tup2 l r) $ bopQueryCall (assoc,outShape) op
+      UnClustW UnClust {..} -> do
+        (inSyms,outSyms) <- case shapeClust of
+          UnClustW UnClust {..}
+            -> (,) <$> getDef' unClusterIn <*> getDef' unClusterPrimaryOut
+          _ -> throwAStr $ "Expected un shapeclust but got: " ++ ashow shapeClust
+        op <- selectOp
+          (ashow . (,assoc))
+          (checkUOp inSyms outSyms)
+          unClusterPrimaryOut
+        inShape <- provenanceShape' unClusterIn
         -- Remember we are making the primary one here
-        primOutPlan <- provenancePlan' unClusterPrimaryOut
-        evalQueryEnv (Identity inPlan) $ uopQueryCall (assoc,primOutPlan) op
+        primOutShape <- provenanceShape' unClusterPrimaryOut
+        evalQueryEnv (Identity inShape) $ uopQueryCall (assoc,primOutShape) op
       NClustW (NClust r) -> throwCodeErr $ ForwardCreateSymbol r
       where
-        getDef' :: WMetaD x (WMetaD (Defaulting (QueryPlan e s)) f) n
-                -> m [PlanSym e s]
+        getDef' :: WMetaD x (WMetaD (Defaulting (QueryShape e s)) f) n
+                -> m [ShapeSym e s]
         getDef' (WMetaD (_,WMetaD (d,_))) = case getDef d of
-          Nothing -> throwAStr "Found empty defaulting in getValidClustPropagator"
-          Just x  -> return $ planAllSyms x
-        selem sym syms = case planSymQnfName sym of
+          Nothing
+           -> throwAStr "Found empty defaulting in getValidClustPropagator"
+          Just x -> return $ shapeAllSyms x
+        selem sym syms = case shapeSymQnfName sym of
           NonSymbolName _ -> True
           _               -> sym `elem` syms
         checkUOp inSyms outSyms = \case
           QSel p -> all3 (`selem` outSyms) p
           QProj pr -> all (`selem` outSyms) (fst <$> pr)
-                     && all (`selem` inSyms) (toList3 pr)
+            && all (`selem` inSyms) (toList3 pr)
           QGroup pr es -> all (`selem` outSyms) (fst <$> pr)
-                         && all (`selem` inSyms) (toList3 $ toList3 pr)
-                         && all (`selem` inSyms) (toList2 es)
+            && all (`selem` inSyms) (toList3 $ toList3 pr)
+            && all (`selem` inSyms) (toList2 es)
           QSort es -> all2 (`selem` outSyms) es
           QLimit _ -> True
           QDrop _ -> True
@@ -374,43 +379,43 @@ clusterCall c = do
           QUnion           -> True
           QProjQuery       -> True
           QDistinct        -> True
-        selectOp :: ((AShowV e, AShowV s) => [f (PlanSym e s)] -> String)
-                 -> (f (PlanSym e s) -> Bool)
-                 -> WMetaD [f (PlanSym e s)] NodeRef n
-                 -> m (f (PlanSym e s))
+        selectOp :: ((AShowV e,AShowV s) => [f (ShapeSym e s)] -> String)
+                 -> (f (ShapeSym e s) -> Bool)
+                 -> WMetaD [f (ShapeSym e s)] NodeRef n
+                 -> m (f (ShapeSym e s))
         selectOp msg checkOp (WMetaD (ops,_)) = case filter checkOp ops of
           []   -> throwAStr $ "No matching operator on output: " ++ msg ops
           op:_ -> return op
-        provenancePlan' :: WMetaD a NodeRef n
-                        -> m (QueryPlan e s)
-        provenancePlan' (WMetaD (_,ref)) = getNodePlan ref
-          >>= maybe err return . getDefaultingFull
+        provenanceShape' :: WMetaD a NodeRef n -> m (QueryShape e s)
+        provenanceShape' (WMetaD (_,ref)) =
+          getNodeShape ref >>= maybe err return . getDefaultingFull
           where
-            err = throwError $ fromString $ "No QueryPlan for node" ++ ashow ref
+            err =
+              throwError $ fromString $ "No QueryShape for node" ++ ashow ref
 
 bopQueryCall :: forall e s t n m .
                (MonadCodeCheckpoint e s t n m,
                 MonadSchemaScope Tup2 e s m) =>
-               ([(PlanSym e s, PlanSym e s)],QueryPlan e s)
-             -> BQOp (PlanSym e s)
+               ([(ShapeSym e s, ShapeSym e s)],QueryShape e s)
+             -> BQOp (ShapeSym e s)
              -> m Constr
-bopQueryCall outAssocAndPlan = \case
-  QJoin p          -> joinCall outAssocAndPlan p
+bopQueryCall outAssocAndShape = \case
+  QJoin p          -> joinCall outAssocAndShape p
   QDistinct        -> throwAStr "QDistinct should have been optimized out."
   QProjQuery       -> throwAStr "QProjQuery should have been optimized out."
-  QUnion           -> unionCall outAssocAndPlan
-  QProd            -> prodCall outAssocAndPlan
-  QLeftAntijoin p  -> joinCall outAssocAndPlan p
-  QRightAntijoin p -> joinCall outAssocAndPlan p
+  QUnion           -> unionCall outAssocAndShape
+  QProd            -> prodCall outAssocAndShape
+  QLeftAntijoin p  -> joinCall outAssocAndShape p
+  QRightAntijoin p -> joinCall outAssocAndShape p
 
 uopQueryCall :: forall e s t n m .
                (MonadCodeCheckpoint e s t n m,
                 MonadSchemaScope Identity e s m) =>
-               ([(PlanSym e s, PlanSym e s)],QueryPlan e s)
-             -> UQOp (PlanSym e s)
+               ([(ShapeSym e s, ShapeSym e s)],QueryShape e s)
+             -> UQOp (ShapeSym e s)
              -> m Constr
 uopQueryCall (outAssoc,_) op = case op of
-  -- | Remember that the symbols of selection refer to the out plan.
+  -- | Remember that the symbols of selection refer to the out shape.
   QSel p      -> selCall outAssoc p
   QGroup pr g -> groupCall pr g
   QProj pr    -> projCall pr
@@ -449,7 +454,7 @@ class ConstructorArg a where
 instance ConstructorArg x => ConstructorArg (Identity x) where
   toConstrType = toConstrType . fmap runIdentity
   toConstrArg = toConstrArg . runIdentity
-instance ConstructorArg a => ConstructorArg (Maybe (QueryPlan e s), a) where
+instance ConstructorArg a => ConstructorArg (Maybe (QueryShape e s), a) where
   toConstrType = toConstrType . fmap snd
   toConstrArg = toConstrArg . snd
 instance ConstructorArg a => ConstructorArg (Maybe a) where
@@ -508,8 +513,8 @@ constrArgs ioFiles = constrArgs' outs <$> sequenceA inps'
     (outs, inps') = toFiles ioFiles
 
 constrArgsRevSide :: (ConstructorArg out, ConstructorArg inp) =>
-                    (([Maybe (Maybe (QueryPlan e s),FileSet)],
-                      [Maybe (Maybe (QueryPlan e s),FilePath)]) ->
+                    (([Maybe (Maybe (QueryShape e s),FileSet)],
+                      [Maybe (Maybe (QueryShape e s),FilePath)]) ->
                      Maybe ([out], [inp]))
                   -> IOFiles e s
                   -> Maybe [CC.Expression CC.CodeSymbol]

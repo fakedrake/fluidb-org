@@ -3,9 +3,9 @@ module FluiDB.Schema.Common (annotateQuery) where
 import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Bitraversable
-import           Data.QnfQuery.Build
 import           Data.Codegen.Build
 import           Data.Codegen.Schema
+import           Data.QnfQuery.Build
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.ExposeUnique
 import           Data.Query.QuerySchema
@@ -21,7 +21,7 @@ annotateQuery
   :: Hashables2 e s
   => QueryCppConf e s
   -> Query e s
-  -> Either (GlobalError e s t n) (Query (PlanSym e s) (QueryPlan e s,s))
+  -> Either (GlobalError e s t n) (Query (ShapeSym e s) (QueryShape e s,s))
 annotateQuery cppConf q = do
   let uniqSym = \e -> do
         i <- get
@@ -39,8 +39,8 @@ annotateQuery cppConf q = do
     $ (>>= maybe (throwAStr "Unknown symbol") return)
     $ fmap
       (bitraverse
-         (pure . uncurry mkPlanSym)
-         (\s -> (,s) <$> mkPlanFromTbl cppConf s)
+         (pure . uncurry mkShapeSym)
+         (\s -> (,s) <$> mkShapeFromTbl cppConf s)
        . snd
        . fromJustErr)
     $ (`evalStateT` def)

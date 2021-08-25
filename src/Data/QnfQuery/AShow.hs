@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE ViewPatterns    #-}
 -- |Helper functions for printing QNFs
@@ -78,6 +79,7 @@ dropProj :: Expr (QNFName e s) -> Maybe e
 dropProj (E0 n) = nameToSym n
 dropProj _      = Nothing
 
+#if 0
 test :: Query (Maybe Int) [Int]
 test =
   qnfToQuery
@@ -94,3 +96,4 @@ a .* b = E0 $ NAggr AggrFirst $ E2 EMul (E0 a) (E0 b)
 toQNF_test :: (AShowV e,Hashables1 e) => Query e [e] -> QNFQuery e [e]
 toQNF_test q =
   fst $ head $ fromRightErr $ (`evalStateT` def) $ runListT $ toQNF Just q
+#endif

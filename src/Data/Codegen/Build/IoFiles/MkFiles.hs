@@ -63,8 +63,8 @@ populateNodeRole :: forall constri constro e s t n m .
                  -> NodeRole (NodeRef n) (Maybe (NodeRef n)) (Maybe (NodeRef n))
                  -> m (NodeRole
                        (NodeRef ())
-                       (Maybe (Maybe (QueryPlan e s), FilePath))
-                       (Maybe (Maybe (QueryPlan e s), FileSet)))
+                       (Maybe (Maybe (QueryShape e s), FilePath))
+                       (Maybe (Maybe (QueryShape e s), FileSet)))
 populateNodeRole constri constro =
   fmap coerceI
   . bitraverse
@@ -81,11 +81,11 @@ getPlanAndSet :: forall constr e s t n m .
                 (FileSetConstructor constr, MakeFilesConstr e s t n m) =>
                 constr
               -> Maybe (NodeRef n)
-              -> m (Maybe (Maybe (QueryPlan e s), FileSet))
+              -> m (Maybe (Maybe (QueryShape e s), FileSet))
 getPlanAndSet f =
   traverse
   $ distrib
-    (dropReader (asks fst) . getNodePlanFull)
+    (dropReader (asks fst) . getNodeShapeFull)
     (\r -> dropReader (asks fst) (getNodeFile r)
      >>= maybe (dropReader (asks fst) $ mkNodeFile f r) return)
 
@@ -125,8 +125,8 @@ makeFilesJUnsafe jclust = do
               (Maybe (NodeRef n))
             -> m (NodeRole
                  (NodeRef ())
-                 (Maybe (Maybe (QueryPlan e s), FilePath))
-                 (Maybe (Maybe (QueryPlan e s), FileSet)))
+                 (Maybe (Maybe (QueryShape e s), FilePath))
+                 (Maybe (Maybe (QueryShape e s), FileSet)))
     coerce' = \case
       Intermediate (NodeRef a) -> return $ Intermediate $ NodeRef a
       _                        -> error "oops non-interm role for interm node"

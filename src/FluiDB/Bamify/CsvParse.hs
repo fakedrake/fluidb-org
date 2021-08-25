@@ -132,7 +132,7 @@ bamifyFile types tblFile bamaFile = do
       $ cppSchemaSize types
     sanityCheckSize recordNum
     return
-      TableSize { tableSizeRows = recordNum,tableSizeRowSize = recordSize }
+      TableSize { tsRows = recordNum,tsRowSize = recordSize }
   where
     sanityCheckSize recordNum = do
       actualSize <- fromJustErr <$> getFileSize bamaFile

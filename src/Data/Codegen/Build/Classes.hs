@@ -157,10 +157,10 @@ mkCallClass' codomainType body = do
 combinerClass :: forall e s t n m .
                 (MonadSchemaScope Tup2 e s m,
                  MonadCodeCheckpoint e s t n m) =>
-                ([(PlanSym e s,PlanSym e s)],QueryPlan e s)
+                ([(ShapeSym e s,ShapeSym e s)],QueryShape e s)
                -> m (CC.Class CC.CodeSymbol)
 combinerClass (assoc,outPlan) = do
-  Tup2 (q1,qs1) (q2,qs2) :: Tup2 (QueryPlan e s,Symbol CodeSymbol)
+  Tup2 (q1,qs1) (q2,qs2) :: Tup2 (QueryShape e s,Symbol CodeSymbol)
     <- fmap3 CC.declarationNameRef getQueryDeclarations
   let symAssoc1 = mkPs qs1 . snd <$> querySchema q1
   let symAssoc2 = mkPs qs2 . snd <$> querySchema q2
@@ -179,11 +179,11 @@ combinerClass (assoc,outPlan) = do
         (ashow x)
   where
     mkPs :: Symbol CodeSymbol
-         -> PlanSym e s
-         -> (PlanSym e s,CC.Expression CC.CodeSymbol)
-    mkPs recSym planSym = case CC.toExpression planSym of
+         -> ShapeSym e s
+         -> (ShapeSym e s,CC.Expression CC.CodeSymbol)
+    mkPs recSym shapeSym = case CC.toExpression shapeSym of
       CC.SymbolExpression cppSym
-        -> (planSym,CC.ObjectMember (CC.SymbolExpression recSym) cppSym)
+        -> (shapeSym,CC.ObjectMember (CC.SymbolExpression recSym) cppSym)
       _ -> error "Unreachable.."
 lookupWith :: (a -> a -> Bool) ->  a -> [(a,b)] -> Maybe b
 lookupWith f a assoc = case filter (f a . fst) assoc of
@@ -196,7 +196,7 @@ orderAssoc cmp order assoc =
 
 propCallClass :: (MonadCodeCheckpoint e s t n m,
                  MonadSchemaScope c e s m) =>
-                Prop (Rel (Expr (PlanSym e s)))
+                Prop (Rel (Expr (ShapeSym e s)))
               -> m (CC.Class CC.CodeSymbol)
 propCallClass = tellClassM
   . mkCallClass (CC.PrimitiveType mempty CC.CppBool)
@@ -209,7 +209,7 @@ propCallClass = tellClassM
 -- the cached.
 startNewCallClass :: (MonadCodeCheckpoint e s t n m,
                      MonadSchemaScope c e s m) =>
-                    [Expr (PlanSym e s)]
+                    [Expr (ShapeSym e s)]
                   -> m (CC.Class CC.CodeSymbol)
 startNewCallClass exps = tellClassM $ do
   -- Extract info about the expreesions
@@ -273,7 +273,7 @@ startNewCallClass exps = tellClassM $ do
 -- still need to know the type in order to operate.
 projToFn :: forall c e s t n m .
            MonadClassBuilder c e s t n m =>
-           [(PlanSym e s, Expr (Either CppType (PlanSym e s)))]
+           [(ShapeSym e s, Expr (Either CppType (ShapeSym e s)))]
          -> m (CC.Class CC.CodeSymbol)
 projToFn pr = do
   sch <- projSchema pr >>= cppSchema
@@ -297,6 +297,6 @@ ashowCout msg = CC.coutSt . return . CC.LiteralStringExpression . (msg ++) . ash
 
 queryRecord :: forall e s t n m .
               MonadCodeCheckpoint e s t n m =>
-              QueryPlan e s
+              QueryShape e s
             -> m (CC.Class CC.CodeSymbol)
 queryRecord qp = tellRecordCls =<< cppSchema (querySchema qp)

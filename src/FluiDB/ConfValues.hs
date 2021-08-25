@@ -29,16 +29,15 @@ import           Data.Cluster.InsertQuery
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
-import           Data.QnfQuery.Build
-import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.Codegen.SchemaAssocClass
 import           Data.CppAst
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.Utils
-import           Data.Query.QuerySchema.GetQueryPlan
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Query.SQL.FileSet
@@ -54,7 +53,8 @@ import           Text.Printf
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
-import qualified Data.HashMap.Lazy                   as HM
+import qualified Data.HashMap.Lazy              as HM
+import           Data.Query.QuerySchema
 import           Data.String
 import           Data.Tuple
 import           Data.Utils.AShow
@@ -212,12 +212,16 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
     clusterBuilt = do
       modify $ \cm -> cm { qnfInsertBottoms = True }
       tableMap' <- forM pgcSchemaAssoc $ \(t,_) -> do
-        n <- insertQueryPlan (literalType queryCppConf) . return . (t,)
+        n <- insertQueryForest (literalType queryCppConf) . return . (t,)
           =<< symPlan t
         triggerClustPropagator $ NClustW $ NClust n
         return (n,t)
       modify $ \cm -> cm { qnfInsertBottoms = False }
       (,fromRefAssocs tableMap') <$> lift2 (gets gbPropNet)
-    symPlan :: Monad m => s -> CGraphBuilderT e s t n m (QueryPlan e s)
-    symPlan =
-      getSymPlan (uniqueColumns queryCppConf) (tableSchema queryCppConf)
+    symPlan :: Monad m => s -> CGraphBuilderT e s t n m (QueryShape e s)
+    symPlan s =
+      getSymShape
+        (uniqueColumns queryCppConf s)
+        (tableSchema queryCppConf s)
+        _tblSize
+        s

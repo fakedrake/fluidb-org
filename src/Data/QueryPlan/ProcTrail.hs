@@ -14,7 +14,6 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 
 modTrailE
   :: Monoid (ZCoEpoch w)

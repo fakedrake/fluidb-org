@@ -4,8 +4,8 @@
 {-# LANGUAGE ViewPatterns         #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 module Data.Query.Optimizations.EchoingJoins
-  (joinPermutations,FuzzyQuery) where
-
+  (joinPermutations
+  ,FuzzyQuery) where
 
 import           Control.Monad.Identity
 import           Control.Monad.State
@@ -33,67 +33,21 @@ data L2 a = L2 a (L1 a)
   deriving (Functor,Traversable,Foldable)
 type QId = Int
 
-type Compose3 f g h = Compose (Compose f g) h
-data Cardinality e s
-  = Cardinality
-  | EqCard [e] (Cardinality e s) (Cardinality e s)
-  -- ^ the
-  | CardProd (Cardinality e s) (Cardinality e s)
-  | CardSel (Cardinality e s)
-  | CardEq (Cardinality e s)
-  | CardUnion (Cardinality e s) (Cardinality e s)
-  | CardGrp (Cardinality e s)
-  | CardLim Int
-  | CardDrop Int (Cardinality e s)
-  | CardQ s
-  deriving Generic
-instance AShowV2 e s => AShow (Cardinality e s)
-instance Default (Cardinality e s) where
-  def = Cardinality
-
 -- | Only the joinset needs to be annotated with query ids.
-type FuzzyQuery e s = Free (Compose3 ((,) (Cardinality e s)) L1 (TQuery e)) s
-wrapFuzzy
-  :: EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
-wrapFuzzy echo q = wrapFuzzy' (getCardinality q) echo q
+type FuzzyQuery e s = Free (Compose L1 (TQuery e)) s
 
-wrapFuzzy'
-  :: Cardinality e s -> EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
-wrapFuzzy' card e x =
+wrapFuzzy :: EchoSide -> Query e (FuzzyQuery e s) -> FuzzyQuery e s
+wrapFuzzy e x =
   FreeT
   $ Identity
   $ Free
   $ Compose
-  $ Compose
-  $ (card,)
   $ return
   $ TQuery { tqQuery = Right x,tqEcho = e }
 
-getCardinality :: Query e (FuzzyQuery e s) -> Cardinality  e s
-getCardinality q = case q of
-  Q2 o l r -> case o of
-    QProd -> CardProd (getCardinality l) (getCardinality r)
-    (QJoin _pr) -> CardSel (CardProd (getCardinality l) (getCardinality r))
-    (QLeftAntijoin _pr) -> CardSel
-      (getCardinality l)
-    (QRightAntijoin _pr) -> CardSel
-      (getCardinality r)
-    QUnion -> CardUnion (getCardinality l) (getCardinality r)
-    QProjQuery -> getCardinality r
-    QDistinct -> getCardinality r
-  Q1 o q -> case o of
-    (QSel pr)       -> CardSel (getCardinality q)
-    (QGroup x0 exs) -> CardGrp (getCardinality q)
-    (QProj x0)      -> getCardinality q
-    (QSort exs)     -> getCardinality q
-    (QLimit n)      -> CardLim n
-    (QDrop n)       -> CardDrop n (getCardinality q)
-  Q0 (FuzzyQueryF (card,_)) -> card
-  Q0 (FuzzyQueryP s) -> CardQ s
-
-pattern FuzzyQueryF :: f (g (h (FreeT (Compose3 f g h) Identity a)))
-                    -> FreeT (Compose3 f g h) Identity a
-pattern FuzzyQueryF a = FreeT (Identity (Free (Compose (Compose a))))
+pattern FuzzyQueryF :: f (g (FreeT (Compose f g) Identity a))
+                    -> FreeT (Compose f g) Identity a
+pattern FuzzyQueryF a = FreeT (Identity (Free (Compose a)))
 pattern FuzzyQueryP :: a -> FreeT f Identity a
 pattern FuzzyQueryP s = FreeT (Identity (Pure s))
 
@@ -104,16 +58,15 @@ setEcho echo  fq  = wrapFuzzy echo $ Q0 fq
 
 -- | Prioritize the left hand side cardinality
 combFuzz :: FuzzyQuery e s -> FuzzyQuery e s -> FuzzyQuery e s
-combFuzz (FuzzyQueryF (card,qs)) (FuzzyQueryF (_card',qs')) =
-  FuzzyQueryF (card,qs <> qs')
-combFuzz (FuzzyQueryF (card,qs)) (FuzzyQueryP s) =
-  FuzzyQueryF (card,qs <> pure (tunnelQuery $ Q0 $ return s))
-combFuzz (FuzzyQueryP s) (FuzzyQueryF (card,qs)) =
-  FuzzyQueryF (card,pure (tunnelQuery $ Q0 $ return s) <> qs)
+combFuzz (FuzzyQueryF qs) (FuzzyQueryF qs') =
+  FuzzyQueryF (qs <> qs')
+combFuzz (FuzzyQueryF qs) (FuzzyQueryP s) =
+  FuzzyQueryF (qs <> pure (tunnelQuery $ Q0 $ return s))
+combFuzz (FuzzyQueryP s) (FuzzyQueryF qs) =
+  FuzzyQueryF (pure (tunnelQuery $ Q0 $ return s) <> qs)
 combFuzz (FuzzyQueryP s) (FuzzyQueryP s') =
   FuzzyQueryF
-    (CardQ s
-    ,pure (tunnelQuery $ Q0 $ return s)
+    (pure (tunnelQuery $ Q0 $ return s)
      <> pure (tunnelQuery $ Q0 $ return s'))
 combFuzz _ _ = error "Unreachable!"
 
@@ -209,11 +162,10 @@ pattern JoinSetAtLeast2 ps q0 q1 qs <-
   JoinSet { jsProps = ps,jsQs = q0 NEL.:| (q1 : qs),jsUid = _}
 
 data PJState e s =
-  PJState { pjsEchoId :: EchoId
-          ,pjsCache   :: HM.HashMap (JoinSet e s) (FuzzyQuery e s)
-          } deriving Generic
+  PJState
+  { pjsEchoId :: EchoId,pjsCache :: HM.HashMap (JoinSet e s) (FuzzyQuery e s) }
+  deriving Generic
 instance Default (PJState e s)
-
 
 selQ :: EchoSide -> [JProp e] -> FuzzyQuery e s -> FuzzyQuery e s
 selQ echo p q =
@@ -228,9 +180,7 @@ eqJoinQ
   -> Maybe (FuzzyQuery e s)
 eqJoinQ _echo [] _q1 _q2 = Nothing
 eqJoinQ echo p q1 q2 =
-  Just
-  $ wrapFuzzy' (eqJoinCard (toList5 p) q1 q2) echo
-  $ J (fmap3 snd $ foldl1' And p) (Q0 q1) (Q0 q2)
+  Just $ wrapFuzzy echo $ J (fmap3 snd $ foldl1' And p) (Q0 q1) (Q0 q2)
 
 
 -- Partitiion toi the following categories:
@@ -246,9 +196,10 @@ eqJoinQ echo p q1 q2 =
 -- * We never pish conn
 -- * We non-deterministically push or don't push the [pl ++ pr]
 
-eqJoinCard
-  :: [e] -> FuzzyQuery e s -> FuzzyQuery e s -> Cardinality e s
-eqJoinCard a l r = EqCard a (getCardinality $ Q0 l) (getCardinality $ Q0 r)
+unFuzz :: FuzzyQuery e s -> Query e s
+unFuzz (FreeT (Identity x)) = case x of
+  Free (Compose (tq NEL.:| _)) -> unTunnelQuery tq >>= unFuzz
+  Pure s                       -> Q0 s
 
 isPushable :: L1 QId -> Prop (Rel (Expr (Maybe QId, e))) -> Bool
 isPushable as (toList5 . fmap3 swap -> p) =
@@ -351,12 +302,12 @@ joinPermutations emb q =
 -- | Remove the noise and tunnels from FuzzQuery and just show that.
 ashowFuzz :: forall e s . (AShowV2 e s) => FuzzyQuery e s -> SExp
 ashowFuzz (FreeT (Identity (Pure x))) = ashow' x
-ashowFuzz (FreeT (Identity (Free (Compose (Compose (card,m)))))) =
-  ashow' (card,ashowTQ . fmap ashowFuzz <$> toList m)
+ashowFuzz (FreeT (Identity (Free (Compose m)))) =
+  ashow' (ashowTQ . fmap ashowFuzz <$> toList m)
   where
     ashowTQ :: TQuery e SExp -> SExp
     ashowTQ = either ashow' ashow' . tqQuery
-
+#if 0
 -- SHould be Just..
 testJe =
   ashowFuzz
@@ -440,3 +391,4 @@ q0 =
                     (Q0 ["d_datekey","d_year"]))
                  (Q0 ["p_category","p_partkey","p_brand1"]))
               (Q0 ["s_region","s_suppkey"])))))
+#endif

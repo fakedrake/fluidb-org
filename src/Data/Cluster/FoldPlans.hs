@@ -44,10 +44,10 @@ import           Text.Printf
 clusterOp
   :: forall c e s t n .
   SpecificCluster c
-  => Proxy (PlanSym e s)
+  => Proxy (ShapeSym e s)
   -> NodeRef n
-  -> c NodeRef (ComposedType c (PlanSym e s) NodeRef) t n
-  -> [ClusterOp c (PlanSym e s)]
+  -> c NodeRef (ComposedType c (ShapeSym e s) NodeRef) t n
+  -> [ClusterOp c (ShapeSym e s)]
 clusterOp _ ref =
   -- Drop the ref part of the pairs
   concatMap fst
@@ -55,7 +55,7 @@ clusterOp _ ref =
   -- looking for
   . filter ((== ref) . snd)
   -- For each one get the (operator, ref) pair
-  . fmap (extractRef (Proxy :: Proxy c) (Proxy :: Proxy (PlanSym e s)))
+  . fmap (extractRef (Proxy :: Proxy c) (Proxy :: Proxy (ShapeSym e s)))
   -- get the n-nodes
   . snd . allNodeRefs0
 
@@ -77,7 +77,8 @@ queryPlans1
   ,MonadAShowErr e s err m
   ,HasCallStack)
   => NodeRef n
-  -> m [(NEL.NonEmpty (Query1 (PlanSym e s) (NodeRef n)),AnyCluster e s t n)]
+  -> m [(NEL.NonEmpty (Query1 (ShapeSym e s) (NodeRef n)),AnyCluster e s t n)]
+
 queryPlans1 refO = do
   clusts <- getClustersNonInput refO
   when (null clusts) $ do
@@ -88,17 +89,17 @@ queryPlans1 refO = do
       $ "NodeRef is in none of the clusters: "
       ++ ashow (refO,fmap qnfOrigDEBUG' allQnfs,allClusts,isInterm)
   forM clusts $ \clust -> fmap (,clust) $ case clust of
-    JoinClustW c       -> getQueryRecurse2 (clusterInputs clust) c
-    BinClustW c        -> getQueryRecurse2 (clusterInputs clust) c
-    UnClustW c         -> getQueryRecurse1 (clusterInputs clust) c
-    NClustW (NClust _) -> throwAStr "Looking for plans for NClust.."
+    JoinClustW c -> getQueryRecurse2 (clusterInputs clust) c
+    BinClustW c -> getQueryRecurse2 (clusterInputs clust) c
+    UnClustW c -> getQueryRecurse1 (clusterInputs clust) c
+    NClustW (NClust _) -> throwAStr "Looking for shapes for NClust.."
   where
     getQueryRecurse1
       :: [NodeRef n]
       -> UnClust e s t n
-      -> m (NEL.NonEmpty (Query1 (PlanSym e s) (NodeRef n)))
+      -> m (NEL.NonEmpty (Query1 (ShapeSym e s) (NodeRef n)))
     getQueryRecurse1 inps c = case (inps,unOps) of
-      ([inRef],Just ops) -> return $ (\o -> Q1' o inRef) <$> ops
+      ([inRef],Just ops) -> return $ (`Q1'` inRef) <$> ops
       (_,Nothing) -> do
         qnfs <- forM
           [snd $ unMetaD $ unClusterPrimaryOut c
@@ -110,21 +111,22 @@ queryPlans1 refO = do
           ++ ashow (refO,qnfs,c)
       _ -> inpNumError "UnClust" $ length inps
       where
-        unOps = NEL.nonEmpty $ clusterOp (Proxy :: Proxy (PlanSym e s)) refO c
+        unOps = NEL.nonEmpty $ clusterOp (Proxy :: Proxy (ShapeSym e s)) refO c
     -- c is either a BinClust or JoinClust.
     getQueryRecurse2
       :: forall c' .
-      (ClusterOp c' (PlanSym e s) ~ BQOp (PlanSym e s),SpecificCluster c')
+      (ClusterOp c' (ShapeSym e s) ~ BQOp (ShapeSym e s),SpecificCluster c')
       => [NodeRef n]
-      -> c' NodeRef (ComposedType c' (PlanSym e s) NodeRef) t n
-      -> m (NEL.NonEmpty (Query1 (PlanSym e s) (NodeRef n)))
+      -> c' NodeRef (ComposedType c' (ShapeSym e s) NodeRef) t n
+      -> m (NEL.NonEmpty (Query1 (ShapeSym e s) (NodeRef n)))
     getQueryRecurse2 inps c = case (inps,binOps) of
-      ([lref,rref],Just ops) -> return
+      ([lref,rref],Just ops) -> return --
         $ (\o -> Q2' o lref rref) <$> ops
       (_,Nothing) -> throwAStr "No operators in cluster"
       _ -> inpNumError "BinClust or JoinClust" $ length inps
       where
-        binOps = NEL.nonEmpty $ clusterOp (Proxy :: Proxy (PlanSym e s)) refO c
+        binOps =
+          NEL.nonEmpty $ clusterOp (Proxy :: Proxy (ShapeSym e s)) refO c
     inpNumError :: String -> Int -> m x
     inpNumError s n =
       error $ printf "clusterInpts returns %d elements over %s" n s
@@ -134,14 +136,14 @@ querySize1
   (Hashables2 e s
   ,MonadError (SizeInferenceError e s t n) m
    -- Nothing in a node means we are currently looking up the node
-  ,MonadState (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double))) m)
+  ,MonadState (ClusterConfig e s t n,RefMap n (Maybe QueryShape)) m)
   => AnyCluster e s t n
-  -> Query1 (PlanSym e s) (([TableSize],Double),QueryPlan e s)
+  -> Query1 (ShapeSym e s) (QueryShape e s)
   -> m ([TableSize],Double)
 querySize1 clust q = do
-  ((_,assoc),planClust) <- dropReader (gets fst)
+  ((_,shapeClust) <- dropReader (gets fst)
     $ getValidClustPropagator clust
-  dropState (gets fst,modify . first . const) $ putPlanCluster planClust
+  dropState (gets fst,modify . first . const) $ putShapeCluster shapeClust
   case q of
     Q2' o l r -> inferBinQuerySizeN o <$> transl o assoc l
       <*> transl o (reverse assoc) r
@@ -153,12 +155,12 @@ querySize1 clust q = do
       QJoin _ -> listToMaybe . safeTail
       _       -> listToMaybe
     transl :: BQOp x
-           -> [(PlanSym e s,PlanSym e s)]
-           -> (([TableSize],Double),QueryPlan e s)
-           -> m (([TableSize],Double),QueryPlan e s)
-    transl o assoc plan =
-      either (const $ throwAStr $ "Op: " ++ ashow (plan,assoc)) return
-      $ traverse (translatePlanMap'' (chooseSym o) assoc) plan
+           -> [(ShapeSym e s,ShapeSym e s)]
+           -> (([TableSize],Double),QueryShape e s)
+           -> m (([TableSize],Double),QueryShape e s)
+    transl o assoc shape =
+      either (const $ throwAStr $ "Op: " ++ ashow (shape,assoc)) return
+      $ traverse (translateShapeMap'' (chooseSym o) assoc) shape
 
 querySize
   :: forall e s t n m .
@@ -167,13 +169,13 @@ querySize
    -- Nothing in a node means we are currently looking up the node
   ,MonadState (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double))) m)
   => NodeRef n
-  -> m (([TableSize],Double),QueryPlan e s)
+  -> m (([TableSize],Double),QueryShape e s)
 querySize ref = get >>= go . refLU ref . snd
   where
     go = \case
-      Just (Just x) -> withPlan x
+      Just (Just x) -> withShape x
       Just Nothing -> do
-        cs :: [(NEL.NonEmpty (Query1 (PlanSym e s) (NodeRef n))
+        cs :: [(NEL.NonEmpty (Query1 (ShapeSym e s) (NodeRef n))
                ,AnyCluster e s t n)] <- dropState
           (gets fst,const $ return ())
           (queryPlans1 ref)
@@ -188,12 +190,12 @@ querySize ref = get >>= go . refLU ref . snd
           -- querySize1 also triggers the propagator for the plans.
           ret <- querySize1 clust =<< traverse querySize q1
           plan <- maybe (throwAStr "oops") return
-            =<< dropReader (gets fst) (getNodePlanFull ref)
+            =<< dropReader (gets fst) (getNodeShapeFull ref)
           modify $ second $ refInsert ref $ Just ret
           return (ret,plan)
-    withPlan ts =
+    withShape ts =
       maybe (throwAStr $ "Can't get plan:" ++ show ref) (return . (ts,))
-      =<< dropState (gets fst,modify . first . const) (forceQueryPlan ref)
+      =<< dropState (gets fst,modify . first . const) (forceQueryShape ref)
     getMedian xs = do
       lst <- xs
       case medianSize lst of
@@ -203,6 +205,7 @@ querySize ref = get >>= go . refLU ref . snd
             (ashow ref)
             (length lst)
         Just x -> return x
+
 
 medianOn :: Ord b => (a -> b) -> [a] -> Maybe a
 medianOn _ [] = Nothing
@@ -228,11 +231,12 @@ topPercOn :: Double -> (a -> Double) -> [a] -> [a]
 topPercOn pp f l = take n $ sortOn (minus 0 . f) l where
   n = max 1 $ round $ fromIntegral (length l) * pp
 
-inferBinQuerySizeN :: Hashables2 e s =>
-                     BQOp (PlanSym e s)
-                   -> (([TableSize],Double),QueryPlan e s)
-                   -> (([TableSize],Double),QueryPlan e s)
-                   -> ([TableSize],Double)
+inferBinQuerySizeN
+  :: Hashables2 e s
+  => BQOp (ShapeSym e s)
+  -> QueryShape e s
+  -> QueryShape e s
+  -> QuerySize e s
 inferBinQuerySizeN o ((lsize,lcert),lplan) ((rsize,rcert),rplan) =
   second (foldl (*) $ lcert * rcert)
   $ unzip
@@ -261,7 +265,7 @@ inferBinQuerySizeN o ((lsize,lcert),lplan) ((rsize,rcert),rplan) =
       QProjQuery       -> (cert 1 const,cert 1 $ const id)
       QUnion           -> (cert 1 const,cert 1 (+))
 
-inferUnQuerySizeN :: UQOp e -> ([TableSize],Double) -> ([TableSize],Double)
+inferUnQuerySizeN :: UQOp e -> QuerySize -> QuerySize
 inferUnQuerySizeN o (tbl,qcert) = second (foldl (*) qcert)
   $ unzip
   $ fmap
