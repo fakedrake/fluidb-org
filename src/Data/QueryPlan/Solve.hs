@@ -17,21 +17,20 @@
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Data.QueryPlan.Solve
-  ( setNodeMaterialized
-  , setNodeStateSafe
-  , setNodeStateUnsafe
-  , planSanityCheck
-  , newEpoch
-  , withProtected
-  , isMaterializable
-  , makeMaterializable
-  , isMaterialized
-  , matNeighbors
-  , getDependencies
-  , garbageCollectFor
-  , killPrimaries
-  , isDeletable
-  ) where
+  (setNodeMaterialized
+  ,setNodeStateSafe
+  ,setNodeStateUnsafe
+  ,planSanityCheck
+  ,newEpoch
+  ,withProtected
+  ,isMaterializable
+  ,makeMaterializable
+  ,isMaterialized
+  ,matNeighbors
+  ,getDependencies
+  ,garbageCollectFor
+  ,killPrimaries
+  ,isDeletable) where
 
 import           Control.Antisthenis.Types
 import           Control.Monad.Cont
@@ -360,8 +359,8 @@ lsplitReader = splitProvenance (SplitLeft,SplitRight) id
   $ \(ReaderT l) (ReaderT r) -> ReaderT $ \s -> mplusPlanT (l s) (r s)
 
 
-garbageCollectFor :: forall t n m .
-                    MonadLogic m => [NodeRef n] -> PlanT t n m ()
+garbageCollectFor
+  :: forall t n m . MonadLogic m => [NodeRef n] -> PlanT t n m ()
 garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
   lift preReport
   go `eitherlReader` (lift newEpoch >> go)
@@ -372,8 +371,13 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
       totalSize <- getDataSize
       budget <- asks $ maybe "<unboundend>" show . budget
       nsmap <- forM ns $ \n -> (n,) <$> totalNodePages n
-      trM $ printf "Starting GC to make (%d / %s) %s: %d"
-        totalSize budget (show nsmap) nsize
+      trM
+        $ printf
+          "Starting GC to make (%d / %s) %s: %d"
+          totalSize
+          budget
+          (show nsmap)
+          nsize
     withGC m = do
       isGC <- gets garbageCollecting
       if isGC then bot "nested GCs" else do
@@ -382,8 +386,8 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
         neededPages <- sum <$> traverse totalNodePages ns
         runReaderT (whenM isOversized m) neededPages
         setGC False
-          where
-            setGC b = modify $ \x -> x{garbageCollecting=b}
+      where
+        setGC b = modify $ \x -> x { garbageCollecting = b }
     go :: ReaderT PageNum (PlanT t n m) ()
     go = do
       assertGcIsPossible

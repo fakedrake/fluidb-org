@@ -89,9 +89,10 @@ traverseTransition side f = \case
     Inp -> (\x' -> Trigger x' y z) <$> f x
     Out -> Trigger x y <$> f z
   x -> pure x
-transitionCost :: (MonadError (PlanningError t n) m,
-                  MonadReader (GCConfig t n) m) =>
-                 Transition t n -> m Cost
+transitionCost
+  :: (MonadError (PlanningError t n) m,MonadReader (GCConfig t n) m)
+  => Transition t n
+  -> m Cost
 transitionCost = \case
   Trigger i _ o -> ioCost i o
   RTrigger i _ o -> ioCost i o

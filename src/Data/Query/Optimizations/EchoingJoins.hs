@@ -5,7 +5,7 @@
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 module Data.Query.Optimizations.EchoingJoins
   (joinPermutations
-  ,FuzzyQuery) where
+  ,FuzzyQuery,unFuzz,ashowFuzz) where
 
 import           Control.Monad.Identity
 import           Control.Monad.State

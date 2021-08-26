@@ -89,9 +89,9 @@ queryPlans1 refO = do
       $ "NodeRef is in none of the clusters: "
       ++ ashow (refO,fmap qnfOrigDEBUG' allQnfs,allClusts,isInterm)
   forM clusts $ \clust -> fmap (,clust) $ case clust of
-    JoinClustW c -> getQueryRecurse2 (clusterInputs clust) c
-    BinClustW c -> getQueryRecurse2 (clusterInputs clust) c
-    UnClustW c -> getQueryRecurse1 (clusterInputs clust) c
+    JoinClustW c       -> getQueryRecurse2 (clusterInputs clust) c
+    BinClustW c        -> getQueryRecurse2 (clusterInputs clust) c
+    UnClustW c         -> getQueryRecurse1 (clusterInputs clust) c
     NClustW (NClust _) -> throwAStr "Looking for shapes for NClust.."
   where
     getQueryRecurse1
@@ -136,12 +136,12 @@ querySize1
   (Hashables2 e s
   ,MonadError (SizeInferenceError e s t n) m
    -- Nothing in a node means we are currently looking up the node
-  ,MonadState (ClusterConfig e s t n,RefMap n (Maybe QueryShape)) m)
+  ,MonadState (ClusterConfig e s t n,RefMap n (Maybe (QueryShape e s))) m)
   => AnyCluster e s t n
   -> Query1 (ShapeSym e s) (QueryShape e s)
   -> m ([TableSize],Double)
 querySize1 clust q = do
-  ((_,shapeClust) <- dropReader (gets fst)
+  (_,shapeClust) <- dropReader (gets fst)
     $ getValidClustPropagator clust
   dropState (gets fst,modify . first . const) $ putShapeCluster shapeClust
   case q of
@@ -236,7 +236,7 @@ inferBinQuerySizeN
   => BQOp (ShapeSym e s)
   -> QueryShape e s
   -> QueryShape e s
-  -> QuerySize e s
+  -> QuerySize
 inferBinQuerySizeN o ((lsize,lcert),lplan) ((rsize,rcert),rplan) =
   second (foldl (*) $ lcert * rcert)
   $ unzip

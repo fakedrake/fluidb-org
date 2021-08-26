@@ -16,28 +16,28 @@
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module FluiDB.Types
-  ( GlobalError(..)
-  , IsGlobalError(..)
-  , errLift
-  , joinErr
-  , GlobalConf(..)
-  , GlobalSolveROT
-  , GlobalSolveT
-  , hoistGlobalSolveT
-  , globalPopUniqueNum
-  , IsGlobalConf(..)
-  , stateLayer
-  , errLayer
-  , flipSE
-  , joinExcept
-  , SqlTypeVars
-  , GlobalUnMonad
-  , s2r
-  , r2s
-  , NodeReport(..)
-  , mkGCParams
-  , RunningConf(..)
-  ) where
+  (GlobalError(..)
+  ,IsGlobalError(..)
+  ,errLift
+  ,joinErr
+  ,PreGlobalConf(..)
+  ,GlobalConf(..)
+  ,GlobalSolveROT
+  ,GlobalSolveT
+  ,hoistGlobalSolveT
+  ,globalPopUniqueNum
+  ,IsGlobalConf(..)
+  ,stateLayer
+  ,errLayer
+  ,flipSE
+  ,joinExcept
+  ,SqlTypeVars
+  ,GlobalUnMonad
+  ,s2r
+  ,r2s
+  ,NodeReport(..)
+  ,mkGCParams
+  ,RunningConf(..)) where
 
 import           Control.Monad.Cont
 import           Control.Monad.Except
@@ -48,11 +48,11 @@ import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Bipartite
 import           Data.Cluster.Types.Monad
-import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.Codegen.SchemaAssocClass
 import qualified Data.List.NonEmpty              as NEL
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations
 import           Data.Query.QuerySize
@@ -134,14 +134,26 @@ globalPopUniqueNum = do
     globalRunning=(globalRunning gc){
         runningUniqueNumber=1 + runningUniqueNumber (globalRunning gc)}}
   return n
+
+data PreGlobalConf e0 e s =
+  PreGlobalConf
+  { pgcExpIso         :: (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
+   ,pgcToUniq         :: Int -> e -> Maybe e
+   ,pgcToFileSet      :: s -> Maybe FileSet -- Embedding of tables in filesets
+   ,pgcPrimKeyAssoc   :: [(s,[e])]          -- Primary keys of each table
+   ,pgcSchemaAssoc    :: SchemaAssoc e s     -- The schema of each table
+   ,pgcTableSizeAssoc :: [(s,TableSize)]          -- Size of each table in bytes
+  }
+
 data GlobalConf e s t n = forall e0 . GlobalConf {
-  globalRunning       :: RunningConf,
-  globalSchemaAssoc   :: SchemaAssoc e s,
-  globalQueryCppConf  :: QueryCppConf e s,
-  globalClusterConfig :: ClusterConfig e s t n,
-  globalGCConfig      :: GCConfig t n,
-  globalMatNodes      :: [NodeRef n],
-  globalExpTypeSymIso :: (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
+  globalTableSizeAssoc :: [(s,TableSize)],
+  globalRunning        :: RunningConf,
+  globalSchemaAssoc    :: SchemaAssoc e s,
+  globalQueryCppConf   :: QueryCppConf e s,
+  globalClusterConfig  :: ClusterConfig e s t n,
+  globalGCConfig       :: GCConfig t n,
+  globalMatNodes       :: [NodeRef n],
+  globalExpTypeSymIso  :: (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
   }
 
 -- Warning: we are not taking int accont scores.
@@ -159,22 +171,24 @@ instance AShow (Query e s) => AShow (NodeReport e s t n)
 mkGCParams :: forall e s t n .
              [NodeReport e s t n]
            -> (GCConfig t n, GCState t n)
-mkGCParams = foldl go (def, def) where
-  go :: (GCConfig t n, GCState t n)
-     -> NodeReport e s t n
-     -> (GCConfig t n, GCState t n)
-  go (gcc@GCConfig{..}, gcs@GCState{..}) NodeReport{..} =
-    (gcc{nodeSizes=refInsert nrRef nrSize nodeSizes,
-         intermediates=(if nrIsInterm then nsInsert nrRef else id) intermediates},
-     gcs{epochs=epochs
-                `onHead`
-                (\ep -> ep{
-                    nodeStates=refInsert nrRef nrMatState
-                               $ nodeStates
-                               $ NEL.head epochs})})
-
-  onHead :: NEL.NonEmpty a -> (a -> a) -> NEL.NonEmpty a
-  onHead (a NEL.:| as) f = f a NEL.:| as
+mkGCParams = foldl go (def,def)
+  where
+    go :: (GCConfig t n,GCState t n)
+       -> NodeReport e s t n
+       -> (GCConfig t n,GCState t n)
+    go (gcc@GCConfig {..},gcs@GCState {..}) NodeReport {..} =
+      (gcc { nodeSizes = refInsert nrRef nrSize nodeSizes
+            ,intermediates = (if nrIsInterm then nsInsert nrRef else id)
+               intermediates
+           }
+      ,gcs { epochs = epochs
+               `onHead` (\ep -> ep { nodeStates = refInsert nrRef nrMatState
+                                       $ nodeStates
+                                       $ NEL.head epochs
+                                   })
+           })
+    onHead :: NEL.NonEmpty a -> (a -> a) -> NEL.NonEmpty a
+    onHead (a NEL.:| as) f = f a NEL.:| as
 
 type GlobalSolveT e s t n m =
   ExceptT (GlobalError e s t n) (StateT (GlobalConf e s t n) m)

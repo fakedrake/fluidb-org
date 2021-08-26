@@ -42,8 +42,10 @@ type SSBGlobalSolveM = GlobalSolveT ExpTypeSym Table T N IO
 
 annotateQuerySSB
   :: QueryCppConf ExpTypeSym Table -> SSBQuery -> SSBGlobalSolveM AnnotQuery
-annotateQuerySSB cppConf query =
-  either throwError return $ annotateQuery cppConf query
+annotateQuerySSB cppConf query = do
+  symSizeAssoc <- gets globalTableSizeAssoc
+  let luSize s = lookup s symSizeAssoc
+  either throwError return $ annotateQuery cppConf luSize query
 
 
 finallyError :: MonadError e m => m a -> m () -> m a

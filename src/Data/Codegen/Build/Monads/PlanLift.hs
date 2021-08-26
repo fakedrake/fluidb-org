@@ -22,8 +22,6 @@
 module Data.Codegen.Build.Monads.PlanLift
   (planLiftCB
   ,SizeInferenceError(..)
-  ,querySize
-  ,updateSizes
   ,missingSizes) where
 
 import           Control.Monad.Except
@@ -32,7 +30,6 @@ import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Bipartite
 import           Data.Cluster.ClusterConfig
-import           Data.Cluster.FoldPlans
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build.Monads.CodeBuilder
@@ -48,9 +45,10 @@ import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.MTL
 
+import           Data.Cluster.Propagators
 import qualified Data.List.NonEmpty                    as NEL
+import           Data.Query.QuerySchema.Types
 import           Data.Utils.AShow
-
 
 -- | Lifts the plan monad to graph builder copying in the plan
 -- computation any relevant information from the graph builder.
@@ -90,12 +88,11 @@ updateAll
     (Either (SizeInferenceError e s t n) (PlanningError t n))
     (GCConfig t n)
 updateAll graph cConf gcConf = do
-  let gr = updateGraph graph gcConf
-  gcConf' <- updateSizes cConf gr
+  gcConf' <- updateSizes cConf $ updateGraph graph gcConf
   return $ updateIntermediates cConf gcConf'
 
 updateGraph :: Bipartite t n -> GCConfig t n -> GCConfig t n
-updateGraph graph gcConf = gcConf{propNet=graph}
+updateGraph graph gcConf = gcConf { propNet = graph }
 
 updateSizes
   :: forall e s t n .
@@ -108,16 +105,30 @@ updateSizes
 updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
   unsizedNodes <- lift missingSizes
   oldSizes <- lift2 $ asks nodeSizes
-  let runMonads m = runExceptT $ (`execStateT` (cConf,Just <$> oldSizes)) m
-  runMonads (filterInterms unsizedNodes >>= mapM (fmap fst . querySize))
-    >>= \case
-      Left e -> throwError e
-      Right (_,rmap) -> lift
-        $ traverse
-          (maybe
-             (error "planLift1 (in querySize) did not finish the recursion")
-             return)
-          rmap
+  let runMonads m = runExceptT $ (`execStateT` (cConf,oldSizes)) m
+  runMonads (filterInterms unsizedNodes >>= mapM putQuerySize) >>= \case
+    Left e         -> throwError e
+    Right (_,rmap) -> return rmap
+
+-- | In ([TableSize],Double) empty list means the node is an
+-- intermediate.
+putQuerySize
+  :: forall e s t n m .
+  (Hashables2 e s
+  ,MonadError (SizeInferenceError e s t n) m
+   -- Nothing in a node means we are currently looking up the node
+  ,MonadState (ClusterConfig e s t n,RefMap n ([TableSize],Double)) m)
+  => NodeRef n
+  -> m ()
+putQuerySize ref =
+  do
+    shapeM <- dropState (gets fst,modify . first . const) (forceQueryShape ref)
+    case shapeM of
+      Nothing -> throwAStr $ "Can't get plan:" ++ show ref
+      Just shape -> do
+        modify $ second $ refInsert ref $ sizeToPair $ qpSize shape
+  where
+    sizeToPair QuerySize {..} = (qsTables,qsCertainty)
 
 updateIntermediates
   :: Hashables2 e s => ClusterConfig e s t n -> GCConfig t n -> GCConfig t n
@@ -158,13 +169,13 @@ filterInterms
   :: (Hashables2 e s
      ,MonadAShowErr e s err m
      ,MonadState
-        (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double)))
+        (ClusterConfig e s t n,RefMap n ([TableSize],Double))
         m)
   => [NodeRef n]
   -> m [NodeRef n]
 filterInterms refs = (`filterM` refs) $ \ref
   -> dropReader (gets fst) (isIntermediateClust ref) >>= \case
-    True  -> modify (second $ refInsert ref $ Just ([],1)) >> return False
+    True  -> modify (second $ refInsert ref ([],1)) >> return False
     False -> return True
 
 onlyCC

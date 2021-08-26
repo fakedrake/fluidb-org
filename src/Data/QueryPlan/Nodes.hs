@@ -13,7 +13,6 @@ module Data.QueryPlan.Nodes
   ,setNodeStateUnsafe
   ,isMat
   ,getNodeCost
-  ,getDataSizeOf
   ,configLU
   ,totalNodePages
   ,getDataSize
@@ -163,9 +162,12 @@ totalUsedPages = do
     Just pgNum -> return pgNum
 
 
-totalNodePages :: (MonadError (PlanningError t n) m,
-                  MonadReader (GCConfig t n) m) =>
-                 NodeRef n -> m PageNum
+totalNodePages
+  :: (MonadError (PlanningError t n) m
+     ,MonadReader (GCConfig t n) m
+     ,HasCallStack)
+  => NodeRef n
+  -> m PageNum
 totalNodePages ref = do
   let pageSize = 4096
   sizes <- getDataSizeOf ref
@@ -174,21 +176,29 @@ totalNodePages ref = do
     Just 0     -> error
       $ printf "Zero page table spotted node %n (size: %s)" ref $ show size
     Just pgNum -> return pgNum
-configLU :: (MonadReader (GCConfig t n) m, MonadError (PlanningError t n) m) =>
-           String
-         -> (GCConfig t n -> RefMap n k)
-         -> NodeRef n
-         -> m k
+configLU
+  :: (MonadReader (GCConfig t n) m
+     ,MonadError (PlanningError t n) m
+     ,HasCallStack)
+  => String
+  -> (GCConfig t n -> RefMap n k)
+  -> NodeRef n
+  -> m k
 configLU msg f r = do
   m <- asks f
   case r `refLU` m of
-    Nothing -> throwError $ LookupFail msg r (refKeys m)
-    Just i  -> return i
+    Nothing -> throwPlan
+      $ printf "Lookup failed [%s] %n %s" msg r (show $ refKeys m)
+    Just i -> return i
 
-getDataSizeOf :: (MonadReader (GCConfig t n) m,
-                 MonadError (PlanningError t n) m) =>
-                NodeRef n -> m [TableSize]
+getDataSizeOf
+  :: (MonadReader (GCConfig t n) m
+     ,MonadError (PlanningError t n) m
+     ,HasCallStack)
+  => NodeRef n
+  -> m [TableSize]
 getDataSizeOf = fmap fst . configLU "getDataSizeOf" nodeSizes
+
 -- | Cost of creating a node under the current state of the graph.
 getNodeCost :: Monad m => NodeRef n -> PlanT t n m Double
 getNodeCost n = do

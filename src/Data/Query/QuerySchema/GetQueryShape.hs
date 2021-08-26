@@ -40,6 +40,7 @@ import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
 import           Data.Utils.AShow
 import           Data.Utils.Function
 import           Data.Utils.Functors
@@ -136,7 +137,6 @@ exprCppType' = \case
       SubSeq i j     -> setArrLen e (Just j) $ j - i
       AssertLength i -> setArrLen e Nothing i
   E0 e -> return e
--- | Add CppSizes
   where
     boolT = return CC.CppBool
 
@@ -219,24 +219,33 @@ aggrType litType shape = fmap aggrCppType
             <$> shapeSymType' litType [shape] e
 
 
+
 -- The cases are:
 -- * QGroup [(a,..),(b,..)...] [] -> [[a],[b],..]
 -- * QGroup [(a,..),(b,..)...] [k1,k2..] -> [[a],[b],..]
-getQueryShapeGrp :: forall e s . (HasCallStack,Hashables2 e s) =>
-                  (e -> Maybe CppType)
-                -> [(ShapeSym e s,Expr (Aggr (Expr (ShapeSym e s))))]
-                -> [Expr (ShapeSym e s)]
-                -> QueryShape e s
-                -> Either (QueryShapeError e s) (QueryShape e s)
+getQueryShapeGrp
+  :: forall e s .
+  (HasCallStack,Hashables2 e s)
+  => (e -> Maybe CppType)
+  -> [(ShapeSym e s,Expr (Aggr (Expr (ShapeSym e s))))]
+  -> [Expr (ShapeSym e s)]
+  -> QueryShape e s
+  -> Either (QueryShapeError e s) (QueryShape e s)
 getQueryShapeGrp litType proj es qshape = do
   sch <- projQueryShapeInternal' =<< traverse3 aexpProps proj
+  rowSize <- getRowSize sch
+  let querySize =
+        QuerySize
+        { qsTables = [TableSize { tsRowSize = rowSize,tsRows = 10 }]
+         ,qsCertainty = 0.1
+        }
   case (es,NEL.nonEmpty proj) of
     (_,Nothing) -> throwAStr $ "Empty group projection: " ++ ashow (proj,es)
     ([],Just nelProj) -> return
       QueryShape
       { qpSchema = [(e,p { columnPropsConst = True }) | (e,p) <- sch]
        ,qpUnique = return . fst <$> nelProj
-       ,qpShape = _
+       ,qpSize = querySize
       }
     _ -> do
       let uniqCandidates = case grpSymsM of
@@ -247,7 +256,8 @@ getQueryShapeGrp litType proj es qshape = do
           $ "LU fail: "
           ++ ashow (proj,ioAssoc,toList <$> toList uniqCandidates)
         Right uniq -> return
-          QueryShape { qpSchema = sch,qpUnique = deoverlap uniq,qpShape = _ }
+          QueryShape
+          { qpSchema = sch,qpUnique = deoverlap uniq,qpSize = querySize }
   where
     deoverlap =
       go
@@ -276,6 +286,13 @@ getQueryShapeGrp litType proj es qshape = do
       cnst <- allM (shapeSymConst qshape) $ toList2 agg
       return ColumnProps { columnPropsCppType = ty,columnPropsConst = cnst }
 
+getRowSize :: [(ShapeSym e s,ColumnProps)]
+           -> Either (QueryShapeError e s) Bytes
+getRowSize sch =
+  maybe (throwAStr $ "schemaSize failed for: " ++ ashow sch) return
+  $ schemaSize
+  $ fmap ((,()) . columnPropsCppType . snd) sch
+
 mapMaybeNEL :: HasCallStack =>
               (NEL.NonEmpty a -> Maybe (NEL.NonEmpty b))
             -> NEL.NonEmpty (NEL.NonEmpty a)
@@ -294,13 +311,18 @@ getQueryShapePrj :: forall e s . (HasCallStack,Hashables2 e s) =>
                 -> Either (QueryShapeError e s) (QueryShape e s)
 getQueryShapePrj litType proj qshape = do
   sch <- projQueryShapeInternal' =<< traverse3 go proj
+  rowSize <- getRowSize sch
   case mapMaybeNEL (traverse (`lookup` ioAssoc)) (qpUnique qshape) of
     Left _ -> throwAStr
       $ "No unique sets exposed in their entirety: "
       ++ ashow
         (toList <$> toList (qpUnique qshape),ioAssoc,qpSchema qshape,proj)
-    Right
-      uniq -> return QueryShape { qpSchema = sch,qpUnique = uniq,qpShape = _ }
+    Right uniq -> return
+      QueryShape
+      { qpSchema = sch
+       ,qpUnique = uniq
+       ,qpSize = putRowSize rowSize $ qpSize qshape
+      }
   where
     ioAssoc = mapMaybe (\case
                           (o,E0 i) -> Just (i,o)
@@ -324,15 +346,16 @@ projQueryShapeInternal' proj = forM proj $ \(sym,expt) -> do
         ,columnPropsConst = all columnPropsConst expt
        })
 
+-- | Build the symbol shape throwing an error if any Nothings come up.
 getSymShape
   :: forall er e s m .
   (Hashables2 e s,AShowError e s er,MonadError er m)
   => Maybe [e]
   -> Maybe (CppSchema' e)
-  -> Cardinality
+  -> Maybe TableSize
   -> s
   -> m (QueryShape e s)
-getSymShape prims symSchema rows s = do
+getSymShape prims symSchema tableSizeM s = do
   sch :: CppSchema' e
     <- maybe (throwAStr "No schema for table") return symSchema
   schAnnotUniq :: [(CppType,(ShapeSym e s,Bool))] <- traverse2 makeSym sch
@@ -341,12 +364,17 @@ getSymShape prims symSchema rows s = do
     $ throwAStr
     $ "No unique columns: "
     ++ ashow (s,first shapeSymQnfOriginal . snd <$> schAnnotUniq)
+  tableSize <- maybe
+    (throwAStr $ "Can't determine size of: " ++ ashow s)
+    return
+    tableSizeM
   maybe (throwAStr $ "No unique columns: " ++ ashow s) return
-    $ mkQueryShape rows schAnnotUniq
+    $ mkQueryShape (symSize tableSize) schAnnotUniq
   where
+    symSize tableSize = QuerySize { qsTables = [tableSize],qsCertainty = 1 }
     makeSym :: Monad m => e -> m (ShapeSym e s,Bool)
     makeSym e = do
-      pks <- maybe (throwAStr "Missing primkeys") return $ prims s
+      pks <- maybe (throwAStr "Missing primkeys") return prims
       es <- maybe (throwAStr "Missing primkeys") return $ fmap2 snd symSchema
       let isPrim = e `elem` pks
           (nm,_) = nqnfSymbol es s

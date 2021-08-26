@@ -54,6 +54,7 @@ import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Query.QuerySchema.GetQueryShape
 import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
 import           Data.Tuple
 import           Data.Utils.AShow
 import           Data.Utils.Functors
@@ -66,11 +67,16 @@ type CppTypeExprConstraints c e s t n m = (
   Foldable c, Functor c,
   MonadReadScope c (QueryShape e s) m)
 
-mkShapeFromTbl :: Hashables2 e s => QueryCppConf e s -> s -> Maybe (QueryShape e s)
-mkShapeFromTbl QueryCppConf {..} s = do
+mkShapeFromTbl
+  :: Hashables2 e s
+  => QueryCppConf e s
+  -> TableSize
+  -> s
+  -> Maybe (QueryShape e s)
+mkShapeFromTbl QueryCppConf {..} tableSize s = do
   sch <- tableSchema s
   ucols <- uniqueColumns s
-  mkQueryShape _rows
+  mkQueryShape QuerySize { qsTables = [tableSize],qsCertainty = 1 }
     $ fmap2 (\e -> (mkShapeSym (PrimaryCol e s 0) e,e `elem` ucols)) sch
 
 -- |Get the schema from something that is like a projection.

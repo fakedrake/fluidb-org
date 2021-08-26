@@ -28,6 +28,7 @@ module Data.Cluster.Types.Monad
   ,Defaulting
   ,CPropagatorShape
   ,Tunnel(..)
+  ,ACPropagatorAssoc(..)
   ,tqueryToForest
   ,forestToQuery
   ,queryToForest
@@ -42,7 +43,7 @@ module Data.Cluster.Types.Monad
   ,getDefaultingFull
   ,getDefaultingDef
   ,defaultingLe
-  ,getDef) where
+  ,getDef,ashowACPA) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -182,8 +183,15 @@ regCall call = modify $ \cc -> cc{
 data ACPropagatorAssoc e s t n =
   ACPropagatorAssoc
   { acpaPropagator :: ACPropagator (QueryShape e s) e s t n
-   ,aspaInOutAssoc :: [(ShapeSym e s,ShapeSym e s)]
+   ,acpaInOutAssoc :: [(ShapeSym e s,ShapeSym e s)]
   }
+
+ashowACPA :: AShow2 e s => ACPropagatorAssoc e s t n -> SExp
+ashowACPA x =
+  Rec
+    "ACPropagatorAssoc"
+    [("acpaPropagator",Sym "<propagator>")
+    ,("acpaInOutAssoc",ashow' $ acpaInOutAssoc x)]
 
 -- | A value that either has a default value or defaults.
 data Defaulting a
@@ -255,8 +263,10 @@ type PropCluster a f e s t n =
 type ShapeCluster f e s t n = PropCluster (QueryShape e s) f e s t n
 type EndoE e s x = x -> Either (AShowStr e s) x
 
+-- | AnyCluster propagator
 type ACPropagator a e s t n =
   EndoE e s (PropCluster a NodeRef e s t n)
+-- | Special cluster propagator
 type CPropagator a c e s t n =
   EndoE e s (c EmptyF (WMetaD (Defaulting a) NodeRef) t n)
 type CPropagatorShape c e s t n = CPropagator (QueryShape e s) c e s t n

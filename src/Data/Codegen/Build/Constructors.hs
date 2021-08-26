@@ -57,6 +57,7 @@ import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.EquiJoinUtils
 import           Data.Codegen.Build.Expression
@@ -314,7 +315,8 @@ clusterCall :: forall e s t n m .
                MonadCodeCheckpoint e s t n m) =>
               AnyCluster e s t n -> m Constr
 clusterCall c = do
-  ((_,assoc),shapeClust) <- getValidClustPropagator c
+  (ACPropagatorAssoc {acpaInOutAssoc = assoc}
+    ,shapeClust) <- getValidClustPropagator c
   go shapeClust assoc c
   where
     go :: ShapeCluster NodeRef e s t n
@@ -326,7 +328,8 @@ clusterCall c = do
         JoinClustW pc -> go (BinClustW $ joinBinCluster pc) assoc
           $ BinClustW
           $ joinBinCluster c
-        _ -> throwAStr $ "Expected join shapeclust but got: " ++ ashow shapeClust
+        _ -> throwAStr
+          $ "Expected join shapeclust but got: " ++ ashow shapeClust
       BinClustW BinClust {..} -> do
         outSyms <- case shapeClust of
           BinClustW BinClust {..} -> getDef' binClusterOut
@@ -341,7 +344,8 @@ clusterCall c = do
         (inSyms,outSyms) <- case shapeClust of
           UnClustW UnClust {..}
             -> (,) <$> getDef' unClusterIn <*> getDef' unClusterPrimaryOut
-          _ -> throwAStr $ "Expected un shapeclust but got: " ++ ashow shapeClust
+          _ -> throwAStr
+            $ "Expected un shapeclust but got: " ++ ashow shapeClust
         op <- selectOp
           (ashow . (,assoc))
           (checkUOp inSyms outSyms)

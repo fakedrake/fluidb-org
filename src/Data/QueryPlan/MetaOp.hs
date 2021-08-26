@@ -66,11 +66,12 @@ getNodeLinksT' s rev ref = getNodeLinksT (NodeLinksFilter ref [s] rev) <&> \case
   Just x  -> x
 {-# INLINE getNodeLinksT' #-}
 
-getNodeLinksN' :: Monad m =>
-                 Side
-               -> [IsReversible]
-               -> NodeRef n
-               -> GraphBuilderT t n m (NodeSet t)
+getNodeLinksN'
+  :: Monad m
+  => Side
+  -> [IsReversible]
+  -> NodeRef n
+  -> GraphBuilderT t n m (NodeSet t)
 getNodeLinksN' s rev ref = getNodeLinksN (NodeLinksFilter ref [s] rev) >>= \case
   Nothing -> do
     (_,ns) <- nodeRefs
@@ -247,11 +248,14 @@ findPrioritizedMetaOp splitFn ref = findTriggerableMetaOps ref >>= \case
   [] -> bot $ printf "no findTriggerableMetaOps %n" ref
   xs -> foldr1Unsafe splitFn $ return <$> xs
 
-metaOpNeededPages :: Monad m => MetaOp t n -> PlanT t n m Int
-metaOpNeededPages MetaOp{..} = fmap sum $ mapM totalNodePages
-  =<< filterM (fmap not . isMaterialized)
-  (toNodeList $ metaOpIn <> metaOpInterm <> metaOpOut)
+metaOpNeededPages :: (HasCallStack,Monad m) => MetaOp t n -> PlanT t n m Int
+metaOpNeededPages MetaOp {..} = do
+  nonMatRefs
+    <- filterM (fmap not . isMaterialized) $ toNodeList $ metaOpIn <> metaOpOut
+  sizes <- mapM totalNodePages nonMatRefs
+  return $ sum sizes
 
+-- | Check if a trigger fits in the budget.
 triggerFits :: MonadPlus m => Maybe Int -> MetaOp t n -> PlanT t n m Bool
 triggerFits freePages mop = do
   neededPages <- metaOpNeededPages mop

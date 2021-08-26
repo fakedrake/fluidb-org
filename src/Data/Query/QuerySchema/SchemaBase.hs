@@ -98,21 +98,21 @@ querySchema
 
 -- | Filter the unique ones. None means there were no uniques (or the
 -- shape was empty.
-mkQueryShape :: TableSize -> [(CppType,(e,Bool))] -> Maybe (QueryShape' e)
-mkQueryShape tblSize sch =
+mkQueryShape
+  :: forall a e . a -> [(CppType,(e,Bool))] -> Maybe (QueryShape' a e)
+mkQueryShape size sch =
   fromSchemaQP
     [(sym
      ,ColumnProps { columnPropsConst = False,columnPropsCppType = ty }
      ,uniq) | (ty,(sym,uniq)) <- sch]
   where
-    fromSchemaQP :: [(e,ColumnProps,Bool)] -> Maybe (QueryShape' e)
+    fromSchemaQP :: [(e,ColumnProps,Bool)] -> Maybe (QueryShape' a e)
     fromSchemaQP
-      sch = NEL.nonEmpty [s | (s,_,isU) <- sch,isU] <&> \uniq -> QueryShape
-      { qpSchema = [(s,prop) | (s,prop,_isU) <- sch]
+      sch' = NEL.nonEmpty [s | (s,_,isU) <- sch',isU] <&> \uniq -> QueryShape
+      { qpSchema = [(s,prop) | (s,prop,_isU) <- sch']
        ,qpUnique = return uniq
-       ,qpSize = QuerySize { qsTables = [tblSize],qsCertainty = 1 }
+       ,qpSize = size
       }
-
 
 shapeSymTypeSym' :: Hashables2 e s =>
                   [QueryShape e s]
@@ -284,10 +284,6 @@ shapeProject exprColumnProps prj shape = do
      ,qpSize = putRowSize rowSize $ qpSize shape
     }
   where
-    putRowSize rs qs =
-      qs { qsTables = onHead (\ts -> ts { tsRowSize = rs }) $ qsTables qs }
-    onHead f (x:xs) = f x : xs
-    onHead _f []    = []
     keyAssoc =
       mapMaybe (\case
                   (e,E0 (Right ev)) -> Just (ev,e)
@@ -334,9 +330,9 @@ joinShapes
   :: forall e .
   Eq e
   => [(e,e)]
-  -> QueryShape' e
-  -> QueryShape' e
-  -> Maybe (QueryShape' e)
+  -> QueryShape' QuerySize e
+  -> QueryShape' QuerySize e
+  -> Maybe (QueryShape' QuerySize e)
 joinShapes eqs qpL qpR =
   uniqDropConst
     QueryShape
@@ -402,7 +398,7 @@ joinQuerySizes luType qs qs' = case luType of
         : xs ++ ys
       _ -> error "Empty table sizes encountered."
 
-uniqDropConst :: Eq e => QueryShape' e -> Maybe (QueryShape' e)
+uniqDropConst :: Eq e => QueryShape' QuerySize e -> Maybe (QueryShape' QuerySize e)
 uniqDropConst p =
   fmap (\uniq -> p { qpUnique = uniq })
   $ NEL.nonEmpty

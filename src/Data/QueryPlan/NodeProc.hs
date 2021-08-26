@@ -33,6 +33,7 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.ProcTrail
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.Monoid
@@ -132,7 +133,7 @@ getCost
   -> Cap (Min' v)
   -> NodeRef n
   -> PlanT t n m (Maybe v)
-getCost mc extraMat cap ref = do
+getCost mc extraMat cap ref = wrapTrace ("getcost: " ++ show ref) $ do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
   ((res,_coepoch),_trail) <- planQuickRun

@@ -51,13 +51,16 @@ inQ isLit e q = if isLit e then Nothing else Just $ recur q
 
 
 -- | Parse, expose unique columns and transform e into ShapeSyms
-parseTpchQuery :: forall e s t n m .
-                 (MonadFakeIO m,SqlTypeVars e s t n) =>
-                 String
-               -> GlobalSolveT e s t n m (Query (ShapeSym e s) (QueryShape e s,s))
+parseTpchQuery
+  :: forall e s t n m .
+  (MonadFakeIO m,SqlTypeVars e s t n)
+  => String
+  -> GlobalSolveT e s t n m (Query (ShapeSym e s) (QueryShape e s,s))
 parseTpchQuery qtext = do
   cppConf :: QueryCppConf e s <- gets globalQueryCppConf
-  (>>= either throwError return . annotateQuery cppConf)
+  symSizeAssoc <- gets globalTableSizeAssoc
+  let luSize s = lookup s symSizeAssoc
+  (>>= either throwError return . annotateQuery cppConf luSize)
     $ errLift
     $ eitherToExcept
     $ fmap2 (Just . DataFile . datFile)

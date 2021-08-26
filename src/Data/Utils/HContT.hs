@@ -35,6 +35,7 @@ import           Data.Either
 import           Data.Foldable
 import           Data.Group
 import           Data.List
+import           Data.Utils.Debug
 
 -- | See: Fischer, Sebastian. "Reinventing Haskell Backtracking." GI
 --  Jahrestagung 2009 (2009): 2875-2888.
@@ -49,7 +50,7 @@ newtype HContT v r m a = HContT {
   }
 runHContT' :: Monad m => HContT v r m a -> (a -> m r) -> m r
 runHContT' c f = unHContT c (fmap Right . f) >>= \case
-  Right x -> return x
+  Right x     -> return x
   Left (_, r) -> runHContT' r return
 
 instance Functor m => Functor (HContT v r m) where
@@ -74,17 +75,20 @@ dissolve :: forall m v r . (Ord v, Foldable m, Applicative m, Semigroup v) =>
 dissolve = dissolve' $ pure . Right
 
 -- | Dissolve a continuation into a lazy list.
-dissolve' :: forall m v r a . (Ord v,Foldable m,Applicative m,Semigroup v) =>
-            (a -> m (Either (v, HContT v r m r) r))
-          -> HContT v r m a -> [r]
-dissolve' f = go . dissolve1 f where
-  go :: ([(v, HContT v r m r)], [r])
-     -> [r]
-  go (cs0, rs) = rs ++ go'
-    where
-      go' = case cs0 of
-        [] -> []
-        (v,c):cs -> go
+dissolve'
+  :: forall m v r a .
+  (Ord v,Foldable m,Applicative m,Semigroup v)
+  => (a -> m (Either (v,HContT v r m r) r))
+  -> HContT v r m a
+  -> [r]
+dissolve' f = go . dissolve1 f
+  where
+    go :: ([(v,HContT v r m r)],[r]) -> [r]
+    go (cs0,rs) = rs ++ go'
+      where
+        go' = case cs0 of
+          [] -> []
+          (v,c):cs -> go
             $ first ((`merge` cs) . fmap (first (v <>)))
             $ dissolve1 (pure . Right) c
 
@@ -106,19 +110,17 @@ eitherlHCont = recur [] where
   invconcat :: [v] -> v
   invconcat = invert . mconcat
   onLast f = \case
-    [] -> []
-    [x] -> [f x]
+    []   -> []
+    [x]  -> [f x]
     x:xs -> x:onLast f xs
 
 -- XXX: instead of foldable we actually need Ord a => m (Either a b) -> m ([a],[b])
-dissolve1 :: (Ord v, Foldable m) =>
-            (x -> m (Either (v, HContT v r m r) r))
-          -> HContT v r m x
-          -> ([(v, HContT v r m r)], [r])
-dissolve1 f = first (sortOn fst)
-  . partitionEithers
-  . toList
-  . (`unHContT` f)
+dissolve1
+  :: (Ord v,Foldable m)
+  => (x -> m (Either (v,HContT v r m r) r))
+  -> HContT v r m x
+  -> ([(v,HContT v r m r)],[r])
+dissolve1 f = first (sortOn fst) . partitionEithers . toList . (`unHContT` f)
 
 merge :: Ord a => [(a, b)] -> [(a, b)] -> [(a, b)]
 merge [] x          = x

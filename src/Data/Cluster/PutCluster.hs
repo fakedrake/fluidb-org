@@ -17,6 +17,7 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Monad
 import           Data.CppAst.CppType
 import           Data.NodeContainers
 import           Data.QnfQuery.BuildUtils
@@ -73,14 +74,18 @@ putBinCluster symAssoc op (l,_nqnfL) (r,_nqnfR) (out,nqnfO) = do
       return clust
 
 -- PUTPROP
-putBClustPropagator :: (Hashables2 e s, Monad m) =>
-                      BinClust e s t n
-                    -> [(ShapeSym e s,ShapeSym e s)]
-                    -> BQOp (ShapeSym e s)
-                    -> CGraphBuilderT e s t n m ()
-putBClustPropagator clust assoc op = putShapePropagator
-  (BinClustW clust)
-  (cPropToACProp $ binClustPropagator assoc op, assoc)
+putBClustPropagator
+  :: (Hashables2 e s,Monad m)
+  => BinClust e s t n
+  -> [(ShapeSym e s,ShapeSym e s)]
+  -> BQOp (ShapeSym e s)
+  -> CGraphBuilderT e s t n m ()
+putBClustPropagator clust assoc op =
+  putShapePropagator (BinClustW clust)
+  $ ACPropagatorAssoc
+  { acpaPropagator = cPropToACProp $ binClustPropagator assoc op
+   ,acpaInOutAssoc = assoc
+  }
 
 shapeSymAssoc :: Hashables2 e s => NQNFResultDF d f a e s -> [(ShapeSym e s,ShapeSym e s)]
 shapeSymAssoc = fmap (bimap mkSym mkSym) . nqnfResInOutNames where
@@ -169,7 +174,9 @@ putNCluster
   -> CGraphBuilderT e s t n m (NClust e s t n)
 putNCluster shape (ref,nqnf) = idempotentClusterInsert [(nClustNode,ref)] $ do
   linkQnfClust (nqnfToQnf nqnf) $ NClustW $ NClust ref
-  putShapePropagator
-    (NClustW $ NClust ref)
-    (cPropToACPropN $ nClustPropagator shape,[])
+  putShapePropagator (NClustW $ NClust ref)
+    $ ACPropagatorAssoc
+    { acpaPropagator = cPropToACPropN $ nClustPropagator shape
+     ,acpaInOutAssoc = []
+    }
   return $ NClust ref

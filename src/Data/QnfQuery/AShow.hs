@@ -6,21 +6,15 @@ module Data.QnfQuery.AShow (ashowQNFVoid,qnfToQuery) where
 
 
 import           Control.Monad
-import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Foldable
 import           Data.Functor.Identity
 import           Data.List
-import           Data.QnfQuery.Build
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Utils.AShow
 import           Data.Utils.Const
-import           Data.Utils.Default
 import           Data.Utils.Functors
-import           Data.Utils.Hashable
-import           Data.Utils.ListT
-import           Data.Utils.Unsafe
 
 ashowQNFVoid
   :: (Functor dbg_f,AShow (dbg_f (Query () ())))

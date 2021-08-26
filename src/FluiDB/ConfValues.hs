@@ -39,7 +39,6 @@ import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.Utils
 import           Data.Query.QuerySchema.Types
-import           Data.Query.QuerySize
 import           Data.Query.SQL.FileSet
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Types
@@ -147,16 +146,6 @@ toTableColumns :: Eq s => SchemaAssoc e s -> s -> Maybe [e]
 toTableColumns schemaAssoc = fmap2 snd . (`lookup` schemaAssoc)
 
 
-data PreGlobalConf e0 e s =
-  PreGlobalConf
-  { pgcExpIso         :: (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
-   ,pgcToUniq         :: Int -> e -> Maybe e
-   ,pgcToFileSet      :: s -> Maybe FileSet -- Embedding of tables in filesets
-   ,pgcPrimKeyAssoc   :: [(s,[e])]          -- Primary keys of each table
-   ,pgcSchemaAssoc    :: SchemaAssoc e s     -- The schema of each table
-   ,pgcTableSizeAssoc :: [(s,TableSize)]          -- Size of each table in bytes
-  }
-
 -- | When calculating the global configuration for tpch we take into
 -- account the follwoing:
 --
@@ -186,6 +175,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
   return
     GlobalConf
     { globalExpTypeSymIso = pgcExpIso
+     ,globalTableSizeAssoc = pgcTableSizeAssoc
      ,globalRunning = def { runningConfBudgetSearch = True }
      ,globalSchemaAssoc = pgcSchemaAssoc
      ,globalMatNodes = nNodes propNetLocal
@@ -223,5 +213,5 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
       getSymShape
         (uniqueColumns queryCppConf s)
         (tableSchema queryCppConf s)
-        _tblSize
+        (s `lookup` pgcTableSizeAssoc)
         s

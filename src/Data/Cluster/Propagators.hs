@@ -41,6 +41,7 @@ import           Data.Bipartite
 import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Monad
 import           Data.Cluster.Types.Zip
 import           Data.CppAst.CppType
 import           Data.Either
@@ -357,13 +358,16 @@ cPropToACPropN f = \case
     NClustW . (\(NClust ref') -> NClust ref') <$> f (NClust ref)
   a -> return a
 
-cPropToACProp :: forall c e s t n a ops .
-                ((forall f g . CanPutIdentity (c f g) (c Identity Identity) f g),
-                 ComposedType c (ShapeSym e s) (WMetaD (Defaulting a) NodeRef)
-                  ~ WMetaD ops (WMetaD (Defaulting a) NodeRef),
-                  Zip2 (c Identity Identity),
-                  SpecificCluster c) =>
-                CPropagator a c e s t n -> ACPropagator a e s t n
+cPropToACProp
+  :: forall c e s t n a ops .
+  ((forall f g .
+    CanPutIdentity (c f g) (c Identity Identity) f g)
+  ,ComposedType c (ShapeSym e s) (WMetaD (Defaulting a) NodeRef)
+   ~ WMetaD ops (WMetaD (Defaulting a) NodeRef)
+  ,Zip2 (c Identity Identity)
+  ,SpecificCluster c)
+  => CPropagator a c e s t n
+  -> ACPropagator a e s t n
 cPropToACProp f ac = maybe (return ac) go $ toSpecificClust ac where
   go :: c
        (WMetaD (Defaulting a) NodeRef)
@@ -388,16 +392,20 @@ putShapePropagator
   => AnyCluster e s t n
   -> ACPropagatorAssoc e s t n
   -> CGraphBuilderT e s t n m ()
-putShapePropagator c p = modPropagators c
-    $ Just . (\cp -> cp{shapePropagators=p `ins` shapePropagators cp}) . fromMaybe def
+putShapePropagator c p =
+  modPropagators c
+  $ Just
+  . (\cp -> cp { shapePropagators = p `ins` shapePropagators cp })
+  . fromMaybe def
   where
     -- Note: we insert unique io assocs. The reason is that the assoc
     -- will have the same symbols semantically, only different
     -- provenance. However in case of projection and grouping the
     -- association will be empty and we have no way of telling the
     -- propagators apart.
-    ins a@(_,[]) as = a:as
-    ins a@(_,k) as  = if k `notElem` fmap snd as then a:as else as
+    ins a@ACPropagatorAssoc {acpaInOutAssoc = []} as = a : as
+    ins a@ACPropagatorAssoc {acpaInOutAssoc = kmap} as =
+      if kmap `notElem` fmap acpaInOutAssoc as then a : as else as
 modPropagators :: (Hashables2 e s, Monad m) =>
                  AnyCluster e s t n
                -> Endo (Maybe (ClustPropagators e s t n))
@@ -482,21 +490,20 @@ getValidClustPropagator
      ,Hashables2 e s
      ,HasCallStack)
   => AnyCluster e s t n
-  -> m
-    ((ACPropagator (QueryShape e s) e s t n,[(ShapeSym e s,ShapeSym e s)])
-    ,ShapeCluster NodeRef e s t n)
+  -> m (ACPropagatorAssoc e s t n,ShapeCluster NodeRef e s t n)
 getValidClustPropagator clust = do
   propsAssoc <- getShapePropagators clust
   curShapeCluster <- getShapeCluster clust
   -- `assc` is empty..
   let shapeClusters =
-        [(prop curShapeCluster,(prop,assc)) | (prop,assc) <- propsAssoc]
+        [(prop curShapeCluster,acpa)
+        | acpa@ACPropagatorAssoc {acpaPropagator = prop} <- propsAssoc]
   case find (isRight . fst) shapeClusters of
     Just (Right newShapeClust,propAssc) -> return (propAssc,newShapeClust)
     Nothing -> throwAStr
       $ "Expected at least one good shape cluster (some errors are ok): "
       ++ ashow
-        (clust,second (first $ const (Sym "<the prop>")) <$> shapeClusters)
+        (clust,second ashowACPA <$> shapeClusters)
     _ -> undefined
 
 triggerClustPropagator :: (MonadState (ClusterConfig e s t n) m,

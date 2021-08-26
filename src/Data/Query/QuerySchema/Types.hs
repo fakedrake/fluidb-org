@@ -11,7 +11,7 @@ module Data.Query.QuerySchema.Types
   ,CppSchema'
   ,CppSchema
   ,QueryShape
-  ,ColumnProps(..)) where
+  ,ColumnProps(..),putRowSize,QueryShapeNoSize) where
 
 import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
@@ -36,23 +36,32 @@ instance AShow ColumnProps
 instance ARead ColumnProps
 instance Hashable ColumnProps
 
-type QueryShape e s = QueryShape' (ShapeSym e s)
+type QueryShapeNoSize e s = QueryShape' () (ShapeSym e s)
+type QueryShape e s = QueryShape' QuerySize (ShapeSym e s)
 data QuerySize = QuerySize { qsTables :: [TableSize],qsCertainty :: Double }
   deriving (Show,Generic,Eq)
 instance Hashable QuerySize
 instance AShow QuerySize
 instance ARead QuerySize
 
-data QueryShape' e' =
+data QueryShape' sizeType e' =
   QueryShape
   { qpSchema :: [(e',ColumnProps)]
    ,qpUnique :: NEL.NonEmpty (NEL.NonEmpty e')
-   ,qpSize   :: QuerySize
+   ,qpSize   :: sizeType
   }
   deriving (Show,Generic,Eq,Functor)
 instance Hashables2 e s => Hashable (QueryShape e s)
 instance (AShow e, AShow s) => AShow (QueryShape e s)
 instance (Hashables2 e s, ARead e, ARead s) => ARead (QueryShape e s)
+
+putRowSize :: Bytes -> QuerySize -> QuerySize
+putRowSize rs qs =
+  qs { qsTables = onHead (\ts -> ts { tsRowSize = rs }) $ qsTables qs }
+  where
+    onHead f (x:xs) = f x : xs
+    onHead _f []    = []
+
 
 -- | Unique symbols
 data ShapeSym e s = ShapeSym {

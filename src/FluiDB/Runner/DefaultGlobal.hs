@@ -62,7 +62,8 @@ instance MonadFakeIO m
   defGlobalConf _ _ = tpchGlobalConf
   getIOQuery i = do
     seed <- globalPopUniqueNum
-    (qtext,_) <- ioCmd ioOps
+    (qtext,_) <- ioCmd
+      ioOps
       "/bin/bash"
       ["-c"
       ,printf
@@ -75,7 +76,9 @@ instance MonadFakeIO m
     parseTpchQuery qtext
   putPS _ q = do
     cppConf <- gets globalQueryCppConf
-    either throwError return $ annotateQuery cppConf q
+    symSizeAssoc <- gets globalTableSizeAssoc
+    let luSize s = lookup s symSizeAssoc
+    either throwError return $ annotateQuery cppConf luSize q
 
 qgenRoot :: FilePath
 
@@ -98,9 +101,14 @@ instance (MonadFakeIO m
       $ eqJoinQuery schemaAssoc [((s,s'),(s',s')) | (s,s') <- js]
   putPS _ q' = do
     cppConf <- gets globalQueryCppConf
+    symSizeAssoc <- gets globalTableSizeAssoc
+    let luSize s = lookup s symSizeAssoc
+    let mkShape s = do
+          size <- luSize s
+          mkShapeFromTbl cppConf size s
     either (throwError . toGlobalError) (return . first (uncurry mkShapeSym))
       $ (>>= maybe (throwAStr "No qnf found") return)
-      $ fmap (>>= traverse (\s -> (,s) <$> mkShapeFromTbl cppConf s) . snd)
+      $ fmap (>>= traverse (\s -> (,s) <$> mkShape s) . snd)
       $ (`evalStateT` def)
       $ listTMaxQNF fst
       $ toQNF (fmap2 snd . tableSchema cppConf) q'

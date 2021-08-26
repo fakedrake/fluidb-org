@@ -20,6 +20,7 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Monad
 import           Data.List.Extra
 import           Data.NodeContainers
 import           Data.QnfQuery.Build
@@ -240,13 +241,17 @@ putJoinClusterI JoinClustConfig {..} = do
   return clust
 
 -- PUTPROP
-putJClustProp :: (HasCallStack,Hashables2 e s, Monad m) =>
-                ([(ShapeSym e s,ShapeSym e s)],
-                 [(ShapeSym e s,ShapeSym e s)],
-                 [(ShapeSym e s,ShapeSym e s)])
-              -> Prop (Rel (Expr (ShapeSym e s)))
-              -> JoinClust e s t n
-              -> CGraphBuilderT e s t n m ()
-putJClustProp assocs@(l,o,r) prop clust = putShapePropagator
-    (JoinClustW clust)
-    (cPropToACProp $ joinClustPropagator assocs prop,l ++ o ++ r)
+putJClustProp
+  :: (HasCallStack,Hashables2 e s,Monad m)
+  => ([(ShapeSym e s,ShapeSym e s)]
+     ,[(ShapeSym e s,ShapeSym e s)]
+     ,[(ShapeSym e s,ShapeSym e s)])
+  -> Prop (Rel (Expr (ShapeSym e s)))
+  -> JoinClust e s t n
+  -> CGraphBuilderT e s t n m ()
+putJClustProp assocs@(l,o,r) prop clust =
+  putShapePropagator (JoinClustW clust)
+  $ ACPropagatorAssoc
+  { acpaPropagator = cPropToACProp $ joinClustPropagator assocs prop
+   ,acpaInOutAssoc = l ++ o ++ r
+  }

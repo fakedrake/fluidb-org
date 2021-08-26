@@ -15,6 +15,7 @@ module Data.Query.QuerySize
   ,tableSize'
   ,PageSize
   ,Cardinality
+  ,Bytes
   ,schemaSizeModify
   ,tableSizeModify
   ,tableSizeComb) where
