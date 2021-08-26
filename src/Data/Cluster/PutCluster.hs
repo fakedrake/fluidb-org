@@ -154,9 +154,13 @@ putUnClustPropagator
   -> UQOp (ShapeSym e s)
   -> CGraphBuilderT e s t n m ()
 putUnClustPropagator symAssocs literalType clust op =
-  putShapePropagator (UnClustW clust)
-  (cPropToACProp $ unClustPropagator symAssocs literalType op,
-   concat symAssocs)
+  putShapePropagator
+    (UnClustW clust)
+    ACPropagatorAssoc
+    { acpaPropagator =
+        cPropToACProp $ unClustPropagator symAssocs literalType op
+     ,acpaInOutAssoc = concat symAssocs
+    }
 
 putNCluster
   :: (Hashables2 e s,Monad m)

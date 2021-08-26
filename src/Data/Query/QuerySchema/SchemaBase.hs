@@ -34,6 +34,7 @@ module Data.Query.QuerySchema.SchemaBase
   ,translateShapeMap'') where
 
 import           Control.Monad.Reader
+import           Data.Bifunctor
 import           Data.Bitraversable
 import           Data.CppAst
 import           Data.Functor.Identity
@@ -218,13 +219,14 @@ translateShapeMap'' :: forall e s . (HasCallStack, Hashables2 e s) =>
 translateShapeMap'' f assoc p =
   traverse (bitraverse safeLookup pure) (qpSchema p) >>= \sch -> do
     qpu <- traverse2 safeLookup $ qpUnique p
-    return QueryShape { qpSchema = sch,qpUnique = qpu,qpSize = _ }
+    return QueryShape { qpSchema = sch,qpUnique = qpu,qpSize = qpSize p }
   where
     symsMap = assocToMap assoc
     safeLookup :: ShapeSym e s -> Either (AShowStr e s) (ShapeSym e s)
     safeLookup e = case shapeSymQnfName e of
-      PrimaryCol {} -> undefined
-      _             -> safeLookup0
+      PrimaryCol {} -> error
+        "We encountered a primary column on the output side of an operation."
+      _ -> safeLookup0
       where
         safeLookup0 :: Either (AShowStr e s) (ShapeSym e s)
         safeLookup0 = lookup_e `alt` asLiteral
@@ -262,18 +264,30 @@ isUniqueSel qp eqs = (`any` qpUnique qp) $ \ukeys ->
     flip (a,b) = (b,a)
     allKeys = shapeAllSyms qp
 
-shapeProject :: forall e s . Hashables2 e s =>
-              ([QueryShape e s] ->
-               Expr (Either CppType (ShapeSym e s)) ->
-               Maybe ColumnProps)
-            -> [(ShapeSym e s, Expr (Either CppType (ShapeSym e s)))]
-            -> QueryShape e s
-            -> Maybe (QueryShape e s)
+shapeProject
+  :: forall e s .
+  Hashables2 e s
+  => ([QueryShape e s]
+      -> Expr (Either CppType (ShapeSym e s))
+      -> Maybe ColumnProps)
+  -> [(ShapeSym e s,Expr (Either CppType (ShapeSym e s)))]
+  -> QueryShape e s
+  -> Maybe (QueryShape e s)
 shapeProject exprColumnProps prj shape = do
   symProps <- forM prj $ \(sym,expr) -> (sym,) <$> exprColumnProps [shape] expr
   uniq <- NEL.nonEmpty $ mapMaybe translUniq $ toList $ qpUnique shape
-  return $ QueryShape { qpSchema = symProps,qpUnique = uniq,qpSize = _ }
+  rowSize <- schemaSize $ fmap ((,()) . columnPropsCppType . snd) symProps
+  return
+    $ QueryShape
+    { qpSchema = symProps
+     ,qpUnique = uniq
+     ,qpSize = putRowSize rowSize $ qpSize shape
+    }
   where
+    putRowSize rs qs =
+      qs { qsTables = onHead (\ts -> ts { tsRowSize = rs }) $ qsTables qs }
+    onHead f (x:xs) = f x : xs
+    onHead _f []    = []
     keyAssoc =
       mapMaybe (\case
                   (e,E0 (Right ev)) -> Just (ev,e)
@@ -297,6 +311,23 @@ substitutions eqs uniqs0 =
       then Just $ (\e -> if e == f then t else e) <$> es
       else Nothing
 
+data LookupSide
+  = LeftForeignKey
+  -- ^ Foreign key join right to left
+  | RightForeignKey
+  -- ^ Foreign key join left to right
+  | NoLookup
+  -- ^ No foreign key join
+
+instance Semigroup LookupSide where
+  a <> b = case a of
+    LeftForeignKey  -> a
+    RightForeignKey -> a
+    NoLookup        -> b
+
+instance Monoid LookupSide where
+  mempty = NoLookup
+
 -- | Concatenate shapes given an equality between them. The equality
 -- makes for different unique sets.
 joinShapes
@@ -307,20 +338,29 @@ joinShapes
   -> QueryShape' e
   -> Maybe (QueryShape' e)
 joinShapes eqs qpL qpR =
-  uniqDropConst QueryShape { qpSchema = sch,qpUnique = uniq,qpSize = _ }
+  uniqDropConst
+    QueryShape
+    { qpSchema = sch
+     ,qpUnique = uniq
+     ,qpSize = joinQuerySizes luSide (qpSize qpL) (qpSize qpR)
+    }
   where
     sch = qpSchema qpL ++ qpSchema qpR
-    uniq :: NEL.NonEmpty (NEL.NonEmpty e)
-    uniq = do
+    (luSide,uniq) = bimap (mconcat . toList) join $ NEL.unzip uniqAnnot
+    -- For each pair of unique subtuples.
+    uniqAnnot :: NEL.NonEmpty (LookupSide,NEL.NonEmpty (NEL.NonEmpty e))
+    uniqAnnot = do
       usetL :: NEL.NonEmpty e <- qpUnique qpL
       usetR :: NEL.NonEmpty e <- qpUnique qpR
       -- Check if the equalities are lookups
       let luOnL = all (`elem` fmap fst normEqs) usetL
       let luOnR = all (`elem` fmap snd normEqs) usetR
-      case (luOnR,luOnL) of
-        (False,True) -> substitutions normEqs usetL
-        (True,False) -> substitutions (swap <$> normEqs) usetR
-        (_,_) -> NEL.nub
+      return $ case (luOnL,luOnR) of
+        (True,False) -> (LeftForeignKey,) $ substitutions normEqs usetL
+        (False,True) -> (RightForeignKey,)
+          $ substitutions (swap <$> normEqs) usetR
+        (_,_) -> (NoLookup,)
+          $ NEL.nub
           $ substitutions normEqs usetL
           <> substitutions (swap <$> normEqs) usetR
     normEqs = mapMaybe (uncurry go) eqs
@@ -342,6 +382,26 @@ joinShapes eqs qpL qpR =
               _          -> False
 
 -- | Drop constant columns
+joinQuerySizes :: LookupSide -> QuerySize -> QuerySize -> QuerySize
+joinQuerySizes luType qs qs' = case luType of
+  NoLookup -> QuerySize
+    { qsTables = mkTables combJoin
+     ,qsCertainty = qsCertainty qs * qsCertainty qs' * 0.5
+    }
+  RightForeignKey -> QuerySize
+    { qsTables = mkTables $ \_ x -> x,qsCertainty = qsCertainty qs' }
+  LeftForeignKey -> QuerySize
+    { qsTables = mkTables $ \x _ -> x,qsCertainty = qsCertainty qs }
+  where
+    combJoin x y = (x * y) `div` 3
+    mkTables combCard = case (qsTables qs,qsTables qs') of
+      (x:xs,y:ys) -> TableSize
+        { tsRows = combCard (tsRows x) (tsRows y)
+         ,tsRowSize = tsRowSize x + tsRowSize y
+        }
+        : xs ++ ys
+      _ -> error "Empty table sizes encountered."
+
 uniqDropConst :: Eq e => QueryShape' e -> Maybe (QueryShape' e)
 uniqDropConst p =
   fmap (\uniq -> p { qpUnique = uniq })
@@ -357,14 +417,15 @@ uniqDropConst p =
       Just False -> True
       _          -> False
 
-shapeSymEqs :: Hashables2 e s =>
-             Prop (Rel (Expr (ShapeSym e s)))
-           -> [(ShapeSym e s,ShapeSym e s)]
-shapeSymEqs p = mapMaybe asEq $ toList $ propQnfAnd p where
-  asEq :: Prop (Rel (Expr (ShapeSym e s))) -> Maybe (ShapeSym e s,ShapeSym e s)
-  asEq = \case
-    P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))) ->
-      if shapeSymIsSym l && shapeSymIsSym r
-      then Just (l,r)
-      else Nothing
-    _ -> Nothing
+shapeSymEqs
+  :: Hashables2 e s
+  => Prop (Rel (Expr (ShapeSym e s)))
+  -> [(ShapeSym e s,ShapeSym e s)]
+shapeSymEqs p = mapMaybe asEq $ toList $ propQnfAnd p
+  where
+    asEq :: Prop (Rel (Expr (ShapeSym e s)))
+         -> Maybe (ShapeSym e s,ShapeSym e s)
+    asEq = \case
+      P0 (R2 REq (R0 (E0 l)) (R0 (E0 r)))
+        -> if shapeSymIsSym l && shapeSymIsSym r then Just (l,r) else Nothing
+      _ -> Nothing

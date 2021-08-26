@@ -91,7 +91,10 @@ joinClustPropagator :: (HasCallStack, Hashables2 e s) =>
                        [(ShapeSym e s,ShapeSym e s)])
                     -> Prop (Rel (Expr (ShapeSym e s)))
                     -> CPropagatorShape JoinClust' e s t n
-joinClustPropagator (assocOL,assocO,assocOR) p JoinClust{joinBinCluster=BinClust{..},..} = do
+joinClustPropagator
+  (assocOL,assocO,assocOR)
+  p
+  JoinClust {joinBinCluster = BinClust {..},..} = do
   let il = s binClusterLeftIn
       ir = s binClusterRightIn
       o = s binClusterOut
@@ -105,9 +108,11 @@ joinClustPropagator (assocOL,assocO,assocOR) p JoinClust{joinBinCluster=BinClust
   iRTransO <- translateShape' (reverse assocO) `traverse` ir
   iRTransOR <- translateShape' assocOR `traverse` ir
   outShapes :: Defaulting (QueryShape e s) <- traverse
-    (maybe (throwAStr $ "joinShapes couldn't get a shape:"
-            ++ ashow (shapeSymEqs p,qpUnique <$> iLTransO,qpUnique <$> iRTransO))
-     return)
+    (maybe
+       (throwAStr
+        $ "joinShapes couldn't get a shape:"
+        ++ ashow (shapeSymEqs p,qpUnique <$> iLTransO,qpUnique <$> iRTransO))
+       return)
     $ joinShapes (shapeSymEqs p) <$> iLTransO <*> iRTransO
   -- We need implement the directions that can be triggered
   let il' = asum [il,oLRTrans]
@@ -115,28 +120,32 @@ joinClustPropagator (assocOL,assocO,assocOR) p JoinClust{joinBinCluster=BinClust
       o' = asum [o,outShapes]
       oL' = asum [oL,iLTransOL]
       oR' = asum [oR,iRTransOR]
-  return $ updateCHash JoinClust {
-    joinBinCluster=updateCHash BinClust{
-        binClusterT=EmptyF,
-        binClusterLeftIn=c il' binClusterLeftIn,
-        binClusterRightIn=c ir' binClusterRightIn,
-        binClusterOut=c o' binClusterOut,
-        binClusterHash=undefined},
-    joinClusterLeftAntijoin=c oL' joinClusterLeftAntijoin,
-    joinClusterRightAntijoin=c oR' joinClusterRightAntijoin,
-    joinClusterLeftIntermediate=clrShape joinClusterLeftIntermediate,
-    joinClusterRightIntermediate=clrShape joinClusterRightIntermediate,
-    joinClusterLeftSplit=EmptyF,
-    joinClusterRightSplit=EmptyF,
-    joinClusterHash=undefined
-  }
+  return
+    $ updateCHash
+      JoinClust
+      { joinBinCluster = updateCHash
+          BinClust
+          { binClusterT = EmptyF
+           ,binClusterLeftIn = c il' binClusterLeftIn
+           ,binClusterRightIn = c ir' binClusterRightIn
+           ,binClusterOut = c o' binClusterOut
+           ,binClusterHash = undefined
+          }
+       ,joinClusterLeftAntijoin = c oL' joinClusterLeftAntijoin
+       ,joinClusterRightAntijoin = c oR' joinClusterRightAntijoin
+       ,joinClusterLeftIntermediate = clrShape joinClusterLeftIntermediate
+       ,joinClusterRightIntermediate = clrShape joinClusterRightIntermediate
+       ,joinClusterLeftSplit = EmptyF
+       ,joinClusterRightSplit = EmptyF
+       ,joinClusterHash = undefined
+      }
   where
     c :: Defaulting (QueryShape e s)
       -> WMetaD (Defaulting (QueryShape e s)) NodeRef n
       -> WMetaD (Defaulting (QueryShape e s)) NodeRef n
     c v (WMetaD (_,n)) = WMetaD (v,n)
     s (WMetaD (v,_)) = v
-    clrShape r = WMetaD (empty, snd $ unMetaD r)
+    clrShape r = WMetaD (empty,snd $ unMetaD r)
 
 binClustPropagator :: Hashables2 e s =>
                      [(ShapeSym e s,ShapeSym e s)]
@@ -153,10 +162,8 @@ unClustPropagator :: forall e s t n . (HasCallStack, Hashables2 e s) =>
                   -> UQOp (ShapeSym e s)
                   -- -> QueryShape e s
                   -> CPropagatorShape UnClust' e s t n
-unClustPropagator symAssocs literalType op = mkUnPropagator
-  mkIn
-  mkOutSec
-  mkOutPrim
+unClustPropagator symAssocs literalType op =
+  mkUnPropagator mkIn mkOutSec mkOutPrim
   where
     mkIn :: G e s (QueryShape e s)
     mkIn = uopInput symAssocs op
@@ -379,8 +386,7 @@ cPropToACProp f ac = maybe (return ac) go $ toSpecificClust ac where
 putShapePropagator
   :: (Hashables2 e s,Monad m)
   => AnyCluster e s t n
-  -> (ACPropagator (QueryShape e s) e s t n,[(ShapeSym e s,ShapeSym e s)])
-  -- ^(Propagator,In/Out mapping)
+  -> ACPropagatorAssoc e s t n
   -> CGraphBuilderT e s t n m ()
 putShapePropagator c p = modPropagators c
     $ Just . (\cp -> cp{shapePropagators=p `ins` shapePropagators cp}) . fromMaybe def
@@ -404,10 +410,10 @@ getPropagators :: (Hashables2 e s, MonadReader (ClusterConfig e s t n) m) =>
                -> m (Maybe (ClustPropagators e s t n))
 getPropagators c = asks (HM.lookup c . qnfPropagators)
 
-getShapePropagators :: (Hashables2 e s, MonadReader (ClusterConfig e s t n) m) =>
-                     AnyCluster e s t n
-                   -> m [(ACPropagator (QueryShape e s) e s t n,
-                         [(ShapeSym e s, ShapeSym e s)])]
+getShapePropagators
+  :: (Hashables2 e s,MonadReader (ClusterConfig e s t n) m)
+  => AnyCluster e s t n
+  -> m [ACPropagatorAssoc e s t n]
 getShapePropagators c = maybe [] shapePropagators <$> getPropagators c
 
 getNodeShape :: MonadReader (ClusterConfig e s t n) m =>

@@ -179,8 +179,12 @@ regCall call = modify $ \cc -> cc{
         $ clustBuildCache cc}}
 
 -- | (Propagator,In :-> Out sym)
-type ACPropagatorAssoc e s t n =
-  (ACPropagator (QueryShape e s) e s t n,[(ShapeSym e s,ShapeSym e s)])
+data ACPropagatorAssoc e s t n =
+  ACPropagatorAssoc
+  { acpaPropagator :: ACPropagator (QueryShape e s) e s t n
+   ,aspaInOutAssoc :: [(ShapeSym e s,ShapeSym e s)]
+  }
+
 -- | A value that either has a default value or defaults.
 data Defaulting a
   = DefaultingEmpty
@@ -251,8 +255,8 @@ type PropCluster a f e s t n =
 type ShapeCluster f e s t n = PropCluster (QueryShape e s) f e s t n
 type EndoE e s x = x -> Either (AShowStr e s) x
 
-
-type ACPropagator a e s t n = EndoE e s (PropCluster a NodeRef e s t n)
+type ACPropagator a e s t n =
+  EndoE e s (PropCluster a NodeRef e s t n)
 type CPropagator a c e s t n =
   EndoE e s (c EmptyF (WMetaD (Defaulting a) NodeRef) t n)
 type CPropagatorShape c e s t n = CPropagator (QueryShape e s) c e s t n
