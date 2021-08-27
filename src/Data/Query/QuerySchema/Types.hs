@@ -16,7 +16,7 @@ module Data.Query.QuerySchema.Types
   ,QueryShapeNoSize
   ,modSize
   ,modCertainty
-  ,useCardinality) where
+  ,useCardinality,modCardinality) where
 
 import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
@@ -57,6 +57,10 @@ useCardinality qsCard qs =
     { qsTables = zipWith go (qsTables qsCard) (qsTables qs) }
   where
     go tsCard ts = ts { tsRows = tsRows tsCard }
+modCardinality :: (Cardinality -> Cardinality) -> QuerySize -> QuerySize
+modCardinality card qs = qs { qsTables = go $ qsTables qs }
+  where
+    go (t:ts) = t { tsRows = card $ tsRows t } : ts
 
 modCertainty :: (Double -> Double) -> QuerySize -> QuerySize
 modCertainty f qs = qs { qsCertainty = f $ qsCertainty qs }

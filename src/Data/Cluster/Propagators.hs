@@ -67,6 +67,11 @@ import           Data.Utils.Tup
 import           Data.Utils.Types
 import           Data.Utils.Unsafe
 
+-- | Scaling
+(.*) :: Int -> Double -> Int
+i .* d = round $ fromIntegral i * d
+
+
 getReversibleB :: BQOp e -> IsReversible
 getReversibleB = \case
   QProd            -> Reversible
@@ -128,18 +133,16 @@ joinClustPropagator
   -- defaultiness. Just fmap into it and insert the most certain
   -- one. The certainty if inferred sizes the certainty of the
   -- outShape.
-  let (ilSize,olSize) =
-        sizeModifiers
-          (luSide == LeftForeignKey)
-          (qpSize <$> il)
-          (qpSize <$> oL)
-          (qpSize <$> outShape)
-  let (irSize,orSize) =
-        sizeModifiers
-          (luSide == RightForeignKey)
-          (qpSize <$> ir)
-          (qpSize <$> oR)
-          (qpSize <$> outShape)
+  (ilSize,olSize) <- updateCardinalities
+    (luSide == LeftForeignKey)
+    (qpSize <$> il)
+    (qpSize <$> oL)
+    (qpSize <$> outShape)
+  (irSize,orSize) <- updateCardinalities
+    (luSide == RightForeignKey)
+    (qpSize <$> ir)
+    (qpSize <$> oR)
+    (qpSize <$> outShape)
   let withSize = liftA2 $ modSize . const
   let il' = asum [il,withSize ilSize oLRTrans]
       ir' = asum [ir,withSize irSize oRRTrans]
@@ -186,10 +189,14 @@ updateCardinalities
   -> m (Defaulting QuerySize,Defaulting QuerySize) -- (new in, new out side)
 updateCardinalities True inpD outSideD outD = case getDef outD of
   Nothing -> throwAStr "error"
-  Just out -> return (useCardinality out <*> inpD,modCardinality 0 outSideD)
-updateCardinalities False inpD outSideD outD = _
+  Just out -> return
+    (useCardinality out <$> inpD
+    ,modCardinality (const 0) <$> outSideD)
+updateCardinalities False inpD outSideD _outD =
+  return
+    (modCardinality (.* 0.7) <$> inpD
+    ,modCardinality (.* 0.3) <$> outSideD)
 
-updateCardinalities True _ _ _ = (mempty,mempty)
 
 binClustPropagator
   :: Hashables2 e s
@@ -311,13 +318,14 @@ uopInput :: forall e s . (HasCallStack, Hashables2 e s) =>
          -> UQOp (ShapeSym e s)
          -> G e s (QueryShape e s)
 uopInput (Tup2 assocPrim assocSec) op = case op of
-  QSel _     -> pIn _
+  QSel _     -> pIn (.* 0.3)
   QGroup _ _ -> G0 Nothing
   QProj _    -> G0 Nothing
-  QSort _    -> pIn _
-  QLimit _   -> pIn _
-  QDrop _    -> pIn _
+  QSort _    -> pIn id
+  QLimit i   -> pIn (const i)
+  QDrop i    -> pIn (`minus` i)
   where
+    minus = (-)
     -- Just translate primary output
     pIn modSize = GL $ \shape -> either
       (const
@@ -325,7 +333,10 @@ uopInput (Tup2 assocPrim assocSec) op = case op of
        $ "[In]Lookup error: "
        ++ ashow (op,swap <$> assocPrim ++ assocSec,shape))
       return
-      $ translateShape' modSize (swap <$> assocPrim ++ assocSec) shape
+      $ translateShape'
+        (modCardinality modSize)
+        (swap <$> assocPrim ++ assocSec)
+        shape
     swap (a,b) = (b,a)
 
 -- get the group transform: Left x Right -> Out
@@ -334,10 +345,10 @@ bopOutput :: Hashables2 e s =>
           -> BQOp (ShapeSym e s)
           -> G e s (QueryShape e s)
 bopOutput assoc o = case o of
-  QProd -> G2 $ maybe (throwAStr "oops") (tp id assoc) ... joinShapes []
+  QProd -> G2 $ maybe (throwAStr "oops") (tp id assoc . snd) ... joinShapes []
   QJoin p -> G2
-    $ maybe (throwAStr "oops") (tp id assoc)
-    ... joinShapes (shapeSymEqs p)
+    $ maybe (throwAStr "oops") (tp id assoc . snd)
+    ... joinShapes (shapeSymEqs p) -- should never occur really...
   QUnion -> GL $ tp _ assoc
   QLeftAntijoin _ -> GL $ tp _ assoc
   QRightAntijoin _ -> GR $ tp _ (reverse assoc)
@@ -349,12 +360,14 @@ bopOutput assoc o = case o of
       Right x -> return x
 
 -- | Output is Tup2 (Inp x Sec -> Prim) (Inp x Prim -> Sec)
-uopOutputs :: forall e s . (HasCallStack,Hashables2 e s) =>
-             Tup2 [(ShapeSym e s, ShapeSym e s)]
-             -- ^ Tup2 prim sec
-           -> (e -> Maybe CppType)
-           -> UQOp (ShapeSym e s)
-           -> Tup2 (G e s (QueryShape e s))
+uopOutputs
+  :: forall e s .
+  (HasCallStack,Hashables2 e s)
+  => Tup2 [(ShapeSym e s,ShapeSym e s)]
+  -- ^ Tup2 prim sec
+  -> (e -> Maybe CppType)
+  -> UQOp (ShapeSym e s)
+  -> Tup2 (G e s (QueryShape e s))
 uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
   QSel p -> tw (>>= disambEq p)
   QGroup p es -> Tup2 (outGrpShape p es) (G0 Nothing)
@@ -389,7 +402,7 @@ uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
       either
         (const $ throwAStr $ "[Out]Lookup error: " ++ ashow (op,assoc,shape))
         return
-      $ translateShape' assoc shape
+      $ translateShape' _ assoc shape
     outGrpShape p es = GL $ \inp -> either
       (\e -> throwAStr $ "getQueryShapeGrp failed: " ++ ashow (e,op))
       return
