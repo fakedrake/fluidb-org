@@ -11,6 +11,7 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Data.Query.QuerySchema.SchemaBase
   (shapeSymOrig
+  ,LookupSide(..)
   ,isUniqueSel
   ,mkQueryShape
   ,mkShapeSym
@@ -29,7 +30,6 @@ module Data.Query.QuerySchema.SchemaBase
   ,schemaQP
   ,lookupQP
   ,shapeSymEqs
-  ,translateShape
   ,translateShape'
   ,translateShapeMap'') where
 
@@ -49,7 +49,6 @@ import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Tuple
 import           Data.Utils.AShow
-import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 
@@ -205,21 +204,28 @@ assocToMap assoc = foldl' (\m (s,d) -> HM.alter (Just . maybe [d] (d:)) s m) mem
 -- pass them through.
 --
 -- Always hard lookups here.
-translateShape' :: forall e s . (HasCallStack, Hashables2 e s) =>
-                 [(ShapeSym e s, ShapeSym e s)]
-               -> QueryShape e s
-               -> Either (AShowStr e s) (QueryShape e s)
+translateShape'
+  :: forall a e s .
+  (HasCallStack,Hashables2 e s)
+  => (QuerySize -> a)
+  -> [(ShapeSym e s,ShapeSym e s)]
+  -> QueryShape e s
+  -> Either (AShowStr e s) (QueryShapeNoSize a e s)
 translateShape' = translateShapeMap'' listToMaybe
 
-translateShapeMap'' :: forall e s . (HasCallStack, Hashables2 e s) =>
-                     (forall a . [a] -> Maybe a)
-                   -> [(ShapeSym e s, ShapeSym e s)]
-                   -> QueryShape e s
-                   -> Either (AShowStr e s) (QueryShape e s)
-translateShapeMap'' f assoc p =
+translateShapeMap''
+  :: forall a e s .
+  (HasCallStack,Hashables2 e s)
+  => (forall x . [x] -> Maybe x)
+  -> (QuerySize -> a)
+  -> [(ShapeSym e s,ShapeSym e s)]
+  -> QueryShape e s
+  -> Either (AShowStr e s) (QueryShapeNoSize a e s)
+translateShapeMap'' f modSize assoc p =
   traverse (bitraverse safeLookup pure) (qpSchema p) >>= \sch -> do
     qpu <- traverse2 safeLookup $ qpUnique p
-    return QueryShape { qpSchema = sch,qpUnique = qpu,qpSize = qpSize p }
+    return
+      QueryShape { qpSchema = sch,qpUnique = qpu,qpSize = modSize $ qpSize p }
   where
     symsMap = assocToMap assoc
     safeLookup :: ShapeSym e s -> Either (AShowStr e s) (ShapeSym e s)
@@ -246,15 +252,11 @@ translateShapeMap'' f assoc p =
             alt _ r@(Right _) = r
             alt l _           = l
 
-translateShape :: (HasCallStack, Hashables2 e s) =>
-                [(ShapeSym e s, ShapeSym e s)]
-              -> QueryShape e s
-              -> Maybe (QueryShape e s)
-translateShape = either (const Nothing) Just ... translateShape'
-isUniqueSel :: Hashables2 e s =>
-              QueryShape e s
-            -> [(Expr (ShapeSym e s),Expr (ShapeSym e s))]
-            -> Bool
+isUniqueSel
+  :: Hashables2 e s
+  => QueryShape e s
+  -> [(Expr (ShapeSym e s),Expr (ShapeSym e s))]
+  -> Bool
 isUniqueSel qp eqs = (`any` qpUnique qp) $ \ukeys ->
   (`all` ukeys)
   $ \uk -> (`any` (eqs ++ fmap flip eqs))
@@ -325,16 +327,18 @@ instance Monoid LookupSide where
   mempty = NoLookup
 
 -- | Concatenate shapes given an equality between them. The equality
--- makes for different unique sets.
+-- makes for different unique sets. We remove the const
+-- columns. Nothing means there is no non-const column in the shape.
 joinShapes
   :: forall e .
   Eq e
   => [(e,e)]
   -> QueryShape' QuerySize e
   -> QueryShape' QuerySize e
-  -> Maybe (QueryShape' QuerySize e)
+  -> Maybe (LookupSide,QueryShape' QuerySize e)
 joinShapes eqs qpL qpR =
-  uniqDropConst
+  (luSide,)
+  <$> uniqDropConst
     QueryShape
     { qpSchema = sch
      ,qpUnique = uniq
@@ -398,7 +402,9 @@ joinQuerySizes luType qs qs' = case luType of
         : xs ++ ys
       _ -> error "Empty table sizes encountered."
 
-uniqDropConst :: Eq e => QueryShape' QuerySize e -> Maybe (QueryShape' QuerySize e)
+-- | Drop the constants. Nothing means there is no non-const column.
+uniqDropConst
+  :: Eq e => QueryShape' QuerySize e -> Maybe (QueryShape' QuerySize e)
 uniqDropConst p =
   fmap (\uniq -> p { qpUnique = uniq })
   $ NEL.nonEmpty

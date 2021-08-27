@@ -37,7 +37,6 @@ import           Data.NodeContainers
 import           Data.QnfQuery.AShow
 import           Data.QnfQuery.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.MTL

@@ -23,7 +23,6 @@ module Data.Query.QuerySchema
   ,mkQueryShape
   ,getSymShape
   ,schemaQP
-  ,translateShape
   ,translateShape'
   ,translateShapeMap''
   ,lookupQP

@@ -43,7 +43,8 @@ module Data.Cluster.Types.Monad
   ,getDefaultingFull
   ,getDefaultingDef
   ,defaultingLe
-  ,getDef,ashowACPA) where
+  ,getDef
+  ,ashowACPA,(<||>)) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -193,7 +194,16 @@ ashowACPA x =
     [("acpaPropagator",Sym "<propagator>")
     ,("acpaInOutAssoc",ashow' $ acpaInOutAssoc x)]
 
--- | A value that either has a default value or defaults.
+-- | A value that either has a default value or defaults. This more
+-- than just a tuple because it has a meaningful applicative
+-- definition. The non-default value has prescedence over the default
+-- value and applicative is based on zipping the arguments. More
+-- importantly Defaulting values form a hierarchy depending on how
+-- specific they are.
+--
+-- A full defaulting value means that the value corresponds to a real
+-- materialized node, otherwise is information about a potential
+-- value.
 data Defaulting a
   = DefaultingEmpty
   | DefaultingDef a
@@ -223,6 +233,14 @@ instance Alternative Defaulting where
   a <|> (DefaultingDef _)                  = a
   (DefaultingDef d) <|> DefaultingFull _ a = DefaultingFull d a
   a <|> _                                  = a
+
+-- | Pesimistic combination of Defaults such that Full and Def are
+-- combined into Def. This us useful when we want to come up with a
+-- default value but nota full value.
+(<||>) :: Defaulting a -> Defaulting a -> Defaulting a
+a <||> DefaultingEmpty = a
+DefaultingEmpty <||> a = a
+a <||> _               = a
 
 promoteDefaulting :: Defaulting a -> Defaulting a
 promoteDefaulting = \case
@@ -289,8 +307,9 @@ type CGraphBuilderT e s t n m =
   ExceptT
     (ClusterError e s)
     (StateT (ClusterConfig e s t n) (GraphBuilderT t n m))
-hoistCGraphBuilderT :: Monad m =>
-                      (forall x . m x -> g x)
-                    -> CGraphBuilderT e s t n m a
-                    -> CGraphBuilderT e s t n g a
+hoistCGraphBuilderT
+  :: Monad m
+  => (forall x . m x -> g x)
+  -> CGraphBuilderT e s t n m a
+  -> CGraphBuilderT e s t n g a
 hoistCGraphBuilderT f = hoist (hoist (hoistGraphBuilderT f))

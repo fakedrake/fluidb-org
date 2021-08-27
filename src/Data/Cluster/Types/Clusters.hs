@@ -68,6 +68,13 @@ import           Data.Utils.Hashable
 import           Data.Utils.Unsafe
 import           GHC.Generics
 
+-- | This is a box that holds an annotated value of type `f b`. We use
+-- it to insert a value at the edges of a cluster but also annotate
+-- them with operators. A cluster may have at it's outputs values of
+-- type `WMetaD (BQOp e) (Defaulting (QueryShape e s))`. The important
+-- value is `Defaulting (QueryShape e s)` which we use for hashing and
+-- equality and other interactions with other clusters but the
+-- operator is useful as provenance.
 newtype WMetaD a f b = WMetaD { unMetaD :: (a,f b)}
   deriving (Generic,Functor,Traversable,Foldable,Show)
 instance (AShow a, AShow (f b)) => AShow (WMetaD a f b)
@@ -436,22 +443,34 @@ instance CanPutIdentity (AnyCluster' e f) (AnyCluster' e Identity) f f where
     NClustW (NClust x) -> NClustW $ NClust $ runIdentity x
 
 -- Type tetris here.
-putId' :: (Bifunctor (c Identity Identity),
-          CanPutIdentity (c Identity (WMetaD a Identity)) (c Identity Identity) Identity (WMetaD a Identity),
-          CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g)) =>
-         c g (WMetaD a g) t n
-       -> c Identity (WMetaD a Identity) (g t) (g n)
-putId' x = dropIdentity
-           $ bimap Identity (WMetaD . second Identity . unMetaD)
-           $ putIdentity x
-dropId' :: (Bifunctor (c Identity Identity),
-          CanPutIdentity (c Identity (WMetaD a Identity)) (c Identity Identity) Identity (WMetaD a Identity),
-          CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g)) =>
-          c Identity (WMetaD a Identity) (g t) (g n)
-        -> c g (WMetaD a g) t n
-dropId' x = dropIdentity
-            $ bimap runIdentity (WMetaD . second runIdentity . unMetaD)
-            $ putIdentity x
+putId'
+  :: (Bifunctor (c Identity Identity)
+     ,CanPutIdentity
+        (c Identity (WMetaD a Identity))
+        (c Identity Identity)
+        Identity
+        (WMetaD a Identity)
+     ,CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g))
+  => c g (WMetaD a g) t n
+  -> c Identity (WMetaD a Identity) (g t) (g n)
+putId' x =
+  dropIdentity
+  $ bimap Identity (WMetaD . second Identity . unMetaD)
+  $ putIdentity x
+dropId'
+  :: (Bifunctor (c Identity Identity)
+     ,CanPutIdentity
+        (c Identity (WMetaD a Identity))
+        (c Identity Identity)
+        Identity
+        (WMetaD a Identity)
+     ,CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g))
+  => c Identity (WMetaD a Identity) (g t) (g n)
+  -> c g (WMetaD a g) t n
+dropId' x =
+  dropIdentity
+  $ bimap runIdentity (WMetaD . second runIdentity . unMetaD)
+  $ putIdentity x
 
 instance CanPutIdentity (JoinClust' g f) (JoinClust' Identity Identity) g f where
   putIdentity JoinClust{..} = updateCHash JoinClust {

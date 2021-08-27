@@ -11,7 +11,12 @@ module Data.Query.QuerySchema.Types
   ,CppSchema'
   ,CppSchema
   ,QueryShape
-  ,ColumnProps(..),putRowSize,QueryShapeNoSize) where
+  ,ColumnProps(..)
+  ,putRowSize
+  ,QueryShapeNoSize
+  ,modSize
+  ,modCertainty
+  ,useCardinality) where
 
 import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
@@ -36,7 +41,7 @@ instance AShow ColumnProps
 instance ARead ColumnProps
 instance Hashable ColumnProps
 
-type QueryShapeNoSize e s = QueryShape' () (ShapeSym e s)
+type QueryShapeNoSize a e s = QueryShape' a (ShapeSym e s)
 type QueryShape e s = QueryShape' QuerySize (ShapeSym e s)
 data QuerySize = QuerySize { qsTables :: [TableSize],qsCertainty :: Double }
   deriving (Show,Generic,Eq)
@@ -44,6 +49,20 @@ instance Hashable QuerySize
 instance AShow QuerySize
 instance ARead QuerySize
 
+-- | Use all the properties of the second argument except
+-- cardinality. Use the cardinality with the most certain. Also use the qsCa
+useCardinality :: QuerySize -> QuerySize -> QuerySize
+useCardinality qsCard qs =
+  if qsCertainty qs >= qsCertainty qsCard then qs else qsCard
+    { qsTables = zipWith go (qsTables qsCard) (qsTables qs) }
+  where
+    go tsCard ts = ts { tsRows = tsRows tsCard }
+
+modCertainty :: (Double -> Double) -> QuerySize -> QuerySize
+modCertainty f qs = qs { qsCertainty = f $ qsCertainty qs }
+
+modSize :: (s0 -> s1) -> QueryShape' s0 e -> QueryShape' s1 e
+modSize f QueryShape {..} = QueryShape { qpSize = f qpSize,.. }
 data QueryShape' sizeType e' =
   QueryShape
   { qpSchema :: [(e',ColumnProps)]
