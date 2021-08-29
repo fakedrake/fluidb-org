@@ -51,6 +51,7 @@ import           Data.Tuple
 import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
+import           GHC.Generics
 
 mkLitShapeSym :: e -> ShapeSym e s
 mkLitShapeSym e = mkShapeSym (NonSymbolName e) e
@@ -316,6 +317,8 @@ data LookupSide
   -- ^ Foreign key join left to right
   | NoLookup
   -- ^ No foreign key join
+  deriving (Eq,Show,Generic)
+instance AShow LookupSide
 
 instance Semigroup LookupSide where
   a <> b = case a of

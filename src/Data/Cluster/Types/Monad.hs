@@ -211,6 +211,7 @@ data Defaulting a
     -- ^ DefaultingFull default_value actual_value
   deriving (Eq,Generic,Show,Read,Functor,Traversable,Foldable)
 instance Hashable a => Hashable (Defaulting a)
+
 instance Applicative Defaulting where
   pure = DefaultingDef
   -- | We want f <$> a <*> b <*> c <*> d to be the minimum of a b c d.
@@ -228,11 +229,16 @@ instance Applicative Defaulting where
 -- value when available.
 instance Alternative Defaulting where
   empty = DefaultingEmpty
-  a <|> DefaultingEmpty                    = a
-  DefaultingEmpty <|> a                    = a
-  a <|> (DefaultingDef _)                  = a
-  (DefaultingDef d) <|> DefaultingFull _ a = DefaultingFull d a
-  a <|> _                                  = a
+  DefaultingEmpty <|> a                  = a
+  a <|> DefaultingEmpty                  = a
+  a <|> DefaultingDef _                  = a
+  DefaultingDef d <|> DefaultingFull _ a = DefaultingFull d a
+  a <|> _                                = a
+
+instance Semigroup (Defaulting a) where
+  a <> b = a <|> b
+instance Monoid (Defaulting a) where
+  mempty = empty
 
 -- | Pesimistic combination of Defaults such that Full and Def are
 -- combined into Def. This us useful when we want to come up with a

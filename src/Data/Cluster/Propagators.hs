@@ -56,7 +56,9 @@ import           Data.Query.Optimizations.ExposeUnique
 import           Data.Query.QuerySchema
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -94,7 +96,8 @@ asum :: [Defaulting a] -> Defaulting a
 asum = foldr (<|>) empty
 
 joinClustPropagator
-  :: (HasCallStack,Hashables2 e s)
+  :: forall e s t n .
+  (HasCallStack,Hashables2 e s)
   => ([(ShapeSym e s,ShapeSym e s)]
      ,[(ShapeSym e s,ShapeSym e s)]
      ,[(ShapeSym e s,ShapeSym e s)])
@@ -103,7 +106,7 @@ joinClustPropagator
 joinClustPropagator
   (assocOL,assocO,assocOR)
   p
-  JoinClust {joinBinCluster = BinClust {..},..} = do
+  JoinClust {joinBinCluster = BinClust {..},..} = wrapTrace "joinClustProp" $ do
   let il = s binClusterLeftIn
       ir = s binClusterRightIn
       o = s binClusterOut
@@ -111,7 +114,10 @@ joinClustPropagator
       oR = s joinClusterRightAntijoin
   -- Create each output shape but without any sizing until we have
   -- access to the actual. Temporarily use the shape of the input.
-  let mkShape = translateShape' id
+  let mkShape :: ([(ShapeSym e s,ShapeSym e s)]
+                  -> QueryShape e s
+                  -> Either (AShowStr e s) (QueryShapeNoSize QuerySize e s)) =
+        translateShape' id
   oLRTrans <- mkShape (swap <$> assocOR) `traverse` oR
   oRRTrans <- mkShape (swap <$> assocOL) `traverse` oL
   iLTransOL <- mkShape assocOL `traverse` il
@@ -129,6 +135,12 @@ joinClustPropagator
   (luSide,outShape) <- fmap sequenceA
     $ traverse joinShapesGuard
     $ joinShapes (shapeSymEqs p) <$> iLTransO <*> iRTransO
+  let il' = il <|> oLRTrans
+      ir' = ir <|> oRRTrans
+      o' = o <|> outShape
+      oL' = oL <|> iLTransOL
+      oR' = oR <|> iRTransOR
+  -- FIX THE SIZES!
   -- Note that the size should be the same regardles of
   -- defaultiness. Just fmap into it and insert the most certain
   -- one. The certainty if inferred sizes the certainty of the
@@ -136,32 +148,35 @@ joinClustPropagator
   (ilSize,olSize) <- updateCardinalities
     (luSide == LeftForeignKey)
     (qpSize <$> il)
-    (qpSize <$> oL)
-    (qpSize <$> outShape)
+    (qpSize <$> oL')
+    (qpSize <$> o')
+  unless (isJust $ getDef olSize)
+    $ throwAStr
+    $ "Ooops: " ++ ashow (luSide,void il,void oL,void outShape)
   (irSize,orSize) <- updateCardinalities
     (luSide == RightForeignKey)
     (qpSize <$> ir)
-    (qpSize <$> oR)
-    (qpSize <$> outShape)
+    (qpSize <$> oR')
+    (qpSize <$> o')
   let withSize = liftA2 $ modSize . const
-  let il' = asum [il,withSize ilSize oLRTrans]
-      ir' = asum [ir,withSize irSize oRRTrans]
-      o' = asum [o,outShape]
-      oL' = asum [oL,withSize olSize iLTransOL]
-      oR' = asum [oR,withSize orSize iRTransOR]
+  let il'' = withSize ilSize il'
+      ir'' = withSize irSize il'
+      o'' = o'
+      oL'' = withSize olSize oL'
+      oR'' = withSize orSize oR'
   return
     $ updateCHash
       JoinClust
       { joinBinCluster = updateCHash
           BinClust
           { binClusterT = EmptyF
-           ,binClusterLeftIn = c il' binClusterLeftIn
-           ,binClusterRightIn = c ir' binClusterRightIn
-           ,binClusterOut = c o' binClusterOut
+           ,binClusterLeftIn = c il'' binClusterLeftIn
+           ,binClusterRightIn = c ir'' binClusterRightIn
+           ,binClusterOut = c o'' binClusterOut
            ,binClusterHash = undefined
           }
-       ,joinClusterLeftAntijoin = c oL' joinClusterLeftAntijoin
-       ,joinClusterRightAntijoin = c oR' joinClusterRightAntijoin
+       ,joinClusterLeftAntijoin = c oL'' joinClusterLeftAntijoin
+       ,joinClusterRightAntijoin = c oR'' joinClusterRightAntijoin
        ,joinClusterLeftIntermediate = clrShape joinClusterLeftIntermediate
        ,joinClusterRightIntermediate = clrShape joinClusterRightIntermediate
        ,joinClusterLeftSplit = EmptyF
@@ -182,13 +197,14 @@ type HasForeignKey = Bool
 -- outputted. Furthermore the inputs both for in and out side will
 -- have the cardinality of the input.
 updateCardinalities
-  :: HasForeignKey
+  :: MonadAShowErr e s err m
+  => HasForeignKey
   -> Defaulting QuerySize -- in
   -> Defaulting QuerySize -- out side
   -> Defaulting QuerySize -- out
   -> m (Defaulting QuerySize,Defaulting QuerySize) -- (new in, new out side)
 updateCardinalities True inpD outSideD outD = case getDef outD of
-  Nothing -> throwAStr "error"
+  Nothing -> throwAStr $ "output should not be empty: " ++ ashow outD
   Just out -> return
     (useCardinality out <$> inpD
     ,modCardinality (const 0) <$> outSideD)
@@ -196,7 +212,6 @@ updateCardinalities False inpD outSideD _outD =
   return
     (modCardinality (.* 0.7) <$> inpD
     ,modCardinality (.* 0.3) <$> outSideD)
-
 
 binClustPropagator
   :: Hashables2 e s
@@ -231,40 +246,45 @@ nClustPropagator p (NClust (WMetaD n)) =
   return $ NClust $ WMetaD $ first (const $ promoteDefaulting $ pure p) n
 
 
+type SizeOnly x = x
 data G e s x
   = G0 (Maybe x)
-  | GL (x -> Either (AShowStr e s) x)
-  | GR (x -> Either (AShowStr e s) x)
-  | G2 (x -> x -> Either (AShowStr e s) x)
+  | GL (x -> SizeOnly x -> Either (AShowStr e s) x) -- keep the left schema
+  | GR (SizeOnly x -> x -> Either (AShowStr e s) x) -- keep the right schema
+  | G2 (x -> x -> Either (AShowStr e s) x) -- combine schemata
+  | G1 (x -> Either (AShowStr e s) x) -- combine schemata
 
-argsG :: G e s x -> a -> a -> [a]
+argsG :: Monoid a => G e s x -> a -> a -> a
 argsG = \case
-  G0 _ -> \_ _ -> []
-  GL _ -> \x _ -> [x]
-  GR _ -> \_ x -> [x]
-  G2 _ -> \x y -> [x,y]
+  G0 _ -> \_ _ -> mempty
+  G1 _ -> const
+  GL _ -> const
+  GR _ -> \_ x -> x
+  G2 _ -> (<>)
 
 -- | The first argument is the lower bound
 promoteN :: Defaulting x -> Defaulting x -> Defaulting x
 promoteN mark d =
   if mark `defaultingLe` d then d else promoteN mark $ promoteDefaulting d
 
--- | Combine two defaultings based on
-liftG :: forall e s x .
-        Defaulting x
-      -> G e s x
-      -> Defaulting x
-      -> Defaulting x
-      -> Either (AShowStr e s) (Defaulting x)
+-- | Combine two defaultings.
+liftG
+  :: forall e s x .
+  Defaulting x
+  -> G e s x
+  -> Defaulting x
+  -> Defaulting x
+  -> Either (AShowStr e s) (Defaulting x)
 liftG old gf l r = promote <$> case gf of
   G0 Nothing  -> return old
   G0 (Just x) -> return $ pure x
-  GL f        -> traverse f l
-  GR f        -> traverse f r
+  G1 f        -> traverse f l
+  GL f        -> sequenceA $ f <$> l <*> r
+  GR f        -> sequenceA $ f <$> l <*> r
   G2 f        -> sequenceA $ f <$> l <*> r
   where
     promote :: Defaulting x -> Defaulting x
-    promote = promoteN (foldl (<|>) empty $ argsG gf l r) . (old <|>)
+    promote = promoteN (argsG gf l r) . (old <|>)
 
 liftGC
   :: G e s x
@@ -296,27 +316,32 @@ mkUnPropagator fo1o2_i fio1_o2 fio2_o1 UnClust{..} = do
       liftGC fo1o2_i unClusterPrimaryOut unClusterSecondaryOut unClusterIn
   let unClusterT=EmptyF
   return UnClust {..}
-mkBinPropagator :: forall e s t n . Hashables2 e s =>
-                 G e s (QueryShape e s)
-               -> G e s (QueryShape e s)
-               -> G e s (QueryShape e s)
-               -> CPropagatorShape BinClust' e s t n
-mkBinPropagator fiLiR_o fiLo_iR fiRo_iL BinClust{..} = do
-  binClusterOut <-
-      liftGC fiLiR_o binClusterLeftIn binClusterRightIn binClusterOut
-  binClusterLeftIn <-
-      liftGC fiRo_iL binClusterRightIn binClusterOut binClusterLeftIn
-  binClusterRightIn <-
-      liftGC fiLo_iR binClusterLeftIn binClusterOut binClusterRightIn
+
+mkBinPropagator
+  :: forall e s t n .
+  Hashables2 e s
+  => G e s (QueryShape e s)
+  -> G e s (QueryShape e s)
+  -> G e s (QueryShape e s)
+  -> CPropagatorShape BinClust' e s t n
+mkBinPropagator fiLiR_o fiLo_iR fiRo_iL BinClust {..} = do
+  binClusterOut
+    <- liftGC fiLiR_o binClusterLeftIn binClusterRightIn binClusterOut
+  binClusterLeftIn
+    <- liftGC fiRo_iL binClusterRightIn binClusterOut binClusterLeftIn
+  binClusterRightIn
+    <- liftGC fiLo_iR binClusterLeftIn binClusterOut binClusterRightIn
   let binClusterT = EmptyF
-  return BinClust {..}
+  return BinClust { .. }
 
 
 -- get the group transform: Prim x Sec -> Inp
-uopInput :: forall e s . (HasCallStack, Hashables2 e s) =>
-           Tup2 [(ShapeSym e s, ShapeSym e s)]
-         -> UQOp (ShapeSym e s)
-         -> G e s (QueryShape e s)
+uopInput
+  :: forall e s .
+  (HasCallStack,Hashables2 e s)
+  => Tup2 [(ShapeSym e s,ShapeSym e s)]
+  -> UQOp (ShapeSym e s)
+  -> G e s (QueryShape e s)
 uopInput (Tup2 assocPrim assocSec) op = case op of
   QSel _     -> pIn (.* 0.3)
   QGroup _ _ -> G0 Nothing
@@ -327,7 +352,7 @@ uopInput (Tup2 assocPrim assocSec) op = case op of
   where
     minus = (-)
     -- Just translate primary output
-    pIn modSize = GL $ \shape -> either
+    pIn modSize = G1 $ \shape -> either
       (const
        $ throwAStr
        $ "[In]Lookup error: "
@@ -340,24 +365,40 @@ uopInput (Tup2 assocPrim assocSec) op = case op of
     swap (a,b) = (b,a)
 
 -- get the group transform: Left x Right -> Out
-bopOutput :: Hashables2 e s =>
-            [(ShapeSym e s,ShapeSym e s)]
-          -> BQOp (ShapeSym e s)
-          -> G e s (QueryShape e s)
+bopOutput
+  :: Hashables2 e s
+  => [(ShapeSym e s,ShapeSym e s)]
+  -> BQOp (ShapeSym e s)
+  -> G e s (QueryShape e s)
 bopOutput assoc o = case o of
-  QProd -> G2 $ maybe (throwAStr "oops") (tp id assoc . snd) ... joinShapes []
-  QJoin p -> G2
-    $ maybe (throwAStr "oops") (tp id assoc . snd)
-    ... joinShapes (shapeSymEqs p) -- should never occur really...
-  QUnion -> GL $ tp _ assoc
-  QLeftAntijoin _ -> GL $ tp _ assoc
-  QRightAntijoin _ -> GR $ tp _ (reverse assoc)
+  QProd -> error
+    "Prod should nod be handled by bopOutput, it has it's own kind of cluster"
+  QJoin _ -> error
+    "Join should nod be handled by bopOutput, it has it's own kind of cluster"
+  QUnion -> GL $ flip $ tp mulCard (+) assoc
+  QLeftAntijoin _ -> GL $ flip $ tp mulCard (\_ i -> i) assoc
+  QRightAntijoin _ -> GR $ tp mulCard (\_ i -> i) (reverse assoc)
   QProjQuery -> error "QProjQuery should have been optimized into a QProj"
   QDistinct -> error "QDistinct should have been optimized into QGroup"
   where
-    tp modSize assoc' x = case translateShape' modSize assoc' x of
-      Left _  -> throwAStr $ ashow (void o,length assoc)
-      Right x -> return x
+    mulCard = (* 0.5) ... (*)
+    tp mkCert mkCard assoc' sizeOnly schema =
+      case translateShape' (const newSize) assoc' schema of
+        Left _  -> throwAStr $ ashow (void o,length assoc)
+        Right x -> return x
+      where
+        secSize = qpSize sizeOnly
+        primSize = qpSize schema
+        primTbl = head $ qsTables primSize
+        secTbl = head $ qsTables secSize
+        primCard = tsRows primTbl
+        secCard = tsRows secTbl
+        newTbl = primTbl { tsRows = mkCard primCard secCard }
+        newSize =
+          QuerySize
+          { qsTables = [newTbl]
+           ,qsCertainty = mkCert (qsCertainty primSize) (qsCertainty secSize)
+          }
 
 -- | Output is Tup2 (Inp x Sec -> Prim) (Inp x Prim -> Sec)
 uopOutputs
@@ -374,14 +415,16 @@ uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
   QProj prj -> Tup2
     (projToShape $ const prj)
     (projToShape $ \p -> complementProj p prj)
-  QSort _ -> Tup2 (GL $ pOut assocPrim) (G0 Nothing)
+  QSort _ -> Tup2 (G1 $ pOut id id assocPrim) (G0 Nothing)
   QLimit _ -> tw id
   QDrop _ -> tw id
   where
     tw :: ([[ShapeSym e s]] -> [[ShapeSym e s]])
        -> Tup2 (G e s (QueryShape e s))
-    tw
-      modUniq = Tup2 (GL $ modUniqShape <=< pOut assocPrim) (GL $ pOut assocSec)
+    tw modUniq =
+      Tup2
+        (G1 $ modUniqShape <=< pOut (.* 0.5) (* 0.5) assocPrim)
+        (G1 $ pOut (.* 0.5) (* 0.5) assocSec)
       where
         modUniqShape p = do
           uniq <- maybe
@@ -395,21 +438,30 @@ uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
             $ toList
             $ qpUnique p
           return p { qpUnique = uniq }
-    pOut :: [(ShapeSym e s,ShapeSym e s)]
+    pOut :: (Cardinality -> Cardinality)
+         -> (Double -> Double)
+         -> [(ShapeSym e s,ShapeSym e s)]
          -> QueryShape e s
          -> Either (AShowStr e s) (QueryShape e s)
-    pOut assoc shape =
+    pOut modCard modCert assoc shape =
       either
         (const $ throwAStr $ "[Out]Lookup error: " ++ ashow (op,assoc,shape))
         return
-      $ translateShape' _ assoc shape
-    outGrpShape p es = GL $ \inp -> either
+      $ translateShape' onSize assoc shape
+      where
+        onSize qs =
+          QuerySize { qsTables = [tbl { tsRows = modCard $ tsRows tbl }]
+                     ,qsCertainty = modCert $ qsCertainty qs
+                    }
+          where
+            tbl = head $ qsTables qs
+    outGrpShape p es = G1 $ \inp -> either
       (\e -> throwAStr $ "getQueryShapeGrp failed: " ++ ashow (e,op))
       return
       $ getQueryShapeGrp literalType p es inp
     projToShape :: (QueryShape e s -> [(ShapeSym e s,Expr (ShapeSym e s))])
                 -> G e s (QueryShape e s)
-    projToShape toPrj = GL go
+    projToShape toPrj = G1 go
       where
         go shape = either err return $ getQueryShapePrj literalType prj shape
           where
@@ -573,13 +625,17 @@ getValidClustPropagator clust = do
         (clust,second ashowACPA <$> shapeClusters)
     _ -> undefined
 
-triggerClustPropagator :: (MonadState (ClusterConfig e s t n) m,
-                          MonadError err m, AShowError e s err,
-                          Hashables2 e s) =>
-                          AnyCluster e s t n -> m ()
+triggerClustPropagator
+  :: (MonadState (ClusterConfig e s t n) m
+     ,MonadError err m
+     ,AShowError e s err
+     ,Hashables2 e s)
+  => AnyCluster e s t n
+  -> m (ShapeCluster NodeRef e s t n)
 triggerClustPropagator clust = do
   (_,newShapeClust) <- dropReader get $ getValidClustPropagator clust
   putShapeCluster newShapeClust
+  return newShapeClust
 
 getNodeShapeFull
   :: MonadReader (ClusterConfig e s t n) m
@@ -599,26 +655,31 @@ forceQueryShape :: forall e s t n m err .
 forceQueryShape n = runMaybeT $ (`evalStateT` mempty) $ go n
   where
     go :: NodeRef n -> StateT (NodeSet n) (MaybeT m) (QueryShape e s)
-    go ref = unlessDone $ do
+    go ref = unlessDone $ \_ -> do
       trail <- get
       guard $ not $ ref `nsMember` trail
       modify (nsInsert ref)
       -- Here we actually need `eitherl`...
       clusts <- lift2
         $ filter (elem ref . clusterOutputs) <$> lookupClustersN ref
-      oneOfM clusts $ \c -> do
-        case partition (elem ref) [clusterInputs c,clusterOutputs c] of
+      oneOfM clusts
+        $ \c -> case partition (elem ref) [clusterInputs c,clusterOutputs c] of
           ([_siblings],[deps]) -> do
             guard $ not $ any (`nsMember` trail) deps
             mapM_ go deps
-            lift2 $ triggerClustPropagator c
-            unlessDone $ throwAStr "We made the deps "
+            shapeClust <- lift2 $ triggerClustPropagator c
+            unlessDone $ \shape -> throwAStr
+              $ "Expected full but got: " ++ ashow (ref,shape,shapeClust)
           _ -> mzero
       where
         oneOfM [] _  = mzero
         oneOfM cs fm = foldr1Unsafe (<|>) $ fm <$> cs
-        unlessDone :: StateT (NodeSet n) (MaybeT m) (QueryShape e s)
+        unlessDone :: (Maybe (Defaulting (QueryShape e s))
+                       -> StateT (NodeSet n) (MaybeT m) (QueryShape e s))
                    -> StateT (NodeSet n) (MaybeT m) (QueryShape e s)
-        unlessDone m = dropReader (lift2 get) (getNodeShapeFull ref) >>= \case
-          Just x  -> return x
-          Nothing -> m
+        unlessDone m = do
+          dropReader (lift2 get) (getNodeShapeFull ref) >>= \case
+            Just x -> return x
+            Nothing -> do
+              shape <- lift2 $ gets $ refLU ref . qnfNodeShapes
+              m shape
