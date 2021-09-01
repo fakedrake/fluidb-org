@@ -23,30 +23,34 @@
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Control.Antisthenis.Minimum
-  (minTest,MinTag) where
+  (MinTag) where
 
 import           Control.Antisthenis.AssocContainer
-import           Control.Antisthenis.Test
 import           Control.Antisthenis.Types
-import           Control.Antisthenis.VarMap
-import           Control.Antisthenis.Zipper
 import           Control.Applicative
 import           Control.Monad.Identity
-import           Control.Monad.Reader
-import           Control.Monad.Writer               hiding (Sum)
 import           Control.Utils.Free
 import           Data.Foldable
-import qualified Data.IntSet                        as IS
 import qualified Data.List.NonEmpty                 as NEL
 import           Data.Maybe
 import           Data.Proxy
 import           Data.Utils.AShow
-import           Data.Utils.Default
-import           Data.Utils.FixState
-import           Data.Utils.Functors
+import           Data.Utils.Debug
 import           Data.Utils.Monoid
 import           Data.Utils.Tup
 import           GHC.Generics
+
+#if 0
+import           Control.Antisthenis.Test
+import           Control.Antisthenis.VarMap
+import           Control.Antisthenis.Zipper
+import           Control.Monad.Reader
+import           Control.Monad.Writer               hiding (Sum)
+import qualified Data.IntSet                        as IS
+import           Data.Utils.Default
+import           Data.Utils.FixState
+import           Data.Utils.Functors
+#endif
 
 data MinTag p v
 
@@ -76,9 +80,9 @@ instance (AShow (f (ZBnd w,a)),AShowBndR w,AShow a,AShowV [ZErr w])
 
 -- | The minimum bound.
 data SecondaryBound w
-  = SecConcrete (ZRes w)
-  | SecSoft (ZBnd w)
-  | NoSec
+  = SecConcrete (ZRes w) -- The secondary bound comes from Res
+  | SecSoft (ZBnd w) -- The secondary bound comes from a Bnd
+  | NoSec -- First actual lower bound or all other res are errors.
   deriving Generic
 instance (AShow (ZRes w),AShow (ZBnd w))
   => AShow (SecondaryBound w)
@@ -208,8 +212,9 @@ instance (AShow a
   -- whether we must reset.
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    $ trace ("Cap: " ++ ashow (mempty :: a,secondaryBound,confCap conf))
     $ case (secondaryBound,confCap conf) of
-      (NoSec,_) -> conf
+      (NoSec,_) -> conf { confCap = CapVal (Min' mempty) }
       (_,CapStruct i) -> conf { confCap = CapStruct $ i - 1 }
       (SecConcrete res,CapVal c) -> ifLt c res (conf { confCap = CapVal c })
         $ error "the secondary bound should be smaller than the cap"
@@ -217,6 +222,7 @@ instance (AShow a
       (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
       (SecSoft bnd,ForceResult) -> conf { confCap = CapVal bnd }
     where
+      -- XXX: This should become SecSoft
       secondaryBound = malMinBound $ bgsIts $ zBgState z
 
 -- | Given a proposed solution and the configuration from which it
@@ -229,7 +235,8 @@ minEvolutionControl
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
 minEvolutionControl conf z = case confCap conf of
-  CapStruct i -> if i >= 0 then res else res <|> Just (BndBnd $ Min' mempty)
+  CapStruct i -> if i >= 0 then res else res
+    <|> Just (BndBnd $ Min' mempty)
   ForceResult -> res >>= \case
     BndBnd _bnd -> Nothing
     x           -> return x
@@ -301,6 +308,8 @@ minStrategy fin = recur
         CmdFinished (ExZipper x) -> return
           (fin,fromMaybe undefined $ zFullResultMin x)
 
+
+#if 0
 minTest :: IO (BndR (MinTag TestParams (Sum Integer)))
 minTest =
   fmap (fst . fst)
@@ -319,3 +328,4 @@ minTest =
     res <- runMech (mkProc $ getMech <$> [1,2,3]) def
     lift3 $ putStrLn $ "Result: " ++ ashow res
     return res
+#endif

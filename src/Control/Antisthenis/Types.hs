@@ -210,7 +210,7 @@ class (KeyAC (ZItAssoc w) ~ ZBnd w
     -> New (Maybe (Zipper' w f p (ZPartialRes w)))
 
   -- | From the configuration that is global to the op make the local
-  -- one to be propagated to the next argument process.β
+  -- one to be propagated to the next argument process.
   zLocalizeConf :: ZCoEpoch w -> GConf w -> Zipper w p -> MayReset (LConf w)
 
 data BndR w
@@ -303,8 +303,12 @@ lengthZ z =
   where
     (ini,it,coit) = lengthZBgState (zBgState z)
 
-instance (AShow (ZItAssoc w (p,p)),AShowBndR w,AShowV p,AShow pr)
-  => AShow (Zipper' w Identity p pr)
+instance (AShow (ZItAssoc w (p,p))
+         ,AShowBndR w
+         ,AShowV p
+         ,AShow pr
+         ,AShow (f (Maybe (ZBnd w),InitProc p,p)))
+  => AShow (Zipper' w f p pr)
 
 -- | A zipper without a cursor.
 type FinZipper w p = Zipper' w EmptyF p (ZPartialRes w)
@@ -317,6 +321,7 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
      ,zRes = g zRes
      ,zId = zId
     }
+
 class Monoid (ExtCoEpoch p) => ExtParams p where
   type ExtEpoch p :: *
 

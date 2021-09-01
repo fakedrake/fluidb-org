@@ -44,6 +44,7 @@ instance C.Category Conv where
 
 type GEq a b = Coercible a b
 
+-- |Generic conversion between tags describing computation.
 data GenericConv w w' where
   GenericConv
     :: (GEq (ZRes w) (ZRes w')

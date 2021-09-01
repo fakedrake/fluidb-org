@@ -43,6 +43,7 @@ import           Data.Foldable
 import           Data.Profunctor
 import           Data.Utils.AShow
 import           Data.Utils.Const
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Unsafe

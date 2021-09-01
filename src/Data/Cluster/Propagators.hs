@@ -58,7 +58,6 @@ import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -92,9 +91,6 @@ getReversibleU = \case
   QLimit _   -> Reversible
   QDrop _    -> Reversible
 
-asum :: [Defaulting a] -> Defaulting a
-asum = foldr (<|>) empty
-
 joinClustPropagator
   :: forall e s t n .
   (HasCallStack,Hashables2 e s)
@@ -106,7 +102,7 @@ joinClustPropagator
 joinClustPropagator
   (assocOL,assocO,assocOR)
   p
-  JoinClust {joinBinCluster = BinClust {..},..} = wrapTrace "joinClustProp" $ do
+  JoinClust {joinBinCluster = BinClust {..},..} = do
   let il = s binClusterLeftIn
       ir = s binClusterRightIn
       o = s binClusterOut
@@ -150,9 +146,6 @@ joinClustPropagator
     (qpSize <$> il)
     (qpSize <$> oL')
     (qpSize <$> o')
-  unless (isJust $ getDef olSize)
-    $ throwAStr
-    $ "Ooops: " ++ ashow (luSide,void il,void oL,void outShape)
   (irSize,orSize) <- updateCardinalities
     (luSide == RightForeignKey)
     (qpSize <$> ir)
@@ -160,7 +153,7 @@ joinClustPropagator
     (qpSize <$> o')
   let withSize = liftA2 $ modSize . const
   let il'' = withSize ilSize il'
-      ir'' = withSize irSize il'
+      ir'' = withSize irSize ir'
       o'' = o'
       oL'' = withSize olSize oL'
       oR'' = withSize orSize oR'

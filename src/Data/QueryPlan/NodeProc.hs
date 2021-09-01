@@ -53,7 +53,11 @@ makeCostProc
   => NodeRef n
   -> [DSet t n (PlanParams n) v]
   -> NodeProc t n (SumTag (PlanParams n) v)
-makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
+makeCostProc ref deps =
+  trace ("makeCostProc " ++ ashow ref)
+  $ convArrProc convMinSum
+  $ procMin
+  $ go <$> deps
   where
     go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
       where
@@ -133,9 +137,10 @@ getCost
   -> Cap (Min' v)
   -> NodeRef n
   -> PlanT t n m (Maybe v)
-getCost mc extraMat cap ref = wrapTrace ("getcost: " ++ show ref) $ do
+getCost mc extraMat cap ref = wrapTrace ("Top: getCost " ++ show ref) $ do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
+  traceM $ "Mat: " ++ ashow (states,extraStates)
   ((res,_coepoch),_trail) <- planQuickRun
     $ (`runReaderT` 1)
     $ (`runStateT` def)
@@ -151,17 +156,3 @@ getCost mc extraMat cap ref = wrapTrace ("getcost: " ++ show ref) $ do
     BndRes (Sum Nothing)  -> return $ Just mempty
     BndBnd _bnd           -> return Nothing
     BndErr e              -> throwPlan $ "antisthenis error: " ++ ashow e
-
--- Arrow choice
-
--- TODO: methods to
---
--- * Fix the trail (done)
---
--- * Check that the epoch meaningfully changed and return the old
---   result. Use the ZipperMonadExt implementation. (done)
---
--- * Connect to the PlanT (done)
---
--- * Connect to isMatable
--- mkCost cost ref = PlanCost { pcCost = cost,pcPlan = nsSingleton ref }
