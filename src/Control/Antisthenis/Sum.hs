@@ -18,9 +18,9 @@ import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Monoid
-import           Data.Utils.Tup
 import           GHC.Generics
 
 data SumTag p v
@@ -54,6 +54,9 @@ instance Applicative (SumPartialRes p v) where
 instance Default (SumPartialRes p v a) where
   def = SumPartInit
 
+tr0 :: a -> a
+tr0 = id
+
 instance (AShow v
          ,Ord2 v v
          ,Invertible v
@@ -72,11 +75,13 @@ instance (AShow v
     ZProcEvolution
     { evolutionControl = sumEvolutionControl
      ,evolutionStrategy = sumEvolutionStrategy
-     ,evolutionEmptyErr = error "No arguments provided"
+     ,evolutionEmptyErr = error "No arguments provided to the sum."
     }
   putRes newBnd (partialRes,newZipper) =
-    (\() -> add partialRes newBnd) <$> newZipper
+    tr0 $ (\() -> add partialRes newBnd) <$> newZipper
     where
+      tr =
+        trace ("putRes: " ++ ashow (newBnd,partialRes,zipperShape newZipper))
       add SumPartInit bnd = toPartial bnd
       add e@(SumPartErr _) _ = e
       add (SumPart partRes) bnd = case bnd of
@@ -90,24 +95,37 @@ instance (AShow v
         BndRes (Sum (Just i)) -> SumPart $ Min' i
         BndErr e              -> SumPartErr e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
-    Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
+    tr0 $ Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
+    where
+      tr =
+        trace
+        $ "replaceRes: " ++ ashow (oldBnd,newBnd,oldRes,zipperShape newZipper)
   zLocalizeConf coepoch conf z =
-    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    tr
+    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
+      tr x =
+        trace
+          ("zLocalizeConf(sum): "
+           ++ ashow (confCap conf,fmap confCap x,zipperShape z))
+          x
       newCap = case zRes z of
         SumPartErr _ -> CapStruct (-1)
         SumPartInit -> case confCap conf of
           CapStruct s -> CapStruct $ s - 1
           x           -> x
-        SumPart r -> case confCap conf of
-          CapVal c -> CapVal cap'
-            where
-              cap' =
-                maybe
-                  (c `subMin` r)
-                  (\b0 -> (c `subMin` r) `addMin` b0)
-                  (fst3 $ runIdentity $ zCursor z)
+        SumPart partRes -> case confCap conf of
+          -- partRes is the total sum so far. We offset the global cap
+          -- by the sum so far so that the local cap ensures that the
+          -- cursor process, when ran, does not cause the overall
+          -- bound to exceed the global cap. This may generate weird
+          -- caps like negative values. That is ok as it should be
+          -- handled by the evolutionControl function.
+          CapVal cap -> CapVal $ case zCursor z of
+            Identity (Nothing,_,_) -> cap `subMin` partRes
+            Identity (Just cursBnd,_,_) -> (cap `subMin` partRes)
+              `addMin` cursBnd
           CapStruct s -> CapStruct $ s - 1
           ForceResult -> ForceResult
 
@@ -115,8 +133,10 @@ subMin :: Invertible v => Min' v -> Min' v -> Min' v
 subMin (Min' a) (Min' b) = Min' $ a `imappend` inv b
 addMin :: Semigroup v => Min' v -> Min' v -> Min' v
 addMin (Min' a) (Min' b) = Min' $ a <> b
+
 -- | Return the result expected or Nothing if there is more evolving
--- that needs to happen. This can only return bounds.
+-- that needs to happen before a valid (ie that satisfies the cap)
+-- result can be produced. This can only return bounds.
 sumEvolutionControl
   :: forall v p m . (Invertible v,Ord2 v v,AShow v,AShow (ExtError p))
   => GConf (SumTag p v)
@@ -125,14 +145,17 @@ sumEvolutionControl
 sumEvolutionControl conf z = case zRes z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
-    CapStruct i -> ifLt i (0 :: Int) Nothing (Just $ BndBnd $ Min' mempty)
-    CapVal bnd
-      -> ifLt bnd (Min' mempty :: Min' v) (Just $ BndBnd $ Min' mempty) Nothing
-    _ -> Nothing
+    CapStruct i -> ifNegI i Nothing (Just $ BndBnd $ Min' mempty)
+    -- If the local bound is negative then
+    CapVal bnd  -> ifNegM bnd (Just $ BndBnd $ Min' mempty) Nothing
+    _           -> Nothing
   SumPart bound -> case confCap conf of
     CapVal cap  -> ifLt cap bound (Just $ BndBnd bound) Nothing
     CapStruct i -> ifLt (0 :: Int) i (Just $ BndBnd bound) Nothing
     ForceResult -> Nothing
+  where
+    ifNegI i = ifLt i (0 :: Int)
+    ifNegM bnd = ifLt bnd (Min' mempty :: Min' v)
 
 sumEvolutionStrategy
   :: Monad m

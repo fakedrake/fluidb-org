@@ -30,7 +30,7 @@ module Control.Antisthenis.Types
   ,ashowItInit
   ,runArrProc
   ,ashowRes
-  ,lengthZ
+  ,zipperShape
   ,mapCursor
   ,Err
   ,ArrProc'
@@ -60,7 +60,7 @@ module Control.Antisthenis.Types
   ,ItProc
   ,CoitProc
   ,capWasFinished
-  ,AShowW) where
+  ,AShowW,ifLe,ifNeg,incrZipperUId) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
@@ -108,7 +108,8 @@ type Err = IndexErr Int
 newtype ResetCmd a = DoReset a deriving Functor
 -- Existential zipper
 data ExZipper w = forall p . ExZipper { runExZipper :: FinZipper w p }
-data MayReset a = DontReset a | ShouldReset deriving Functor
+data MayReset a = DontReset a | ShouldReset deriving (Generic,Functor)
+instance AShow a => AShow (MayReset a)
 type Cmds w = Cmds' (ExZipper w) (ZItAssoc w)
 data Cmds' r f a = Cmds { cmdReset :: ResetCmd a,cmdItCoit :: MayReset (ItInit r f a) }
   deriving Functor
@@ -269,7 +270,7 @@ data Zipper' w cursf (p :: *) pr =
     -- element to be ran. The bound provided is for the case that.
    ,zCursor  :: cursf (Maybe (ZBnd w),InitProc p,p)
    ,zRes     :: pr -- The result without the cursor.
-   ,zId      :: String
+   ,zId      :: (Int,String)
   }
   deriving Generic
 instance Functor (Zipper' w cursf p) where
@@ -279,26 +280,27 @@ instance Functor (Zipper' w cursf p) where
 lengthZBgState :: Foldable (ZItAssoc w) => ZipState w p -> (Int,Int,Int)
 lengthZBgState ZipState {..} = (length bgsInits,length bgsIts,length bgsCoits)
 
-data ZLen =
-  ZLen
-  { zLenInits :: Int
-   ,zLenIts   :: Int
-   ,zLenCoits :: Int
-   ,zLenCurs  :: Int
-   ,zLenId    :: String
+data ZShape =
+  ZShape
+  { zshInits :: Int
+   ,zshIts   :: Int
+   ,zshCoits :: Int
+   ,zshCurs  :: Int
+   ,zshId    :: (Int,String)
   }
   deriving Generic
 
-instance AShow ZLen
+instance AShow ZShape
 
-lengthZ :: (Foldable (ZItAssoc w),Foldable cursf) => Zipper' w cursf p pr -> ZLen
-lengthZ z =
-  ZLen
-  { zLenInits = ini
-   ,zLenIts = it
-   ,zLenCoits = coit
-   ,zLenCurs = length (zCursor z)
-   ,zLenId = zId z
+zipperShape
+  :: (Foldable (ZItAssoc w),Foldable cursf) => Zipper' w cursf p pr -> ZShape
+zipperShape z =
+  ZShape
+  { zshInits = ini
+   ,zshIts = it
+   ,zshCoits = coit
+   ,zshCurs = length (zCursor z)
+   ,zshId = zId z
   }
   where
     (ini,it,coit) = lengthZBgState (zBgState z)
@@ -321,6 +323,9 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
      ,zRes = g zRes
      ,zId = zId
     }
+
+incrZipperUId :: Zipper' w cursf p pr -> Zipper' w cursf p pr
+incrZipperUId z = z { zId = first (1 +) $ zId z }
 
 class Monoid (ExtCoEpoch p) => ExtParams p where
   type ExtEpoch p :: *
@@ -345,12 +350,13 @@ runArrProc _ _              = error "unreachable"
 ashowRes :: (ZRes w -> SExp) -> BndR w -> String
 ashowRes ashow'' = ashow . \case
   BndRes r ->  ashow'' r
-  BndErr _ -> Sym "<error>"
-  BndBnd _ -> Sym "<bound>"
+  BndErr _ -> Sym "<error-result>"
+  BndBnd _ -> Sym "<bound-result>"
 
 mapCursor :: (forall a . f a -> g a) -> Zipper' w f p r -> Zipper' w g p r
 mapCursor f Zipper {..} =
-  Zipper { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
+  Zipper
+  { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
 
 
 -- | Ordered set where we can find the better of two values without
@@ -384,3 +390,13 @@ ifLt a b t e = case compare2 a b of
   LT -> t
   _  -> e
 {-# INLINE ifLt #-}
+
+ifLe :: Ord2 a b => a -> b -> c -> c -> c
+ifLe a b t e = case compare2 a b of
+  LT -> t
+  EQ -> t
+  _  -> e
+{-# INLINE ifLe #-}
+
+ifNeg :: Ord2 a Integer => a ->  c -> c -> c
+ifNeg bnd = ifLt bnd 0

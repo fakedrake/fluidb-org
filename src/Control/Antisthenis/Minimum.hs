@@ -81,25 +81,39 @@ instance (AShow (f (ZBnd w,a)),AShowBndR w,AShow a,AShowV [ZErr w])
 -- | The minimum bound.
 data SecondaryBound w
   = SecConcrete (ZRes w) -- The secondary bound comes from Res
-  | SecSoft (ZBnd w) -- The secondary bound comes from a Bnd
+  | SecSoft (Maybe (ZRes w)) (ZBnd w) -- The secondary bound comes from a Bnd
   | NoSec -- First actual lower bound or all other res are errors.
+  | NeverSec -- There won't be a secondary because there is only one
+             -- process in the pipeline.
   deriving Generic
 instance (AShow (ZRes w),AShow (ZBnd w))
   => AShow (SecondaryBound w)
-malMinBound
-  :: forall f w a .
+zSecondaryBound
+  :: forall f w r x.
   (Foldable f
   ,Functor f
+  ,ZItAssoc w ~ MinAssocList [] w
   ,Ord2 (ZRes w) (ZBnd w)
   ,Ord2 (ZBnd w) (ZBnd w))
-  => MinAssocList f w a
+  => Zipper' w f r x
   -> SecondaryBound w
-malMinBound mal = case malConcrete mal of
-  OnlyErrors _ -> maybe NoSec SecSoft elemBnd
+zSecondaryBound z = case malConcrete mal of
+  OnlyErrors
+    _ -> noSecondaryBound -- maybe noSecondaryBound (SecSoft Nothing) elemBnd
   FoundResult firstRes -> case elemBnd of
-    Just bnd -> ifLt firstRes bnd (SecConcrete firstRes) (SecSoft bnd)
-    Nothing  -> SecConcrete firstRes -- there are no other results.
+    Just bnd
+      -> ifLt firstRes bnd (SecConcrete firstRes) (SecSoft (Just firstRes) bnd)
+    Nothing -> SecConcrete firstRes -- there are no other results.
   where
+    -- How do we encode the lack of a secondary bound. If we are still
+    -- going through the inits there is NoSec (ie. while there is no
+    -- secondary bound ATM, we shouldn't get too carried away as there
+    -- are inits that might be very small) but if can't find another
+    -- secondary bound and there are no inits to go through we should
+    -- just concede that there will never be a secondary bound and we
+    -- should go all-in in the process under the cursor.
+    noSecondaryBound = if null $ bgsInits $ zBgState z then NeverSec else NoSec
+    mal = bgsIts $ zBgState z
     elemBnd = foldl' go Nothing $ fst <$> malElements mal
       where
         go :: Maybe (ZBnd w) -> ZBnd w -> Maybe (ZBnd w)
@@ -126,7 +140,6 @@ instance AssocContainer (MinAssocList [] w) where
   acEmpty = MinAssocList [] emptyConcreteVal
   acNonEmpty (MinAssocList mal x) =
     (`MinAssocList` x) <$> NEL.nonEmpty mal
-
 
 barrel :: NEL.NonEmpty a -> NEL.NonEmpty (NEL.NonEmpty a)
 barrel x@(a0 NEL.:| as0) = x NEL.:| go [] a0 as0
@@ -158,6 +171,9 @@ instance BndRParams (MinTag p a) where
   type ZBnd (MinTag p a) = Min' a
   type ZRes (MinTag p a) = Min' a
 
+tr0 :: a -> a
+tr0 = id
+
 instance (AShow a
          ,Ord2 a a
          ,Monoid a -- we only need mempty from this
@@ -174,7 +190,7 @@ instance (AShow a
   zprocEvolution =
     ZProcEvolution
     { evolutionControl = minEvolutionControl
-     ,evolutionStrategy = minStrategy
+     ,evolutionStrategy = minEvolutionStrategy
      ,evolutionEmptyErr = noArgumentsError
     }
   -- We only need to do anything if the result is concrete. A
@@ -182,11 +198,12 @@ instance (AShow a
   -- the case where the result is an error the error is
   -- updated. Bounded results are already stored in the associative
   -- structure.
-  putRes newBnd ((),newZipper) = case newBnd of
+  putRes newBnd ((),newZipper) = tr0 $ case newBnd of
     BndRes r -> zModConcrete (putResult r) newZipper
     BndErr e -> zModConcrete (putError e) newZipper
     BndBnd _ -> newZipper -- already taken care of implicitly
     where
+      tr = trace $ "putRes: " ++ ashow (newBnd,zipperShape newZipper)
       -- Only put error if there is no concrete solution.
       putError e = \case
         OnlyErrors es     -> OnlyErrors $ e : es
@@ -203,27 +220,35 @@ instance (AShow a
   -- result as the result is implicit in the container. `Nothing`
   -- means that we failed to remove oldBnd so this will always
   -- succeed.
-  replaceRes _oldBnd newBnd (oldRes,newZipper) =
-    Just $ putRes newBnd (oldRes,newZipper)
+  replaceRes oldBnd newBnd (oldRes,newZipper) =
+    tr0 $ Just $ putRes newBnd (oldRes,newZipper)
+    where
+      tr =
+        trace
+        $ "replaceRes: " ++ ashow (oldBnd,newBnd,oldRes,zipperShape newZipper)
   -- | The secondary bound becomes the cap when it is smaller than the
   -- global cap.
   --
   -- Also handles the combination of epoch and coepoch that dictates
   -- whether we must reset.
   zLocalizeConf coepoch conf z =
-    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
-    $ trace ("Cap: " ++ ashow (mempty :: a,secondaryBound,confCap conf))
-    $ case (secondaryBound,confCap conf) of
+    tr
+    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    $ case (zSecondaryBound z,confCap conf) of
+      (NeverSec,_) -> conf
       (NoSec,_) -> conf { confCap = CapVal (Min' mempty) }
       (_,CapStruct i) -> conf { confCap = CapStruct $ i - 1 }
-      (SecConcrete res,CapVal c) -> ifLt c res (conf { confCap = CapVal c })
-        $ error "the secondary bound should be smaller than the cap"
-      (SecSoft bnd,CapVal c) -> conf { confCap = CapVal $ omin bnd c }
+      (SecConcrete res,CapVal c) -> ifLt c res (conf { confCap = CapVal res })
+        $ conf { confCap = CapVal res }
+      (SecSoft _ bnd,CapVal c) -> conf { confCap = CapVal $ omin bnd c }
       (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
-      (SecSoft bnd,ForceResult) -> conf { confCap = CapVal bnd }
+      (SecSoft _ bnd,ForceResult) -> conf { confCap = CapVal bnd }
     where
-      -- XXX: This should become SecSoft
-      secondaryBound = malMinBound $ bgsIts $ zBgState z
+      tr x =
+        trace
+          ("zLocalizeConf(min): "
+           ++ ashow (confCap conf,fmap confCap x,zipperShape z))
+          x
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
@@ -248,10 +273,11 @@ minEvolutionControl conf z = case confCap conf of
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
       Just r -> Just $ BndBnd r
-      Nothing -> case malMinBound $ bgsIts $ zBgState z of
+      Nothing -> case zSecondaryBound z of
+        NeverSec      -> Nothing
         NoSec         -> Nothing
         SecConcrete r -> Just $ BndRes r
-        SecSoft b     -> Just $ BndBnd b
+        SecSoft _ b   -> Just $ BndBnd b
 
 minBndR :: Ord2 v v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
 minBndR = curry $ \case
@@ -289,7 +315,7 @@ zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
       OnlyErrors (e:_) -> if zIsFinished z then Just $ BndErr e else Nothing
       FoundResult r    -> Just $ BndRes r
 
-minStrategy
+minEvolutionStrategy
   :: (AShow v,Ord2 v v,Monad m,AShow (ExtError p))
   => k
   -> FreeT
@@ -297,7 +323,7 @@ minStrategy
     m
     (k,BndR (MinTag p v))
   -> m (k,BndR (MinTag p v))
-minStrategy fin = recur
+minEvolutionStrategy fin = recur
   where
     recur (FreeT m) = m >>= \case
       Pure a -> return a

@@ -23,7 +23,7 @@ modTrailE
 modTrailE f = mealyLift $ fromKleisli $ \a -> gets (f . npsTrail) >>= \case
   Left e -> return $ Left e
   Right r -> do
-    modify $ \nps -> nps { npsTrail = trace ("trail: " ++ show r) r }
+    modify $ \nps -> nps { npsTrail = r }
     return (Right a)
 
 modTrail :: Monoid (ZCoEpoch w)
@@ -40,9 +40,7 @@ withTrail
   -> NodeProc t n w
   -> NodeProc t n w
 withTrail cycleErr ref m =
-  modTrailE putRef
-  >>> (arr (trace ("Cycle: " ++ ashow ref) . BndErr) ||| m)
-  >>> modTrail (nsDelete ref)
+  modTrailE putRef >>> (arr BndErr ||| m) >>> modTrail (nsDelete ref)
   where
     putRef ns
       | nsSize ns > 10 = error $ "Very long trail: " ++ ashow ns
@@ -66,7 +64,6 @@ mkEpoch
   -> NodeRef n
   -> Arr (NodeProc t n w) (Conf w) (Either whenMat (Conf w))
 mkEpoch whenMat ref = mealyLift $ fromKleisli $ \conf -> do
-  traceM $ "Triggering: " ++ ashow (ref,confCap conf)
   let isMater = fromMaybe False $ ref `refLU` confEpoch conf
   tell $ refFromAssocs [(ref,isMater)]
   return $ if isMater then Left $ whenMat conf else Right conf

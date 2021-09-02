@@ -11,6 +11,7 @@
 {-# LANGUAGE UndecidableInstances  #-}
 module Data.QueryPlan.NodeProc (NodeProc,getCost,MechConf(..),(:>:)(..)) where
 
+import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Common
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.Convert
@@ -23,7 +24,7 @@ import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer                       hiding (Sum)
-import           Data.List.NonEmpty                         as NEL
+import qualified Data.List.NonEmpty                         as NEL
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Profunctor
@@ -54,12 +55,9 @@ makeCostProc
   -> [DSet t n (PlanParams n) v]
   -> NodeProc t n (SumTag (PlanParams n) v)
 makeCostProc ref deps =
-  trace ("makeCostProc " ++ ashow ref)
-  $ convArrProc convMinSum
-  $ procMin
-  $ go <$> deps
+  convArrProc convMinSum $ procMin $ zipWith go [1 ..] deps
   where
-    go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
+    go i DSetR {..} = convArrProc convSumMin $ procSum i $ constArr : dsetNeigh
       where
         constArr = arr $ const $ BndRes dsetConst
     procMin
@@ -68,11 +66,12 @@ makeCostProc ref deps =
     procMin ns = lmap (\conf -> conf { confTrPref = mid }) $ mkProcId mid ns
       where
         mid = "min:" ++ ashow ref
-    procSum :: [NodeProc t n (SumTag (PlanParams n) v)]
+    procSum :: Int
+            -> [NodeProc t n (SumTag (PlanParams n) v)]
             -> NodeProc t n (SumTag (PlanParams n) v)
-    procSum ns = lmap (\conf -> conf { confTrPref = mid }) $ mkProcId mid ns
+    procSum i ns = lmap (\conf -> conf { confTrPref = mid }) $ mkProcId mid ns
       where
-        mid = "sum:" ++ ashow ref
+        mid = "sum[" ++ show i ++ "]:" ++ ashow ref
 
 type CostParams n v = SumTag (PlanParams n) v
 type NoMatProc t n v =
@@ -80,9 +79,11 @@ type NoMatProc t n v =
   -> NodeProc t n (SumTag (PlanParams n) v) -- The mat proc constructed by the node under consideration
   -> NodeProc t n (SumTag (PlanParams n) v)
 
--- | Build AND INSERT a new mech in the mech directory.
+-- | Build AND INSERT a new mech in the mech directory. The mech does
+-- not update it's place in the mech map.
 mkNewMech
-  :: (Invertible v,Ord2 v v,AShow v)
+  :: forall t n v .
+  (Invertible v,Ord2 v v,AShow v)
   => MechConf t n v
   -> NodeRef n
   -> NodeProc t n (CostParams n v)
@@ -95,11 +96,22 @@ mkNewMech mc@MechConf {..} ref = squashMealy $ do
            ,dsetNeigh = [getOrMakeMech mc n | n <- toNodeList $ metaOpIn mop]
           } | (mop,cost) <- mops]
   let costProcess = makeCostProc ref mechs
+  -- XXX: If we have ephemeral errors we do not need a trail.
+  let mkErr trail = ErrCycle ref trail
   let ret =
-        withTrail (ErrCycle ref) ref
+        updateMechMap
+        $ withTrail mkErr ref
         $ mkEpoch id ref >>> mcIsMatProc ref costProcess ||| costProcess
-  lift2 $ modify $ modL mcMechMapLens $ refInsert ref ret
+  lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
   return ret
+  where
+    updateMechMap :: NodeProc t n (CostParams n v)
+                  -> NodeProc t n (CostParams n v)
+    updateMechMap (MealyArrow f) = MealyArrow $ fromKleisli $ \c -> do
+      r@(nxt :: NodeProc t n (CostParams n v),_)
+        <- first updateMechMap <$> toKleisli f c
+      lift2 $ modify $ modL mcMechMapLens $ refInsert ref nxt
+      return r
 
 data MechConf t n v =
   MechConf
@@ -110,17 +122,42 @@ data MechConf t n v =
 
 data a :>:  b = Lens { getL :: a -> b,modL :: (b -> b) -> a -> a }
 
+
 getOrMakeMech
   :: (Invertible v,Ord2 v v,AShow v)
   => MechConf t n v
   -> NodeRef n
   -> NodeProc t n (SumTag (PlanParams n) v)
-getOrMakeMech mc@MechConf {..} ref =
-  squashMealy
-  $ lift2
-  $ gets
-  $ fromMaybe (mkNewMech mc ref) . refLU ref . getL mcMechMapLens
+getOrMakeMech mc@MechConf {..} ref = squashMealy $ do
+  lift2 (gets $ refLU ref . getL mcMechMapLens) >>= \case
+    Nothing -> do
+      return $ mkNewMech mc ref
+    Just x -> do
+      -- Note: One might think that inserting an temporary error here
+      -- might affect correctness. This argument goes something like
+      -- this: the value returned by this mech (the temp error) will
+      -- be used by a nested computation. However, when this actually
+      -- returns a non-temporary value it may very well not be an
+      -- error. This means that during the computatuion this cell
+      -- CHANGED ITS VALUE which is supposedly not possible since each
+      -- cell only has ONE correct concrete value. This argument is
+      -- logical but it does not hold because the temporary cycle
+      -- error has a lifespan exacly equal to the time it takes to
+      -- come up with ANY value for the node's computation. When the
+      -- computation comes up with a value, concrete or just a bound,
+      -- it will be overwritten and that value WILL actually be
+      -- correct. We know that all triggered mechs will have returned
+      -- some value before getCost finishes so at the end all mechs
+      -- will contain a correct value.
+      lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
+      return x
 
+cycleProc :: NodeRef n -> NodeProc t n (SumTag (PlanParams n) v)
+cycleProc ref =
+  arr
+  $ const
+  $ BndErr
+  $ ErrCycle ref mempty
 
 planQuickRun :: Monad m => PlanT t n Identity a -> PlanT t n m a
 planQuickRun m = do

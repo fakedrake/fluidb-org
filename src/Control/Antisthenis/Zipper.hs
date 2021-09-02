@@ -20,6 +20,7 @@
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE TypeOperators             #-}
 {-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 module Control.Antisthenis.Zipper
   (zSize
@@ -39,6 +40,7 @@ import           Control.Antisthenis.Types
 import           Control.Arrow                               hiding (first)
 import           Control.Monad.Identity
 import           Control.Utils.Free
+import           Data.Bifunctor
 import           Data.Foldable
 import           Data.Profunctor
 import           Data.Utils.AShow
@@ -46,6 +48,7 @@ import           Data.Utils.Const
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
+import           Data.Utils.Functors
 import           Data.Utils.Unsafe
 
 
@@ -84,14 +87,14 @@ mkZCat'
     (LConf w)
     (Zipper w (ArrProc w m))
 mkZCat' zid [] = error $ "mul needs at least one value: " ++ zid
-mkZCat' zipId (a:as) = mkMooreCat zipper $ mkZCat zipper
+mkZCat' zipId (a:as) = mkMooreCat iniZipper $ mkZCat iniZipper
   where
-    zipper =
+    iniZipper =
       Zipper
       { zCursor = Identity (Nothing,a,a)
        ,zBgState = mkGgState as
        ,zRes = def
-       ,zId = zipId
+       ,zId = (0,zipId)
       }
 
 -- Make a ziper evolution.
@@ -102,18 +105,21 @@ mkZCat
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
     (LConf w)
     (Zipper w (ArrProc w m))
-mkZCat prevz = MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
-  let Identity (_bnd,inip,cursProc) = zCursor prevz
-  (coepoch',(p',val)) <- runArrProc cursProc lconf
-  -- confTrM lconf $ "Cursor evaluated! " ++ ashowRes (const $ Sym "<res>") val
-  runFreeT $ (coepoch',) <$> case val of
-    BndBnd bnd -> pushIt $ mapCursor (const $ Const (bnd,inip,p')) prevz
-    BndRes res -> pushCoit $ mapCursor (const $ Const (Right res,p')) prevz
-    BndErr err -> pushCoit $ mapCursor (const $ Const (Left err,p')) prevz
+mkZCat (incrZipperUId -> prevz) =
+  MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
+    let Identity (_bnd,inip,cursProc) = zCursor prevz
+    (coepoch',(p',val)) <- runArrProc cursProc lconf
+    -- Update the cursor value and rotate the zipper.
+    -- traceM $ "Will now rotate: " ++ zId prevz
+    runFreeT $ (coepoch',) <$> case val of
+      BndBnd bnd -> pushIt $ mapCursor (const $ Const (bnd,inip,p')) prevz
+      BndRes res -> pushCoit $ mapCursor (const $ Const (Right res,p')) prevz
+      BndErr err -> pushCoit $ mapCursor (const $ Const (Left err,p')) prevz
 
 -- | The cursor is already evaluated.
 type EvaledZipper w p v =
   Zipper' w (Const v) p (ZPartialRes w)
+
 -- | This is almost a Mealy (Kleisly) arrow. From a gutted zipper (the
 -- previous step was setting the cursor on an it) there are a couple
 -- of ways to put the zipper together (either pull it or ini or reset
@@ -136,7 +142,7 @@ pushIt
       { zCursor = Identity (Nothing,inip,inip)
        ,zBgState = bgsReset zBgState
        ,zRes = def
-       ,zId = zId
+       ,zId = first (const 0) zId
       }
     cmdItCoit' = DontReset $ case bgsInits zBgState of
       []       -> CmdIt itEvolve
@@ -158,7 +164,7 @@ pushIt
               ,zRes = ()
               ,zId = zId
              })
-    -- Evolve by poping an it
+    -- Evolve by poping an iterator.
     itEvolve pop = return (mkZCat zipper,zipper)
       where
         zipper =
@@ -170,6 +176,13 @@ pushIt
           }
         (bnd' :: ZBnd w,(inip',itp'),its') =
           pop $ acInsert bnd (inip,itp) (bgsIts zBgState)
+
+traceCmds ::ItInit r f a -> ItInit r f a
+traceCmds = \case
+  CmdInit a     -> CmdInit $ trace "CmdInit" a
+  CmdItInit a b -> trace "CmdItInit" $ CmdItInit a $ trace "CmdItInitR" b
+  CmdIt a       -> trace "CmdIt" $ CmdIt a
+  CmdFinished r -> CmdFinished $ trace "CmdFinished" r
 
 pushCoit :: forall w m p .
          (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
@@ -195,7 +208,7 @@ pushCoit Zipper {zCursor = Const newCoit,..} =
       { zCursor = resetCursor
        ,zBgState = bgsReset zBgState
        ,zRes = def
-       ,zId = zId
+       ,zId = first (const 0) zId
       }
     cmdItCoit' =
       DontReset $ case (bgsInits zBgState,acNonEmpty $ bgsIts zBgState) of
@@ -226,17 +239,15 @@ pushCoit Zipper {zCursor = Const newCoit,..} =
          })
     mkItBgs
       its = zBgState { bgsCoits = newCoit : bgsCoits zBgState,bgsIts = its }
-    mkItZ (bnd,ini,it) its =
-      replaceRes
-        bnd
-        newRes
-        (zRes
-        ,Zipper
-         { zCursor = Identity (Just bnd,ini,it)
-          ,zBgState = mkItBgs its
-          ,zRes = ()
-          ,zId = zId
-         })
+    mkItZ (bnd,ini,it) its = replaceRes bnd newRes (zRes,z)
+      where
+        z =
+          Zipper
+          { zCursor = Identity (Just bnd,ini,it)
+           ,zBgState = mkItBgs its
+           ,zRes = ()
+           ,zId = zId
+          }
 
 -- | Apply the cap until finished. In the unPartialize function
 -- Nothing means the cap was not reached so an final result does not
@@ -296,11 +307,12 @@ handleLifetimes zid getRes =
       DontReset conf' -> return $ ret conf'
       where
         resetZ =
-          Zipper
+          trace "RESET!!! (lifetimes)"
+          $ Zipper
           { zBgState = bgsReset $ zBgState z
            ,zRes = def :: ZPartialRes w
            ,zCursor = zCursor z
-           ,zId = zid
+           ,zId = (0,zid)
           }
         ret conf' =
           maybe (Left conf') (\x -> Right (coepoch,x)) $ getRes globConf z
