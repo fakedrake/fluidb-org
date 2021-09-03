@@ -89,6 +89,7 @@ mkNewMech
   -> NodeProc t n (CostParams n v)
 mkNewMech mc@MechConf {..} ref = squashMealy $ do
   mops <- lift3 $ findCostedMetaOps ref
+  traceM $ ashow mops
   -- Should never see the same val twice.
   let mechs =
         [DSetR

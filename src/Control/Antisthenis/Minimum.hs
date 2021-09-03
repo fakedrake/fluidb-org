@@ -198,7 +198,7 @@ instance (AShow a
   -- the case where the result is an error the error is
   -- updated. Bounded results are already stored in the associative
   -- structure.
-  putRes newBnd ((),newZipper) = tr0 $ case newBnd of
+  putRes newBnd ((),newZipper) = tr $ case newBnd of
     BndRes r -> zModConcrete (putResult r) newZipper
     BndErr e -> zModConcrete (putError e) newZipper
     BndBnd _ -> newZipper -- already taken care of implicitly
@@ -221,7 +221,7 @@ instance (AShow a
   -- means that we failed to remove oldBnd so this will always
   -- succeed.
   replaceRes oldBnd newBnd (oldRes,newZipper) =
-    tr0 $ Just $ putRes newBnd (oldRes,newZipper)
+    tr $ Just $ putRes newBnd (oldRes,newZipper)
     where
       tr =
         trace
@@ -263,11 +263,25 @@ minEvolutionControl conf z = case confCap conf of
   CapStruct i -> if i >= 0 then res else res
     <|> Just (BndBnd $ Min' mempty)
   ForceResult -> res >>= \case
-    BndBnd _bnd -> Nothing
-    x           -> return x
+    BndBnd bnd -> case zSecondaryBound z of
+      SecConcrete r -> trace ("return(min): " ++ ashow (bnd,r))
+        $ ifLe r bnd (Just $ BndRes r) Nothing
+      _ -> trace ("return(min): " ++ ashow bnd) Nothing
+    x -> return x
   CapVal cap -> res >>= \case
-    BndBnd bnd -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
-    x          -> return x
+    -- BUG: we are using the secondary cap to cap the value we produce
+    -- here. This is fine if the secondary cap is soft but if it is
+    -- concrete it wint change. In fact if the local cap comes from a
+    -- concrete secondary cap it means we have already come up with
+    -- the correct result. This check must be performed BEFORE
+    -- comparing `cap` to `bnd` because `bnd` may by far surpass the
+    -- concrete secondary
+    BndBnd bnd -> case zSecondaryBound z of
+      SecConcrete r -> trace ("return(min): " ++ ashow (cap,bnd,r))
+        $ ifLe r bnd (Just $ BndRes r) Nothing
+      _ -> trace ("return(min): " ++ ashow (cap,bnd))
+        $ ifLt cap bnd (Just $ BndBnd bnd) Nothing
+    x -> return x
   where
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.

@@ -78,7 +78,7 @@ instance (AShow v
      ,evolutionEmptyErr = error "No arguments provided to the sum."
     }
   putRes newBnd (partialRes,newZipper) =
-    tr0 $ (\() -> add partialRes newBnd) <$> newZipper
+    tr $ (\() -> add partialRes newBnd) <$> newZipper
     where
       tr =
         trace ("putRes: " ++ ashow (newBnd,partialRes,zipperShape newZipper))
@@ -95,7 +95,7 @@ instance (AShow v
         BndRes (Sum (Just i)) -> SumPart $ Min' i
         BndErr e              -> SumPartErr e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
-    tr0 $ Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
+    tr $ Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
     where
       tr =
         trace
@@ -142,7 +142,7 @@ sumEvolutionControl
   => GConf (SumTag p v)
   -> Zipper (SumTag p v) (ArrProc (SumTag p v) m)
   -> Maybe (BndR (SumTag p v))
-sumEvolutionControl conf z = case zRes z of
+sumEvolutionControl conf z = tr $ case zRes z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     CapStruct i -> ifNegI i Nothing (Just $ BndBnd $ Min' mempty)
@@ -154,6 +154,9 @@ sumEvolutionControl conf z = case zRes z of
     CapStruct i -> ifLt (0 :: Int) i (Just $ BndBnd bound) Nothing
     ForceResult -> Nothing
   where
+    tr = fmap $ \x -> case x of
+      BndBnd bnd -> trace ("return(sum): BndBnd " ++ ashow bnd) x
+      _          -> trace "return(sum): <other>" x
     ifNegI i = ifLt i (0 :: Int)
     ifNegM bnd = ifLt bnd (Min' mempty :: Min' v)
 
