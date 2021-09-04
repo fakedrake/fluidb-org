@@ -21,6 +21,7 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.ProcTrail
 import           Data.QueryPlan.Types
+import           Data.String
 import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Functors
@@ -36,7 +37,7 @@ isMaterializable ref = do
     $ Conf
     { confCap = ForceResult
      ,confEpoch = states
-     ,confTrPref = "topLevel:" ++ ashow ref
+     ,confTrPref = ["topLevel:" ++ ashow ref]
     }
   case res of
     BndRes GBool {..} -> return $ unExists gbTrue
@@ -57,11 +58,15 @@ makeIsMatableProc ref deps =
   where
     procAnd :: [NodeProc0 t n (OrTag n) (AndTag n)]
             -> NodeProc0 t n (OrTag n) (AndTag n)
-    procAnd ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+    procAnd ns =
+      arr (\conf -> conf { confTrPref = [mid] })
+      >>> mkProcId (fromString mid) ns
       where
         mid = "min:" ++ ashow ref
     procOr :: [NodeProc t n (OrTag n)] -> NodeProc t n (OrTag n)
-    procOr ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+    procOr ns =
+      arr (\conf -> conf { confTrPref = [mid] })
+      >>> mkProcId (fromString mid) ns
       where
         mid = "sum:" ++ ashow ref
 

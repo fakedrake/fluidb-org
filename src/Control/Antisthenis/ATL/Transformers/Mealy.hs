@@ -211,7 +211,9 @@ mealyLift c = res
   where
     res = MealyArrow $ rmap (res,) c
 
--- | A mealy wrapped in a functor could become a mealy.
+-- | A mealy wrapped in a functor could become a mealy. The first
+-- iteration of the mealy maching also includes the (ArrFunctor c)
+-- effects but the rest are just normal.
 squashMealy
   :: (ArrowFunctor c,Monad (ArrFunctor c))
   => ArrFunctor c (MealyArrow c a b)

@@ -259,14 +259,13 @@ minEvolutionControl
   => Conf (MinTag p v)
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
-minEvolutionControl conf z = case confCap conf of
+minEvolutionControl conf z = tr $ case confCap conf of
   CapStruct i -> if i >= 0 then res else res
     <|> Just (BndBnd $ Min' mempty)
   ForceResult -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
-      SecConcrete r -> trace ("return(min): " ++ ashow (bnd,r))
-        $ ifLe r bnd (Just $ BndRes r) Nothing
-      _ -> trace ("return(min): " ++ ashow bnd) Nothing
+      SecConcrete r -> ifLe r bnd (Just $ BndRes r) Nothing
+      _             -> Nothing
     x -> return x
   CapVal cap -> res >>= \case
     -- BUG: we are using the secondary cap to cap the value we produce
@@ -277,12 +276,17 @@ minEvolutionControl conf z = case confCap conf of
     -- comparing `cap` to `bnd` because `bnd` may by far surpass the
     -- concrete secondary
     BndBnd bnd -> case zSecondaryBound z of
-      SecConcrete r -> trace ("return(min): " ++ ashow (cap,bnd,r))
-        $ ifLe r bnd (Just $ BndRes r) Nothing
-      _ -> trace ("return(min): " ++ ashow (cap,bnd))
-        $ ifLt cap bnd (Just $ BndBnd bnd) Nothing
+      SecConcrete r -> ifLe r bnd (Just $ BndRes r) Nothing
+      _             -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
     x -> return x
   where
+    tr = fmap $ \x -> case x of
+      BndRes r -> trace' ("BndRes " ++ ashow r) x
+      BndBnd b -> trace' ("BndBnd " ++ ashow b) x
+      BndErr _ -> trace' "BndErr <error>" x
+      where
+        trace' msg x =
+          trace ("return(min, " ++ ashow (zId z) ++ "): " ++ msg) x
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
@@ -331,13 +335,13 @@ zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
 
 minEvolutionStrategy
   :: (AShow v,Ord2 v v,Monad m,AShow (ExtError p))
-  => k
+  => (BndR (MinTag p v) -> k)
   -> FreeT
     (ItInit (ExZipper (MinTag p v)) (ZItAssoc (MinTag p v)))
     m
     (k,BndR (MinTag p v))
   -> m (k,BndR (MinTag p v))
-minEvolutionStrategy fin = recur
+minEvolutionStrategy fromZ = recur
   where
     recur (FreeT m) = m >>= \case
       Pure a -> return a
@@ -346,7 +350,10 @@ minEvolutionStrategy fin = recur
         CmdIt it -> recur $ it popMinAssocList
         CmdInit ini -> recur ini
         CmdFinished (ExZipper x) -> return
-          (fin,fromMaybe undefined $ zFullResultMin x)
+          (trace
+             ("fin: " ++ ashow (zFullResultMin x,zipperShape x))
+             (fromZ $ fromMaybe undefined $ zFullResultMin x)
+          ,fromMaybe undefined $ zFullResultMin x)
 
 
 #if 0

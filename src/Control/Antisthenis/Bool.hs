@@ -286,7 +286,7 @@ instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
 
 boolEvolutionStrategy
   :: Monad m
-  => x
+  => (BndR (BoolTag op p) -> x)
   -> FreeT
     (ItInit
        (ExZipper (BoolTag op p))
@@ -303,8 +303,9 @@ boolEvolutionStrategy fin = recur
         CmdIt it -> recur
           $ it (error "Unimpl: function to select the cheapest")
         CmdInit ini -> recur ini
-        CmdFinished (ExZipper z) -> return
-          (fin,maybe (BndErr undefined) (either BndErr BndRes) (zRes z))
+        CmdFinished (ExZipper z)
+          -> let res = maybe (BndErr undefined) (either BndErr BndRes) (zRes z)
+          in return (fin res,res)
 
 -- | Return Just when we have a result the could be the restult of the
 -- poperator. This decides when to stop working.

@@ -162,7 +162,7 @@ sumEvolutionControl conf z = tr $ case zRes z of
 
 sumEvolutionStrategy
   :: Monad m
-  => x
+  => (BndR (SumTag p v) -> x)
   -> FreeT
     (ItInit (ExZipper (SumTag p v)) (SimpleAssoc [] (ZBnd (SumTag p v))))
     m
@@ -176,7 +176,8 @@ sumEvolutionStrategy fin = recur
         CmdItInit _it ini -> recur ini
         CmdIt it -> recur $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
         CmdInit ini -> recur ini
-        CmdFinished (ExZipper z) -> return (fin,case zRes z of
-          SumPart (Min' bnd) -> BndRes $ Sum $ Just bnd
-          SumPartInit        -> BndRes $ Sum Nothing
-          SumPartErr e       -> BndErr e)
+        CmdFinished (ExZipper z)
+          -> let res = case zRes z of
+                   SumPart (Min' bnd) -> BndRes $ Sum $ Just bnd
+                   SumPartInit        -> BndRes $ Sum Nothing
+                   SumPartErr e       -> BndErr e in return (fin res,res)

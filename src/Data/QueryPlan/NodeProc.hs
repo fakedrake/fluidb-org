@@ -25,7 +25,6 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer                       hiding (Sum)
 import qualified Data.List.NonEmpty                         as NEL
-import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Profunctor
 import           Data.QueryPlan.CostTypes
@@ -33,6 +32,7 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.ProcTrail
 import           Data.QueryPlan.Types
+import           Data.String
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Default
@@ -63,15 +63,19 @@ makeCostProc ref deps =
     procMin
       :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
       -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
-    procMin ns = lmap (\conf -> conf { confTrPref = mid }) $ mkProcId mid ns
+    procMin ns =
+      lmap (\conf -> conf { confTrPref = zidName mid : confTrPref conf })
+      $ mkProcId mid ns
       where
-        mid = "min:" ++ ashow ref
+        mid = zidDefault $ "min:" ++ ashow ref
     procSum :: Int
             -> [NodeProc t n (SumTag (PlanParams n) v)]
             -> NodeProc t n (SumTag (PlanParams n) v)
-    procSum i ns = lmap (\conf -> conf { confTrPref = mid }) $ mkProcId mid ns
+    procSum i ns =
+      lmap (\conf -> conf { confTrPref = zidName mid : confTrPref conf })
+      $ mkProcId mid ns
       where
-        mid = "sum[" ++ show i ++ "]:" ++ ashow ref
+        mid = zidDefault $ "sum[" ++ show i ++ "]:" ++ ashow ref
 
 type CostParams n v = SumTag (PlanParams n) v
 type NoMatProc t n v =
@@ -92,27 +96,27 @@ mkNewMech mc@MechConf {..} ref = squashMealy $ do
   traceM $ ashow mops
   -- Should never see the same val twice.
   let mechs =
-        [DSetR
-          { dsetConst = Sum $ Just $ mcMkCost ref cost
-           ,dsetNeigh = [getOrMakeMech mc n | n <- toNodeList $ metaOpIn mop]
-          } | (mop,cost) <- mops]
+        [DSetR { dsetConst = Sum $ Just $ mcMkCost ref cost
+                ,dsetNeigh =
+                   [getOrMakeMech ref mc n | n <- toNodeList $ metaOpIn mop]
+               } | (mop,cost) <- mops]
   let costProcess = makeCostProc ref mechs
   -- XXX: If we have ephemeral errors we do not need a trail.
   let mkErr trail = ErrCycle ref trail
   let ret =
-        updateMechMap
-        $ withTrail mkErr ref
+        asSelfUpdating
+        -- $ withTrail mkErr ref
         $ mkEpoch id ref >>> mcIsMatProc ref costProcess ||| costProcess
-  lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
   return ret
   where
-    updateMechMap :: NodeProc t n (CostParams n v)
-                  -> NodeProc t n (CostParams n v)
-    updateMechMap (MealyArrow f) = MealyArrow $ fromKleisli $ \c -> do
-      r@(nxt :: NodeProc t n (CostParams n v),_)
-        <- first updateMechMap <$> toKleisli f c
-      lift2 $ modify $ modL mcMechMapLens $ refInsert ref nxt
-      return r
+    asSelfUpdating :: NodeProc t n (CostParams n v)
+                   -> NodeProc t n (CostParams n v)
+    asSelfUpdating (MealyArrow f) = MealyArrow $ fromKleisli $ \c -> do
+      (nxt,r) <- toKleisli f c
+      let nxt' = asSelfUpdating nxt
+      traceM $ "updateMechMap " ++ ashow (ref,r)
+      lift2 $ modify $ modL mcMechMapLens $ refInsert ref nxt'
+      return (nxt',r)
 
 data MechConf t n v =
   MechConf
@@ -123,17 +127,22 @@ data MechConf t n v =
 
 data a :>:  b = Lens { getL :: a -> b,modL :: (b -> b) -> a -> a }
 
-
+-- | Bug(?): in the first round we lookup the mech but in subsequent
+-- rounds we are not.
 getOrMakeMech
   :: (Invertible v,Ord2 v v,AShow v)
-  => MechConf t n v
+  => NodeRef n
+  -> MechConf t n v
   -> NodeRef n
   -> NodeProc t n (SumTag (PlanParams n) v)
-getOrMakeMech mc@MechConf {..} ref = squashMealy $ do
+getOrMakeMech parentRef mc@MechConf {..} ref = squashMealy $ do
   lift2 (gets $ refLU ref . getL mcMechMapLens) >>= \case
     Nothing -> do
+      traceM $ "getOrMakeMech:new-mech: " ++ ashow (parentRef,ref)
+      lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
       return $ mkNewMech mc ref
     Just x -> do
+      traceM $ "getOrMakeMech:found-mech: " ++ ashow (parentRef,ref)
       -- Note: One might think that inserting an temporary error here
       -- might affect correctness. This argument goes something like
       -- this: the value returned by this mech (the temp error) will
@@ -150,6 +159,10 @@ getOrMakeMech mc@MechConf {..} ref = squashMealy $ do
       -- correct. We know that all triggered mechs will have returned
       -- some value before getCost finishes so at the end all mechs
       -- will contain a correct value.
+      --
+      -- All this also means that it is not possible for a node
+      -- process to be rotated independently from two different places
+      -- because it can't be looked up.
       lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
       return x
 
@@ -183,11 +196,11 @@ getCost mc extraMat cap ref = wrapTrace ("Top: getCost " ++ show ref) $ do
     $ (`runReaderT` 1)
     $ (`runStateT` def)
     $ runWriterT
-    $ runMech (getOrMakeMech mc ref)
+    $ runMech (getOrMakeMech ref mc ref)
     $ Conf
     { confCap = cap
      ,confEpoch = states <> extraStates
-     ,confTrPref = "topLevel:" ++ ashow ref
+     ,confTrPref = ["topLevel:" ++ ashow ref]
     }
   case res of
     BndRes (Sum (Just r)) -> return $ Just r

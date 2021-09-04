@@ -25,6 +25,7 @@
 module Control.Antisthenis.Types
   (IndexErr(..)
   ,Ord2(..)
+  ,ZipperId(..)
   ,omin
   ,ifLt
   ,ashowItInit
@@ -32,6 +33,7 @@ module Control.Antisthenis.Types
   ,ashowRes
   ,zipperShape
   ,mapCursor
+  ,ZipperName
   ,Err
   ,ArrProc'
   ,NoArgError(..)
@@ -60,7 +62,7 @@ module Control.Antisthenis.Types
   ,ItProc
   ,CoitProc
   ,capWasFinished
-  ,AShowW,ifLe,ifNeg,incrZipperUId) where
+  ,AShowW,ifLe,ifNeg,incrZipperUId,zidDefault,zidReset,zidModTrail) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
@@ -71,8 +73,11 @@ import           Control.Arrow                               hiding (first,
 import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Bifunctor
+import           Data.List
 import           Data.Proxy
+import           Data.String
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Monoid
@@ -153,7 +158,7 @@ data ZProcEvolution w m k =
     -- evolving. Get the final.
    ,evolutionStrategy
       :: forall x .
-      x
+      (BndR w -> x)
       -> FreeT (ItInit (ExZipper w) (ZItAssoc w)) m (x,k)
       -> m (x,k)
      -- Empty error is the error emitted when there are no arguments
@@ -234,13 +239,13 @@ type ArrProc' w m =
 data Conf w =
   Conf { confCap    :: Cap (ZCap w)
         ,confEpoch  :: ZEpoch w
-        ,confTrPref :: String
+        ,confTrPref :: [ZipperName]
        }
   deriving Generic
 instance (AShow (ZEpoch w),AShow (ZCap w))
   => AShow (Conf w)
 instance Default (ZEpoch w) => Default (Conf w) where
-  def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = "no-pref" }
+  def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = [] }
 type GConf w = Conf w
 type LConf w = Conf w
 
@@ -263,6 +268,27 @@ instance Functor (ZItAssoc w) => Functor (ZipState w) where
      ,bgsCoits = fmap (fmap f) bgsCoits
     }
 
+type ZipperName = String
+type ZipperNames = [String]
+-- zidTrail is just the trail that leads to this zipper being
+-- revolved. Each zipper can only revolve at a single trail which
+-- evolutionControl returns none. the zidTrail should be erased when
+-- it returns a value.
+data ZipperId =
+  ZipperId { zidName :: ZipperName,zidTrail :: ZipperNames,zidVersion :: Int }
+instance IsString ZipperId where
+  fromString = zidDefault
+zidModTrail :: ([ZipperName] -> [ZipperName]) -> ZipperId -> ZipperId
+zidModTrail f zid = zid { zidTrail = f $ zidTrail zid }
+zidReset :: ZipperId -> ZipperId
+zidReset zid = zid { zidVersion = 0 }
+zidDefault :: String -> ZipperId
+zidDefault name = ZipperId { zidName = name,zidTrail = [],zidVersion = 0 }
+instance AShow ZipperId where
+  ashow' ZipperId {..} =
+    sexp (zidName ++ ":" ++ show zidVersion) [] -- $ Sym <$> zidTrail
+zidBumpVersion :: ZipperId -> ZipperId
+zidBumpVersion zid = zid { zidVersion = 1 + zidVersion zid }
 data Zipper' w cursf (p :: *) pr =
   Zipper
   { zBgState :: ZipState w p
@@ -270,7 +296,7 @@ data Zipper' w cursf (p :: *) pr =
     -- element to be ran. The bound provided is for the case that.
    ,zCursor  :: cursf (Maybe (ZBnd w),InitProc p,p)
    ,zRes     :: pr -- The result without the cursor.
-   ,zId      :: (Int,String)
+   ,zId      :: ZipperId
   }
   deriving Generic
 instance Functor (Zipper' w cursf p) where
@@ -286,7 +312,7 @@ data ZShape =
    ,zshIts   :: Int
    ,zshCoits :: Int
    ,zshCurs  :: Int
-   ,zshId    :: (Int,String)
+   ,zshId    :: ZipperId
   }
   deriving Generic
 
@@ -325,7 +351,7 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
     }
 
 incrZipperUId :: Zipper' w cursf p pr -> Zipper' w cursf p pr
-incrZipperUId z = z { zId = first (1 +) $ zId z }
+incrZipperUId z = z { zId = zidBumpVersion $ zId z }
 
 class Monoid (ExtCoEpoch p) => ExtParams p where
   type ExtEpoch p :: *
