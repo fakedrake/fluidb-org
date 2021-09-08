@@ -49,11 +49,9 @@ module Data.QueryPlan.Types
   ,liftNodeProc
   ,Count
   ,NodeProc
-  ,NTrail
   ,PlanParams
   ,SumTag
   ,NodeProc0
-  ,NodeProcSt(..)
   ,bot
   ,top
   ,runPlanT'
@@ -433,24 +431,13 @@ instance Eq (MetaOp t n) where
 
 
 -- Node procs
--- | A map containing all the proc maps. Mutually recursive with the
--- proc itself.
-newtype NodeProcSt n w =
-  NodeProcSt {  -- npsProcs :: RefMap n (ArrProc w m)
-               npsTrail :: NTrail n
-             }
-  deriving Generic
-instance Default (NodeProcSt n w)
-
-type NTrail = NodeSet
-
 -- | NodeProc t n ()
 type NodeProc t n w = NodeProc0 t n w w
 
 type Scaling = Double
 -- | A node process. The outer
 type NodeProc0 t n w w0 =
-  ArrProc w0 (StateT (NodeProcSt n w) (ReaderT Scaling (PlanT t n Identity)))
+  ArrProc w0 (ReaderT Scaling (PlanT t n Identity))
 
 lowerNodeProc
   :: ZCoEpoch w0 ~ ZCoEpoch w

@@ -393,25 +393,12 @@ interpretBExp = recur
           (BndErr $ error $ "Failed to dereference expr key: " ++ show k)
           k
     handleCycles k = withTrail $ \(trail,vals) -> if k `IS.member` trail
-      then Left $ ErrCycle k trail else Right (IS.insert k trail,vals)
+      then Left $ ErrCycle k  else Right (IS.insert k trail,vals)
     fromBool c = GBool { gbTrue = Exists c,gbFalse = Exists $ not c }
     convOr :: ArrProc (BoolTag Or p) m -> ArrProc (BoolTag op p) m
     convOr = convBool
     convAnd :: ArrProc (BoolTag And p) m -> ArrProc (BoolTag op p) m
     convAnd = convBool
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

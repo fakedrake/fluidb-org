@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase       #-}
 {-# LANGUAGE TypeFamilies     #-}
-module Data.QueryPlan.ProcTrail (withTrail,modTrail,mkEpoch) where
+module Data.QueryPlan.ProcTrail (mkEpoch) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Common
@@ -16,6 +16,7 @@ import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 
+#ifdef SEPARATE_TRAIL
 modTrailE
   :: Monoid (ZCoEpoch w)
   => (NTrail n -> Either (ZErr w) (NTrail n))
@@ -46,7 +47,7 @@ withTrail cycleErr ref m =
       | nsSize ns > 10 = error $ "Very long trail: " ++ ashow ns
       | ref `nsMember` ns = Left $ cycleErr ns
       | otherwise = Right $ nsInsert ref ns
-
+#endif
 -- | Transfer the value of the epoch to the coepoch. The epoch of a
 -- node wrt to calculating costs is fully defined by the
 -- materialization status of the node. The arrow produced by this
