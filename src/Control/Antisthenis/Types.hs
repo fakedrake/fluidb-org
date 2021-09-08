@@ -25,7 +25,6 @@
 module Control.Antisthenis.Types
   (IndexErr(..)
   ,Ord2(..)
-  ,ZipperId(..)
   ,omin
   ,ifLt
   ,ashowItInit
@@ -33,7 +32,6 @@ module Control.Antisthenis.Types
   ,ashowRes
   ,zipperShape
   ,mapCursor
-  ,ZipperName
   ,Err
   ,ArrProc'
   ,NoArgError(..)
@@ -62,12 +60,15 @@ module Control.Antisthenis.Types
   ,ItProc
   ,CoitProc
   ,capWasFinished
-  ,AShowW,ifLe,ifNeg,incrZipperUId,zidDefault,zidReset,zidModTrail) where
+  ,AShowW
+  ,ifNeg
+  ,ifLe,incrZipperUId) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.ZipperId
 import           Control.Arrow                               hiding (first,
                                                               second)
 import           Control.Monad.Identity
@@ -111,7 +112,8 @@ type Err = IndexErr Int
 -- | Either provide a meaningful reset command or delegate to a the
 -- previous reset branch.
 newtype ResetCmd a = DoReset a deriving Functor
--- Existential zipper
+-- Existential zipper. This zipper does not have a cursor, it just
+-- remembers the structure of the zipper.
 data ExZipper w = forall p . ExZipper { runExZipper :: FinZipper w p }
 data MayReset a = DontReset a | ShouldReset deriving (Generic,Functor)
 instance AShow a => AShow (MayReset a)
@@ -125,7 +127,9 @@ data ItInit r f a
   = CmdItInit (ItProcF f a) (InitProc a)
   | CmdIt (ItProcF f a)
   | CmdInit (InitProc a)
-  | CmdFinished r
+  | CmdFinished r -- when a process finishes it should stick to a
+                  -- value until the epoch/coepoch pair requests a
+                  -- reset.
 
 ashowItInit :: ItInit r f a -> SExp
 ashowItInit = \case
@@ -237,15 +241,13 @@ type ArrProc' w m =
   MooreCat (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
 
 data Conf w =
-  Conf { confCap    :: Cap (ZCap w)
-        ,confEpoch  :: ZEpoch w
-        ,confTrPref :: [ZipperName]
-       }
+  Conf
+  { confCap :: Cap (ZCap w),confEpoch :: ZEpoch w,confTrPref :: () }
   deriving Generic
 instance (AShow (ZEpoch w),AShow (ZCap w))
   => AShow (Conf w)
 instance Default (ZEpoch w) => Default (Conf w) where
-  def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = [] }
+  def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = () }
 type GConf w = Conf w
 type LConf w = Conf w
 
@@ -268,27 +270,6 @@ instance Functor (ZItAssoc w) => Functor (ZipState w) where
      ,bgsCoits = fmap (fmap f) bgsCoits
     }
 
-type ZipperName = String
-type ZipperNames = [String]
--- zidTrail is just the trail that leads to this zipper being
--- revolved. Each zipper can only revolve at a single trail which
--- evolutionControl returns none. the zidTrail should be erased when
--- it returns a value.
-data ZipperId =
-  ZipperId { zidName :: ZipperName,zidTrail :: ZipperNames,zidVersion :: Int }
-instance IsString ZipperId where
-  fromString = zidDefault
-zidModTrail :: ([ZipperName] -> [ZipperName]) -> ZipperId -> ZipperId
-zidModTrail f zid = zid { zidTrail = f $ zidTrail zid }
-zidReset :: ZipperId -> ZipperId
-zidReset zid = zid { zidVersion = 0 }
-zidDefault :: String -> ZipperId
-zidDefault name = ZipperId { zidName = name,zidTrail = [],zidVersion = 0 }
-instance AShow ZipperId where
-  ashow' ZipperId {..} =
-    sexp (zidName ++ ":" ++ show zidVersion) [] -- $ Sym <$> zidTrail
-zidBumpVersion :: ZipperId -> ZipperId
-zidBumpVersion zid = zid { zidVersion = 1 + zidVersion zid }
 data Zipper' w cursf (p :: *) pr =
   Zipper
   { zBgState :: ZipState w p

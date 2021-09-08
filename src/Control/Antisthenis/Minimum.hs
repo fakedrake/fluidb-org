@@ -35,7 +35,6 @@ import qualified Data.List.NonEmpty                 as NEL
 import           Data.Maybe
 import           Data.Proxy
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Monoid
 import           Data.Utils.Tup
 import           GHC.Generics
@@ -81,7 +80,8 @@ instance (AShow (f (ZBnd w,a)),AShowBndR w,AShow a,AShowV [ZErr w])
 -- | The minimum bound.
 data SecondaryBound w
   = SecConcrete (ZRes w) -- The secondary bound comes from Res
-  | SecSoft (Maybe (ZRes w)) (ZBnd w) -- The secondary bound comes from a Bnd
+  | SecSoft (Maybe (ZRes w)) (ZBnd w) -- The secondary bound comes from a Bnd (the ZRes
+                                      -- is just for debug)
   | NoSec -- First actual lower bound or all other res are errors.
   | NeverSec -- There won't be a secondary because there is only one
              -- process in the pipeline.
@@ -98,11 +98,10 @@ zSecondaryBound
   => Zipper' w f r x
   -> SecondaryBound w
 zSecondaryBound z = case malConcrete mal of
-  OnlyErrors
-    _ -> noSecondaryBound -- maybe noSecondaryBound (SecSoft Nothing) elemBnd
+  OnlyErrors _ -> noSecondaryBound
   FoundResult firstRes -> case elemBnd of
     Just bnd
-      -> ifLt firstRes bnd (SecConcrete firstRes) (SecSoft (Just firstRes) bnd)
+      -> ifLe firstRes bnd (SecConcrete firstRes) (SecSoft (Just firstRes) bnd)
     Nothing -> SecConcrete firstRes -- there are no other results.
   where
     -- How do we encode the lack of a secondary bound. If we are still
@@ -171,9 +170,6 @@ instance BndRParams (MinTag p a) where
   type ZBnd (MinTag p a) = Min' a
   type ZRes (MinTag p a) = Min' a
 
-tr0 :: a -> a
-tr0 = id
-
 instance (AShow a
          ,Ord2 a a
          ,Monoid a -- we only need mempty from this
@@ -198,12 +194,11 @@ instance (AShow a
   -- the case where the result is an error the error is
   -- updated. Bounded results are already stored in the associative
   -- structure.
-  putRes newBnd ((),newZipper) = tr $ case newBnd of
+  putRes newBnd ((),newZipper) = case newBnd of
     BndRes r -> zModConcrete (putResult r) newZipper
     BndErr e -> zModConcrete (putError e) newZipper
     BndBnd _ -> newZipper -- already taken care of implicitly
     where
-      tr = trace $ "putRes: " ++ ashow (newBnd,zipperShape newZipper)
       -- Only put error if there is no concrete solution.
       putError e = \case
         OnlyErrors es     -> OnlyErrors $ e : es
@@ -220,20 +215,15 @@ instance (AShow a
   -- result as the result is implicit in the container. `Nothing`
   -- means that we failed to remove oldBnd so this will always
   -- succeed.
-  replaceRes oldBnd newBnd (oldRes,newZipper) =
-    tr $ Just $ putRes newBnd (oldRes,newZipper)
-    where
-      tr =
-        trace
-        $ "replaceRes: " ++ ashow (oldBnd,newBnd,oldRes,zipperShape newZipper)
+  replaceRes _oldBnd newBnd (oldRes,newZipper) =
+    Just $ putRes newBnd (oldRes,newZipper)
   -- | The secondary bound becomes the cap when it is smaller than the
   -- global cap.
   --
   -- Also handles the combination of epoch and coepoch that dictates
   -- whether we must reset.
   zLocalizeConf coepoch conf z =
-    tr
-    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (zSecondaryBound z,confCap conf) of
       (NeverSec,_) -> conf
       (NoSec,_) -> conf { confCap = CapVal (Min' mempty) }
@@ -243,12 +233,6 @@ instance (AShow a
       (SecSoft _ bnd,CapVal c) -> conf { confCap = CapVal $ omin bnd c }
       (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
       (SecSoft _ bnd,ForceResult) -> conf { confCap = CapVal bnd }
-    where
-      tr x =
-        trace
-          ("zLocalizeConf(min): "
-           ++ ashow (confCap conf,fmap confCap x,zipperShape z))
-          x
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
@@ -259,7 +243,7 @@ minEvolutionControl
   => Conf (MinTag p v)
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
-minEvolutionControl conf z = tr $ case confCap conf of
+minEvolutionControl conf z = case confCap conf of
   CapStruct i -> if i >= 0 then res else res
     <|> Just (BndBnd $ Min' mempty)
   ForceResult -> res >>= \case
@@ -280,13 +264,6 @@ minEvolutionControl conf z = tr $ case confCap conf of
       _             -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
     x -> return x
   where
-    tr = fmap $ \x -> case x of
-      BndRes r -> trace' ("BndRes " ++ ashow r) x
-      BndBnd b -> trace' ("BndBnd " ++ ashow b) x
-      BndErr _ -> trace' "BndErr <error>" x
-      where
-        trace' msg x =
-          trace ("return(min, " ++ ashow (zId z) ++ "): " ++ msg) x
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
@@ -303,7 +280,7 @@ minBndR = curry $ \case
   (e@(BndErr _),_)    -> e
   (BndBnd a,BndBnd b) -> BndBnd $ omin a b
   (BndRes a,BndRes b) -> BndRes $ omin a b
-  (BndRes a,BndBnd b) -> ifLt a b (BndRes a) (BndBnd b)
+  (BndRes a,BndBnd b) -> ifLe a b (BndRes a) (BndBnd b)
   (BndBnd a,BndRes b) -> ifLt a b (BndBnd a) (BndRes b)
 
 
@@ -350,9 +327,7 @@ minEvolutionStrategy fromZ = recur
         CmdIt it -> recur $ it popMinAssocList
         CmdInit ini -> recur ini
         CmdFinished (ExZipper x) -> return
-          (trace
-             ("fin: " ++ ashow (zFullResultMin x,zipperShape x))
-             (fromZ $ fromMaybe undefined $ zFullResultMin x)
+          (fromZ $ fromMaybe undefined $ zFullResultMin x
           ,fromMaybe undefined $ zFullResultMin x)
 
 

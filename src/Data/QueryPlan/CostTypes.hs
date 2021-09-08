@@ -78,7 +78,8 @@ instance Num Cost where
   Cost a b - Cost a' b' = Cost (a - a') (b - b')
   Cost a b * Cost a' b' = Cost (a * a') (b * b')
 
-instance AShow Cost
+instance AShow Cost where
+  ashow' c = Sym $ show (costReads c) ++ "/" ++ show (costWrites c)
 instance Semigroup Cost where
   c1 <> c2 =
     Cost { costReads = costReads c1 + costReads c1

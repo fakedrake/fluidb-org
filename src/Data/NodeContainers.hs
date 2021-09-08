@@ -96,7 +96,7 @@ pattern N :: Int -> NodeRef n
 pattern N i = NodeRef i
 
 instance AShow (NodeRef n) where
-  ashow' (NodeRef r) = sexp "N" [ashow' r]
+  ashow' (NodeRef r) = Sym $ "N" ++ show r
 instance ARead (NodeRef n) where
   aread' = \case
     Sub [Sym "N", r]       -> N <$> aread' r

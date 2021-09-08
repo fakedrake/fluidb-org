@@ -156,7 +156,7 @@ instance ArrowReader c  => ArrowReader (MealyArrow c) where
   {-# INLINE arrCoLocal' #-}
 
 
-
+-- | Modify mealy chain.
 hoistMealy
   :: Profunctor c'
   => (c a (MealyArrow c a b,b) -> c' a' (MealyArrow c a b,b'))

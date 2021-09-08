@@ -38,6 +38,7 @@ import           Control.Antisthenis.ATL.Transformers.Moore
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Types
+import           Control.Antisthenis.ZipperId
 import           Control.Arrow                               hiding (first)
 import           Control.Monad.Identity
 import           Control.Utils.Free
@@ -45,7 +46,6 @@ import           Data.Foldable
 import           Data.Profunctor
 import           Data.Utils.AShow
 import           Data.Utils.Const
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Unsafe
@@ -246,14 +246,13 @@ pushCoit Zipper {zCursor = Const newCoit,..} =
 -- make sense. Use this to fast forward to a result and to stick to a
 -- result.
 mkMachine
-  :: forall m w k .
+  :: forall m w .
   (Monad m,ZipperParams w,AShowW w)
   => ZipperId
-  -> (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> [ArrProc w m]
-  -> Arr (ArrProc w (FreeT (ItInit (ExZipper w) (ZItAssoc w)) m)) (GConf w) k
-mkMachine zid getRes =
-  handleLifetimes zid getRes
+  -> ArrProc w (FreeT (ItInit (ExZipper w) (ZItAssoc w)) m)
+mkMachine zid  =
+  handleLifetimes zid
   . loopMooreCat -- feed the previous zipper to the next localizeConf
   . dimap fst (\z -> (z,z))
   . mkZCat' zid
@@ -263,19 +262,18 @@ mkMachine zid getRes =
 -- create a function to determine the lifespan. This way we can se the
 -- lifespans more globally.
 handleLifetimes
-  :: forall m w k .
+  :: forall m w .
   (Monad m,ZipperParams w)
   => ZipperId
-  -> (GConf w -> Zipper w (ArrProc w m) -> Maybe k)
   -> Arr
     (ArrProc' w (FreeT (Cmds' (ExZipper w) (ZItAssoc w)) m))
     (LConf w)
     (Zipper w (ArrProc w m))
-  -> Arr (ArrProc w (FreeT (ItInit (ExZipper w) (ZItAssoc w)) m)) (GConf w) k
-handleLifetimes zid getRes =
+  -> ArrProc w (FreeT (ItInit (ExZipper w) (ZItAssoc w)) m)
+handleLifetimes zid =
   evalResetsArr
   . hoistMealy (WriterArrow . rmap (\(nxt,(coepoch,z)) -> (coepoch,(nxt,z))))
-  . mooreBatchC (Kleisli go)
+  . mooreBatchC (Kleisli go) -- go gives out a Left correctly.
   . hoistMoore
     (mempty,)
     (rmap (\(coepoch,(nxt,z)) -> (nxt,(coepoch,z))) . runWriterArrow)
@@ -292,20 +290,17 @@ handleLifetimes zid getRes =
        -> FreeT
          (Cmds' (ExZipper w) (ZItAssoc w))
          m
-         (Either (LConf w) (ZCoEpoch w,k))
+         (Either (LConf w) (ZCoEpoch w,BndR w))
     go (globConf,(coepoch,z0)) = case zLocalizeConf coepoch globConf z of
       ShouldReset -> wrapFree
         Cmds { cmdReset = DoReset $ go (globConf,(coepoch,resetZ))
               ,cmdItCoit = ShouldReset
              }
-      DontReset conf' -> return $ ret conf'
+      DontReset conf' -> return
+        $ maybe (Left conf') (\x -> Right (coepoch,x))
+        $ evolutionControl zprocEvolution globConf z
       where
-        z = z0 { zId = zidModTrail modTr $ zId z0 }
-          where
-            modTr [] = confTrPref globConf
-            modTr curT =
-              if curT == confTrPref globConf
-              then curT else error "Changed trail!"
+        z = z0
         resetZ =
           Zipper
           { zBgState = bgsReset $ zBgState z
@@ -313,8 +308,6 @@ handleLifetimes zid getRes =
            ,zCursor = zCursor z
            ,zId = zidReset zid
           }
-        ret conf' =
-          maybe (Left conf') (\x -> Right (coepoch,x)) $ getRes globConf z
 
 evalResetsArr
   :: forall conf m f r k s .
@@ -356,7 +349,7 @@ mkProcId
   => ZipperId
   -> [ArrProc w m]
   -> ArrProc w m
-mkProcId zid procs = evolution $ mkMachine zid evolutionControl procs
+mkProcId zid procs = evolution $ mkMachine zid procs
   where
     ZProcEvolution {..} = zprocEvolution
     evolution

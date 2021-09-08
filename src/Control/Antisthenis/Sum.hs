@@ -18,9 +18,9 @@ import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Proxy
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Monoid
+import           Data.Utils.Tup
 import           GHC.Generics
 
 data SumTag p v
@@ -54,9 +54,6 @@ instance Applicative (SumPartialRes p v) where
 instance Default (SumPartialRes p v a) where
   def = SumPartInit
 
-tr0 :: a -> a
-tr0 = id
-
 instance (AShow v
          ,Ord2 v v
          ,Invertible v
@@ -78,10 +75,8 @@ instance (AShow v
      ,evolutionEmptyErr = error "No arguments provided to the sum."
     }
   putRes newBnd (partialRes,newZipper) =
-    tr $ (\() -> add partialRes newBnd) <$> newZipper
+    (\() -> add partialRes newBnd) <$> newZipper
     where
-      tr =
-        trace ("putRes: " ++ ashow (newBnd,partialRes,zipperShape newZipper))
       add SumPartInit bnd = toPartial bnd
       add e@(SumPartErr _) _ = e
       add (SumPart partRes) bnd = case bnd of
@@ -95,70 +90,64 @@ instance (AShow v
         BndRes (Sum (Just i)) -> SumPart $ Min' i
         BndErr e              -> SumPartErr e
   replaceRes oldBnd newBnd (oldRes,newZipper) =
-    tr $ Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
-    where
-      tr =
-        trace
-        $ "replaceRes: " ++ ashow (oldBnd,newBnd,oldRes,zipperShape newZipper)
+    Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
   zLocalizeConf coepoch conf z =
-    tr
-    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
-      tr x =
-        trace
-          ("zLocalizeConf(sum): "
-           ++ ashow (confCap conf,fmap confCap x,zipperShape z))
-          x
-      newCap = case zRes z of
-        SumPartErr _ -> CapStruct (-1)
-        SumPartInit -> case confCap conf of
-          CapStruct s -> CapStruct $ s - 1
-          x           -> x
-        SumPart partRes -> case confCap conf of
-          -- partRes is the total sum so far. We offset the global cap
-          -- by the sum so far so that the local cap ensures that the
-          -- cursor process, when ran, does not cause the overall
-          -- bound to exceed the global cap. This may generate weird
-          -- caps like negative values. That is ok as it should be
-          -- handled by the evolutionControl function.
-          CapVal cap -> CapVal $ case zCursor z of
-            Identity (Nothing,_,_) -> cap `subMin` partRes
-            Identity (Just cursBnd,_,_) -> (cap `subMin` partRes)
-              `addMin` cursBnd
-          CapStruct s -> CapStruct $ s - 1
-          ForceResult -> ForceResult
+      newCap =
+        case zRes z    -- zRes does not contain result in cursor
+         of
+          SumPartErr _ -> CapStruct (-1)
+          SumPartInit -> case confCap conf of
+            CapStruct s -> CapStruct $ s - 1
+            x           -> x
+          SumPart partRes -> case confCap conf of
+            -- partRes is the total sum so far. We offset the global cap
+            -- by the sum so far so that the local cap ensures that the
+            -- cursor process, when ran, does not cause the overall
+            -- bound to exceed the global cap. This may generate weird
+            -- caps like negative values. That is ok as it should be
+            -- handled by the evolutionControl function. Note again that
+            -- zRes does not include the value under cursor.
+            CapVal cap  -> CapVal $ cap `subMin` partRes
+            CapStruct s -> CapStruct $ s - 1
+            ForceResult -> ForceResult
 
 subMin :: Invertible v => Min' v -> Min' v -> Min' v
 subMin (Min' a) (Min' b) = Min' $ a `imappend` inv b
 addMin :: Semigroup v => Min' v -> Min' v -> Min' v
 addMin (Min' a) (Min' b) = Min' $ a <> b
 
+
 -- | Return the result expected or Nothing if there is more evolving
 -- that needs to happen before a valid (ie that satisfies the cap)
 -- result can be produced. This can only return bounds.
 sumEvolutionControl
-  :: forall v p m . (Invertible v,Ord2 v v,AShow v,AShow (ExtError p))
+  :: forall v p m .
+  (Invertible v,Ord2 v v,Semigroup v,AShow v,AShow (ExtError p))
   => GConf (SumTag p v)
   -> Zipper (SumTag p v) (ArrProc (SumTag p v) m)
   -> Maybe (BndR (SumTag p v))
-sumEvolutionControl conf z = tr $ case zRes z of
+sumEvolutionControl conf z = case zFullResSum z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     CapStruct i -> ifNegI i Nothing (Just $ BndBnd $ Min' mempty)
     -- If the local bound is negative then
-    CapVal bnd  -> ifNegM bnd (Just $ BndBnd $ Min' mempty) Nothing
+    CapVal cap  -> ifNegM cap (Just $ BndBnd $ Min' mempty) Nothing
     _           -> Nothing
-  SumPart bound -> case confCap conf of
-    CapVal cap  -> ifLt cap bound (Just $ BndBnd bound) Nothing
-    CapStruct i -> ifLt (0 :: Int) i (Just $ BndBnd bound) Nothing
+  SumPart bnd -> case confCap conf of
+    CapVal cap  -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
+    CapStruct i -> ifLe i (0 :: Int) (Just $ BndBnd bnd) Nothing
     ForceResult -> Nothing
   where
-    tr = fmap $ \x -> case x of
-      BndBnd bnd -> trace ("return(sum): BndBnd " ++ ashow bnd) x
-      _          -> trace "return(sum): <other>" x
     ifNegI i = ifLt i (0 :: Int)
     ifNegM bnd = ifLt bnd (Min' mempty :: Min' v)
+
+-- | The full result includes both zRes and zCursor.
+zFullResSum
+  :: Semigroup v => Zipper (SumTag p v) p0 -> SumPartialRes p v (Min' v)
+zFullResSum z = maybe id addMin (fst3 $ runIdentity $ zCursor z) <$> zRes z
 
 sumEvolutionStrategy
   :: Monad m
@@ -177,7 +166,8 @@ sumEvolutionStrategy fin = recur
         CmdIt it -> recur $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
         CmdInit ini -> recur ini
         CmdFinished (ExZipper z)
-          -> let res = case zRes z of
+          -> let res = case zRes z of -- cursor is wrapped in EmptyF so zRes is the
+                                     -- only result.
                    SumPart (Min' bnd) -> BndRes $ Sum $ Just bnd
                    SumPartInit        -> BndRes $ Sum Nothing
                    SumPartErr e       -> BndErr e in return (fin res,res)

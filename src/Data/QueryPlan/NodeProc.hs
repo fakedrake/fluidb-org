@@ -18,6 +18,7 @@ import           Control.Antisthenis.Convert
 import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.Zipper
+import           Control.Antisthenis.ZipperId
 import           Control.Arrow                              hiding ((>>>))
 import           Control.Monad.Except
 import           Control.Monad.Identity
@@ -26,13 +27,11 @@ import           Control.Monad.State
 import           Control.Monad.Writer                       hiding (Sum)
 import qualified Data.List.NonEmpty                         as NEL
 import           Data.NodeContainers
-import           Data.Profunctor
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.ProcTrail
 import           Data.QueryPlan.Types
-import           Data.String
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Default
@@ -63,17 +62,13 @@ makeCostProc ref deps =
     procMin
       :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
       -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
-    procMin ns =
-      lmap (\conf -> conf { confTrPref = zidName mid : confTrPref conf })
-      $ mkProcId mid ns
+    procMin ns = mkProcId mid ns
       where
         mid = zidDefault $ "min:" ++ ashow ref
     procSum :: Int
             -> [NodeProc t n (SumTag (PlanParams n) v)]
             -> NodeProc t n (SumTag (PlanParams n) v)
-    procSum i ns =
-      lmap (\conf -> conf { confTrPref = zidName mid : confTrPref conf })
-      $ mkProcId mid ns
+    procSum i ns = mkProcId mid ns
       where
         mid = zidDefault $ "sum[" ++ show i ++ "]:" ++ ashow ref
 
@@ -93,19 +88,15 @@ mkNewMech
   -> NodeProc t n (CostParams n v)
 mkNewMech mc@MechConf {..} ref = squashMealy $ do
   mops <- lift3 $ findCostedMetaOps ref
-  traceM $ ashow mops
   -- Should never see the same val twice.
   let mechs =
-        [DSetR { dsetConst = Sum $ Just $ mcMkCost ref cost
-                ,dsetNeigh =
-                   [getOrMakeMech ref mc n | n <- toNodeList $ metaOpIn mop]
-               } | (mop,cost) <- mops]
+        [DSetR
+          { dsetConst = Sum $ Just $ mcMkCost ref cost
+           ,dsetNeigh = [getOrMakeMech mc n | n <- toNodeList $ metaOpIn mop]
+          } | (mop,cost) <- mops]
   let costProcess = makeCostProc ref mechs
-  -- XXX: If we have ephemeral errors we do not need a trail.
-  let mkErr trail = ErrCycle ref trail
   let ret =
         asSelfUpdating
-        -- $ withTrail mkErr ref
         $ mkEpoch id ref >>> mcIsMatProc ref costProcess ||| costProcess
   return ret
   where
@@ -114,9 +105,8 @@ mkNewMech mc@MechConf {..} ref = squashMealy $ do
     asSelfUpdating (MealyArrow f) = MealyArrow $ fromKleisli $ \c -> do
       (nxt,r) <- toKleisli f c
       let nxt' = asSelfUpdating nxt
-      traceM $ "updateMechMap " ++ ashow (ref,r)
       lift2 $ modify $ modL mcMechMapLens $ refInsert ref nxt'
-      return (nxt',r)
+      return (getOrMakeMech mc ref,r)
 
 data MechConf t n v =
   MechConf
@@ -131,18 +121,15 @@ data a :>:  b = Lens { getL :: a -> b,modL :: (b -> b) -> a -> a }
 -- rounds we are not.
 getOrMakeMech
   :: (Invertible v,Ord2 v v,AShow v)
-  => NodeRef n
-  -> MechConf t n v
+  => MechConf t n v
   -> NodeRef n
   -> NodeProc t n (SumTag (PlanParams n) v)
-getOrMakeMech parentRef mc@MechConf {..} ref = squashMealy $ do
+getOrMakeMech mc@MechConf {..} ref = squashMealy $ do
   lift2 (gets $ refLU ref . getL mcMechMapLens) >>= \case
     Nothing -> do
-      traceM $ "getOrMakeMech:new-mech: " ++ ashow (parentRef,ref)
       lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
       return $ mkNewMech mc ref
     Just x -> do
-      traceM $ "getOrMakeMech:found-mech: " ++ ashow (parentRef,ref)
       -- Note: One might think that inserting an temporary error here
       -- might affect correctness. This argument goes something like
       -- this: the value returned by this mech (the temp error) will
@@ -188,19 +175,18 @@ getCost
   -> Cap (Min' v)
   -> NodeRef n
   -> PlanT t n m (Maybe v)
-getCost mc extraMat cap ref = wrapTrace ("Top: getCost " ++ show ref) $ do
+getCost mc extraMat cap ref = do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
-  traceM $ "Mat: " ++ ashow (states,extraStates)
   ((res,_coepoch),_trail) <- planQuickRun
     $ (`runReaderT` 1)
     $ (`runStateT` def)
     $ runWriterT
-    $ runMech (getOrMakeMech ref mc ref)
+    $ runMech (getOrMakeMech  mc ref)
     $ Conf
     { confCap = cap
      ,confEpoch = states <> extraStates
-     ,confTrPref = ["topLevel:" ++ ashow ref]
+     ,confTrPref = ()
     }
   case res of
     BndRes (Sum (Just r)) -> return $ Just r

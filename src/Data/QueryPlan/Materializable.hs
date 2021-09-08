@@ -34,11 +34,7 @@ isMaterializable ref = do
     $ (`runStateT` def)
     $ runWriterT
     $ runMech (getOrMakeMech ref)
-    $ Conf
-    { confCap = ForceResult
-     ,confEpoch = states
-     ,confTrPref = ["topLevel:" ++ ashow ref]
-    }
+    $ Conf { confCap = ForceResult,confEpoch = states,confTrPref = () }
   case res of
     BndRes GBool {..} -> return $ unExists gbTrue
     BndBnd _bnd -> throwPlan "We forced the result but got a partial result."
@@ -58,15 +54,11 @@ makeIsMatableProc ref deps =
   where
     procAnd :: [NodeProc0 t n (OrTag n) (AndTag n)]
             -> NodeProc0 t n (OrTag n) (AndTag n)
-    procAnd ns =
-      arr (\conf -> conf { confTrPref = [mid] })
-      >>> mkProcId (fromString mid) ns
+    procAnd ns = mkProcId (fromString mid) ns
       where
         mid = "min:" ++ ashow ref
     procOr :: [NodeProc t n (OrTag n)] -> NodeProc t n (OrTag n)
-    procOr ns =
-      arr (\conf -> conf { confTrPref = [mid] })
-      >>> mkProcId (fromString mid) ns
+    procOr ns = mkProcId (fromString mid) ns
       where
         mid = "sum:" ++ ashow ref
 
