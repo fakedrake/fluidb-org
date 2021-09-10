@@ -155,6 +155,7 @@ plennedCostConf =
   { mcIsMatProc = const $ const $ arr $ const $ BndRes $ Sum $ Just mempty
    ,mcMechMapLens = lens
    ,mcMkCost = \ref cost -> PlanCost { pcPlan = nsSingleton ref,pcCost = cost }
+   ,mcCompStack = BndErr . ErrCycleEphemeral
   }
   where
     lens = Lens { getL = gcMechMap,modL = \f gsc
@@ -164,8 +165,7 @@ setNodeStateSafe :: MonadLogic m =>
                    NodeRef n -> IsMat -> PlanT t n m ()
 setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
 {-# INLINE setNodeStateSafe' #-}
-{-# OPTIONS_GHC -Wno-deferred-type-errors #-}
-{-# OPTIONS_GHC -Wno-deferred-type-errors #-}
+
 setNodeStateSafe' :: MonadLogic m =>
                     PlanT t n m (MetaOp t n)
                   -> NodeRef n -> IsMat -> PlanT t n m ()

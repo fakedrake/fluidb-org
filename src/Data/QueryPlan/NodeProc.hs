@@ -14,7 +14,7 @@
 module Data.QueryPlan.NodeProc (NodeProc,getCost,MechConf(..),(:>:)(..)) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
-import           Control.Antisthenis.ATL.Common
+import           Control.Antisthenis.ATL.Class.Writer
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Convert
@@ -30,15 +30,16 @@ import           Control.Monad.State
 import           Control.Monad.Writer                        hiding (Sum)
 import           Data.Foldable
 import qualified Data.List.NonEmpty                          as NEL
+import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Profunctor
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
-import           Data.QueryPlan.ProcTrail
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
+import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.Monoid
 
@@ -83,38 +84,51 @@ type NoMatProc t n v =
   -> NodeProc t n (SumTag (PlanParams n) v) -- The mat proc constructed by the node under consideration
   -> NodeProc t n (SumTag (PlanParams n) v)
 
+
+-- | Check that a node is materialized and add mark it as such in the
+-- coepoch.
+ifMaterialized
+  :: NodeRef n
+  -> NodeProc t n (CostParams n v)
+  -> NodeProc t n (CostParams n v)
+  -> NodeProc t n (CostParams n v)
+ifMaterialized ref t e = squashMealy $ \conf -> do
+  let isMater = fromMaybe False $ ref `refLU` peParams (confEpoch conf)
+  tell $ mempty { pceParams = refFromAssocs [(ref,isMater)] }
+  traceM $ "isMaterialized: " ++ ashow (ref,isMater)
+  return (conf,if isMater then t else e)
+
 -- | Build AND INSERT a new mech in the mech directory. The mech does
--- not update it's place in the mech map.
+-- not update it's place in the mech map.α
 mkNewMech
   :: forall t n v .
   (Invertible v,Ord2 v v,AShow v,InitRef n)
   => MechConf t n v
   -> NodeRef n
   -> NodeProc t n (CostParams n v)
-mkNewMech mc@MechConf {..} ref = squashMealy $ do
-  mops <- lift2 $ findCostedMetaOps ref
-  -- Should never see the same val twice.
-  traceM $ "mkNewMech " ++ ashow (ref,fst <$> mops)
-  let mechs =
-        [DSetR
-          { dsetConst = Sum $ Just $ mcMkCost ref cost
-           ,dsetNeigh = [getOrMakeMech mc n | n <- toNodeList $ metaOpIn mop]
-          } | (mop,cost) <- mops]
-  let costProcess = makeCostProc ref mechs
-  return
-    $ asSelfUpdating
-    $ mkEpoch id ref >>> mcIsMatProc ref costProcess ||| costProcess
+mkNewMech mc@MechConf {..} ref =
+  asSelfUpdating $ ifMaterialized ref (mcIsMatProc ref costProcess) costProcess
   where
+    costProcess = squashMealy $ \conf -> do
+      mops <- lift2 $ findCostedMetaOps ref
+      -- Should never see the same val twice.
+      traceM $ "mkNewMech " ++ ashow (ref,fst <$> mops)
+      let mechs =
+            [DSetR { dsetConst = Sum $ Just $ mcMkCost ref cost
+                    ,dsetNeigh =
+                       [getOrMakeMech mc n | n <- toNodeList $ metaOpIn mop]
+                   } | (mop,cost) <- mops]
+      return (conf,makeCostProc ref mechs)
     asSelfUpdating :: NodeProc t n (CostParams n v)
                    -> NodeProc t n (CostParams n v)
     asSelfUpdating (MealyArrow f) = MealyArrow $ fromKleisli $ \c -> do
-      (nxt,r) <- toKleisli f c
+      ((nxt,r),coepoch) <- listen $ toKleisli f c
       traceM $ "drop-trail:" ++ ashow ref
       lift2
         $ modify
         $ modL mcMechMapLens
         $ refInsert ref
-        $ rmap (\x -> trace ("result: " ++ ashow (ref,x)) x)
+        $ rmap (\x -> trace ("result: " ++ ashow (ref,x,pcePred coepoch)) x)
         $ asSelfUpdating nxt
       return (getOrMakeMech mc ref,r)
 
@@ -140,16 +154,18 @@ markComputable ref conf =
 -- The property is that assuming a value is not computable while
 -- computing the value itself should not affact the final result.
 satisfyComputability
-  :: MechConf t n v
+  :: (Invertible v,Ord2 v v,AShow v,InitRef n)
+  => MechConf t n v
   -> NodeProc t n (CostParams n v)
   -> NodeProc t n (CostParams n v)
 satisfyComputability mc c = mkNodeProc $ \conf -> do
   -- first run normally.
   r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
   -- Solve each predicate.
-  case toNodeList $ pData $ pcePred coepoch of
+  case toNodeList $ pNonComputables $ pcePred coepoch of
     [] -> return r
     assumedNonComputables -> do
+      traceM $ "Checking computability of: " ++ ashow assumedNonComputables
       actuallyComputables <- filterM (isComputableM conf) assumedNonComputables
       let conf' = foldl' (flip markComputable) conf actuallyComputables
       runNodeProc (satisfyComputability mc nxt0) conf'
@@ -163,18 +179,21 @@ satisfyComputability mc c = mkNodeProc $ \conf -> do
         BndErr _ -> False
         _        -> True
 
-isPredicated :: NodeRef n -> ZCoEpoch (CostParams n v) -> Bool
-isPredicated ref coepoch = nsMember ref $ pData $ pcePred coepoch
-markNonComputable :: NodeRef n -> Predicates n
-markNonComputable n = mempty { pDrop = [n] }
-assumeNonComputable :: NodeRef n -> Predicates n
-assumeNonComputable n = mempty { pData = nsSingleton n }
+markNonComputable :: NodeRef n -> PlanCoEpoch n
+markNonComputable
+  n = mempty { pcePred = mempty { pNonComputables = nsSingleton n } }
+unmarkNonComputable :: NodeRef n -> PlanCoEpoch n -> PlanCoEpoch n
+unmarkNonComputable ref pe =
+  pe { pcePred = (pcePred pe)
+         { pNonComputables = nsDelete ref $ pNonComputables $ pcePred pe }
+     }
 
 data MechConf t n v =
   MechConf
   { mcMechMapLens :: GCState t n :>: RefMap n (NodeProc t n (CostParams n v))
    ,mcMkCost      :: NodeRef n -> Cost -> v
    ,mcIsMatProc   :: NoMatProc t n v
+   ,mcCompStack   :: NodeRef n -> BndR (CostParams n v)
   }
 
 data a :>:  b = Lens { getL :: a -> b,modL :: (b -> b) -> a -> a }
@@ -185,38 +204,45 @@ getOrMakeMech
   :: (Invertible v,Ord2 v v,AShow v,InitRef n)
   => MechConf t n v
   -> NodeRef n
-  -> NodeProc t n (SumTag (PlanParams n) v)
-getOrMakeMech mc@MechConf {..} ref = squashMealy $ do
+  -> NodeProc t n (CostParams n v)
+getOrMakeMech mc@MechConf {..} ref = squashMealy $ \conf -> do
   traceM $ "lu-ref:" ++ ashow ref
-  lift2 (gets $ refLU ref . getL mcMechMapLens) >>= \case
-    Nothing -> do
-      lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
-      return $ mkNewMech mc ref
-    Just x -> do
-      -- Note: One might think that inserting an temporary error here
-      -- might affect correctness. This argument goes something like
-      -- this: the value returned by this mech (the temp error) will
-      -- be used by a nested computation. However, when this actually
-      -- returns a non-temporary value it may very well not be an
-      -- error. This means that during the computatuion this cell
-      -- CHANGED ITS VALUE which is supposedly not possible since each
-      -- cell only has ONE correct concrete value. This argument is
-      -- logical but it does not hold because the temporary cycle
-      -- error has a lifespan exacly equal to the time it takes to
-      -- come up with ANY value for the node's computation. When the
-      -- computation comes up with a value, concrete or just a bound,
-      -- it will be overwritten and that value WILL actually be
-      -- correct. We know that all triggered mechs will have returned
-      -- some value before getCost finishes so at the end all mechs
-      -- will contain a correct value.
-      --
-      -- All this also means that it is not possible for a node
-      -- process to be rotated independently from two different places
-      -- because it can't be looked up.
-      traceM $ "put-trail1:" ++ ashow ref
-      lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
-      return x
+  mechM <- lift2 $ gets $ refLU ref . getL mcMechMapLens
+  lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc mc ref
+  return (conf,censorPredicate ref $ fromMaybe (mkNewMech mc ref) mechM)
 
+-- | Return an error (uncomputable) and insert a predicate that
+-- whatever results we come up with are predicated on ref being
+-- uncomputable
+cycleProc :: MechConf t n v -> NodeRef n -> NodeProc t n (CostParams n v)
+cycleProc mc ref =
+  arrCoListen'
+  $ arr
+  $ const (markNonComputable ref,mcCompStack mc ref)
+
+-- | Make sure the predicate of a node being non-computable does not
+-- propagate outside of the process. This is useful for wrapping
+-- processes that may recurse. If the predicate at NodeRef is indeed
+-- non-computable then the predicate holds and we should remove it
+-- from the coepoch. If the predicate of ref being non-computable does
+-- not hold then the function of assuming non-computability when
+-- coming up with said result was to avoid a fixpoint.
+--
+-- We need a good theoretical foundation on how fixpoints are handled
+-- for the particular operators we use.
+censorPredicate
+  :: NodeRef n
+  -> NodeProc t n (CostParams n v)
+  -> NodeProc t n (CostParams n v)
+censorPredicate ref c = arrCoListen' $ rmap go $ arrListen' c
+  where
+    go (coepoch,ret) = case ret of
+      BndErr ErrCycleEphemeral {}
+        -> (unmarkNonComputable ref coepoch
+           ,BndErr
+              ErrCycle
+              { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch })
+      _ -> (unmarkNonComputable ref coepoch,ret)
 
 planQuickRun :: Monad m => PlanT t n Identity a -> PlanT t n m a
 planQuickRun m = do
@@ -241,7 +267,11 @@ getCost mc extraMat cap ref = wrapTrace ("getCost: " ++ ashow ref) $ do
     $ runWriterT
     $ runMech
       (let ?initRef = ref in satisfyComputability mc $ getOrMakeMech mc ref)
-    $ Conf { confCap = cap,confEpoch = states <> extraStates,confTrPref = () }
+    $ Conf
+    { confCap = cap
+     ,confEpoch = def { peParams = states <> extraStates }
+     ,confTrPref = ()
+    }
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just mempty

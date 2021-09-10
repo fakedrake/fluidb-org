@@ -12,23 +12,25 @@ import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Binom
 import           Data.Utils.ListT
-import           Data.Utils.Monoid
 
-historicalCostConf :: MechConf t n Cost
+
+historicalCostConf :: MechConf t n PCost
 historicalCostConf =
   MechConf
   { mcMechMapLens = histMapLens
-   ,mcMkCost = justCost
+   ,mcMkCost = mkCost
    ,mcIsMatProc = noMatCost
+   ,mcCompStack = \_ref -> BndRes $ pure var
   }
   where
-    justCost = \_ref cost -> cost
+    mkCost _ref cost = toIBinom cost
     histMapLens = Lens { getL = gcHistMechMap,modL = \f gc
       -> gc { gcHistMechMap = f $ gcHistMechMap gc } }
 
 -- | The expected cost of the next query.
-pastCosts :: Monad m => NodeSet n -> ListT (PlanT t n m) (Maybe Cost)
+pastCosts :: Monad m => NodeSet n -> ListT (PlanT t n m) (Maybe PCost)
 pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
@@ -43,32 +45,37 @@ pastCosts extraMat = do
 -- invariants.
 noMatCost
   :: NodeRef n
-  -> NodeProc t n (SumTag (PlanParams n) Cost)
-  -> NodeProc t n (SumTag (PlanParams n) Cost)
+  -> NodeProc t n (SumTag (PlanParams n) PCost)
+  -> NodeProc t n (SumTag (PlanParams n) PCost)
 noMatCost _ref matCost = recur
   where
     recur = MealyArrow $ fromKleisli $ \conf -> do
-      scale <- ask
-      if scale < 0.1 then return (recur,BndRes 0) else do
+      curScale <- ask
+      if curScale < 0.1 then return (recur,BndRes zero) else do
         (nxt,ret) <- local (* factor)
           $ second changeBound
           <$> toKleisli (runMealyArrow matCost) (changeCap conf)
         return (nxt,case ret of
-          BndErr _ -> BndRes 0
+          BndErr _ -> BndRes zero
           _        -> ret)
+    zero = pure $ toIBinom 0
     factor = 0.5
     changeBound = \case
-      BndBnd (Min' b) -> BndBnd $ Min' $ scaleCost factor b
-      BndRes r        -> BndRes $ scaleCost factor <$> r
-      e@(BndErr _)    -> e
+      BndBnd b     -> BndBnd $ fmap (scalePCost factor) b
+      BndRes r     -> BndRes $ scalePCost factor <$> r
+      e@(BndErr _) -> e
     changeCap conf = conf { confCap = case confCap conf of
-      CapVal c    -> CapVal $ scaleCost (1 / factor) <$> c
+      CapVal c    -> CapVal $ scalePCost (1 / factor) <$> c
       ForceResult -> ForceResult
       CapStruct i -> CapStruct i }
 
 
+
+
+scalePCost :: Double -> PCost -> PCost
+gscalePCost = fmap . scaleCost
 scaleCost :: Double -> Cost -> Cost
-scaleCost scale Cost {..} =
+scaleCost sc Cost {..} =
   Cost { costReads = scaleI costReads,costWrites = scaleI costWrites }
   where
-    scaleI x = round $ scale * fromIntegral x
+    scaleI x = round $ sc * fromIntegral x

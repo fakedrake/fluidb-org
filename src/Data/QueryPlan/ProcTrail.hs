@@ -58,10 +58,10 @@ withTrail cycleErr ref m =
 -- decide the continued legitimacy of the current value.
 mkEpoch
   :: (ZCoEpoch w ~ RefMap n Bool
-     ,ZEpoch w ~ RefMap n Bool
-     ,AShow (ZCap w)
-     ,Monoid (ExtCoEpoch (PlanParams n)))
-  => (Conf w -> whenMat)
+    ,ZEpoch w ~ RefMap n Bool
+    ,AShow (ZCap w)
+    ,Monoid (ExtCoEpoch (PlanParams n)))
+  => (Conf (CostParams n v) -> whenMat)
   -> NodeRef n
   -> Arr (NodeProc t n w) (Conf w) (Either whenMat (Conf w))
 mkEpoch whenMat ref = mealyLift $ fromKleisli $ \conf -> do

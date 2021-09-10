@@ -22,6 +22,7 @@
 
 module Data.QueryPlan.Types
   (Transition(..)
+  ,PCost
   ,QueryHistory(..)
   ,PlanT
   ,IsMatable
@@ -89,6 +90,7 @@ import           Data.Query.QuerySize
 import           Data.QueryPlan.CostTypes
 import           Data.String
 import           Data.Utils.AShow
+import           Data.Utils.Binom
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
@@ -147,12 +149,13 @@ provenanceAsBool = \case
   EitherRight -> True
   SplitRight  -> True
 
+type PCost = IBinom Cost
 type IsMatable = Bool
 data GCState t n =
   GCState
   { frontier :: NodeSet n
    ,gcMechMap :: RefMap n (NodeProc t n (SumTag (PlanParams n) (PlanCost n)))
-   ,gcHistMechMap :: RefMap n (NodeProc t n (SumTag (PlanParams n) Cost))
+   ,gcHistMechMap :: RefMap n (NodeProc t n (SumTag (PlanParams n) PCost))
    ,matableMechMap :: RefMap n (NodeProc t n (BoolTag Or (PlanParams n)))
    ,gcCache :: GCCache (MetaOp t n) t n
    ,epochs :: NEL.NonEmpty (GCEpoch t n)
@@ -206,7 +209,6 @@ branchingIdTrace msg = do
   return $ printf "[branch:%s] %s" (
     show
     $ reverse
-    -- $ fmap (catMaybes . provenanceAsBool)
     $ provenance st)
     msg
 
@@ -459,24 +461,26 @@ liftNodeProc = convArrProc
 {-# INLINE liftNodeProc #-}
 
 data PlanParams n
-data Predicates n
-  = Predicates {pDrop :: [NodeRef n], pData :: NodeSet n }
-
+newtype Predicates n = Predicates { pNonComputables :: NodeSet n }
+  deriving Generic
+instance AShow (Predicates n)
 isEmptyPredicates :: Predicates n -> Bool
-isEmptyPredicates = nsNull . pData
+isEmptyPredicates = nsNull . pNonComputables
 instance Semigroup (Predicates n) where
   p <> p' =
-    Predicates
-    { pDrop = pDrop p
-     ,pData = foldl' (flip nsDelete) (pData p) (pDrop p') <> pData p'
-    }
+    Predicates { pNonComputables = pNonComputables p <> pNonComputables p' }
 instance Monoid (Predicates n) where
-  mempty = Predicates [] mempty
+  mempty = Predicates mempty
 type CoPredicates n = NodeSet n
 data PlanEpoch n =
   PlanEpoch { peCoPred :: CoPredicates n,peParams :: RefMap n Bool }
-data PlanCoEpoch n
-  = PlanCoEpoch { pcePred :: Predicates n,pceParams :: RefMap n Bool }
+  deriving Generic
+data PlanCoEpoch n =
+  PlanCoEpoch { pcePred :: Predicates n,pceParams :: RefMap n Bool }
+  deriving Generic
+instance  AShow (PlanCoEpoch n)
+instance  AShow (PlanEpoch n)
+instance Default (PlanEpoch n)
 instance Monoid (PlanCoEpoch n) where
   mempty = PlanCoEpoch mempty mempty
 instance Semigroup  (PlanCoEpoch n) where
@@ -497,7 +501,7 @@ instance ExtParams (PlanParams n) where
     where
       predicatesMatch =
         nsNull (peCoPred epoch)
-        || nsDisjoint (pData $ pcePred coepoch) (peCoPred epoch)
+        || nsDisjoint (pNonComputables $ pcePred coepoch) (peCoPred epoch)
       paramsMatch =
         and
         $ refIntersectionWithKey

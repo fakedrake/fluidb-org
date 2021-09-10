@@ -78,6 +78,7 @@ import           Data.List
 import           Data.Proxy
 import           Data.String
 import           Data.Utils.AShow
+import           Data.Utils.Binom
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
@@ -102,8 +103,8 @@ type CoitProc a = a
 -- | Error related to indexes
 data IndexErr i
   = ErrMissing i
-  | ErrCycle
-  | ErrCycleEphemeral i
+  | ErrCycleEphemeral { ecCur :: i }
+  | ErrCycle { ecPred :: OptSet i,ecCur :: i }
   | NoArguments
   deriving Generic
 instance (AShow i,AShow (OptSet i))
@@ -376,6 +377,7 @@ class Ord2 a b where
   default compare2 :: (Ord a,a ~ b) => a -> b -> Ordering
   compare2 = compare
 
+
 instance Ord2 Int Int
 instance Ord2 Integer Integer
 instance Ord2 Float Float
@@ -387,6 +389,11 @@ instance Ord2 a b => Ord2 (Sum a) (Sum b) where
   compare2 (Sum Nothing) (Sum (Just _))  = GT
   compare2 (Sum (Just _)) (Sum Nothing)  = LT
   compare2 (Sum (Just a)) (Sum (Just b)) = compare2 a b
+-- | The variable always wins
+instance Ord2 a b => Ord2 (IBinom a) (IBinom b) where
+  compare2 (IBinom a b) (IBinom a' b') = case compare a a' of
+    EQ -> compare2 b b'
+    x  -> x
 
 omin :: Ord2 a a => a -> a -> a
 omin a b = case compare2 a b of

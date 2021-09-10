@@ -10,6 +10,7 @@ module Data.Utils.Monoid
   ,Max(..)
   ,Invertible(..)) where
 
+import           Data.Poly
 import           Data.Utils.AShow
 import           Data.Utils.Default
 import           GHC.Generics

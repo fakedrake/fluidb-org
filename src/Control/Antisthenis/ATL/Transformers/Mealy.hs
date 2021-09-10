@@ -211,13 +211,14 @@ mealyLift c = res
   where
     res = MealyArrow $ rmap (res,) c
 
--- | A mealy wrapped in a functor could become a mealy. The first
--- iteration of the mealy maching also includes the (ArrFunctor c)
--- effects but the rest are just normal.
+-- | A mealy wrapped in a functor could become a mealy. The argument
+-- is a mealy arrow wrapped in a boilerplate computation. The result
+-- is a mealy arrow where the wrapped computation happens before the
+-- first iteration.
 squashMealy
   :: (ArrowFunctor c,Monad (ArrFunctor c))
-  => ArrFunctor c (MealyArrow c a b)
+  => (a -> ArrFunctor c (a,MealyArrow c a b))
   -> MealyArrow c a b
 squashMealy m = MealyArrow $ fromKleisli $ \a -> do
-  MealyArrow m' <- m
-  toKleisli m' a
+  (a',MealyArrow m') <- m a
+  toKleisli m' a'
