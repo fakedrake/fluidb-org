@@ -102,10 +102,8 @@ type CoitProc a = a
 -- | Error related to indexes
 data IndexErr i
   = ErrMissing i
-  | ErrCycle { ecInitRef :: i } -- The cycle is valid only for a particular
-                               -- initial ref (really for a trail of
-                               -- initial refs but the top parent is
-                               -- good enough).
+  | ErrCycle
+  | ErrCycleEphemeral i
   | NoArguments
   deriving Generic
 instance (AShow i,AShow (OptSet i))

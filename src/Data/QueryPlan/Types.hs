@@ -28,6 +28,10 @@ module Data.QueryPlan.Types
   ,PlanSearchScore(..)
   ,MonadHaltD
   ,MetaOp(..)
+  ,Predicates(..)
+  ,CoPredicates
+  ,PlanEpoch(..)
+  ,PlanCoEpoch(..)
   ,pushHistory
   ,showMetaOp
   ,throwPlan
@@ -455,17 +459,48 @@ liftNodeProc = convArrProc
 {-# INLINE liftNodeProc #-}
 
 data PlanParams n
+data Predicates n
+  = Predicates {pDrop :: [NodeRef n], pData :: NodeSet n }
+
+isEmptyPredicates :: Predicates n -> Bool
+isEmptyPredicates = nsNull . pData
+instance Semigroup (Predicates n) where
+  p <> p' =
+    Predicates
+    { pDrop = pDrop p
+     ,pData = foldl' (flip nsDelete) (pData p) (pDrop p') <> pData p'
+    }
+instance Monoid (Predicates n) where
+  mempty = Predicates [] mempty
+type CoPredicates n = NodeSet n
+data PlanEpoch n =
+  PlanEpoch { peCoPred :: CoPredicates n,peParams :: RefMap n Bool }
+data PlanCoEpoch n
+  = PlanCoEpoch { pcePred :: Predicates n,pceParams :: RefMap n Bool }
+instance Monoid (PlanCoEpoch n) where
+  mempty = PlanCoEpoch mempty mempty
+instance Semigroup  (PlanCoEpoch n) where
+  PlanCoEpoch a b <> PlanCoEpoch a' b' = PlanCoEpoch (a <> a') (b <> b')
 
 instance ExtParams (PlanParams n) where
   type ExtError (PlanParams n) =
     IndexErr (NodeRef n)
-  type ExtEpoch (PlanParams n) = RefMap n Bool
-  type ExtCoEpoch (PlanParams n) = RefMap n Bool
+  type ExtEpoch (PlanParams n) = PlanEpoch n
+  type ExtCoEpoch (PlanParams n) = PlanCoEpoch n
   -- | When the coepoch is older than the epoch we must reset and get
   -- a fresh value for the process. Otherwise the progress made so far
   -- towards a value is valid and we should continue from there.
   --
   -- XXX: The cap may have changed though
   extCombEpochs Proxy coepoch epoch a =
-    if and $ refIntersectionWithKey (const (==)) coepoch epoch
-    then DontReset a else ShouldReset
+    if paramsMatch && predicatesMatch then DontReset a else ShouldReset
+    where
+      predicatesMatch =
+        nsNull (peCoPred epoch)
+        || nsDisjoint (pData $ pcePred coepoch) (peCoPred epoch)
+      paramsMatch =
+        and
+        $ refIntersectionWithKey
+          (const (==))
+          (pceParams coepoch)
+          (peParams epoch)

@@ -35,6 +35,7 @@ import qualified Data.List.NonEmpty                 as NEL
 import           Data.Maybe
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Monoid
 import           Data.Utils.Tup
 import           GHC.Generics
@@ -223,7 +224,8 @@ instance (AShow a
   -- Also handles the combination of epoch and coepoch that dictates
   -- whether we must reset.
   zLocalizeConf coepoch conf z =
-    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    tr
+    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (zSecondaryBound z,confCap conf) of
       (NeverSec,_) -> conf
       (NoSec,_) -> conf { confCap = CapVal (Min' mempty) }
@@ -233,6 +235,9 @@ instance (AShow a
       (SecSoft _ bnd,CapVal c) -> conf { confCap = CapVal $ omin bnd c }
       (SecConcrete res,ForceResult) -> conf { confCap = CapVal res }
       (SecSoft _ bnd,ForceResult) -> conf { confCap = CapVal bnd }
+    where
+      tr = id
+      -- tr = trace ("zLocalizeConf(min): " ++ ashow (zipperShape z,confCap conf))
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
@@ -243,7 +248,7 @@ minEvolutionControl
   => Conf (MinTag p v)
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
-minEvolutionControl conf z = case confCap conf of
+minEvolutionControl conf z = fmap traceRes $ case confCap conf of
   CapStruct i -> if i >= 0 then res else res
     <|> Just (BndBnd $ Min' mempty)
   ForceResult -> res >>= \case
@@ -264,6 +269,7 @@ minEvolutionControl conf z = case confCap conf of
       _             -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
     x -> return x
   where
+    traceRes r = trace ("return: " ++ ashow (zId z,r)) r
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of

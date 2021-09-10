@@ -6,28 +6,30 @@
 {-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE ViewPatterns          #-}
 module Data.QueryPlan.NodeProc (NodeProc,getCost,MechConf(..),(:>:)(..)) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Common
 import           Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Convert
 import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.Zipper
 import           Control.Antisthenis.ZipperId
-import           Control.Arrow                              hiding ((>>>))
+import           Control.Arrow                               hiding ((>>>))
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Writer                       hiding (Sum)
-import qualified Data.List.NonEmpty                         as NEL
+import           Control.Monad.Writer                        hiding (Sum)
+import           Data.Foldable
+import qualified Data.List.NonEmpty                          as NEL
 import           Data.NodeContainers
 import           Data.Profunctor
 import           Data.QueryPlan.CostTypes
@@ -37,10 +39,8 @@ import           Data.QueryPlan.ProcTrail
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
-import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.Monoid
-
 
 type InitRef n = (?initRef :: NodeRef n)
 
@@ -94,6 +94,7 @@ mkNewMech
 mkNewMech mc@MechConf {..} ref = squashMealy $ do
   mops <- lift2 $ findCostedMetaOps ref
   -- Should never see the same val twice.
+  traceM $ "mkNewMech " ++ ashow (ref,fst <$> mops)
   let mechs =
         [DSetR
           { dsetConst = Sum $ Just $ mcMkCost ref cost
@@ -117,6 +118,58 @@ mkNewMech mc@MechConf {..} ref = squashMealy $ do
         $ asSelfUpdating nxt
       return (getOrMakeMech mc ref,r)
 
+markComputable :: NodeRef n -> Conf (CostParams n v) -> Conf (CostParams n v)
+markComputable ref conf =
+  conf { confEpoch = (confEpoch conf)
+           { peCoPred = nsInsert ref $ peCoPred $ confEpoch conf }
+       }
+
+
+-- | Run the machine and see if there are any pradicates. Remember
+-- that predicates of a result are a set of nodes that need to be
+-- non-compuatable (cycle error) for the result to be valid. As
+-- results are solved the predicates are erased by the machines of the
+-- predicated nodes. When a predicated node is not computable and is
+-- predicated as such it is simply deleted. When a node is predicated
+-- as non computable and it turns out to be computable the exact same
+-- happens, but the reason is slightly different: due to
+-- non-oscillation property (xxx: define it more carefully) while its
+-- value turns out to be computable its presence does not change the
+-- value itself.
+--
+-- The property is that assuming a value is not computable while
+-- computing the value itself should not affact the final result.
+satisfyComputability
+  :: MechConf t n v
+  -> NodeProc t n (CostParams n v)
+  -> NodeProc t n (CostParams n v)
+satisfyComputability mc c = mkNodeProc $ \conf -> do
+  -- first run normally.
+  r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
+  -- Solve each predicate.
+  case toNodeList $ pData $ pcePred coepoch of
+    [] -> return r
+    assumedNonComputables -> do
+      actuallyComputables <- filterM (isComputableM conf) assumedNonComputables
+      let conf' = foldl' (flip markComputable) conf actuallyComputables
+      runNodeProc (satisfyComputability mc nxt0) conf'
+  where
+    mkNodeProc = MealyArrow . WriterArrow . fromKleisli
+    runNodeProc = toKleisli . runWriterArrow . runMealyArrow
+    isComputableM conf ref = do
+      (_coproc,(_nxt,ret))
+        <- runNodeProc (satisfyComputability mc $ getOrMakeMech mc ref) conf
+      return $ case ret of
+        BndErr _ -> False
+        _        -> True
+
+isPredicated :: NodeRef n -> ZCoEpoch (CostParams n v) -> Bool
+isPredicated ref coepoch = nsMember ref $ pData $ pcePred coepoch
+markNonComputable :: NodeRef n -> Predicates n
+markNonComputable n = mempty { pDrop = [n] }
+assumeNonComputable :: NodeRef n -> Predicates n
+assumeNonComputable n = mempty { pData = nsSingleton n }
+
 data MechConf t n v =
   MechConf
   { mcMechMapLens :: GCState t n :>: RefMap n (NodeProc t n (CostParams n v))
@@ -137,10 +190,9 @@ getOrMakeMech mc@MechConf {..} ref = squashMealy $ do
   traceM $ "lu-ref:" ++ ashow ref
   lift2 (gets $ refLU ref . getL mcMechMapLens) >>= \case
     Nothing -> do
-      traceM $ "put-trail:" ++ ashow ref
-      lift2 $ modify $ modL mcMechMapLens $ refInsert ref cycleProc
+      lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
       return $ mkNewMech mc ref
-    Just (MealyArrow (toKleisli -> x)) -> do
+    Just x -> do
       -- Note: One might think that inserting an temporary error here
       -- might affect correctness. This argument goes something like
       -- this: the value returned by this mech (the temp error) will
@@ -162,17 +214,8 @@ getOrMakeMech mc@MechConf {..} ref = squashMealy $ do
       -- process to be rotated independently from two different places
       -- because it can't be looked up.
       traceM $ "put-trail1:" ++ ashow ref
-      lift2 $ modify $ modL mcMechMapLens $ refInsert ref cycleProc
-      return $ MealyArrow $ fromKleisli $ \conf -> x
-        >=> (\a -> case a of
-               (_,BndErr (ErrCycle initRef0))
-                 -> if ?initRef == initRef0 then return a
-                 else toKleisli (runMealyArrow $ mkNewMech mc ref) conf
-               _ -> return a)
-
-
-cycleProc :: InitRef n => NodeProc t n (SumTag (PlanParams n) v)
-cycleProc = arr $ const $ BndErr $ ErrCycle ?initRef
+      lift2 $ modify $ modL mcMechMapLens $ refInsert ref $ cycleProc ref
+      return x
 
 
 planQuickRun :: Monad m => PlanT t n Identity a -> PlanT t n m a
@@ -196,14 +239,11 @@ getCost mc extraMat cap ref = wrapTrace ("getCost: " ++ ashow ref) $ do
   (res,_coepoch) <- planQuickRun
     $ (`runReaderT` 1) -- scaling
     $ runWriterT
-    $ runMech (let ?initRef=ref in getOrMakeMech mc ref)
-    $ Conf
-    { confCap = cap
-     ,confEpoch = states <> extraStates
-     ,confTrPref = ()
-    }
+    $ runMech
+      (let ?initRef = ref in satisfyComputability mc $ getOrMakeMech mc ref)
+    $ Conf { confCap = cap,confEpoch = states <> extraStates,confTrPref = () }
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
-    BndRes (Sum Nothing)  -> return $ Just mempty
-    BndBnd _bnd           -> return Nothing
-    BndErr e              -> throwPlan $ "getCost:antisthenis error: " ++ ashow e
+    BndRes (Sum Nothing) -> return $ Just mempty
+    BndBnd _bnd -> return Nothing
+    BndErr e -> throwPlan $ "getCost:antisthenis error: " ++ ashow e

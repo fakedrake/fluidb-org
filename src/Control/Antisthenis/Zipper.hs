@@ -309,6 +309,10 @@ handleLifetimes zid =
            ,zId = zidReset zid
           }
 
+
+
+-- | Handle the resets of an arrow. When cmdItCoit == ShouldReset
+-- chain the cmdReset is chained at the end.
 evalResetsArr
   :: forall conf m f r k s .
   Monad m

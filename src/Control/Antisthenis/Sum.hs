@@ -18,6 +18,7 @@ import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Monoid
 import           Data.Utils.Tup
@@ -92,9 +93,14 @@ instance (AShow v
   replaceRes oldBnd newBnd (oldRes,newZipper) =
     Just $ putRes newBnd ((`subMin` oldBnd) <$> oldRes,newZipper)
   zLocalizeConf coepoch conf z =
-    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    tr
+    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
+      tr = id
+      -- tr =
+      --   trace
+      --     ("zLocalizeConf(sum) " ++ ashow (zId z,zRes z,confCap conf,newCap))
       newCap =
         case zRes z    -- zRes does not contain result in cursor
          of
@@ -125,11 +131,11 @@ addMin (Min' a) (Min' b) = Min' $ a <> b
 -- result can be produced. This can only return bounds.
 sumEvolutionControl
   :: forall v p m .
-  (Invertible v,Ord2 v v,Semigroup v,AShow v,AShow (ExtError p))
+  (Invertible v,Ord2 v v,Semigroup v,AShow v,AShow (ExtError p),ExtParams p)
   => GConf (SumTag p v)
   -> Zipper (SumTag p v) (ArrProc (SumTag p v) m)
   -> Maybe (BndR (SumTag p v))
-sumEvolutionControl conf z = case zFullResSum z of
+sumEvolutionControl conf z = fmap traceRes $ case zFullResSum z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     CapStruct i -> ifNegI i Nothing (Just $ BndBnd $ Min' mempty)
@@ -141,6 +147,7 @@ sumEvolutionControl conf z = case zFullResSum z of
     CapStruct i -> ifLe i (0 :: Int) (Just $ BndBnd bnd) Nothing
     ForceResult -> Nothing
   where
+    traceRes r = trace ("return: " ++ ashow (zId z,r)) r
     ifNegI i = ifLt i (0 :: Int)
     ifNegM bnd = ifLt bnd (Min' mempty :: Min' v)
 

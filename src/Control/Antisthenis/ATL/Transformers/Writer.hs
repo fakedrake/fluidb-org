@@ -54,7 +54,7 @@ instance ArrowTransformer (WriterArrow w) where
 
 instance (Monoid w,Arrow c) => Category (WriterArrow w c) where
   WriterArrow bc . WriterArrow ab =
-    WriterArrow $ ab >>> id *** bc >>> arr (\(s,(s',x)) -> (s <> s',x))
+    WriterArrow $ ab >>> second bc >>> arr (\(s,(s',x)) -> (s <> s',x))
   id = arrLift id
   {-# INLINE (.) #-}
   {-# INLINE id #-}
