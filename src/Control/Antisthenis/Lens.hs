@@ -9,18 +9,17 @@ import           Data.Utils.Nat
 
 -- | A very simple lens to handle the infinite type problem.
 data a :>:  b =
-  Lens'
+  Lens
   { getL :: a -> b,modL :: (b -> b) -> a -> a }
 
 instance C.Category (:>:) where
-  a . b = Lens' { getL = getL a . getL b,modL = modL b . modL a  }
-  id = Lens' { getL = id,modL = id }
+  a . b = Lens { getL = getL a . getL b,modL = modL b . modL a }
+  id = Lens { getL = id,modL = id }
 
 class HasLens a b where
   defLens :: a :>: b
   default defLens :: a ~ b => a :>: b
   defLens = C.id
-
 
 ifLt :: (Ord b,HasLens a b) => a -> b ->  c -> c -> c
 ifLt a b t e = if getL defLens a < b then t else e

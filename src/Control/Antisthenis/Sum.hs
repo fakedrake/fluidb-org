@@ -55,6 +55,7 @@ instance (AShow v,AShow (ZErr (SumTag p v)))
   => AShow (SumPartialRes p v)
 
 instance (AShow v
+         ,AShow (ExtCap p)
          ,Ord v
          ,Subtr v
          ,Semigroup v
@@ -102,10 +103,9 @@ instance (AShow v
     $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
-      tr = id
-      -- tr =
-      --   trace
-      --     ("zLocalizeConf(sum) " ++ ashow (zId z,zRes z,confCap conf,newCap))
+      tr =
+        trace
+          ("zLocalizeConf(sum) " ++ ashow (zId z,zRes z,confCap conf,newCap))
       newCap = case zRes z of
         SumPartErr _ -> CapVal zero -- zero cap
         SumPartInit -> confCap conf
@@ -120,8 +120,10 @@ instance (AShow v
           CapVal cap  -> CapVal $ subCap cap partRes
           ForceResult -> ForceResult
 
-subCap :: HasLens cap (Min v) => cap -> Sum v -> cap
-subCap = error "not implemented"
+subCap :: forall cap v . (Subtr v,HasLens cap (Min v)) => cap -> Sum v -> cap
+subCap cap s = modL defLens (coerce . go . coerce :: Min v -> Min v) cap where
+  go :: Sum v -> Sum v
+  go s' = maybe (error "subtracting infinity from cap") (sub s') $ negSum s
 
 -- | Return the result expected or Nothing if there is more evolving
 -- that needs to happen before a valid (ie that satisfies the cap)

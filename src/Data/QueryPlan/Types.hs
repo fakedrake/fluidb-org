@@ -22,6 +22,10 @@
 
 module Data.QueryPlan.Types
   (Transition(..)
+  ,HistTag
+  ,CostTag
+  ,HistProc
+  ,CostProc
   ,PCost
   ,IsPlanParams
   ,PlanMech(..)
@@ -157,8 +161,8 @@ provenanceAsBool = \case
 
 type PCost = Comp Cost
 type IsMatable = Bool
-type HistProc t n = NodeProc t n (SumTag (PlanParams CostTag n) (PlanCost n))
-type CostProc t n = NodeProc t n (SumTag (PlanParams HistTag n) PCost)
+type CostProc t n = NodeProc t n (CostParams CostTag n)
+type HistProc t n = NodeProc t n (CostParams HistTag n)
 type MatProc t n = NodeProc t n (BoolTag Or (PlanParams CostTag n))
 data GCState t n =
   GCState
@@ -520,7 +524,16 @@ instance ExtParams (PlanParams CostTag n) where
   type ExtEpoch (PlanParams CostTag n) = PlanEpoch n
   type ExtCoEpoch (PlanParams CostTag n) = PlanCoEpoch n
   type ExtCap (PlanParams CostTag n) =
-    Min (PlanMechVal n CostTag)
+    Min (PlanMechVal CostTag n)
+  extCombEpochs _ = planCombEpochs
+
+instance ExtParams (PlanParams HistTag n) where
+  type ExtError (PlanParams HistTag n) =
+    IndexErr (NodeRef n)
+  type ExtEpoch (PlanParams HistTag n) = PlanEpoch n
+  type ExtCoEpoch (PlanParams HistTag n) = PlanCoEpoch n
+  type ExtCap (PlanParams HistTag n) =
+    Min (PlanMechVal HistTag n)
   extCombEpochs _ = planCombEpochs
 
 type IsPlanParams tag n =
@@ -534,6 +547,7 @@ type IsPlanParams tag n =
   ,Subtr (PlanMechVal tag n)
   ,Zero (PlanMechVal tag n)
   ,Zero (ExtCap (PlanParams tag n))
+  ,AShow (ExtCap (PlanParams tag n))
   ,HasLens (ExtCap (PlanParams tag n)) (Min (PlanMechVal tag n))
   ,PlanMech tag n)
 

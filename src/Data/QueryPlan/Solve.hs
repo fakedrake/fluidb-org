@@ -59,14 +59,17 @@ import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.HContT
 import           Data.Utils.ListT
-import           Data.Utils.Monoid
 import           Data.Utils.Tup
 
+import           Control.Antisthenis.Lens
 import           Control.Arrow
+import           Data.Proxy
+import           Data.QueryPlan.Comp
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
 import           Data.Utils.Default
+import           Data.Utils.Nat
 
 
 -- | run a bunch of common stuff to make the following more responsive.
@@ -130,16 +133,29 @@ haltPlan matRef mop = do
   extraCost <- metaOpCost [matRef] mop
   haltPlanCost $ fromIntegral $ costAsInt extraCost
 
+-- | Make a plan for a node to be concrete.
+instance PlanMech CostTag n where
+  type PlanMechVal CostTag n = PlanCost n
+  mcIsMatProc _ref _proc = arr $ const $ BndRes zero
+  mcMechMapLens =
+    Lens { getL = gcMechMap
+          ,modL = (\f gsc -> gsc { gcMechMap = f $ gcMechMap gsc })
+         }
+  mcMkCost Proxy ref cost = PlanCost { pcPlan = Just  $ nsSingleton ref,pcCost = cost }
+  mcCompStack = BndErr . ErrCycleEphemeral
+
+
+instance HasLens (Min (PlanCost n)) (Min (PlanCost n))
 haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
   (costs,extraNodes) <- runWriterT
     $ forM frefs
-    $ lift . getCost plennedCostConf mempty ForceResult >=> \case
-      Nothing -> return 0
+    $ lift . getCost @CostTag Proxy mempty ForceResult >=> \case
+      Nothing -> return zero
       Just c -> do
-        tell $ pcPlan c
+        maybe (return ()) tell $ pcPlan c
         return $ pcCost c
   let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   histCosts <- takeListT 5 $ pastCosts extraNodes
@@ -147,22 +163,7 @@ haltPlanCost concreteCost = do
   halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
 
--- | Make a plan for a node to be concrete.
-
-plennedCostConf :: MechConf t n (PlanCost n)
-plennedCostConf =
-  MechConf
-  { mcIsMatProc = const $ const $ arr $ const $ BndRes $ Sum $ Just mempty
-   ,mcMechMapLens = lens
-   ,mcMkCost = \ref cost -> PlanCost { pcPlan = nsSingleton ref,pcCost = cost }
-   ,mcCompStack = BndErr . ErrCycleEphemeral
-  }
-  where
-    lens = Lens { getL = gcMechMap,modL = \f gsc
-      -> gsc { gcMechMap = f $ gcMechMap gsc } }
-
-setNodeStateSafe :: MonadLogic m =>
-                   NodeRef n -> IsMat -> PlanT t n m ()
+setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
 setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
 {-# INLINE setNodeStateSafe' #-}
 
@@ -545,5 +546,5 @@ cutPlanT plan = do
   conf <- ask
   hoistPlanT
     (cutContT
-       (runExceptT $ (`runReaderT` conf) $ (`runStateT` st) $ lift3 $ mzero))
+       (runExceptT $ (`runReaderT` conf) $ (`runStateT` st) $ lift3 mzero))
     plan

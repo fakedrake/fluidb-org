@@ -24,13 +24,16 @@ import           Data.NodeContainers
 import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Hashable
-import           Data.Utils.Monoid
+import           Data.Utils.Nat
 import           GHC.Generics
 
 
-data PlanCost n = PlanCost { pcPlan :: NodeSet n,pcCost :: Cost }
+data PlanCost n = PlanCost { pcPlan :: Maybe (NodeSet n),pcCost :: Cost }
   deriving (Show,Generic,Eq)
 instance AShow (PlanCost n)
+instance Zero (PlanCost n) where zero = mempty
+instance Subtr (PlanCost n) where
+  subtr (PlanCost _ a) (PlanCost _ b) = PlanCost Nothing $ subtr a b
 
 instance Ord (PlanCost n) where
   compare c1 c2 = compare (pcCost c1) (pcCost c2)
@@ -38,44 +41,28 @@ instance Ord (PlanCost n) where
 
 instance Semigroup (PlanCost n) where
   c1 <> c2 =
-    PlanCost { pcPlan = pcPlan c1 <> pcPlan c1,pcCost = pcCost c1 + pcCost c2 }
+    PlanCost
+    { pcPlan = go (pcPlan c1) (pcPlan c1),pcCost = pcCost c1 <> pcCost c2 }
+    where
+      go Nothing a         = a
+      go a Nothing         = a
+      go (Just a) (Just b) = Just $ a <> b
 instance Monoid (PlanCost n) where
   mempty = PlanCost { pcCost = mempty,pcPlan = mempty }
 
-newtype NegCost c = NegCost { unNegCost :: c}
-instance Invertible (PlanCost n) where
-  type Inverse (PlanCost n) = NegCost (PlanCost n)
-  inv = NegCost
-  uninv = unNegCost
-  imappend c (NegCost i) =
-    PlanCost { pcPlan = pcPlan c `nsDifference` pcPlan i
-              ,pcCost = pcCost c `imappend` inv (pcCost i)
-             }
-
 data Cost = Cost { costReads :: Int,costWrites :: Int }
   deriving (Show,Eq,Generic)
+
+instance Zero Cost where
+  zero = Cost 0 0
+instance Subtr Cost where
+  subtr (Cost a b) (Cost a' b') = Cost (a - a') (b - b')
+
 -- XXX: Here we are INCONSISTENT in assuming that reads and writes
 -- cost the same.
 instance Ord Cost where
   compare (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
   {-# INLINE compare #-}
-
-instance Invertible Cost where
-  type Inverse Cost = NegCost Cost
-  inv = NegCost
-  uninv = unNegCost
-  imappend c (NegCost i) =
-    Cost { costReads = costReads c - costReads i
-          ,costWrites = costWrites c - costWrites i
-         }
-
-instance Num Cost where
-  signum (Cost a b) = Cost (signum a) (signum b)
-  abs (Cost a b) = Cost (abs a) (abs b)
-  fromInteger x = Cost (fromInteger x) (fromInteger x)
-  Cost a b + Cost a' b' = Cost (a + a') (b + b')
-  Cost a b - Cost a' b' = Cost (a - a') (b - b')
-  Cost a b * Cost a' b' = Cost (a * a') (b * b')
 
 instance AShow Cost where
   ashow' c = Sym $ show (costReads c) ++ "/" ++ show (costWrites c)

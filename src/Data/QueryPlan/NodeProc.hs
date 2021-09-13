@@ -250,11 +250,12 @@ planQuickRun m = do
 getCost
   :: forall tag t n m .
   (Monad m,IsPlanParams tag n,AShow (PlanMechVal tag n))
-  => NodeSet n
+  => Proxy tag
+  -> NodeSet n
   -> Cap (ExtCap (PlanParams tag n))
   -> NodeRef n
   -> PlanT t n m (Maybe (PlanMechVal tag n))
-getCost extraMat cap ref = wrapTrace ("getCost: " ++ ashow ref) $ do
+getCost _ extraMat cap ref = wrapTrace ("getCost: " ++ ashow ref) $ do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
   (res,_coepoch) <- planQuickRun
