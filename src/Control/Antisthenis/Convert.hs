@@ -19,7 +19,7 @@ import           Control.Antisthenis.Types
 import qualified Control.Category            as C
 import           Data.Coerce
 import           Data.Profunctor
-import           Data.Utils.Monoid
+import           Data.Utils.Nat
 
 data Conv w w' =
   Conv
@@ -85,12 +85,12 @@ convBndR Conv{..} = \case
   BndErr e -> BndErr $ convErr e
 
 -- We only need mempty from this monoid
-convSumMin :: Monoid v => Conv (SumTag p v) (MinTag p v)
+convSumMin :: Conv (SumTag p v) (MinTag p v)
 convSumMin =
   Conv
   { convEpoch = id
    ,convCap = coerce
-   ,convRes = \case {Sum Nothing -> Min' mempty; Sum (Just x) -> Min' x}
+   ,convRes = coerce
    ,convBnd = coerce
    ,convErr = coerce
   }
@@ -100,7 +100,7 @@ convMinSum =
   Conv
   { convEpoch = id
    ,convCap = coerce
-   ,convRes = \(Min' x) -> Sum (Just x)
+   ,convRes = coerce
    ,convBnd = coerce
    ,convErr = coerce
   }

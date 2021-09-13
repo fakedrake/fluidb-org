@@ -23,6 +23,10 @@
 module Data.QueryPlan.Types
   (Transition(..)
   ,PCost
+  ,IsPlanParams
+  ,PlanMech(..)
+  ,CostParams
+  ,NoMatProc
   ,QueryHistory(..)
   ,PlanT
   ,IsMatable
@@ -67,6 +71,7 @@ module Data.QueryPlan.Types
 
 import           Control.Antisthenis.Bool
 import           Control.Antisthenis.Convert
+import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Sum
 import           Control.Antisthenis.Types
 import           Control.Applicative
@@ -87,16 +92,17 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Proxy
 import           Data.Query.QuerySize
+import           Data.QueryPlan.Comp
 import           Data.QueryPlan.CostTypes
 import           Data.String
 import           Data.Utils.AShow
-import           Data.Utils.Binom
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.HContT
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
+import           Data.Utils.Nat
 import           GHC.Generics                (Generic)
 import           GHC.Stack
 import           Prelude                     hiding (filter, lookup)
@@ -149,21 +155,24 @@ provenanceAsBool = \case
   EitherRight -> True
   SplitRight  -> True
 
-type PCost = IBinom Cost
+type PCost = Comp Cost
 type IsMatable = Bool
+type HistProc t n = NodeProc t n (SumTag (PlanParams CostTag n) (PlanCost n))
+type CostProc t n = NodeProc t n (SumTag (PlanParams HistTag n) PCost)
+type MatProc t n = NodeProc t n (BoolTag Or (PlanParams CostTag n))
 data GCState t n =
   GCState
-  { frontier :: NodeSet n
-   ,gcMechMap :: RefMap n (NodeProc t n (SumTag (PlanParams n) (PlanCost n)))
-   ,gcHistMechMap :: RefMap n (NodeProc t n (SumTag (PlanParams n) PCost))
-   ,matableMechMap :: RefMap n (NodeProc t n (BoolTag Or (PlanParams n)))
-   ,gcCache :: GCCache (MetaOp t n) t n
-   ,epochs :: NEL.NonEmpty (GCEpoch t n)
+  { frontier          :: NodeSet n
+   ,gcMechMap         :: RefMap n (CostProc t n)
+   ,gcHistMechMap     :: RefMap n (HistProc t n)
+   ,matableMechMap    :: RefMap n (MatProc t n)
+   ,gcCache           :: GCCache (MetaOp t n) t n
+   ,epochs            :: NEL.NonEmpty (GCEpoch t n)
     -- | Nodes with nonzero protection are not demoted when the epoch changes
-   ,nodeProtection :: RefMap n Count
-   ,epochFilter :: HS.HashSet (GCEpoch t n,RefMap n Count)
-   ,provenance :: [ProvenanceAtom]
-   ,traceDebug :: [String]
+   ,nodeProtection    :: RefMap n Count
+   ,epochFilter       :: HS.HashSet (GCEpoch t n,RefMap n Count)
+   ,provenance        :: [ProvenanceAtom]
+   ,traceDebug        :: [String]
     -- aStarScores       :: RefMap n Double,
    ,garbageCollecting :: Bool
   }
@@ -443,7 +452,7 @@ type NodeProc t n w = NodeProc0 t n w w
 type Scaling = Double
 -- | A node process. The outer
 type NodeProc0 t n w w0 =
-  ArrProc w0 (ReaderT Scaling (PlanT t n Identity))
+  ArrProc w0 (PlanT t n Identity)
 
 lowerNodeProc
   :: ZCoEpoch w0 ~ ZCoEpoch w
@@ -460,7 +469,7 @@ liftNodeProc
 liftNodeProc = convArrProc
 {-# INLINE liftNodeProc #-}
 
-data PlanParams n
+data PlanParams tag n
 newtype Predicates n = Predicates { pNonComputables :: NodeSet n }
   deriving Generic
 instance AShow (Predicates n)
@@ -486,25 +495,63 @@ instance Monoid (PlanCoEpoch n) where
 instance Semigroup  (PlanCoEpoch n) where
   PlanCoEpoch a b <> PlanCoEpoch a' b' = PlanCoEpoch (a <> a') (b <> b')
 
-instance ExtParams (PlanParams n) where
-  type ExtError (PlanParams n) =
+-- | Tags to disambiguate the properties of historical and cost processes.
+data HistTag
+data CostTag
+
+type CostParams tag n = SumTag (PlanParams tag n) (PlanMechVal tag n)
+type NoMatProc tag t n =
+  NodeRef n
+  -> NodeProc t n (CostParams tag n) -- The mat proc constructed by the node under consideration
+  -> NodeProc t n (CostParams tag n)
+
+class ExtParams (PlanParams tag n) => PlanMech tag n where
+  type PlanMechVal tag n :: *
+
+  mcMechMapLens :: GCState t n :>: RefMap n (NodeProc t n (CostParams tag n))
+  mcMkCost :: Proxy tag -> NodeRef n -> Cost -> PlanMechVal tag n
+  mcIsMatProc :: NoMatProc tag t n
+  mcCompStack :: NodeRef n -> BndR (CostParams tag n)
+
+
+instance ExtParams (PlanParams CostTag n) where
+  type ExtError (PlanParams CostTag n) =
     IndexErr (NodeRef n)
-  type ExtEpoch (PlanParams n) = PlanEpoch n
-  type ExtCoEpoch (PlanParams n) = PlanCoEpoch n
-  -- | When the coepoch is older than the epoch we must reset and get
-  -- a fresh value for the process. Otherwise the progress made so far
-  -- towards a value is valid and we should continue from there.
-  --
-  -- XXX: The cap may have changed though
-  extCombEpochs Proxy coepoch epoch a =
-    if paramsMatch && predicatesMatch then DontReset a else ShouldReset
-    where
-      predicatesMatch =
-        nsNull (peCoPred epoch)
-        || nsDisjoint (pNonComputables $ pcePred coepoch) (peCoPred epoch)
-      paramsMatch =
-        and
-        $ refIntersectionWithKey
-          (const (==))
-          (pceParams coepoch)
-          (peParams epoch)
+  type ExtEpoch (PlanParams CostTag n) = PlanEpoch n
+  type ExtCoEpoch (PlanParams CostTag n) = PlanCoEpoch n
+  type ExtCap (PlanParams CostTag n) =
+    Min (PlanMechVal n CostTag)
+  extCombEpochs _ = planCombEpochs
+
+type IsPlanParams tag n =
+  (ExtError (PlanParams tag n) ~ IndexErr
+     (NodeRef n)
+  ,ExtEpoch (PlanParams tag n) ~ PlanEpoch n
+  ,ExtCoEpoch (PlanParams tag n) ~ PlanCoEpoch n
+  ,AShow (PlanMechVal tag n)
+  ,Ord (PlanMechVal tag n)
+  ,Semigroup (PlanMechVal tag n)
+  ,Subtr (PlanMechVal tag n)
+  ,Zero (PlanMechVal tag n)
+  ,Zero (ExtCap (PlanParams tag n))
+  ,HasLens (ExtCap (PlanParams tag n)) (Min (PlanMechVal tag n))
+  ,PlanMech tag n)
+
+-- | When the coepoch is older than the epoch we must reset and get
+-- a fresh value for the process. Otherwise the progress made so far
+-- towards a value is valid and we should continue from there.
+--
+-- XXX: The cap may have changed though
+planCombEpochs :: PlanCoEpoch n -> PlanEpoch n -> a -> MayReset a
+planCombEpochs coepoch epoch a =
+  if paramsMatch && predicatesMatch then DontReset a else ShouldReset
+  where
+    predicatesMatch =
+      nsNull (peCoPred epoch)
+      || nsDisjoint (pNonComputables $ pcePred coepoch) (peCoPred epoch)
+    paramsMatch =
+      and
+      $ refIntersectionWithKey
+        (const (==))
+        (pceParams coepoch)
+        (peParams epoch)

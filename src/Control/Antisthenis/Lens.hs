@@ -1,20 +1,34 @@
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE RankNTypes #-}
-module Control.Antisthenis.Lens (getL,modL,(:>:)(..)) where
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeOperators     #-}
+module Control.Antisthenis.Lens ((:>:)(..),HasLens(..),ifLt,min2l,rgetL,diff2l) where
 
-import Data.Utils.Const
-import Control.Monad.Identity
-import qualified Control.Category as C
+import qualified Control.Category  as C
+import           Data.Utils.Monoid
+import           Data.Utils.Nat
 
 -- | A very simple lens to handle the infinite type problem.
-newtype a :>:  b =
-  Lens' { runLens' :: forall f . Functor f => (b -> f b) -> a -> f a }
+data a :>:  b =
+  Lens'
+  { getL :: a -> b,modL :: (b -> b) -> a -> a }
 
 instance C.Category (:>:) where
-  Lens' f . Lens' g = Lens' $ g . f
-  id = Lens' id
+  a . b = Lens' { getL = getL a . getL b,modL = modL b . modL a  }
+  id = Lens' { getL = id,modL = id }
 
-getL :: a :>: b -> a -> b
-getL (Lens' l) = getConst . l Const
-modL :: a :>: b -> (b -> b) -> a -> a
-modL (Lens' l) f = runIdentity . l (Identity . f)
+class HasLens a b where
+  defLens :: a :>: b
+  default defLens :: a ~ b => a :>: b
+  defLens = C.id
+
+
+ifLt :: (Ord b,HasLens a b) => a -> b ->  c -> c -> c
+ifLt a b t e = if getL defLens a < b then t else e
+min2l :: (Ord b,HasLens a b) => a -> b -> a
+min2l a b = modL defLens (min b) a
+diff2l :: forall a b . (Invertible b,HasLens a b) => a -> b -> a
+diff2l a b = modL (defLens :: a :>: b) go a
+  where
+    go b' = b' `imappend` inv b
+rgetL :: (Zero a,HasLens a b) => b -> a
+rgetL b = modL defLens (const b) zero

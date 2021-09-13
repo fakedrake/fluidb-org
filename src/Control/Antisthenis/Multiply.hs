@@ -121,7 +121,6 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
     $ conf { confCap = newCap }
     where
       newCap = fromZ (prRes $ zRes z) $ case confCap conf of
-        CapStruct _i -> undefined
         CapVal c -> case zRes z of
           PartialResMul {prBnd = Just bnd,prRes = Just (Right res)} -> CapVal
             $ c `div` (bnd * res)
@@ -131,9 +130,9 @@ instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
           _ -> CapStruct 1
         x -> x
       fromZ r x = case r of
-        Just (Left _)          -> CapStruct 1
+        Just (Left _)          -> CapVal _sub_zero
         Just (Right (Mul 0 _)) -> x
-        Just (Right _is_zero)  -> CapStruct (-1) -- HERE WE BLOCK ON ZERO
+        Just (Right _is_zero)  -> CapVal _sub_zero
         _                      -> x
 
 -- | Keep zeroes separate so they are easily accessible and have an
@@ -189,7 +188,6 @@ mulSolution conf z = zeroRes <|> ret
       Just (Right m@(Mul zs _)) -> if zs > 0 then Just $ BndRes m else Nothing
       _                         -> Nothing
     ret = case (prRes $ zRes z,confCap conf) of
-      (_,CapStruct i) -> if i < 0 then return $ BndErr undefined else resM
       (_,ForceResult) -> resM >>= \case
         BndBnd _bnd -> Nothing
         BndErr _e   -> Nothing -- xxx: should check if zero is even possible.

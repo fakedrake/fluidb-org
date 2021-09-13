@@ -1,7 +1,9 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingVia   #-}
-{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE DefaultSignatures    #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE DerivingVia          #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Data.Utils.Monoid
   (Min'(..)
   ,Min(..)
@@ -15,6 +17,7 @@ import           Data.Utils.AShow
 import           Data.Utils.Default
 import           GHC.Generics
 
+-- | Minimum of natural numbers.
 newtype Min' a = Min' a
   deriving stock (Show,Eq,Functor,Generic)
 instance Num a => Num (Min' a) where
@@ -169,7 +172,8 @@ instance Num a => Monoid (Sum a) where
 
 instance AShow v => AShow (Sum v)
 
-class Monoid a => Invertible a where
+-- | Invertible number.
+class (Monoid a) => Invertible a where
   type Inverse a :: *
   inv :: a -> Inverse a
   uninv :: Inverse a -> a

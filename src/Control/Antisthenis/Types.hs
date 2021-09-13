@@ -24,9 +24,6 @@
 
 module Control.Antisthenis.Types
   (IndexErr(..)
-  ,Ord2(..)
-  ,omin
-  ,ifLt
   ,ashowItInit
   ,runArrProc
   ,ashowRes
@@ -59,10 +56,8 @@ module Control.Antisthenis.Types
   ,InitProc
   ,ItProc
   ,CoitProc
-  ,capWasFinished
   ,AShowW
-  ,ifNeg
-  ,ifLe,incrZipperUId) where
+  ,incrZipperUId) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
@@ -82,19 +77,14 @@ import           Data.Utils.Binom
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
-import           Data.Utils.Monoid
 import           Data.Utils.OptSet
 import           GHC.Generics
 
 data Cap b
-  = CapStruct Int -- Maximum depth NOT max steps
-  | CapVal b -- Cap val
+  = CapVal b -- Cap val
   | ForceResult
   deriving (Show,Functor,Generic)
 instance AShow b => AShow (Cap b)
-capWasFinished :: Cap b -> Bool
-capWasFinished (CapStruct i) = i < 0
-capWasFinished _             = False
 
 type InitProc a = a
 type ItProc a = a
@@ -341,7 +331,10 @@ class Monoid (ExtCoEpoch p) => ExtParams p where
 
   type ExtCoEpoch p :: *
 
+  type ExtCap p :: *
+
   type ExtError p :: *
+
 
   extCombEpochs
     :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> Conf w -> MayReset (Conf w)
@@ -366,52 +359,3 @@ mapCursor :: (forall a . f a -> g a) -> Zipper' w f p r -> Zipper' w g p r
 mapCursor f Zipper {..} =
   Zipper
   { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
-
-
--- | Ordered set where we can find the better of two values without
--- worying about the substitutive law of equality. This way we can
--- find the minimum have annotated values without defining an ordering
--- that accounts for the equality of the annotations.
-class Ord2 a b where
-  compare2 :: a -> b -> Ordering
-  default compare2 :: (Ord a,a ~ b) => a -> b -> Ordering
-  compare2 = compare
-
-
-instance Ord2 Int Int
-instance Ord2 Integer Integer
-instance Ord2 Float Float
-instance Ord2 Char Char
-instance Ord2 a b => Ord2 (Min' a) (Min' b) where
-  compare2 (Min' a) (Min' b) = compare2 a b
-instance Ord2 a b => Ord2 (Sum a) (Sum b) where
-  compare2 (Sum Nothing) (Sum Nothing)   = EQ
-  compare2 (Sum Nothing) (Sum (Just _))  = GT
-  compare2 (Sum (Just _)) (Sum Nothing)  = LT
-  compare2 (Sum (Just a)) (Sum (Just b)) = compare2 a b
--- | The variable always wins
-instance Ord2 a b => Ord2 (IBinom a) (IBinom b) where
-  compare2 (IBinom a b) (IBinom a' b') = case compare a a' of
-    EQ -> compare2 b b'
-    x  -> x
-
-omin :: Ord2 a a => a -> a -> a
-omin a b = case compare2 a b of
-  GT -> b
-  _  -> a
-{-# INLINE omin #-}
-ifLt :: Ord2 a b => a -> b -> c -> c -> c
-ifLt a b t e = case compare2 a b of
-  LT -> t
-  _  -> e
-{-# INLINE ifLt #-}
-
-ifLe :: Ord2 a b => a -> b -> c -> c -> c
-ifLe a b t e = case compare2 a b of
-  LT -> t
-  EQ -> t
-  _  -> e
-{-# INLINE ifLe #-}
-
-ifNeg :: Ord2 a Integer => a ->  c -> c -> c
-ifNeg bnd = ifLt bnd 0

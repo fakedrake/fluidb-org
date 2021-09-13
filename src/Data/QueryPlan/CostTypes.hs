@@ -17,10 +17,9 @@ module Data.QueryPlan.CostTypes
   ,costAsInt
 ) where
 
-import           Control.Antisthenis.Types
 import           Data.Foldable
-import qualified Data.HashMap.Strict       as HM
-import qualified Data.HashSet              as HS
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet        as HS
 import           Data.NodeContainers
 import           Data.Utils.AShow
 import           Data.Utils.Default
@@ -30,12 +29,12 @@ import           GHC.Generics
 
 
 data PlanCost n = PlanCost { pcPlan :: NodeSet n,pcCost :: Cost }
-  deriving (Show,Generic)
+  deriving (Show,Generic,Eq)
 instance AShow (PlanCost n)
 
-instance Ord2 (PlanCost n) (PlanCost n) where
-  compare2 c1 c2 = compare2 (pcCost c1) (pcCost c2)
-  {-# INLINE compare2 #-}
+instance Ord (PlanCost n) where
+  compare c1 c2 = compare (pcCost c1) (pcCost c2)
+  {-# INLINE compare #-}
 
 instance Semigroup (PlanCost n) where
   c1 <> c2 =
@@ -57,9 +56,9 @@ data Cost = Cost { costReads :: Int,costWrites :: Int }
   deriving (Show,Eq,Generic)
 -- XXX: Here we are INCONSISTENT in assuming that reads and writes
 -- cost the same.
-instance Ord2 Cost Cost where
-  compare2 (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
-  {-# INLINE compare2 #-}
+instance Ord Cost where
+  compare (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
+  {-# INLINE compare #-}
 
 instance Invertible Cost where
   type Inverse Cost = NegCost Cost

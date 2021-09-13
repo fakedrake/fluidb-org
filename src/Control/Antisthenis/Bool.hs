@@ -316,20 +316,12 @@ boolEvolutionControl
   -> Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
   -> Maybe (BndR (BoolTag op p))
 boolEvolutionControl conf z = case confCap conf of
-  CapStruct i -> if
-    | i < 0     -> return $ BndErr undefined
-    | i == 0    -> localRes
-    | otherwise -> either BndErr BndRes <$> zRes z
   ForceResult -> zRes z >>= \case
     Left _e -> Nothing -- xxx: should check if zero is even possible.
     Right x -> if zFinished z then Just $ BndRes x else Nothing
   CapVal cap -> do
     localBnd <- zBound z
     if cap < localBnd then return $ BndBnd localBnd else Nothing
-  where
-    localRes = do
-      if zLocalIsFinal
-        z then either BndErr BndRes <$> zRes z else BndBnd <$> zBound z
 
 zLocalIsFinal
   :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool

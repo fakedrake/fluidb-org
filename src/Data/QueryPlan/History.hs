@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 module Data.QueryPlan.History
   (pastCosts) where
 
@@ -8,13 +9,12 @@ import           Control.Antisthenis.Types
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.NodeContainers
+import           Data.QueryPlan.Comp
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Binom
 import           Data.Utils.ListT
-
 
 historicalCostConf :: MechConf t n PCost
 historicalCostConf =
@@ -22,10 +22,10 @@ historicalCostConf =
   { mcMechMapLens = histMapLens
    ,mcMkCost = mkCost
    ,mcIsMatProc = noMatCost
-   ,mcCompStack = \_ref -> BndRes $ pure var
+   ,mcCompStack = \_ref -> BndRes $ pure nonComp
   }
   where
-    mkCost _ref cost = toIBinom cost
+    mkCost _ref cost = toComp cost
     histMapLens = Lens { getL = gcHistMechMap,modL = \f gc
       -> gc { gcHistMechMap = f $ gcHistMechMap gc } }
 
@@ -50,15 +50,15 @@ noMatCost
 noMatCost _ref matCost = recur
   where
     recur = MealyArrow $ fromKleisli $ \conf -> do
-      curScale <- ask
+      curScale :: Double <- undefined
       if curScale < 0.1 then return (recur,BndRes zero) else do
-        (nxt,ret) <- local (* factor)
+        (nxt,ret) <- id -- local (* factor)
           $ second changeBound
           <$> toKleisli (runMealyArrow matCost) (changeCap conf)
         return (nxt,case ret of
           BndErr _ -> BndRes zero
           _        -> ret)
-    zero = pure $ toIBinom 0
+    zero = pure $ toComp 0
     factor = 0.5
     changeBound = \case
       BndBnd b     -> BndBnd $ fmap (scalePCost factor) b
@@ -66,14 +66,12 @@ noMatCost _ref matCost = recur
       e@(BndErr _) -> e
     changeCap conf = conf { confCap = case confCap conf of
       CapVal c    -> CapVal $ scalePCost (1 / factor) <$> c
-      ForceResult -> ForceResult
-      CapStruct i -> CapStruct i }
+      ForceResult -> ForceResult }
 
 
 
 
-scalePCost :: Double -> PCost -> PCost
-gscalePCost = fmap . scaleCost
+scalePCost = fmap . scaleCost
 scaleCost :: Double -> Cost -> Cost
 scaleCost sc Cost {..} =
   Cost { costReads = scaleI costReads,costWrites = scaleI costWrites }
