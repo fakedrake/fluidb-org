@@ -558,7 +558,8 @@ type IsPlanParams tag n =
 -- XXX: The cap may have changed though
 planCombEpochs :: PlanCoEpoch n -> PlanEpoch n -> a -> MayReset a
 planCombEpochs coepoch epoch a =
-  if paramsMatch && predicatesMatch then DontReset a else ShouldReset
+  if paramsMatch && predicatesMatch then DontReset a
+  else trace ("Commanding reset!" ++ ashow (coepoch,epoch)) ShouldReset
   where
     predicatesMatch =
       nsNull (peCoPred epoch)

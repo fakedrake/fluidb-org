@@ -247,7 +247,8 @@ instance BndRParams (BoolTag op p) where
   type ZBnd (BoolTag op p) = BoolBound op
   type ZRes (BoolTag op p) = BoolV op
 
-instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
+instance (AShow (ExtCoEpoch p),ExtParams p,BoolOp op)
+  => ZipperParams (BoolTag op p) where
   type ZEpoch (BoolTag op p) = ExtEpoch p
   type ZCoEpoch (BoolTag op p) = ExtCoEpoch p
   type ZCap (BoolTag op p) = BoolBound op
@@ -366,6 +367,7 @@ interpretBExp
   :: forall m p .
   (MonadState (ProcMap (BoolTag AnyOp p) m) m
   ,MonadReader (IS.IntSet,IM.IntMap Bool) m
+  ,AShow (ExtCoEpoch p)
   ,ExtParams p)
   => BExp
   -> ArrProc (BoolTag AnyOp p) m

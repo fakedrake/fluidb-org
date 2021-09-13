@@ -110,7 +110,8 @@ data ExZipper w = forall p . ExZipper { runExZipper :: FinZipper w p }
 data MayReset a = DontReset a | ShouldReset deriving (Generic,Functor)
 instance AShow a => AShow (MayReset a)
 type Cmds w = Cmds' (ExZipper w) (ZItAssoc w)
-data Cmds' r f a = Cmds { cmdReset :: ResetCmd a,cmdItCoit :: MayReset (ItInit r f a) }
+data Cmds' r f a =
+  Cmds { cmdReset :: ResetCmd a,cmdItCoit :: MayReset (ItInit r f a) }
   deriving Functor
 type ItProcF f a =
   ((forall x . AssocContainer f => NonEmptyAC f x -> (KeyAC f,x,f x))
@@ -181,6 +182,7 @@ type Local a = a
 class (KeyAC (ZItAssoc w) ~ ZBnd w
       ,BndRParams w
       ,Monoid (ZCoEpoch w)
+      ,AShow (ZCoEpoch w)
       ,AssocContainer (ZItAssoc w)
       ,Default (ZPartialRes w)) => ZipperParams w where
   type ZCap w :: *
@@ -326,7 +328,7 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
 incrZipperUId :: Zipper' w cursf p pr -> Zipper' w cursf p pr
 incrZipperUId z = z { zId = zidBumpVersion $ zId z }
 
-class Monoid (ExtCoEpoch p) => ExtParams p where
+class (Monoid (ExtCoEpoch p)) => ExtParams p where
   type ExtEpoch p :: *
 
   type ExtCoEpoch p :: *

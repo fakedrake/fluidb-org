@@ -166,9 +166,8 @@ mkMetaOpPlan MetaOpFollow{..} tref = fmap return $ triggerTRef tref
 findMetaOps :: Monad m => NodeRef n -> PlanT t n m [MetaOp t n]
 findMetaOps = fmap2 fst . findCostedMetaOps
 findMetaOps' :: Monad m => NodeRef n -> PlanT t n m [MetaOp t n]
-findMetaOps' ref = do
-  mops <- runListT $ followUnsafe followIns ref <|> followUnsafe followOuts ref
-  map fst . sortOn snd <$> forM mops (\op -> (op,) <$> metaOpNeededPages op)
+findMetaOps'
+  ref = runListT $ followUnsafe followIns ref <|> followUnsafe followOuts ref
 {-# INLINE findMetaOps' #-}
 
 findCostedMetaOps :: Monad m => NodeRef n -> PlanT t n m [(MetaOp t n,Cost)]

@@ -103,9 +103,10 @@ instance (AShow v
     $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
-      tr =
-        trace
-          ("zLocalizeConf(sum) " ++ ashow (zId z,zRes z,confCap conf,newCap))
+      tr = id
+      -- tr =
+      --   trace
+      --     ("zLocalizeConf(sum) " ++ ashow (zId z,zRes z,confCap conf,newCap))
       newCap = case zRes z of
         SumPartErr _ -> CapVal zero -- zero cap
         SumPartInit -> confCap conf
@@ -144,14 +145,16 @@ sumEvolutionControl conf z = fmap traceRes $ case zFullResSum z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     -- If the local bound is negative then
-    CapVal cap -> if positiveCap cap then Just $ BndBnd zero else Nothing
+    CapVal cap -> if negativeCap cap then Just $ BndBnd zero else Nothing
     _          -> Nothing
   SumPart bnd -> case confCap conf of
-    CapVal cap  -> ifLt cap (coerce bnd :: Min v) (Just $ BndBnd $ coerce bnd) Nothing
+    CapVal cap ->
+      ifLt cap (coerce bnd :: Min v) (Just $ BndBnd $ coerce bnd) Nothing
     ForceResult -> Nothing
   where
-    positiveCap cap = getL defLens cap > (zero :: Min v)
-    traceRes r = trace ("return: " ++ ashow (zId z,r)) r
+    negativeCap cap = getL defLens cap < (zero :: Min v)
+    traceRes = id
+    -- traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
 
 -- | The full result includes both zRes and zCursor.
 zFullResSum :: Semigroup v => Zipper (SumTag p v) p0 -> SumPartialRes p v

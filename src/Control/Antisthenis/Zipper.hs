@@ -32,6 +32,7 @@ module Control.Antisthenis.Zipper
   ,runMech) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
+import           Control.Antisthenis.ATL.Class.Writer
 import           Control.Antisthenis.ATL.Common
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
@@ -39,13 +40,15 @@ import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.ZipperId
-import           Control.Arrow                               hiding (first)
+import           Control.Arrow                               hiding (first,
+                                                              (>>>))
 import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Foldable
 import           Data.Profunctor
 import           Data.Utils.AShow
 import           Data.Utils.Const
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Unsafe
@@ -76,7 +79,7 @@ type ZCat w m =
 -- theory allowed that more than one steps are required (see Free
 -- monad) but this one requests the local conf which can always be
 -- resolved in one step.
-mkZCat'
+mkZCatIni
   :: forall w m .
   (ZipperParams w,Monad m,AShow (ZBnd w))
   => ZipperId
@@ -85,8 +88,10 @@ mkZCat'
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
     (LConf w)
     (Zipper w (ArrProc w m))
-mkZCat' zid [] = error $ "mul needs at least one value: " ++ ashow zid
-mkZCat' zipId (a:as) = mkMooreCat iniZipper $ mkZCat iniZipper
+mkZCatIni zid [] = error $ "mul needs at least one value: " ++ ashow zid
+mkZCatIni zipId (a:as) =
+  mkMooreCat iniZipper
+  $ mkZCat (trace ("starting: " ++ ashow zipId) mempty) iniZipper
   where
     iniZipper =
       Zipper
@@ -97,25 +102,33 @@ mkZCat' zipId (a:as) = mkMooreCat iniZipper $ mkZCat iniZipper
       }
 
 -- Make a ziper evolution.
+--
+-- mkZCat does noth collect the coepochs, each iteration ONLY contains
+-- the coepoch of the most recent cursor executed. The zipper state is
+-- always dependent on a coepoch.
 mkZCat
   :: (ZipperParams w,Monad m,AShow (ZBnd w))
-  => Zipper w (ArrProc w m)
+  => ZCoEpoch w
+  -> Zipper w (ArrProc w m)
   -> MealyArrow
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
     (LConf w)
     (Zipper w (ArrProc w m))
-mkZCat (incrZipperUId -> prevz) =
+mkZCat coepoch0 (incrZipperUId -> prevz) =
   MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
     let Identity (_bnd,inip,cursProc) = zCursor prevz
-    (coepoch',(p',val)) <- runArrProc cursProc lconf
+    (coepoch,(p',val)) <- runArrProc cursProc lconf
+    let coepoch' = coepoch <> coepoch0
     -- Update the cursor value and rotate the zipper.
-    -- traceM $ "Will now rotate: " ++ zId prevz
-    runFreeT $ (coepoch',) <$> case val of
-      BndBnd bnd -> pushIt $ mapCursor (const $ Const (bnd,inip,p')) prevz
-      BndRes res -> pushCoit $ mapCursor (const $ Const (Right res,p')) prevz
-      BndErr err -> pushCoit $ mapCursor (const $ Const (Left err,p')) prevz
+    traceM $ "Will now rotate: " ++ ashow (zId prevz,coepoch0,coepoch)
+    return $ Free $ fmap (return . (coepoch',)) $ case val of
+      BndBnd bnd -> pushIt coepoch'
+        $ mapCursor (const $ Const (bnd,inip,p')) prevz
+      BndRes res -> pushCoit coepoch'
+        $ mapCursor (const $ Const (Right res,p')) prevz
+      BndErr err -> pushCoit coepoch'
+        $ mapCursor (const $ Const (Left err,p')) prevz
 
--- | The cursor is already evaluated.
 type EvaledZipper w p v =
   Zipper' w (Const v) p (ZPartialRes w)
 
@@ -123,18 +136,18 @@ type EvaledZipper w p v =
 -- previous step was setting the cursor on an it) there are a couple
 -- of ways to put the zipper together (either pull it or ini or reset
 -- etc). Create the commands for that.
-pushIt :: forall w m p .
-       (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
-       => EvaledZipper w p (ZBnd w,InitProc p,p)
-       -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
 pushIt
-  Zipper
-  {zCursor = Const (bnd,inip,itp),..}   -- zid (bnd,inip,itp) oldRes bgs =
-  =
-  wrapFree
-  $ Cmds { cmdItCoit = cmdItCoit'
-          ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
-         }
+  :: forall w m p .
+  (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
+  => ZCoEpoch w
+  -> EvaledZipper w p (ZBnd w,InitProc p,p)
+  -> Cmds w (ZCat w m,Zipper w p)
+pushIt coepoch Zipper {zCursor = Const (bnd,inip,itp),..} =
+  Cmds
+  { cmdItCoit = cmdItCoit'
+   ,cmdReset = DoReset
+      (mkZCat (trace ("1 resetting!" ++ ashow zId) mempty) rzipper,rzipper)
+  }
   where
     rzipper =
       Zipper
@@ -146,7 +159,7 @@ pushIt
     cmdItCoit' = DontReset $ case bgsInits zBgState of
       []       -> CmdIt itEvolve
       ini:inis -> CmdItInit itEvolve $ iniEvolve ini inis
-    iniEvolve ini inis = return (mkZCat zipper,zipper)
+    iniEvolve ini inis = (mkZCat coepoch zipper,zipper)
       where
         zipper :: Zipper w p
         zipper =
@@ -164,7 +177,7 @@ pushIt
               ,zId = zId
              })
     -- Evolve by poping an iterator.
-    itEvolve pop = return (mkZCat zipper,zipper)
+    itEvolve pop = (mkZCat coepoch zipper,zipper)
       where
         zipper =
           Zipper
@@ -176,15 +189,14 @@ pushIt
         (bnd' :: ZBnd w,(inip',itp'),its') =
           pop $ acInsert bnd (inip,itp) (bgsIts zBgState)
 
-pushCoit :: forall w m p .
-         (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
-         => EvaledZipper w p (Either (ZErr w) (ZRes w),CoitProc p)
-         -> FreeT (Cmds w) m (ZCat w m,Zipper w p)
-pushCoit Zipper {zCursor = Const newCoit,..} =
-  wrapFree
-  $ Cmds { cmdItCoit = cmdItCoit'
-          ,cmdReset = DoReset $ return (mkZCat rzipper,rzipper)
-         }
+pushCoit
+  :: forall w m p .
+  (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
+  => ZCoEpoch w
+  -> EvaledZipper w p (Either (ZErr w) (ZRes w),CoitProc p)
+  -> Cmds w (ZCat w m,Zipper w p)
+pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
+  Cmds { cmdItCoit = cmdItCoit',cmdReset = DoReset (mkZCat coepoch rzipper,rzipper) }
   where
     newRes = either BndErr BndRes $ fst newCoit
     resetCursor = Identity (Nothing,snd newCoit,snd newCoit)
@@ -204,8 +216,7 @@ pushCoit Zipper {zCursor = Const newCoit,..} =
       }
     cmdItCoit' =
       DontReset $ case (bgsInits zBgState,acNonEmpty $ bgsIts zBgState) of
-        ([],Nothing)
-          -> CmdFinished $ ExZipper $ putRes newRes (zRes,finZipper)
+        ([],Nothing) -> CmdFinished $ ExZipper $ putRes newRes (zRes,finZipper)
         (ini:inis,Nothing) -> CmdInit $ evolve $ mkIniZ ini inis
         ([],Just nonempty) -> CmdIt $ \pop -> evolve
           $ let (k,(ini,it),its) = pop nonempty
@@ -216,7 +227,7 @@ pushCoit Zipper {zCursor = Const newCoit,..} =
            in fromJustErr $ mkItZ (k,ini',it) its)
           (evolve $ mkIniZ ini inis)
     -- Just return the zipper
-    evolve zipper = return (mkZCat zipper,zipper)
+    evolve zipper = (mkZCat coepoch zipper,zipper)
     mkIniBgs inis =
       zBgState { bgsCoits = newCoit : bgsCoits zBgState,bgsInits = inis }
     mkIniZ ini inis =
@@ -255,7 +266,7 @@ mkMachine zid  =
   handleLifetimes zid
   . loopMooreCat -- feed the previous zipper to the next localizeConf
   . dimap fst (\z -> (z,z))
-  . mkZCat' zid
+  . mkZCatIni zid
 
 -- | Compare the previous and next configurations to see of anything
 -- changed. The problem with this approach is that the monad could
@@ -273,9 +284,9 @@ handleLifetimes
 handleLifetimes zid =
   evalResetsArr
   . hoistMealy (WriterArrow . rmap (\(nxt,(coepoch,z)) -> (coepoch,(nxt,z))))
-  . mooreBatchC (Kleisli go) -- go gives out a Left correctly.
+  . mooreBatchC (Kleisli guardOut) -- go gives out a Left correctly.
   . hoistMoore
-    (mempty,)
+    (trace ("2 resetting!" ++ ashow zid) mempty,)
     (rmap (\(coepoch,(nxt,z)) -> (nxt,(coepoch,z))) . runWriterArrow)
   where
     -- (current config,(previous global epoch, previous zipper))
@@ -286,21 +297,25 @@ handleLifetimes zid =
     -- configuration that is current to the iteration into a local
     -- configuration that has an updated epoch. The updated epoch is
     -- deduced based on the previous executions of the epoch.
-    go :: (GConf w,(ZCoEpoch w,Zipper w (ArrProc w m)))
-       -> FreeT
-         (Cmds' (ExZipper w) (ZItAssoc w))
-         m
-         (Either (LConf w) (ZCoEpoch w,BndR w))
-    go (globConf,(coepoch,z0)) = case zLocalizeConf coepoch globConf z of
+    guardOut
+      :: (GConf w,(ZCoEpoch w,Zipper w (ArrProc w m)))
+      -> FreeT
+        (Cmds' (ExZipper w) (ZItAssoc w))
+        m
+        (Either (LConf w) (ZCoEpoch w,BndR w))
+    guardOut (globConf,(coepoch,z)) = case zLocalizeConf coepoch globConf z of
       ShouldReset -> wrapFree
-        Cmds { cmdReset = DoReset $ go (globConf,(coepoch,resetZ))
-              ,cmdItCoit = ShouldReset
-             }
+        Cmds
+        { cmdReset = DoReset
+            $ guardOut
+              (globConf
+              ,(trace ("3 resetting!" ++ ashow (zId z)) mempty,resetZ))
+         ,cmdItCoit = ShouldReset
+        }
       DontReset conf' -> return
         $ maybe (Left conf') (\x -> Right (coepoch,x))
         $ evolutionControl zprocEvolution globConf z
       where
-        z = z0
         resetZ =
           Zipper
           { zBgState = bgsReset $ zBgState z
@@ -308,8 +323,6 @@ handleLifetimes zid =
            ,zCursor = zCursor z
            ,zId = zidReset zid
           }
-
-
 
 -- | Handle the resets of an arrow. When cmdItCoit == ShouldReset
 -- chain the cmdReset is chained at the end.
@@ -365,7 +378,8 @@ mkProcId zid procs = evolution $ mkMachine zid procs
     evolution (ArrProc p) =
       ArrProc
       $ fmap (\((coep,nxt),res) -> (coep,(nxt,res)))
-      . evolutionStrategy (\v -> (mempty,arr $ const v)) -- nothing to add to the coepoch
+      . evolutionStrategy (\v -> (trace ("4 resetting!" ++ ashow zid) mempty
+                                 ,arr $ const v)) -- nothing to add to the coepoch
       . fmap (\(coep,(nxt,res)) -> ((coep,evolution nxt),res))
       . p
     evolution _ = error "unreachable"

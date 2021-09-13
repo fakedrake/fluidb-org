@@ -160,7 +160,9 @@ instance BndRParams (MinTag p v) where
   type ZRes (MinTag p v) = Min v
 
 instance (AShow a
+         ,AShow (ExtCoEpoch p)
          ,Ord a
+         ,AShow (ExtCap p)
          ,Zero (ExtCap p)
          ,ExtParams p
          ,NoArgError (ExtError p)
@@ -220,10 +222,12 @@ instance (AShow a
       (SecConcrete res,CapVal c)    -> conf { confCap = CapVal $ min2l c res }
       (SecSoft _ bnd,CapVal c)      -> conf { confCap = CapVal $ min2l c bnd }
       (SecConcrete res,ForceResult) -> conf { confCap = CapVal $ rgetL res }
-      (SecSoft _ bnd,ForceResult)   -> conf { confCap = CapVal $ rgetL  bnd }
+      (SecSoft _ bnd,ForceResult)   -> conf { confCap = CapVal $ rgetL bnd }
     where
-      tr = id
-  -- tr = trace ("zLocalizeConf(min): " ++ ashow (zipperShape z,confCap conf))
+      -- tr = id
+      tr =
+        trace
+          ("zLocalizeConf(min): " ++ ashow (zipperShape z,confCap conf,coepoch))
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
@@ -253,7 +257,8 @@ minEvolutionControl conf z = fmap traceRes $ case confCap conf of
       _             -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
     x -> return x
   where
-    traceRes r = trace ("return: " ++ ashow (zId z,r)) r
+    -- traceRes = id
+    traceRes r = trace ("return(min): " ++ ashow (zId z,r)) r
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of

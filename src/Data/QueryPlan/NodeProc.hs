@@ -1,3 +1,4 @@
+{-# LANGUAGE Arrows                #-}
 {-# LANGUAGE DeriveFoldable        #-}
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveTraversable     #-}
@@ -16,6 +17,7 @@ module Data.QueryPlan.NodeProc (NodeProc,getCost,(:>:)(..)) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Class.Writer
+import           Control.Antisthenis.ATL.Common
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Convert
@@ -79,8 +81,6 @@ makeCostProc ref deps =
       where
         mid = zidDefault $ "sum[" ++ show i ++ "]:" ++ ashow ref
 
-
-
 -- | Check that a node is materialized and add mark it as such in the
 -- coepoch.
 ifMaterialized
@@ -89,11 +89,12 @@ ifMaterialized
   -> NodeProc t n (CostParams tag n)
   -> NodeProc t n (CostParams tag n)
   -> NodeProc t n (CostParams tag n)
-ifMaterialized ref t e = squashMealy $ \conf -> do
+ifMaterialized ref t e = proc conf -> do
   let isMater = fromMaybe False $ ref `refLU` peParams (confEpoch conf)
-  tell $ mempty { pceParams = refFromAssocs [(ref,isMater)] }
-  traceM $ "isMaterialized: " ++ ashow (ref,isMater)
-  return (conf,if isMater then t else e)
+  () <- arrTell -< (mempty { pceParams = refFromAssocs [(ref,isMater)] })
+  case isMater of
+    True -> t -< conf
+    False -> e -< conf
 
 -- | Build AND INSERT a new mech in the mech directory. The mech does
 -- not update it's place in the mech map.α
@@ -103,7 +104,8 @@ mkNewMech
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
 mkNewMech ref =
-  asSelfUpdating $ ifMaterialized ref (mcIsMatProc ref costProcess) costProcess
+  asSelfUpdating
+  $ ifMaterialized ref (mcIsMatProc ref costProcess) costProcess
   where
     costProcess = squashMealy $ \conf -> do
       mops <- lift $ findCostedMetaOps ref
@@ -112,15 +114,15 @@ mkNewMech ref =
       let mechs =
             [DSetR
               { dsetConst = Sum $ Just $ mcMkCost (Proxy :: Proxy tag) ref cost
-               ,dsetNeigh =
-                  [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
+               ,dsetNeigh = [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
               } | (mop,cost) <- mops]
       return (conf,makeCostProc ref mechs)
     asSelfUpdating :: NodeProc t n (CostParams tag n)
                    -> NodeProc t n (CostParams tag n)
-    asSelfUpdating (MealyArrow f) = MealyArrow $ fromKleisli $ \c -> do
+    asSelfUpdating
+      (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       ((nxt,r),coepoch) <- listen $ toKleisli f c
-      traceM $ "drop-trail:" ++ ashow ref
+      traceM $ "drop-trail:" ++ ashow (ref,r,coepoch)
       lift
         $ modify
         $ modL mcMechMapLens
@@ -128,6 +130,9 @@ mkNewMech ref =
         $ rmap (\x -> trace ("result: " ++ ashow (ref,x,pcePred coepoch)) x)
         $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
+
+procTell :: (Monoid w,Arrow c) => w -> MealyArrow (WriterArrow w c) a a
+procTell w = arrCoListen' $ arr $ \x -> (w,x)
 
 markComputable
   :: IsPlanParams tag n
@@ -203,7 +208,7 @@ getOrMakeMech ref = squashMealy $ \conf -> do
     $ modL mcMechMapLens
     $ refInsert ref
     $ cycleProc @tag ref
-  return (conf,censorPredicate ref $ fromMaybe (mkNewMech ref) mechM)
+  return (conf,fromMaybe (mkNewMech ref) mechM)
 
 -- | Return an error (uncomputable) and insert a predicate that
 -- whatever results we come up with are predicated on ref being
@@ -212,7 +217,9 @@ cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
 cycleProc ref =
   arrCoListen'
   $ arr
-  $ const (markNonComputable ref,mcCompStack ref)
+  $ const
+    (trace ("mark-non-comp: " ++ ashow (ref, mempty <> markNonComputable ref )) markNonComputable ref
+    ,mcCompStack ref)
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
@@ -232,11 +239,13 @@ censorPredicate
 censorPredicate ref c = arrCoListen' $ rmap go $ arrListen' c
   where
     go (coepoch,ret) = case ret of
-      BndErr ErrCycleEphemeral {}
-        -> (unmarkNonComputable ref coepoch
-           ,BndErr
-              ErrCycle
-              { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch })
+      BndErr ErrCycleEphemeral {..} -> trace
+        ("censorPredicate: Ephemeral cycle" -- ecCur MUST be in pcePred
+         ++ ashow (ref,ecCur,pcePred coepoch))
+        $ (unmarkNonComputable ref coepoch
+          ,BndErr
+             ErrCycle
+             { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch })
       _ -> (unmarkNonComputable ref coepoch,ret)
 
 planQuickRun :: Monad m => PlanT t n Identity a -> PlanT t n m a

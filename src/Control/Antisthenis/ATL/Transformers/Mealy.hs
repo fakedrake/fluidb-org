@@ -27,15 +27,16 @@ import           Control.Antisthenis.ATL.Class.Reader
 import           Control.Antisthenis.ATL.Class.State
 import           Control.Antisthenis.ATL.Class.Writer
 import           Control.Antisthenis.ATL.Common
-import           Control.Arrow                            hiding ((>>>))
-import           Control.Category                         hiding ((>>>))
+import           Control.Antisthenis.ATL.Transformers.Writer
+import           Control.Arrow                               hiding ((>>>))
+import           Control.Category                            hiding ((>>>))
 import           Control.Monad.Fix
 import           Control.Utils.Free
-import           Data.Bifunctor                           (bimap)
+import           Data.Bifunctor                              (bimap)
 import           Data.Maybe
 import           Data.Profunctor
 import           Data.Void
-import           Prelude                                  hiding (id, (.))
+import           Prelude                                     hiding (id, (.))
 
 -- | Note that this is not a transformer because it is not isomorphic
 -- to c.
@@ -222,3 +223,11 @@ squashMealy
 squashMealy m = MealyArrow $ fromKleisli $ \a -> do
   (a',MealyArrow m') <- m a
   toKleisli m' a'
+
+test ::  [Int]
+test = fst $ ap 2 $ nxtArr $ ap 1 $ a  where
+  a :: MealyArrow (WriterArrow [Int] (->)) Int Int
+  a =  arrCoListen' $ arr $ const ([1],2)
+  un = runWriterArrow . runMealyArrow
+  nxtArr = fst . snd
+  ap  = flip un
