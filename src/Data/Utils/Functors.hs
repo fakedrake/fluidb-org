@@ -1,5 +1,6 @@
 module Data.Utils.Functors
-  (traverse4
+  (iterateM_
+  ,traverse4
   ,traverse5
   ,traverse3
   ,traverse2
@@ -27,7 +28,8 @@ module Data.Utils.Functors
   ,lift5
   ,bitraverse2
   ,cofmap
-  ,(<&>),bivoid) where
+  ,(<&>)
+  ,bivoid) where
 
 import           Control.Monad
 import           Control.Monad.Trans
@@ -148,3 +150,7 @@ cofmap = id
 
 bivoid :: Bifunctor f => f a b -> f () ()
 bivoid = bimap (const ()) (const ())
+
+iterateM_ :: Monad m => a -> (a -> m a) ->  m b
+iterateM_ x0 f = g x0
+    where g x = f x >>= g

@@ -29,6 +29,7 @@ module Control.Antisthenis.Types
   ,ashowRes
   ,zipperShape
   ,mapCursor
+  ,RstCmd
   ,Err
   ,ArrProc'
   ,NoArgError(..)
@@ -101,9 +102,10 @@ instance (AShow i,AShow (OptSet i))
   => AShow (IndexErr i)
 type Err = IndexErr Int
 
--- | Either provide a meaningful reset command or delegate to a the
--- previous reset branch.
+-- | Provide a meaningful reset command.
 newtype ResetCmd a = DoReset a deriving Functor
+type RstCmd w m x = (ResetCmd (FreeT (Cmds w) m x))
+
 -- Existential zipper. This zipper does not have a cursor, it just
 -- remembers the structure of the zipper.
 data ExZipper w = forall p . ExZipper { runExZipper :: FinZipper w p }
@@ -111,7 +113,7 @@ data MayReset a = DontReset a | ShouldReset deriving (Generic,Functor)
 instance AShow a => AShow (MayReset a)
 type Cmds w = Cmds' (ExZipper w) (ZItAssoc w)
 data Cmds' r f a =
-  Cmds { cmdReset :: ResetCmd a,cmdItCoit :: MayReset (ItInit r f a) }
+  Cmds { cmdReset :: ResetCmd a,cmdItCoit :: ItInit r f a }
   deriving Functor
 type ItProcF f a =
   ((forall x . AssocContainer f => NonEmptyAC f x -> (KeyAC f,x,f x))
@@ -147,17 +149,15 @@ type AShowW w =
 -- | Some functions that require shared variables.
 data ZProcEvolution w m k =
   ZProcEvolution
-  {
-    -- Evolution control decides when to return values and when to
+  { -- Evolution control decides when to return values and when to
     -- continue.
-    evolutionControl :: GConf w -> Zipper w (ArrProc w m) -> Maybe k
+    evolutionControl :: GConf w -> Zipper w (ArrProc w m) -> Maybe (BndR w)
     -- Evolution strategy decides which branches to take when
     -- evolving. Get the final.
    ,evolutionStrategy
       :: forall x .
-      (BndR w -> x)
-      -> FreeT (ItInit (ExZipper w) (ZItAssoc w)) m (x,k)
-      -> m (x,k)
+      FreeT (Cmds w) m x
+      -> m (Maybe (RstCmd w m x),Either (BndR w) x)
      -- Empty error is the error emitted when there are no arguments
      -- to an operator.
    ,evolutionEmptyErr :: ZErr w

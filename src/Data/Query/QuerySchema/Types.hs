@@ -60,6 +60,7 @@ useCardinality qsCard qs =
 modCardinality :: (Cardinality -> Cardinality) -> QuerySize -> QuerySize
 modCardinality card qs = qs { qsTables = go $ qsTables qs }
   where
+    go []     = error "Unreachable"
     go (t:ts) = t { tsRows = card $ tsRows t } : ts
 
 modCertainty :: (Double -> Double) -> QuerySize -> QuerySize

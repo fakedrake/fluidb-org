@@ -31,6 +31,7 @@ import           Control.Antisthenis.Test
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.VarMap
 import           Control.Antisthenis.Zipper
+import           Control.Antisthenis.ZipperId
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -285,28 +286,34 @@ instance (AShow (ExtCoEpoch p),ExtParams p,BoolOp op)
       return $ min bnd gcap }
 
 
+-- boolEvolutionStrategy
+--   :: Monad m
+--   => (BndR (BoolTag op p) -> x)
+--   -> FreeT
+--     (ItInit
+--        (ExZipper (BoolTag op p))
+--        (CountingAssoc [] Maybe (ZBnd (BoolTag op p))))
+--     m
+--     (x,BndR (BoolTag op p))
+--   -> m (x,BndR (BoolTag op p))
+
 boolEvolutionStrategy
   :: Monad m
-  => (BndR (BoolTag op p) -> x)
-  -> FreeT
-    (ItInit
-       (ExZipper (BoolTag op p))
-       (CountingAssoc [] Maybe (ZBnd (BoolTag op p))))
-    m
-    (x,BndR (BoolTag op p))
-  -> m (x,BndR (BoolTag op p))
-boolEvolutionStrategy fin = recur
+  => FreeT (Cmds (BoolTag op p)) m x
+  -> m
+    (Maybe (ResetCmd (FreeT (Cmds (BoolTag op p)) m x))
+    ,Either (BndR (BoolTag op p)) x)
+boolEvolutionStrategy = recur Nothing
   where
-    recur (FreeT m) = m >>= \case
-      Pure a -> return a
-      Free f -> case f of
-        CmdItInit _it ini -> recur ini
-        CmdIt it -> recur
+    recur rst (FreeT m) = m >>= \case
+      Pure a -> return (rst,Right a)
+      Free cmd -> case cmdItCoit cmd of
+        CmdItInit _it ini -> recur (Just $ cmdReset cmd) ini
+        CmdIt it -> recur (Just $ cmdReset cmd)
           $ it (error "Unimpl: function to select the cheapest")
-        CmdInit ini -> recur ini
-        CmdFinished (ExZipper z)
-          -> let res = maybe (BndErr undefined) (either BndErr BndRes) (zRes z)
-          in return (fin res,res)
+        CmdInit ini -> recur (Just $ cmdReset cmd) ini
+        CmdFinished (ExZipper z) -> return
+          (rst,Left $ maybe (BndErr undefined) (either BndErr BndRes) (zRes z))
 
 -- | Return Just when we have a result the could be the restult of the
 -- poperator. This decides when to stop working.
@@ -375,8 +382,10 @@ interpretBExp = recur
   where
     recur :: BExp -> ArrProc (BoolTag AnyOp p) m
     recur = \case
-      e :/\: e' -> convAnd $ mkProc $ convBool . recur <$> [e,e']
-      e :\/: e' -> convOr $ mkProc $ convBool . recur <$> [e,e']
+      e :/\: e' ->
+        convAnd $ mkProcId (zidDefault "and") $ convBool . recur <$> [e,e']
+      e :\/: e' ->
+        convOr $ mkProcId (zidDefault "or") $ convBool . recur <$> [e,e']
       BNot e -> notBool $ recur e
       BLVar k -> mealyLift $ fromKleisli $ const $ asks $ \(_trail,m) -> maybe
         (BndErr $ error $ "Failed to dereference value key: " ++ ashow (k,m))
@@ -386,8 +395,8 @@ interpretBExp = recur
         $ getUpdMech
           (BndErr $ error $ "Failed to dereference expr key: " ++ show k)
           k
-    handleCycles k = withTrail $ \(trail,vals) -> if k
-      `IS.member` trail then Left ErrCycle { ecCur = k,ecPred = mempty }
+    handleCycles k = withTrail $ \(trail,vals) ->
+      if k `IS.member` trail then Left ErrCycle { ecCur = k,ecPred = mempty }
       else Right (IS.insert k trail,vals)
     fromBool c = GBool { gbTrue = Exists c,gbFalse = Exists $ not c }
     convOr :: ArrProc (BoolTag Or p) m -> ArrProc (BoolTag op p) m

@@ -20,7 +20,6 @@ import           Control.Utils.Free
 import           Data.Coerce
 import           Data.Proxy
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Nat
 import           Data.Utils.Tup
@@ -99,14 +98,9 @@ instance (AShow v
     Just oldBnd' -> Just
       $ putRes newBnd (sprMap (`sub` oldBnd') oldRes,newZipper)
   zLocalizeConf coepoch conf z =
-    tr
-    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = newCap }
     where
-      tr = id
-      -- tr =
-      --   trace
-      --     ("zLocalizeConf(sum) " ++ ashow (zId z,zRes z,confCap conf,newCap))
       newCap = case zRes z of
         SumPartErr _ -> CapVal zero -- zero cap
         SumPartInit -> confCap conf
@@ -163,22 +157,23 @@ zFullResSum z = sprMap (maybe id ((<>) . coerce) cursorM) $ zRes z where
 
 sumEvolutionStrategy
   :: (Zero v,Monad m)
-  => (BndR (SumTag p v) -> x)
-  -> FreeT
-    (ItInit (ExZipper (SumTag p v)) (SimpleAssoc [] (ZBnd (SumTag p v))))
-    m
-    (x,BndR (SumTag p v))
-  -> m (x,BndR (SumTag p v))
-sumEvolutionStrategy fin = recur
+  => FreeT (Cmds (SumTag p v)) m x
+  -> m
+    (Maybe (ResetCmd (FreeT (Cmds (SumTag p v)) m x))
+    ,Either (BndR (SumTag p v)) x)
+sumEvolutionStrategy = recur Nothing
   where
-    recur (FreeT m) = m >>= \case
-      Pure a -> return a
-      Free f -> case f of
-        CmdItInit _it ini -> recur ini
-        CmdIt it -> recur $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
-        CmdInit ini -> recur ini
-        CmdFinished (ExZipper z)
-          -> let res = case zRes z of
-                   SumPart bnd  -> BndRes $ coerce bnd
-                   SumPartInit  -> BndRes zero
-                   SumPartErr e -> BndErr e in return (fin res,res)
+    recur rst (FreeT m) = m >>= \case
+      Pure a -> return (rst,Right a)
+      Free cmds0 -> go cmds0 where
+        go cmds = case cmdItCoit cmds of
+          CmdItInit _it ini -> recur' ini
+          CmdIt it -> recur' $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
+          CmdInit ini -> recur' ini
+          CmdFinished (ExZipper z) -> return (rst,Left $ zToRes z)
+          where
+            recur' = recur $ Just $ cmdReset cmds
+            zToRes z = case zRes z of
+              SumPart bnd  -> BndRes $ coerce bnd
+              SumPartInit  -> BndRes zero
+              SumPartErr e -> BndErr e

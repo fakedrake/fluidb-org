@@ -36,7 +36,6 @@ import qualified Data.List.NonEmpty                 as NEL
 import           Data.Maybe
 import           Data.Proxy
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
@@ -214,8 +213,7 @@ instance (AShow a
   -- Also handles the combination of epoch and coepoch that dictates
   -- whether we must reset.
   zLocalizeConf coepoch conf z =
-    tr
-    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (zSecondaryBound z,confCap conf) of
       (NeverSec,_)                  -> conf
       (NoSec,_)                     -> conf { confCap = CapVal zero }
@@ -223,11 +221,6 @@ instance (AShow a
       (SecSoft _ bnd,CapVal c)      -> conf { confCap = CapVal $ min2l c bnd }
       (SecConcrete res,ForceResult) -> conf { confCap = CapVal $ rgetL res }
       (SecSoft _ bnd,ForceResult)   -> conf { confCap = CapVal $ rgetL bnd }
-    where
-      -- tr = id
-      tr =
-        trace
-          ("zLocalizeConf(min): " ++ ashow (zipperShape z,confCap conf,coepoch))
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
@@ -238,7 +231,7 @@ minEvolutionControl
   => Conf (MinTag p v)
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
-minEvolutionControl conf z = fmap traceRes $ case confCap conf of
+minEvolutionControl conf z = case confCap conf of
   ForceResult -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
       SecConcrete r -> if r < bnd then Just $ BndRes r else Nothing
@@ -257,8 +250,6 @@ minEvolutionControl conf z = fmap traceRes $ case confCap conf of
       _             -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
     x -> return x
   where
-    -- traceRes = id
-    traceRes r = trace ("return(min): " ++ ashow (zId z,r)) r
     -- The result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
@@ -306,21 +297,18 @@ zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
       FoundResult r    -> Just $ BndRes r
 
 minEvolutionStrategy
-  :: (AShow v,Monad m,AShow (ExtError p),Ord v)
-  => (BndR (MinTag p v) -> k)
-  -> FreeT
-    (ItInit (ExZipper (MinTag p v)) (ZItAssoc (MinTag p v)))
-    m
-    (k,BndR (MinTag p v))
-  -> m (k,BndR (MinTag p v))
-minEvolutionStrategy fromZ = recur
+  :: (Ord v,Monad m,AShow v)
+  => FreeT (Cmds (MinTag p v)) m x
+  -> m
+    (Maybe (ResetCmd (FreeT (Cmds (MinTag p v)) m x))
+    ,Either (BndR (MinTag p v)) x)
+minEvolutionStrategy = recur Nothing
   where
-    recur (FreeT m) = m >>= \case
-      Pure a -> return a
-      Free f -> case f of
-        CmdItInit _it ini -> recur ini
-        CmdIt it -> recur $ it popMinAssocList
-        CmdInit ini -> recur ini
-        CmdFinished (ExZipper x) -> return
-          (fromZ $ fromMaybe undefined $ zFullResultMin x
-          ,fromMaybe undefined $ zFullResultMin x)
+    recur rst (FreeT m) = m >>= \case
+      Pure a -> return (rst,Right a)
+      Free cmd -> case cmdItCoit cmd of
+        CmdItInit _it ini -> recur (Just $ cmdReset cmd) ini
+        CmdIt it -> recur (Just $ cmdReset cmd) $ it popMinAssocList
+        CmdInit ini -> recur (Just $ cmdReset cmd) ini
+        CmdFinished (ExZipper x) ->
+          return (rst,Left $ fromMaybe undefined $ zFullResultMin x)

@@ -1,11 +1,11 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Arrows              #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE Arrows #-}
+{-# LANGUAGE TupleSections       #-}
 module Control.Antisthenis.ATL.Transformers.Moore
-  (MooreCat
+  (MooreCat(..)
   ,hoistMoore
   ,mooreBatch
   ,mkMooreCat
@@ -14,9 +14,9 @@ module Control.Antisthenis.ATL.Transformers.Moore
   ,mooreFoldInputs
   ,loopMooreCat) where
 
-import Data.Profunctor
-import Control.Arrow
-import Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Arrow
+import           Data.Profunctor
 
 data MooreCat c a b = MooreMech b (MealyArrow c a b)
 
@@ -25,7 +25,7 @@ mealyBatchC
   :: forall a a' b b' c .
   (ArrowChoice c,ArrowApply c)
   => b
-  -> (c (a',b) (Either a b'))
+  -> c (a',b) (Either a b')
   -> MealyArrow c a b
   -> MealyArrow c a' b'
 mealyBatchC b0 f = go b0
@@ -70,7 +70,7 @@ mooreBatch f = \case
 mooreBatchC
   :: forall c a a' b b' .
   (ArrowChoice c,ArrowApply c,Profunctor c)
-  => (c (a',b) (Either a b'))
+  => c (a',b) (Either a b')
   -> MooreCat c a b
   -> MealyArrow c a' b'
 mooreBatchC c (MooreMech b mealy) = mealyBatchC b c mealy

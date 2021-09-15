@@ -17,7 +17,6 @@ module Data.QueryPlan.NodeProc (NodeProc,getCost,(:>:)(..)) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Class.Writer
-import           Control.Antisthenis.ATL.Common
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Convert
@@ -104,13 +103,12 @@ mkNewMech
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
 mkNewMech ref =
-  asSelfUpdating
-  $ ifMaterialized ref (mcIsMatProc ref costProcess) costProcess
+  asSelfUpdating $ ifMaterialized ref (mcIsMatProc ref costProcess) costProcess
   where
     costProcess = squashMealy $ \conf -> do
       mops <- lift $ findCostedMetaOps ref
       -- Should never see the same val twice.
-      traceM $ "mkNewMech " ++ ashow (ref,fst <$> mops)
+      traceM $ "mkNewMech " ++ ashow (ref,Sym . showMetaOp . fst <$> mops)
       let mechs =
             [DSetR
               { dsetConst = Sum $ Just $ mcMkCost (Proxy :: Proxy tag) ref cost
@@ -121,18 +119,9 @@ mkNewMech ref =
                    -> NodeProc t n (CostParams tag n)
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
-      ((nxt,r),coepoch) <- listen $ toKleisli f c
-      traceM $ "drop-trail:" ++ ashow (ref,r,coepoch)
-      lift
-        $ modify
-        $ modL mcMechMapLens
-        $ refInsert ref
-        $ rmap (\x -> trace ("result: " ++ ashow (ref,x,pcePred coepoch)) x)
-        $ asSelfUpdating nxt
+      (nxt,r) <- toKleisli f c
+      lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
-
-procTell :: (Monoid w,Arrow c) => w -> MealyArrow (WriterArrow w c) a a
-procTell w = arrCoListen' $ arr $ \x -> (w,x)
 
 markComputable
   :: IsPlanParams tag n
@@ -170,7 +159,6 @@ satisfyComputability c = mkNodeProc $ \conf -> do
   case toNodeList $ pNonComputables $ pcePred coepoch of
     [] -> return r
     assumedNonComputables -> do
-      traceM $ "Checking computability of: " ++ ashow assumedNonComputables
       actuallyComputables <- filterM (isComputableM conf) assumedNonComputables
       let conf' = foldl' (flip markComputable) conf actuallyComputables
       runNodeProc (satisfyComputability nxt0) conf'
@@ -201,7 +189,6 @@ getOrMakeMech
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
 getOrMakeMech ref = squashMealy $ \conf -> do
-  traceM $ "lu-ref:" ++ ashow ref
   mechM <- lift $ gets $ refLU ref . getL mcMechMapLens
   lift
     $ modify
@@ -214,12 +201,8 @@ getOrMakeMech ref = squashMealy $ \conf -> do
 -- whatever results we come up with are predicated on ref being
 -- uncomputable
 cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
-cycleProc ref =
-  arrCoListen'
-  $ arr
-  $ const
-    (trace ("mark-non-comp: " ++ ashow (ref, mempty <> markNonComputable ref )) markNonComputable ref
-    ,mcCompStack ref)
+cycleProc
+  ref = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStack ref)
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
@@ -239,13 +222,10 @@ censorPredicate
 censorPredicate ref c = arrCoListen' $ rmap go $ arrListen' c
   where
     go (coepoch,ret) = case ret of
-      BndErr ErrCycleEphemeral {..} -> trace
-        ("censorPredicate: Ephemeral cycle" -- ecCur MUST be in pcePred
-         ++ ashow (ref,ecCur,pcePred coepoch))
-        $ (unmarkNonComputable ref coepoch
-          ,BndErr
-             ErrCycle
-             { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch })
+      BndErr ErrCycleEphemeral {} ->
+        (unmarkNonComputable ref coepoch
+        ,BndErr
+           ErrCycle { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch })
       _ -> (unmarkNonComputable ref coepoch,ret)
 
 planQuickRun :: Monad m => PlanT t n Identity a -> PlanT t n m a
