@@ -144,6 +144,8 @@ type AShowW w =
   ,AShow (ZPartialRes w)
   ,Functor (ZItAssoc w)
   ,BndRParams w
+  ,AShow (ZEpoch w)
+  ,AShow (ZCap w)
   ,AShow (ZItAssoc w ((),())))
 
 -- | Some functions that require shared variables.

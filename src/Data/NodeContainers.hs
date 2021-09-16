@@ -103,7 +103,7 @@ instance ARead (NodeRef n) where
     Sub [Sym "NodeRef", r] -> N <$> aread' r
     _                      -> Nothing
 instance Show (NodeRef n) where
-  show (NodeRef n) = "<" ++ show n ++ ">"
+  show (NodeRef n) = "N" ++ show n
 instance Read (NodeRef a) where
   readsPrec _ x = if
     | "NodeRef " `isPrefixOf` norm' x -> go 8

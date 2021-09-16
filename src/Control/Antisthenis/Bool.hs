@@ -375,6 +375,7 @@ interpretBExp
   (MonadState (ProcMap (BoolTag AnyOp p) m) m
   ,MonadReader (IS.IntSet,IM.IntMap Bool) m
   ,AShow (ExtCoEpoch p)
+  ,AShow (ExtEpoch p)
   ,ExtParams p)
   => BExp
   -> ArrProc (BoolTag AnyOp p) m

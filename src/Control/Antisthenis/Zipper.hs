@@ -76,7 +76,7 @@ type ZCat w m =
 -- resolved in one step.
 mkZCatIni
   :: forall w m .
-  (ZipperParams w,Monad m,AShow (ZBnd w))
+  (ZipperParams w,Monad m,AShowW w)
   => ZipperId
   -> [ArrProc w m]
   -> MooreCat
@@ -100,7 +100,7 @@ mkZCatIni zipId (a:as) = mkMooreCat iniZipper $ mkZCat mempty iniZipper
 -- the coepoch of the most recent cursor executed. The zipper state is
 -- always dependent on a coepoch.
 mkZCat
-  :: (ZipperParams w,Monad m,AShow (ZBnd w))
+  :: (ZipperParams w,Monad m,AShowW w)
   => ZCoEpoch w
   -> Zipper w (ArrProc w m)
   -> MealyArrow
@@ -113,13 +113,18 @@ mkZCat coepoch0 (incrZipperUId -> prevz) =
     (coepoch,(p',val)) <- runArrProc cursProc lconf
     let coepoch' = coepoch <> coepoch0
     -- Update the cursor value and rotate the zipper.
-    return $ Free $ fmap (return . (coepoch',)) $ case val of
+    traceM $ "Cursor value: " ++ ashow val
+    return $ Free $ fmap return $ mapCmds (fmap (mempty,)) (coepoch',) $ case val of
       BndBnd bnd -> pushIt coepoch'
         $ mapCursor (const $ Const (bnd,inip,p')) prevz
       BndRes res -> pushCoit coepoch'
         $ mapCursor (const $ Const (Right res,p')) prevz
       BndErr err -> pushCoit coepoch'
         $ mapCursor (const $ Const (Left err,p')) prevz
+
+mapCmds :: (ResetCmd a -> ResetCmd b) -> (a -> b) -> Cmds w a -> Cmds w b
+mapCmds f g Cmds {..} =
+  Cmds { cmdReset = f cmdReset,cmdItCoit = g <$> cmdItCoit }
 
 type EvaledZipper w p v =
   Zipper' w (Const v) p (ZPartialRes w)
@@ -130,16 +135,13 @@ type EvaledZipper w p v =
 -- etc). Create the commands for that.
 pushIt
   :: forall w m p .
-  (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
+  (Monad m,p ~ ArrProc w m,ZipperParams w,AShowW w)
   => ZCoEpoch w
   -> EvaledZipper w p (ZBnd w,InitProc p,p)
   -> Cmds w (ZCat w m,Zipper w p)
 pushIt coepoch Zipper {zCursor = Const (bnd,inip,itp),..} =
   Cmds
-  { cmdItCoit = cmdItCoit'
-   ,cmdReset = DoReset
-      (mkZCat (trace ("1 resetting!" ++ ashow zId) mempty) rzipper,rzipper)
-  }
+  { cmdItCoit = cmdItCoit',cmdReset = DoReset (mkZCat mempty rzipper,rzipper) }
   where
     rzipper =
       Zipper
@@ -183,13 +185,13 @@ pushIt coepoch Zipper {zCursor = Const (bnd,inip,itp),..} =
 
 pushCoit
   :: forall w m p .
-  (Monad m,p ~ ArrProc w m,ZipperParams w,AShow (ZBnd w))
+  (Monad m,p ~ ArrProc w m,ZipperParams w,AShowW w)
   => ZCoEpoch w
   -> EvaledZipper w p (Either (ZErr w) (ZRes w),CoitProc p)
   -> Cmds w (ZCat w m,Zipper w p)
 pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
   Cmds { cmdItCoit = cmdItCoit'
-        ,cmdReset = DoReset (mkZCat coepoch rzipper,rzipper)
+        ,cmdReset = DoReset (mkZCat mempty rzipper,rzipper)
        }
   where
     newRes = either BndErr BndRes $ fst newCoit
@@ -253,23 +255,43 @@ mkProcId
   -> [ArrProc w m]
   -> ArrProc w m
 mkProcId zid procs = mkProc $ \gconf st@(DoReset rst,coepoch,MooreMech z it) -> do
-  -- Pull out the right command sequence to a useful result
-  traceM $ "zLocalizeConf: " ++ ashow (zipperShape z,coepoch)
-  cmd <- case zLocalizeConf coepoch gconf z of
-    ShouldReset     -> lift $ runFreeT rst
-    DontReset lconf -> lift $ runProc it lconf
+  -- XXX: remember to reset the coepoch
+  (coepoch',cmd) <- case zLocalizeConf coepoch gconf z of
+    ShouldReset -> do
+      traceM $ "Will now reset: " ++ ashow (zipperShape z,confCap gconf)
+      -- Note that reset has one dummy level.
+      lift (runFreeT rst) >>= \case
+        Free _ -> error "Reset should have a shallow layer."
+        Pure ((itR,zR),coepR) -> case zLocalizeConf coepR gconf zR of
+          ShouldReset     -> error $ "Double reset: " ++ ashow (zipperShape zR)
+          DontReset lconf -> fmap (coepR,) $ lift $ getCursorCmds itR lconf
+    DontReset lconf -> do
+      traceM
+        $ "zLocalizeConf: "
+        ++ ashow (zipperShape z,coepoch,confCap gconf,confCap lconf)
+      fmap (coepoch,) $ lift $ getCursorCmds it lconf
+  traceM $ "Evaluating command sequence: " ++ ashow (zId z)
   (rst',res) <- lift $ runCmdSequence cmd
+  traceM $ "Interpreting result: " ++ ashow (zId z,fmap (const ()) rst')
   case res of
-    Left bndr -> yieldMB (coepoch,bndr) >> return (gconf,st)
-    Right ((nxt,z'),coepoch') -> do
-      gconf' <- case evolutionControl zprocEvolution gconf z' of
-        Nothing -> return gconf
-        Just r  -> yieldMB (coepoch',r)
-      return (gconf',(fromMaybe (DoReset rst) rst',coepoch',MooreMech z' nxt))
+    Left bndr -> do
+      traceM $ "Has finished: " ++ ashow (zipperShape z,bndr)
+      gconf' <- yieldMB (coepoch',bndr)
+      return (gconf',st)
+    Right ((nxt,z'),coepoch'')       -- XXX: does this override coepoch'?
+      -> do
+        traceM $ "Checking if result is valid: " ++ ashow (zipperShape z)
+        gconf' <- case evolutionControl zprocEvolution gconf z' of
+          Nothing -> return gconf
+          Just r -> do
+            traceM $ "Yielding: " ++ ashow (zipperShape z',coepoch'',r)
+            yieldMB (coepoch'',r)
+        return
+          (gconf',(fromMaybe (DoReset rst) rst',coepoch'',MooreMech z' nxt))
   where
     runCmdSequence
       cmds = evolutionStrategy zprocEvolution $ FreeT $ return cmds
-    runProc (MealyArrow m) cnf = runFreeT $ runWriterT $ toKleisli m cnf
+    getCursorCmds (MealyArrow m) cnf = runFreeT $ runWriterT $ toKleisli m cnf
     mkProc = putWriter . wrapMealy (resetIni,mempty,iniMoore)
       where
         resetIni = DoReset $ return ((iniMealy,iniZ),mempty)
