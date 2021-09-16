@@ -142,7 +142,7 @@ instance PlanMech CostTag n where
           ,modL = (\f gsc -> gsc { gcMechMap = f $ gcMechMap gsc })
          }
   mcMkCost Proxy ref cost = PlanCost { pcPlan = Just  $ nsSingleton ref,pcCost = cost }
-  mcCompStack = BndErr . ErrCycleEphemeral
+  mcCompStack n = BndErr $ ErrCycleEphemeral n
 
 
 instance HasLens (Min (PlanCost n)) (Min (PlanCost n))

@@ -113,14 +113,20 @@ mkZCat coepoch0 (incrZipperUId -> prevz) =
     (coepoch,(p',val)) <- runArrProc cursProc lconf
     let coepoch' = coepoch <> coepoch0
     -- Update the cursor value and rotate the zipper.
-    traceM $ "Cursor value: " ++ ashow val
-    return $ Free $ fmap return $ mapCmds (fmap (mempty,)) (coepoch',) $ case val of
-      BndBnd bnd -> pushIt coepoch'
-        $ mapCursor (const $ Const (bnd,inip,p')) prevz
-      BndRes res -> pushCoit coepoch'
-        $ mapCursor (const $ Const (Right res,p')) prevz
-      BndErr err -> pushCoit coepoch'
-        $ mapCursor (const $ Const (Left err,p')) prevz
+    --
+    -- XXX: There are cases where the coit process is const without
+    -- lookup.
+    return
+      $ Free
+      $ fmap return
+      $ mapCmds (fmap (mempty,)) (coepoch',)
+      $ case val of
+        BndBnd bnd -> pushIt coepoch'
+          $ mapCursor (const $ Const (bnd,inip,p')) prevz
+        BndRes res -> pushCoit coepoch'
+          $ mapCursor (const $ Const (Right res,p')) prevz
+        BndErr err -> pushCoit coepoch'
+          $ mapCursor (const $ Const (Left err,p')) prevz
 
 mapCmds :: (ResetCmd a -> ResetCmd b) -> (a -> b) -> Cmds w a -> Cmds w b
 mapCmds f g Cmds {..} =
@@ -195,7 +201,6 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
        }
   where
     newRes = either BndErr BndRes $ fst newCoit
-    resetCursor = Identity (Nothing,snd newCoit,snd newCoit)
     finZipper =
       Zipper
       { zCursor = EmptyF
@@ -205,7 +210,7 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
       }
     rzipper =
       Zipper
-      { zCursor = resetCursor
+      { zCursor = Identity (Nothing,snd newCoit,snd newCoit)
        ,zBgState = bgsReset zBgState
        ,zRes = def
        ,zId = zidReset zId
@@ -250,7 +255,7 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
 
 mkProcId
   :: forall m w .
-  (Monad m,ZipperParams w,AShowW w)
+  (Monad m,ZipperParams w,AShowW w,Eq (ZCoEpoch w))
   => ZipperId
   -> [ArrProc w m]
   -> ArrProc w m
@@ -258,36 +263,26 @@ mkProcId zid procs = mkProc $ \gconf st@(DoReset rst,coepoch,MooreMech z it) -> 
   -- XXX: remember to reset the coepoch
   (coepoch',cmd) <- case zLocalizeConf coepoch gconf z of
     ShouldReset -> do
-      traceM $ "Will now reset: " ++ ashow (zipperShape z,confCap gconf)
       -- Note that reset has one dummy level.
       lift (runFreeT rst) >>= \case
         Free _ -> error "Reset should have a shallow layer."
-        Pure ((itR,zR),coepR) -> case zLocalizeConf coepR gconf zR of
-          ShouldReset     -> error $ "Double reset: " ++ ashow (zipperShape zR)
-          DontReset lconf -> fmap (coepR,) $ lift $ getCursorCmds itR lconf
+        Pure
+          ((itR,zR),coepR_empty) -> case zLocalizeConf coepR_empty gconf zR of
+          ShouldReset -> error $ "Double reset: " ++ ashow (zipperShape zR)
+          DontReset
+            lconf -> fmap (coepR_empty,) $ lift $ getCursorCmds itR lconf
     DontReset lconf -> do
-      traceM
-        $ "zLocalizeConf: "
-        ++ ashow (zipperShape z,coepoch,confCap gconf,confCap lconf)
       fmap (coepoch,) $ lift $ getCursorCmds it lconf
-  traceM $ "Evaluating command sequence: " ++ ashow (zId z)
   (rst',res) <- lift $ runCmdSequence cmd
-  traceM $ "Interpreting result: " ++ ashow (zId z,fmap (const ()) rst')
   case res of
     Left bndr -> do
-      traceM $ "Has finished: " ++ ashow (zipperShape z,bndr)
       gconf' <- yieldMB (coepoch',bndr)
       return (gconf',st)
-    Right ((nxt,z'),coepoch'')       -- XXX: does this override coepoch'?
-      -> do
-        traceM $ "Checking if result is valid: " ++ ashow (zipperShape z)
-        gconf' <- case evolutionControl zprocEvolution gconf z' of
-          Nothing -> return gconf
-          Just r -> do
-            traceM $ "Yielding: " ++ ashow (zipperShape z',coepoch'',r)
-            yieldMB (coepoch'',r)
-        return
-          (gconf',(fromMaybe (DoReset rst) rst',coepoch'',MooreMech z' nxt))
+    Right ((nxt,z'),coepoch'') -> do
+      gconf' <- case evolutionControl zprocEvolution gconf z' of
+        Nothing -> return gconf
+        Just r  -> yieldMB (coepoch'',r)
+      return (gconf',(fromMaybe (DoReset rst) rst',coepoch'',MooreMech z' nxt))
   where
     runCmdSequence
       cmds = evolutionStrategy zprocEvolution $ FreeT $ return cmds

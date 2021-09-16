@@ -475,7 +475,7 @@ liftNodeProc = convArrProc
 
 data PlanParams tag n
 newtype Predicates n = Predicates { pNonComputables :: NodeSet n }
-  deriving Generic
+  deriving (Eq,Show,Generic)
 instance AShow (Predicates n)
 isEmptyPredicates :: Predicates n -> Bool
 isEmptyPredicates = nsNull . pNonComputables
@@ -490,7 +490,7 @@ data PlanEpoch n =
   deriving Generic
 data PlanCoEpoch n =
   PlanCoEpoch { pcePred :: Predicates n,pceParams :: RefMap n Bool }
-  deriving Generic
+  deriving (Show,Eq,Generic)
 instance  AShow (PlanCoEpoch n)
 instance  AShow (PlanEpoch n)
 instance Default (PlanEpoch n)
@@ -558,8 +558,7 @@ type IsPlanParams tag n =
 -- XXX: The cap may have changed though
 planCombEpochs :: PlanCoEpoch n -> PlanEpoch n -> a -> MayReset a
 planCombEpochs coepoch epoch a =
-  if paramsMatch && predicatesMatch then DontReset a
-  else trace ("Commanding reset!" ++ ashow (coepoch,epoch)) ShouldReset
+  if paramsMatch && predicatesMatch then DontReset a else ShouldReset
   where
     predicatesMatch =
       nsNull (peCoPred epoch)

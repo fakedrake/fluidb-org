@@ -199,10 +199,15 @@ getOrMakeMech ref = squashMealy $ \conf -> do
 
 -- | Return an error (uncomputable) and insert a predicate that
 -- whatever results we come up with are predicated on ref being
--- uncomputable
+-- uncomputable.
+--
+-- XXX: cycleproc iteration should still lookup in case it is out of
+-- date.
 cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
-cycleProc
-  ref = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStack ref)
+cycleProc ref =
+  MealyArrow $ rmap (first $ const $ getOrMakeMech ref) $ runMealyArrow go
+  where
+    go = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStack ref)
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping

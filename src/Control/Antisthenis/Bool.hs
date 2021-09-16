@@ -374,6 +374,7 @@ interpretBExp
   :: forall m p .
   (MonadState (ProcMap (BoolTag AnyOp p) m) m
   ,MonadReader (IS.IntSet,IM.IntMap Bool) m
+  ,Eq (ZCoEpoch (BoolTag AnyOp p))
   ,AShow (ExtCoEpoch p)
   ,AShow (ExtEpoch p)
   ,ExtParams p)
