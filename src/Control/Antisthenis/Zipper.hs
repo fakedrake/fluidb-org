@@ -113,9 +113,6 @@ mkZCat coepoch0 (incrZipperUId -> prevz) =
     (coepoch,(p',val)) <- runArrProc cursProc lconf
     let coepoch' = coepoch <> coepoch0
     -- Update the cursor value and rotate the zipper.
-    --
-    -- XXX: There are cases where the coit process is const without
-    -- lookup.
     return
       $ Free
       $ fmap return
@@ -252,7 +249,6 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
            ,zId = zId
           }
 
-
 mkProcId
   :: forall m w .
   (Monad m,ZipperParams w,AShowW w,Eq (ZCoEpoch w))
@@ -260,19 +256,14 @@ mkProcId
   -> [ArrProc w m]
   -> ArrProc w m
 mkProcId zid procs = mkProc $ \gconf st@(DoReset rst,coepoch,MooreMech z it) -> do
-  -- XXX: remember to reset the coepoch
+  -- Localize the configuration and check whether it the epoch is new
+  -- from the perspective of the process. Obtain a command sequence
+  -- that leads to a result.
   (coepoch',cmd) <- case zLocalizeConf coepoch gconf z of
-    ShouldReset -> do
-      -- Note that reset has one dummy level.
-      lift (runFreeT rst) >>= \case
-        Free _ -> error "Reset should have a shallow layer."
-        Pure
-          ((itR,zR),coepR_empty) -> case zLocalizeConf coepR_empty gconf zR of
-          ShouldReset -> error $ "Double reset: " ++ ashow (zipperShape zR)
-          DontReset
-            lconf -> fmap (coepR_empty,) $ lift $ getCursorCmds itR lconf
-    DontReset lconf -> do
-      fmap (coepoch,) $ lift $ getCursorCmds it lconf
+    ShouldReset     -> unwrapReset rst gconf
+    DontReset lconf -> fmap (coepoch,) $ lift $ getCursorCmds it lconf
+  -- Run the command sequence selecting the best place state to reset
+  -- to.
   (rst',res) <- lift $ runCmdSequence cmd
   case res of
     Left bndr -> do
@@ -284,6 +275,15 @@ mkProcId zid procs = mkProc $ \gconf st@(DoReset rst,coepoch,MooreMech z it) -> 
         Just r  -> yieldMB (coepoch'',r)
       return (gconf',(fromMaybe (DoReset rst) rst',coepoch'',MooreMech z' nxt))
   where
+    -- Remember: reset has one dummy level that returns a Pure
+    -- cmd. This means that `runCmdSequence` will come up with no
+    -- new reset commands and we will be back where we started in
+    -- the next iteration.
+    unwrapReset rst gconf = lift (runFreeT rst) >>= \case
+      Free _ -> error "Reset should have a shallow layer."
+      Pure ((itR,zR),coepR_empty) -> case zLocalizeConf coepR_empty gconf zR of
+        ShouldReset     -> error $ "Double reset: " ++ ashow (zipperShape zR)
+        DontReset lconf -> fmap (coepR_empty,) $ lift $ getCursorCmds itR lconf
     runCmdSequence
       cmds = evolutionStrategy zprocEvolution $ FreeT $ return cmds
     getCursorCmds (MealyArrow m) cnf = runFreeT $ runWriterT $ toKleisli m cnf

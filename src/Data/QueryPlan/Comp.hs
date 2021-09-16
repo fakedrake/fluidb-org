@@ -3,9 +3,9 @@ module Data.QueryPlan.Comp (Comp(..),nonComp,toComp) where
 
 import           Control.Applicative
 import           Data.Pointed
+import           Data.QueryPlan.Scalable
 import           Data.Utils.AShow
 import           Data.Utils.AShow.Print
-import           Data.Utils.Monoid
 import           Data.Utils.Nat
 
 -- | An integer binomial that assumes that we will be adding.
@@ -14,8 +14,9 @@ data Comp a = Comp Double a deriving (Functor,Show,Eq)
 instance AShow a => AShow (Comp a) where
   ashow' (Comp i a) =
     Sym $ show i ++ "w+" ++ showSExpOneLine False (ashow' a)
-instance Ord a => Ord (Comp a) where
-  compare (Comp _ a) (Comp _ b) = compare a b
+instance (Ord a,Scalable a) => Ord (Comp a) where
+  compare (Comp c1 a) (Comp c2 b) =
+    compare (scale (1 - c1) a) (scale (1 - c2) b)
 
 instance Applicative Comp where
   pure = Comp 0

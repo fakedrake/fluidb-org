@@ -23,6 +23,7 @@
 module Data.QueryPlan.Types
   (Transition(..)
   ,HistTag
+  ,HistCap(..)
   ,CostTag
   ,HistProc
   ,CostProc
@@ -515,7 +516,7 @@ class ExtParams (PlanParams tag n) => PlanMech tag n where
   mcMechMapLens :: GCState t n :>: RefMap n (NodeProc t n (CostParams tag n))
   mcMkCost :: Proxy tag -> NodeRef n -> Cost -> PlanMechVal tag n
   mcIsMatProc :: NoMatProc tag t n
-  mcCompStack :: NodeRef n -> BndR (CostParams tag n)
+  mcCompStackVal :: NodeRef n -> BndR (CostParams tag n)
 
 
 instance ExtParams (PlanParams CostTag n) where
@@ -527,13 +528,21 @@ instance ExtParams (PlanParams CostTag n) where
     Min (PlanMechVal CostTag n)
   extCombEpochs _ = planCombEpochs
 
+data HistCap a = HistCap { hcMatsEncountered :: Int,hcValCap :: Min a }
+  deriving Generic
+instance AShow a => AShow (HistCap a)
+instance Zero a => Zero (HistCap a) where
+  zero = HistCap { hcMatsEncountered = 0,hcValCap = zero }
+instance HasLens (HistCap a) (Min a) where
+  defLens =
+    Lens { getL = hcValCap,modL = \f c -> c { hcValCap = f $ hcValCap c } }
 instance ExtParams (PlanParams HistTag n) where
   type ExtError (PlanParams HistTag n) =
     IndexErr (NodeRef n)
   type ExtEpoch (PlanParams HistTag n) = PlanEpoch n
   type ExtCoEpoch (PlanParams HistTag n) = PlanCoEpoch n
   type ExtCap (PlanParams HistTag n) =
-    Min (PlanMechVal HistTag n)
+    HistCap (PlanMechVal HistTag n)
   extCombEpochs _ = planCombEpochs
 
 type IsPlanParams tag n =

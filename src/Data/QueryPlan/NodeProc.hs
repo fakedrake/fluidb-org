@@ -207,7 +207,7 @@ cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
 cycleProc ref =
   MealyArrow $ rmap (first $ const $ getOrMakeMech ref) $ runMealyArrow go
   where
-    go = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStack ref)
+    go = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStackVal ref)
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping

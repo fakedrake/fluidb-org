@@ -1,10 +1,9 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeOperators     #-}
-module Control.Antisthenis.Lens ((:>:)(..),HasLens(..),ifLt,min2l,rgetL,diff2l) where
+module Control.Antisthenis.Lens ((:>:)(..),HasLens(..),ifLt,min2l,rgetL) where
 
-import qualified Control.Category  as C
-import           Data.Utils.Monoid
+import qualified Control.Category as C
 import           Data.Utils.Nat
 
 -- | A very simple lens to handle the infinite type problem.
@@ -21,13 +20,17 @@ class HasLens a b where
   default defLens :: a ~ b => a :>: b
   defLens = C.id
 
+instance HasLens (Min a) (Maybe a) where
+  defLens = Lens { getL = \(Min a) ->
+    a,modL = \f (Min a) -> Min $ f a }
+
+instance HasLens (Sum a) (Maybe a) where
+  defLens = Lens { getL = \(Sum a) ->
+    a,modL = \f (Sum a) -> Sum $ f a }
+
 ifLt :: (Ord b,HasLens a b) => a -> b ->  c -> c -> c
 ifLt a b t e = if getL defLens a < b then t else e
 min2l :: (Ord b,HasLens a b) => a -> b -> a
 min2l a b = modL defLens (min b) a
-diff2l :: forall a b . (Invertible b,HasLens a b) => a -> b -> a
-diff2l a b = modL (defLens :: a :>: b) go a
-  where
-    go b' = b' `imappend` inv b
 rgetL :: (Zero a,HasLens a b) => b -> a
 rgetL b = modL defLens (const b) zero

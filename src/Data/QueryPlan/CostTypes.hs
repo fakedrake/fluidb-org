@@ -18,9 +18,10 @@ module Data.QueryPlan.CostTypes
 ) where
 
 import           Data.Foldable
-import qualified Data.HashMap.Strict as HM
-import qualified Data.HashSet        as HS
+import qualified Data.HashMap.Strict     as HM
+import qualified Data.HashSet            as HS
 import           Data.NodeContainers
+import           Data.QueryPlan.Scalable
 import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Hashable
@@ -75,7 +76,8 @@ instance Monoid Cost where
   mempty = Cost  0 0
 costAsInt :: Cost -> Int
 costAsInt Cost{..} = costReads + costWrites * 10
-
+instance Scalable Cost where
+  scale sc (Cost r w) = Cost (scale sc r) (scale sc w)
 data GCCache mop t n =
   GCCache { materializedMachines  :: RefMap n ()
           , isMaterializableCache :: MatCache mop t n

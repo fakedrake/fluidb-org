@@ -204,7 +204,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
       tableMap' <- forM pgcSchemaAssoc $ \(t,_) -> do
         n <- insertQueryForest (literalType queryCppConf) . return . (t,)
           =<< symPlan t
-        triggerClustPropagator $ NClustW $ NClust n
+        _shapeClust <- triggerClustPropagator $ NClustW $ NClust n
         return (n,t)
       modify $ \cm -> cm { qnfInsertBottoms = False }
       (,fromRefAssocs tableMap') <$> lift2 (gets gbPropNet)
