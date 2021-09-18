@@ -150,9 +150,11 @@ haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
-  (costs,extraNodes) <- runWriterT
-    $ forM frefs
-    $ lift . getCost @CostTag Proxy mempty ForceResult >=> \case
+  (costs,extraNodes) <- runWriterT $ forM frefs $ \ref -> do
+    cost <- lift
+      $ wrapTrace ("planCost " ++ ashow ref)
+      $ getCost @CostTag Proxy mempty ForceResult ref
+    case cost of
       Nothing -> return zero
       Just c -> do
         maybe (return ()) tell $ pcPlan c

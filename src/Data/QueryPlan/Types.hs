@@ -487,18 +487,27 @@ instance Monoid (Predicates n) where
   mempty = Predicates mempty
 type CoPredicates n = NodeSet n
 data PlanEpoch n =
-  PlanEpoch { peCoPred :: CoPredicates n,peParams :: RefMap n Bool }
+  PlanEpoch
+  { peCoPred       :: CoPredicates n
+   ,peParams       :: RefMap n Bool
+   ,peMaterialized :: Integer
+  }
   deriving Generic
 data PlanCoEpoch n =
-  PlanCoEpoch { pcePred :: Predicates n,pceParams :: RefMap n Bool }
+  PlanCoEpoch
+  { pcePred       :: Predicates n
+   ,pceParams     :: RefMap n Bool
+   ,pceMaterlized :: Integer
+  }
   deriving (Show,Eq,Generic)
 instance  AShow (PlanCoEpoch n)
 instance  AShow (PlanEpoch n)
 instance Default (PlanEpoch n)
 instance Monoid (PlanCoEpoch n) where
-  mempty = PlanCoEpoch mempty mempty
-instance Semigroup  (PlanCoEpoch n) where
-  PlanCoEpoch a b <> PlanCoEpoch a' b' = PlanCoEpoch (a <> a') (b <> b')
+  mempty = PlanCoEpoch mempty mempty 0
+instance Semigroup (PlanCoEpoch n) where
+  PlanCoEpoch a b d <> PlanCoEpoch a' b' d' =
+    PlanCoEpoch (a <> a') (b <> b') (max d d')
 
 -- | Tags to disambiguate the properties of historical and cost processes.
 data HistTag

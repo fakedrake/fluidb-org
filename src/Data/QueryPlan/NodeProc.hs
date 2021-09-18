@@ -120,6 +120,7 @@ mkNewMech ref =
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       (nxt,r) <- toKleisli f c
+      when (ref == 62) $ traceM $ "Update-tape: " ++ ashow ref
       lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 
@@ -152,10 +153,12 @@ satisfyComputability
   :: IsPlanParams tag n
   => NodeProc t n (CostParams tag n)
   -> NodeProc t n (CostParams tag n)
-satisfyComputability c = mkNodeProc $ \conf -> do
+satisfyComputability
+  c = mkNodeProc $ \conf -> wrapTrace "satisfyComputability" $ do
   -- first run normally.
   r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
   -- Solve each predicate.
+  traceM $ "zombie-predicates: " ++ ashow (pNonComputables $ pcePred coepoch)
   case toNodeList $ pNonComputables $ pcePred coepoch of
     [] -> return r
     assumedNonComputables -> do
@@ -165,7 +168,7 @@ satisfyComputability c = mkNodeProc $ \conf -> do
   where
     mkNodeProc = MealyArrow . WriterArrow . fromKleisli
     runNodeProc = toKleisli . runWriterArrow . runMealyArrow
-    isComputableM conf ref = do
+    isComputableM conf ref = wrapTrace ("isComputableM " ++ ashow ref) $ do
       (_coproc,(_nxt,ret))
         <- runNodeProc (satisfyComputability $ getOrMakeMech ref) conf
       return $ case ret of
@@ -189,6 +192,7 @@ getOrMakeMech
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
 getOrMakeMech ref = squashMealy $ \conf -> do
+  traceM $ "ref-lu: " ++ ashow ref
   mechM <- lift $ gets $ refLU ref . getL mcMechMapLens
   lift
     $ modify
@@ -201,13 +205,14 @@ getOrMakeMech ref = squashMealy $ \conf -> do
 -- whatever results we come up with are predicated on ref being
 -- uncomputable.
 --
--- XXX: cycleproc iteration should still lookup in case it is out of
--- date.
+-- XXX: If the node is copredicated throw.
 cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
 cycleProc ref =
   MealyArrow $ rmap (first $ const $ getOrMakeMech ref) $ runMealyArrow go
   where
-    go = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStackVal ref)
+    go =
+      arrCoListen' $ arr $ \_conf -> (markNonComputable ref,mcCompStackVal ref)
+    assert' (p,msg) a = if p then a else error $ "Assert: " ++ msg
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
@@ -249,7 +254,7 @@ getCost
   -> Cap (ExtCap (PlanParams tag n))
   -> NodeRef n
   -> PlanT t n m (Maybe (PlanMechVal tag n))
-getCost _ extraMat cap ref = wrapTrace ("getCost: " ++ ashow ref) $ do
+getCost _ extraMat cap ref = do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
   (res,_coepoch) <- planQuickRun

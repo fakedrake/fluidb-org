@@ -1,6 +1,6 @@
 {
     "style": "johan-tibell",
-    "extensions": ["Arrows","DerivingVia","LambdaCase","ScopedTypeVariables","TupleSections","RankNTypes","FlexibleContexts","MultiParamTypeClasses","TypeFamilies","RecordWildCards","ViewPatterns","ImplicitParams","GADTs","QuantifiedConstraints","DefaultSignatures","FunctionalDependencies","MultiWayIf","BangPatterns","PatternSynonyms"],
+    "extensions": ["Arrows","DerivingVia","LambdaCase","ScopedTypeVariables","TupleSections","RankNTypes","FlexibleContexts","MultiParamTypeClasses","TypeFamilies","RecordWildCards","ViewPatterns","ImplicitParams","GADTs","QuantifiedConstraints","DefaultSignatures","FunctionalDependencies","MultiWayIf","BangPatterns","PatternSynonyms","TypeApplications"],
     "fixities": [],
     "formatting": {
         "op": {

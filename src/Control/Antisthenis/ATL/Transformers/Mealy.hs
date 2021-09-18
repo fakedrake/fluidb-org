@@ -18,7 +18,9 @@ module Control.Antisthenis.ATL.Transformers.Mealy
   ,mealyScan
   ,mealyLift
   ,yieldMB
-  ,finishMB,wrapMealy,yieldMealy) where
+  ,finishMB
+  ,wrapMealy
+  ,yieldMealy) where
 
 import           Control.Antisthenis.ATL.Class.Bind
 import           Control.Antisthenis.ATL.Class.Functorial
@@ -27,18 +29,17 @@ import           Control.Antisthenis.ATL.Class.Reader
 import           Control.Antisthenis.ATL.Class.State
 import           Control.Antisthenis.ATL.Class.Writer
 import           Control.Antisthenis.ATL.Common
-import           Control.Antisthenis.ATL.Transformers.Writer
-import           Control.Arrow                               hiding ((>>>))
-import           Control.Category                            hiding ((>>>))
+import           Control.Arrow                            hiding ((>>>))
+import           Control.Category                         hiding ((>>>))
 import           Control.Monad.Fix
 import           Control.Monad.Identity
 import           Control.Monad.Loops
 import           Control.Utils.Free
-import           Data.Bifunctor                              (bimap)
+import           Data.Bifunctor                           (bimap)
 import           Data.Maybe
 import           Data.Profunctor
 import           Data.Void
-import           Prelude                                     hiding (id, (.))
+import           Prelude                                  hiding (id, (.))
 
 -- | Note that this is not a transformer because it is not isomorphic
 -- to c.

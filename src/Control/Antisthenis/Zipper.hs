@@ -26,6 +26,7 @@
 module Control.Antisthenis.Zipper (mkProcId,runMech) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
+import           Control.Antisthenis.ATL.Class.Writer
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
 import           Control.Antisthenis.ATL.Transformers.Writer
@@ -36,6 +37,7 @@ import           Control.Arrow                               hiding (first,
                                                               (>>>))
 import           Control.Monad.Cont
 import           Control.Monad.Identity
+import           Control.Monad.State
 import           Control.Monad.Writer
 import           Control.Utils.Free
 import           Data.Foldable
@@ -46,7 +48,9 @@ import           Data.Utils.Const
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
+import           Data.Utils.Functors
 import           Data.Utils.Unsafe
+import           Data.Void
 
 
 mkGgState :: ZipperParams w => [p] -> ZipState w p
@@ -66,7 +70,6 @@ type ZCat w m =
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
     (LConf w)
     (Zipper w (ArrProc w m))
-
 
 -- | Build an evolving zipper. Provided a local conf this zipper may
 -- rotate towards any (allowed) direction. After each rotation the
@@ -249,52 +252,76 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
            ,zId = zId
           }
 
+
+data ZState w m =
+  ZState
+  { zsCoEpoch :: ZCoEpoch w
+   ,zsZipper  :: Zipper w (ArrProc w m)
+   ,zsItCmd   :: ZCat w m
+   ,zsReset   :: ZCat w m
+  }
+type family MBF a :: * -> * where
+  MBF (MealyArrow (WriterArrow w c) a b) = MB a (w,b) (ArrFunctor c)
+
 mkProcId
   :: forall m w .
   (Monad m,ZipperParams w,AShowW w,Eq (ZCoEpoch w))
   => ZipperId
   -> [ArrProc w m]
   -> ArrProc w m
-mkProcId zid procs = mkProc $ \gconf st@(DoReset rst,coepoch,MooreMech z it) -> do
-  -- Localize the configuration and check whether it the epoch is new
-  -- from the perspective of the process. Obtain a command sequence
-  -- that leads to a result.
-  (coepoch',cmd) <- case zLocalizeConf coepoch gconf z of
-    ShouldReset     -> unwrapReset rst gconf
-    DontReset lconf -> fmap (coepoch,) $ lift $ getCursorCmds it lconf
-  -- Run the command sequence selecting the best place state to reset
-  -- to.
-  (rst',res) <- lift $ runCmdSequence cmd
-  case res of
-    Left bndr -> do
-      gconf' <- yieldMB (coepoch',bndr)
-      return (gconf',st)
-    Right ((nxt,z'),coepoch'') -> do
-      gconf' <- case evolutionControl zprocEvolution gconf z' of
-        Nothing -> return gconf
-        Just r  -> yieldMB (coepoch'',r)
-      return (gconf',(fromMaybe (DoReset rst) rst',coepoch'',MooreMech z' nxt))
+mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
   where
-    -- Remember: reset has one dummy level that returns a Pure
-    -- cmd. This means that `runCmdSequence` will come up with no
-    -- new reset commands and we will be back where we started in
-    -- the next iteration.
-    unwrapReset rst gconf = lift (runFreeT rst) >>= \case
-      Free _ -> error "Reset should have a shallow layer."
-      Pure ((itR,zR),coepR_empty) -> case zLocalizeConf coepR_empty gconf zR of
-        ShouldReset     -> error $ "Double reset: " ++ ashow (zipperShape zR)
-        DontReset lconf -> fmap (coepR_empty,) $ lift $ getCursorCmds itR lconf
     runCmdSequence
-      cmds = evolutionStrategy zprocEvolution $ FreeT $ return cmds
-    getCursorCmds (MealyArrow m) cnf = runFreeT $ runWriterT $ toKleisli m cnf
-    mkProc = putWriter . wrapMealy (resetIni,mempty,iniMoore)
+      :: FreeT (Cmds w) m ((ZCat w m,Zipper w (ArrProc w m)),ZCoEpoch w)
+      -> m
+        (Maybe (ZCat w m)
+        ,Either (BndR w) ((ZCat w m,Zipper w (ArrProc w m)),ZCoEpoch w))
+    runCmdSequence cmds = do
+      (rstCmdM,r) <- evolutionStrategy zprocEvolution cmds
+      rstM <- forM rstCmdM $ \(DoReset (FreeT rst)) -> rst <&> \case
+        Free _m -> error "Reset is expected to have a Pure layer"
+        Pure ((resetCat,_resetZ),_coepochEmpty) -> resetCat
+      return (rstM,r)
+    fromArrow
+      :: ZCat w m
+      -> Conf w
+      -> MBF
+        (ArrProc w m)
+        (FreeT (Cmds w) m ((ZCat w m,Zipper w (ArrProc w m)),ZCoEpoch w))
+    fromArrow (MealyArrow m) cnf =
+      fmap (FreeT . return) $ lift $ runFreeT $ runWriterT $ toKleisli m cnf
+    zsIni :: ZState w m
+    zsIni =
+      ZState
+      { zsCoEpoch = mempty
+       ,zsZipper = iniZ
+       ,zsReset = iniMealy
+       ,zsItCmd = iniMealy
+      }
       where
-        resetIni = DoReset $ return ((iniMealy,iniZ),mempty)
-        putWriter (MealyArrow m) = MealyArrow $ WriterArrow $ rmap go m
-          where
-            go (nxt,(coepoch,r)) = (coepoch,(putWriter nxt,r))
-        iniMoore = mkZCatIni zid procs
-        MooreMech iniZ iniMealy = iniMoore
+        iniZ :: Zipper w (ArrProc w m)
+        MooreMech iniZ iniMealy = mkZCatIni zid procs
+    -- XXX: Drop the writerq
+    zNext :: ZState w m -> Conf w -> MBF (ArrProc w m) Void
+    zNext zs@ZState {..} gconf = do
+      case zLocalizeConf zsCoEpoch gconf zsZipper of
+        ShouldReset -> do
+          let zs' = zs { zsCoEpoch = mempty,zsItCmd = zsReset }
+          (zNext zs' gconf :: MBF (ArrProc w m) Void)
+        DontReset lconf -> do
+          case evolutionControl zprocEvolution gconf zsZipper of
+            Just res -> yieldMB (zsCoEpoch,res) >>= zNext zs
+            Nothing -> do
+              a <- fromArrow zsItCmd lconf
+              (rstM,upd) <- lift $ runCmdSequence a
+              let zs' = zs { zsReset = fromMaybe zsReset rstM }
+              case upd of
+                Left finRes -> yieldMB (zsCoEpoch,finRes) >>= zNext zs'
+                Right ((nxt,z),coepoch) -> do
+                  let zs'' =
+                        zs' { zsItCmd = nxt,zsZipper = z,zsCoEpoch = coepoch }
+                  zNext zs'' gconf
+
 
 runMech :: ArrowFunctor c => MealyArrow c a b -> a -> ArrFunctor c b
 runMech (MealyArrow c) ini = snd <$> toKleisli c ini

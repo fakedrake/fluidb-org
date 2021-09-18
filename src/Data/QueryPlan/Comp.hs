@@ -42,8 +42,8 @@ instance Semigroup a => Semigroup (Comp a) where
 instance Monoid a => Monoid (Comp a) where
   mempty = Comp 0 mempty
 
-nonComp :: Monoid a => Comp a
-nonComp = Comp 1 mempty
+nonComp :: Zero a => Comp a
+nonComp = Comp 1 zero
 
 toComp :: a -> Comp a
 toComp = Comp 0

@@ -70,12 +70,8 @@ import           Control.Arrow                               hiding (first,
 import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Bifunctor
-import           Data.List
 import           Data.Proxy
-import           Data.String
 import           Data.Utils.AShow
-import           Data.Utils.Binom
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.OptSet
@@ -338,7 +334,6 @@ class (Monoid (ExtCoEpoch p)) => ExtParams p where
   type ExtCap p :: *
 
   type ExtError p :: *
-
 
   extCombEpochs
     :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> Conf w -> MayReset (Conf w)
