@@ -324,7 +324,9 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
     }
 
 incrZipperUId :: Zipper' w cursf p pr -> Zipper' w cursf p pr
-incrZipperUId z = z { zId = zidBumpVersion $ zId z }
+incrZipperUId z =
+  if zidVersion (zId z) < 10
+  then z { zId = zidBumpVersion $ zId z } else error "Too much incrementing"
 
 class (Monoid (ExtCoEpoch p)) => ExtParams p where
   type ExtEpoch p :: *

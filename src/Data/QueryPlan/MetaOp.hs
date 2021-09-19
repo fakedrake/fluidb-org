@@ -52,6 +52,7 @@ import           Data.Utils.ListT
 import           Data.Utils.Ranges
 import           Prelude                    hiding (filter, lookup)
 
+import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Types
 import           Data.Utils.Default
 import           Data.Utils.Unsafe

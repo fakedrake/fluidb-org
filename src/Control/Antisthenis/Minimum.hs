@@ -36,6 +36,7 @@ import qualified Data.List.NonEmpty                 as NEL
 import           Data.Maybe
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
@@ -68,8 +69,8 @@ instance (AShow (f (ZBnd w,a)),AShowBndR w,AShow a,AShowV [ZErr w])
 
 -- | The minimum bound.
 data SecondaryBound w
-  = SecConcrete (ZRes w) -- The secondary bound comes from Res
-  | SecSoft (Maybe (ZRes w)) (ZBnd w) -- The secondary bound comes from a Bnd (the ZRes
+  = SecRes (ZRes w) -- The secondary bound comes from Res
+  | SecBnd (Maybe (ZRes w)) (ZBnd w) -- The secondary bound comes from a Bnd (the ZRes
                                       -- is just for debug)
   | NoSec -- First actual lower bound or all other res are errors.
   | NeverSec -- There won't be a secondary because there is only one
@@ -85,9 +86,9 @@ zSecondaryBound
 zSecondaryBound z = case malConcrete mal of
   OnlyErrors _ -> noSecondaryBound
   FoundResult firstRes -> case elemBnd of
-    Just bnd -> if firstRes < bnd then SecConcrete firstRes
-      else SecSoft (Just firstRes) bnd
-    Nothing -> SecConcrete firstRes -- there are no other results.
+    Just bnd -> if firstRes < bnd then SecRes firstRes
+      else SecBnd (Just firstRes) bnd
+    Nothing -> SecRes firstRes -- there are no other results.
   where
     -- How do we encode the lack of a secondary bound. If we are still
     -- going through the inits there is NoSec (ie. while there is no
@@ -127,13 +128,18 @@ instance AssocContainer (MinAssocList [] w) where
   acNonEmpty (MinAssocList mal x) =
     (`MinAssocList` x) <$> NEL.nonEmpty mal
 
-barrel :: NEL.NonEmpty a -> NEL.NonEmpty (NEL.NonEmpty a)
-barrel x@(a0 NEL.:| as0) = x NEL.:| go [] a0 as0
+type L1 = NEL.NonEmpty
+barrel :: L1 a -> L1 (L1 a)
+barrel x@(_ NEL.:| []) = pure x
+barrel x@(a NEL.:| a':as) = x NEL.:| go [a] a' as
   where
-    go _pref _a []    = []
-    go pref a (a':as) = (a' NEL.:| (a : pref)) : go (a : pref) a' as
+    go left root [] = pure $ root NEL.:| left
+    go left root (root':right) =
+      (root NEL.:| root' : left ++ right)
+      : go (root : left) root' right
 
-minimumOn :: Ord b => NEL.NonEmpty (b,a) -> a
+
+minimumOn :: Ord b => L1 (b,a) -> a
 minimumOn ((b,a) NEL.:| as) =
   snd
   $ foldl' (\(b0,a0) (b1,a1) -> if b0 < b1 then (b0,a0) else (b1,a1)) (b,a) as
@@ -141,14 +147,18 @@ minimumOn ((b,a) NEL.:| as) =
 -- | Return the minimum of the list.
 popMinAssocList
   :: (Ord (ZBnd w),AShowV (ZBnd w))
-  => MinAssocList NEL.NonEmpty w a
+  => MinAssocList L1 w a
   -> (ZBnd w,a,MinAssocList [] w a)
-popMinAssocList (MinAssocList m c) = (v,a,MinAssocList vs c)
+popMinAssocList arg@(MinAssocList m c) = check (v,a,res)
   where
+    check x =
+      if any (\(bnd,_a) -> v > bnd) $ malElements res
+      then error "Min fail" else x
+    res = MinAssocList vs c
     (v,a) NEL.:| vs = minimumOn $ (\a' -> (fst $ NEL.head a',a')) <$> barrel m
 
 topMinAssocList
-  :: Ord (ZBnd w) => MinAssocList NEL.NonEmpty w a -> ZBnd w
+  :: Ord (ZBnd w) => MinAssocList L1 w a -> ZBnd w
 topMinAssocList mal = elemBnd
   where
     elemBnd = let x NEL.:| xs = fst <$> malElements mal in foldl' min x xs
@@ -215,12 +225,12 @@ instance (AShow a
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (zSecondaryBound z,confCap conf) of
-      (NeverSec,_)                  -> conf
-      (NoSec,_)                     -> conf { confCap = CapVal zero }
-      (SecConcrete res,CapVal c)    -> conf { confCap = CapVal $ min2l c res }
-      (SecSoft _ bnd,CapVal c)      -> conf { confCap = CapVal $ min2l c bnd }
-      (SecConcrete res,ForceResult) -> conf { confCap = CapVal $ rgetL res }
-      (SecSoft _ bnd,ForceResult)   -> conf { confCap = CapVal $ rgetL bnd }
+      (NeverSec,_)               -> conf
+      (NoSec,_)                  -> conf { confCap = CapVal zero }
+      (SecRes res,CapVal c)      -> conf { confCap = CapVal $ min2l c res }
+      (SecBnd _ bnd,CapVal c)    -> conf { confCap = CapVal $ min2l c bnd }
+      (SecRes res,ForceResult)   -> conf { confCap = CapVal $ rgetL res }
+      (SecBnd _ bnd,ForceResult) -> conf { confCap = CapVal $ rgetL bnd }
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
@@ -228,14 +238,15 @@ instance (AShow a
 minEvolutionControl
   :: forall v p r x .
   (HasLens (ExtCap p) (Min v),AShow v,AShow (ExtError p),Ord v)
-  => Conf (MinTag p v)
+  => GConf (MinTag p v)
   -> Zipper' (MinTag p v) Identity r x
   -> Maybe (BndR (MinTag p v))
 minEvolutionControl conf z = case confCap conf of
   ForceResult -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
-      SecConcrete r -> if r < bnd then Just $ BndRes r else Nothing
-      _             -> Nothing
+      SecRes r        -> if r < bnd then Just $ BndRes r else Nothing
+      SecBnd _ secBnd -> if secBnd >= bnd then Nothing else error "oops"
+      _               -> Nothing
     x -> return x
   CapVal cap -> res >>= \case
     -- BUG: we are using the secondary cap to cap the value we produce
@@ -246,19 +257,20 @@ minEvolutionControl conf z = case confCap conf of
     -- comparing `cap` to `bnd` because `bnd` may by far surpass the
     -- concrete secondary
     BndBnd bnd -> case zSecondaryBound z of
-      SecConcrete r -> if r < bnd then Just $ BndRes r else Nothing
-      _             -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
-    x -> return x
+      SecRes r -> if r < bnd then Just $ BndRes r
+        else ifLt cap bnd (Just $ BndBnd bnd) Nothing
+      _ -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
+    x -> Just x
   where
-    -- The result so far. The cursor is assumed to always be either an
+    -- THE result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
       Just r -> Just $ BndBnd r
       Nothing -> case zSecondaryBound z of
-        NeverSec      -> Nothing
-        NoSec         -> Nothing
-        SecConcrete r -> Just $ BndRes r
-        SecSoft _ b   -> Just $ BndBnd b
+        NeverSec   -> Nothing
+        NoSec      -> Nothing
+        SecRes r   -> Just $ BndRes r
+        SecBnd _ b -> Just $ BndBnd b
 
 minBndR :: Ord v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
 minBndR = curry $ \case

@@ -52,7 +52,6 @@ module Data.QueryPlan.Types
   ,NodeState(..)
   ,PlanningError(..)
   ,IsMat(..)
-  ,Cost(..)
   ,BotMonad(..)
   ,PlanSanityError(..)
   ,ProvenanceAtom(..)

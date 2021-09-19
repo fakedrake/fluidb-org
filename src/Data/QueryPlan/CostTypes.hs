@@ -62,27 +62,28 @@ instance Subtr Cost where
 -- XXX: Here we are INCONSISTENT in assuming that reads and writes
 -- cost the same.
 instance Ord Cost where
-  compare (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
+  compare a b = compare (costAsInt a) (costAsInt b)
   {-# INLINE compare #-}
 
 instance AShow Cost where
   ashow' c = Sym $ show (costReads c) ++ "/" ++ show (costWrites c)
 instance Semigroup Cost where
   c1 <> c2 =
-    Cost { costReads = costReads c1 + costReads c1
+    Cost { costReads = costReads c1 + costReads c2
           ,costWrites = costWrites c1 + costWrites c2
          }
 instance Monoid Cost where
-  mempty = Cost  0 0
+  mempty = Cost 0 0
 costAsInt :: Cost -> Int
 costAsInt Cost{..} = costReads + costWrites * 10
 instance Scalable Cost where
   scale sc (Cost r w) = Cost (scale sc r) (scale sc w)
 data GCCache mop t n =
-  GCCache { materializedMachines  :: RefMap n ()
-          , isMaterializableCache :: MatCache mop t n
-          , metaOpCache           :: RefMap n [(mop, Cost)]
-          }
+  GCCache
+  { materializedMachines  :: RefMap n ()
+   ,isMaterializableCache :: MatCache mop t n
+   ,metaOpCache           :: RefMap n [(mop,Cost)]
+  }
   deriving Generic
 instance Default (GCCache mop t n)
 data StarScore mop t n =

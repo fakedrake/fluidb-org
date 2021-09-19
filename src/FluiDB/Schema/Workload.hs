@@ -54,6 +54,7 @@ import           Data.Query.Optimizations
 import           Data.Query.Optimizations.Echo
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
+import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Solve
 import           Data.QueryPlan.Transitions

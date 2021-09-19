@@ -86,7 +86,7 @@ mkZCatIni
     (WriterArrow (ZCoEpoch w) (Kleisli (FreeT (Cmds w) m)))
     (LConf w)
     (Zipper w (ArrProc w m))
-mkZCatIni zid [] = error $ "mul needs at least one value: " ++ ashow zid
+mkZCatIni zid [] = error $ "No arg values for operation: " ++ ashow zid
 mkZCatIni zipId (a:as) = mkMooreCat iniZipper $ mkZCat mempty iniZipper
   where
     iniZipper =
@@ -255,10 +255,11 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
 
 data ZState w m =
   ZState
-  { zsCoEpoch :: ZCoEpoch w
-   ,zsZipper  :: Zipper w (ArrProc w m)
-   ,zsItCmd   :: ZCat w m
-   ,zsReset   :: ZCat w m
+  { zsCoEpoch     :: ZCoEpoch w
+   ,zsZipper      :: Zipper w (ArrProc w m)
+   ,zsItCmd       :: ZCat w m
+   ,zsReset       :: ZCat w m
+   ,zsRecentReset :: Bool
   }
 type family MBF a :: * -> * where
   MBF (MealyArrow (WriterArrow w c) a b) = MB a (w,b) (ArrFunctor c)
@@ -297,6 +298,7 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
        ,zsZipper = iniZ
        ,zsReset = iniMealy
        ,zsItCmd = iniMealy
+       ,zsRecentReset = True
       }
       where
         iniZ :: Zipper w (ArrProc w m)
@@ -306,11 +308,14 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
     zNext zs@ZState {..} gconf = do
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
-          let zs' = zs { zsCoEpoch = mempty,zsItCmd = zsReset }
+          let zs' =
+                zs
+                { zsCoEpoch = mempty,zsItCmd = zsReset,zsRecentReset = True }
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
         DontReset lconf -> do
           case evolutionControl zprocEvolution gconf zsZipper of
-            Just res -> yieldMB (zsCoEpoch,res) >>= zNext zs
+            Just res -> do
+              yieldMB (zsCoEpoch,res) >>= zNext zs { zsRecentReset = False }
             Nothing -> do
               a <- fromArrow zsItCmd lconf
               (rstM,upd) <- lift $ runCmdSequence a
@@ -321,7 +326,6 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
                   let zs'' =
                         zs' { zsItCmd = nxt,zsZipper = z,zsCoEpoch = coepoch }
                   zNext zs'' gconf
-
 
 runMech :: ArrowFunctor c => MealyArrow c a b -> a -> ArrFunctor c b
 runMech (MealyArrow c) ini = snd <$> toKleisli c ini

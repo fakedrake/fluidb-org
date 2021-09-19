@@ -107,8 +107,8 @@ mkNewMech ref =
   where
     costProcess = squashMealy $ \conf -> do
       mops <- lift $ findCostedMetaOps ref
+      ("metaops("++ ashow ref ++ ")") <<: mops
       -- Should never see the same val twice.
-      traceM $ "mkNewMech " ++ ashow (ref,Sym . showMetaOp . fst <$> mops)
       let mechs =
             [DSetR
               { dsetConst = Sum $ Just $ mcMkCost (Proxy :: Proxy tag) ref cost
@@ -120,7 +120,7 @@ mkNewMech ref =
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       (nxt,r) <- toKleisli f c
-      when (ref == 62) $ traceM $ "Update-tape: " ++ ashow ref
+      ("result(" ++ ashow ref ++ ")") <<: r
       lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 
@@ -151,26 +151,27 @@ markComputable ref conf =
 -- computing the value itself should not affact the final result.
 satisfyComputability
   :: IsPlanParams tag n
-  => NodeProc t n (CostParams tag n)
+  => NodeRef n
+  -> NodeProc t n (CostParams tag n)
   -> NodeProc t n (CostParams tag n)
 satisfyComputability
-  c = mkNodeProc $ \conf -> wrapTrace "satisfyComputability" $ do
+  ref
+  c = mkNodeProc $ \conf ->  do
   -- first run normally.
   r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
   -- Solve each predicate.
-  traceM $ "zombie-predicates: " ++ ashow (pNonComputables $ pcePred coepoch)
   case toNodeList $ pNonComputables $ pcePred coepoch of
     [] -> return r
     assumedNonComputables -> do
       actuallyComputables <- filterM (isComputableM conf) assumedNonComputables
       let conf' = foldl' (flip markComputable) conf actuallyComputables
-      runNodeProc (satisfyComputability nxt0) conf'
+      runNodeProc (satisfyComputability ref nxt0) conf'
   where
     mkNodeProc = MealyArrow . WriterArrow . fromKleisli
     runNodeProc = toKleisli . runWriterArrow . runMealyArrow
-    isComputableM conf ref = wrapTrace ("isComputableM " ++ ashow ref) $ do
+    isComputableM conf ref' =  do
       (_coproc,(_nxt,ret))
-        <- runNodeProc (satisfyComputability $ getOrMakeMech ref) conf
+        <- runNodeProc (satisfyComputability ref' $ getOrMakeMech ref') conf
       return $ case ret of
         BndErr _ -> False
         _        -> True
@@ -192,7 +193,6 @@ getOrMakeMech
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
 getOrMakeMech ref = squashMealy $ \conf -> do
-  traceM $ "ref-lu: " ++ ashow ref
   mechM <- lift $ gets $ refLU ref . getL mcMechMapLens
   lift
     $ modify
@@ -204,15 +204,11 @@ getOrMakeMech ref = squashMealy $ \conf -> do
 -- | Return an error (uncomputable) and insert a predicate that
 -- whatever results we come up with are predicated on ref being
 -- uncomputable.
---
--- XXX: If the node is copredicated throw.
 cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
 cycleProc ref =
   MealyArrow $ rmap (first $ const $ getOrMakeMech ref) $ runMealyArrow go
   where
-    go =
-      arrCoListen' $ arr $ \_conf -> (markNonComputable ref,mcCompStackVal ref)
-    assert' (p,msg) a = if p then a else error $ "Assert: " ++ msg
+    go = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStackVal ref)
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
@@ -259,7 +255,7 @@ getCost _ extraMat cap ref = do
   let extraStates = nsToRef (const True) extraMat
   (res,_coepoch) <- planQuickRun
     $ runWriterT
-    $ runMech (satisfyComputability @tag $ getOrMakeMech ref)
+    $ runMech (satisfyComputability @tag ref $ getOrMakeMech ref)
     $ Conf
     { confCap = cap
      ,confEpoch = def { peParams = states <> extraStates }

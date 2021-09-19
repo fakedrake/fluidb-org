@@ -5,19 +5,20 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 module Data.Utils.Debug
-  ( wrapTrace
-  , HasCallStack
-  , wrapTraceShow
-  , traceM
-  , traceTM
-  , trace
-  , traceT
-  , wrapTraceT
-  , assertM
-  , printf
-  , ashow
-  , traceV
-  , assert
+  (wrapTrace
+  ,HasCallStack
+  ,wrapTraceShow
+  ,traceM
+  ,traceTM
+  ,trace
+  ,traceT
+  ,wrapTraceT
+  ,assertM
+  ,printf
+  ,ashow
+  ,traceV
+  ,assert
+  ,(<<:)
   ,wrapTraceP) where
 
 import           Data.Utils.AShow
@@ -97,3 +98,5 @@ wrapTraceT = wrapTrace
 wrapTraceP :: Profunctor p => String -> p a b -> p a b
 wrapTraceP _ = id
 #endif
+(<<:) :: (AShow a,Monad m) => String -> a -> m ()
+msg <<: a = traceM $ msg ++ ": " ++ ashow a
