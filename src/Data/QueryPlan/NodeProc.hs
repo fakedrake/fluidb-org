@@ -107,7 +107,7 @@ mkNewMech ref =
   where
     costProcess = squashMealy $ \conf -> do
       mops <- lift $ findCostedMetaOps ref
-      ("metaops("++ ashow ref ++ ")") <<: mops
+      -- ("metaops("++ ashow ref ++ ")") <<: mops
       -- Should never see the same val twice.
       let mechs =
             [DSetR
@@ -120,7 +120,7 @@ mkNewMech ref =
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       (nxt,r) <- toKleisli f c
-      ("result(" ++ ashow ref ++ ")") <<: r
+      -- ("result(" ++ ashow ref ++ ")") <<: r
       lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 
@@ -134,6 +134,13 @@ markComputable ref conf =
            { peCoPred = nsInsert ref $ peCoPred $ confEpoch conf }
        }
 
+setComputables
+  :: IsPlanParams tag n
+  => NodeSet n
+  -> Conf (CostParams tag n)
+  -> Conf (CostParams tag n)
+setComputables refs conf =
+  conf { confEpoch = (confEpoch conf) { peCoPred = refs } }
 
 -- | Run the machine and see if there are any pradicates. Remember
 -- that predicates of a result are a set of nodes that need to be
@@ -154,27 +161,29 @@ satisfyComputability
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
   -> NodeProc t n (CostParams tag n)
-satisfyComputability
-  ref
-  c = mkNodeProc $ \conf ->  do
-  -- first run normally.
-  r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
-  -- Solve each predicate.
-  case toNodeList $ pNonComputables $ pcePred coepoch of
-    [] -> return r
-    assumedNonComputables -> do
-      actuallyComputables <- filterM (isComputableM conf) assumedNonComputables
-      let conf' = foldl' (flip markComputable) conf actuallyComputables
-      runNodeProc (satisfyComputability ref nxt0) conf'
+satisfyComputability = go mempty
   where
     mkNodeProc = MealyArrow . WriterArrow . fromKleisli
     runNodeProc = toKleisli . runWriterArrow . runMealyArrow
-    isComputableM conf ref' =  do
-      (_coproc,(_nxt,ret))
-        <- runNodeProc (satisfyComputability ref' $ getOrMakeMech ref') conf
-      return $ case ret of
-        BndErr _ -> False
-        _        -> True
+    go trail ref c = mkNodeProc $ \conf -> do
+      -- first run normally.
+      r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
+      -- Solve each predicate.
+      case toNodeList $ pNonComputables $ pcePred coepoch of
+        [] -> return r
+        assumedNonComputables -> do
+          actuallyComputables
+            <- filterM (isComputableM conf) assumedNonComputables
+          let conf' = foldl' (flip markComputable) conf actuallyComputables
+          runNodeProc (go trail ref nxt0) conf'
+      where
+        isComputableM conf ref' = do
+          (_coproc,(_nxt,ret)) <- runNodeProc
+            (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
+            $ setComputables trail conf
+          return $ case ret of
+            BndErr _ -> False
+            _        -> True
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
 markNonComputable
@@ -185,14 +194,13 @@ unmarkNonComputable ref pe =
          { pNonComputables = nsDelete ref $ pNonComputables $ pcePred pe }
      }
 
--- | Bug(?): in the first round we lookup the mech but in subsequent
--- rounds we are not.
 getOrMakeMech
   :: forall tag t n .
   IsPlanParams tag n
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
 getOrMakeMech ref = squashMealy $ \conf -> do
+  -- "ref-lu" <<: ref
   mechM <- lift $ gets $ refLU ref . getL mcMechMapLens
   lift
     $ modify
@@ -250,7 +258,7 @@ getCost
   -> Cap (ExtCap (PlanParams tag n))
   -> NodeRef n
   -> PlanT t n m (Maybe (PlanMechVal tag n))
-getCost _ extraMat cap ref = do
+getCost _ extraMat cap ref = wrapTrace ("getCost" <: ref) $ do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
   (res,_coepoch) <- planQuickRun

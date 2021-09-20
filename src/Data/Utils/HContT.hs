@@ -10,6 +10,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# OPTIONS_GHC -O2 -fno-prof-count-entries -fno-prof-auto #-}
+{-# LANGUAGE TypeApplications      #-}
 
 -- |Best first search monad with continuations.
 
@@ -171,7 +172,7 @@ cutContT bot = recur where
       (cs',[]) -> recur $ HContT $ \f ->
         bind2 f $ msum $ pure . Left <$> merge cs' cs
 
-#if 0
+#if 1
 -- "cad"
 test :: [Char]
 test = dissolve
@@ -180,4 +181,17 @@ test = dissolve
   where
     h :: Int -> HContT (Sum Int) Char [] ()
     h = halt . Sum
+
+stream :: (Foldable m,MonadPlus m) => HContT (Sum Int) r m Int
+stream = go 0 where
+  go i = do
+    halt $ Sum i
+    return i <|> go (i+1)
+
+test2 :: [(Int,Int,Int)]
+test2 = dissolve @[] $ do
+  (a,b,c) <- (,,) <$> stream <*> stream <*> stream
+  guard $ a + b - c == 10
+  return (a,b,c)
+
 #endif

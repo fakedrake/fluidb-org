@@ -37,12 +37,10 @@ import           Control.Arrow                               hiding (first,
                                                               (>>>))
 import           Control.Monad.Cont
 import           Control.Monad.Identity
-import           Control.Monad.State
 import           Control.Monad.Writer
 import           Control.Utils.Free
 import           Data.Foldable
 import           Data.Maybe
-import           Data.Profunctor
 import           Data.Utils.AShow
 import           Data.Utils.Const
 import           Data.Utils.Debug
@@ -252,17 +250,17 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
            ,zId = zId
           }
 
-
 data ZState w m =
   ZState
-  { zsCoEpoch     :: ZCoEpoch w
-   ,zsZipper      :: Zipper w (ArrProc w m)
-   ,zsItCmd       :: ZCat w m
-   ,zsReset       :: ZCat w m
-   ,zsRecentReset :: Bool
+  { zsCoEpoch :: ZCoEpoch w
+   ,zsZipper  :: Zipper w (ArrProc w m)
+   ,zsItCmd   :: ZCat w m
+   ,zsReset   :: ZCat w m
   }
+
 type family MBF a :: * -> * where
-  MBF (MealyArrow (WriterArrow w c) a b) = MB a (w,b) (ArrFunctor c)
+  MBF (MealyArrow (WriterArrow w c) a b) =
+    MB a (w,b) (ArrFunctor c)
 
 mkProcId
   :: forall m w .
@@ -298,24 +296,19 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
        ,zsZipper = iniZ
        ,zsReset = iniMealy
        ,zsItCmd = iniMealy
-       ,zsRecentReset = True
       }
       where
         iniZ :: Zipper w (ArrProc w m)
         MooreMech iniZ iniMealy = mkZCatIni zid procs
-    -- XXX: Drop the writerq
     zNext :: ZState w m -> Conf w -> MBF (ArrProc w m) Void
     zNext zs@ZState {..} gconf = do
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
-          let zs' =
-                zs
-                { zsCoEpoch = mempty,zsItCmd = zsReset,zsRecentReset = True }
+          let zs' = zs { zsCoEpoch = mempty,zsItCmd = zsReset }
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
         DontReset lconf -> do
           case evolutionControl zprocEvolution gconf zsZipper of
-            Just res -> do
-              yieldMB (zsCoEpoch,res) >>= zNext zs { zsRecentReset = False }
+            Just res -> yieldMB (zsCoEpoch,res) >>= zNext zs
             Nothing -> do
               a <- fromArrow zsItCmd lconf
               (rstM,upd) <- lift $ runCmdSequence a

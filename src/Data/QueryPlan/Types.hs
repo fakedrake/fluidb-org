@@ -499,8 +499,11 @@ data PlanCoEpoch n =
    ,pceMaterlized :: Integer
   }
   deriving (Show,Eq,Generic)
-instance  AShow (PlanCoEpoch n)
-instance  AShow (PlanEpoch n)
+instance AShow (PlanCoEpoch n) where
+  ashow' PlanCoEpoch {..} = ashow' pcePred
+instance AShow (PlanEpoch n) where
+  ashow' PlanEpoch {..} = ashow' peCoPred
+
 instance Default (PlanEpoch n)
 instance Monoid (PlanCoEpoch n) where
   mempty = PlanCoEpoch mempty mempty 0
