@@ -85,7 +85,7 @@ convBndR Conv{..} = \case
   BndErr e -> BndErr $ convErr e
 
 -- We only need mempty from this monoid
-convSumMin :: Conv (SumTag p v) (MinTag p v)
+convSumMin :: Conv (SumTag p) (MinTag p)
 convSumMin =
   Conv
   { convEpoch = id
@@ -95,7 +95,7 @@ convSumMin =
    ,convErr = coerce
   }
 
-convMinSum :: Conv (MinTag p v) (SumTag p v)
+convMinSum :: Conv (MinTag p) (SumTag p)
 convMinSum =
   Conv
   { convEpoch = id

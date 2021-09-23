@@ -63,6 +63,7 @@ import           Data.Utils.Tup
 
 import           Control.Antisthenis.Lens
 import           Control.Arrow
+import qualified Control.Category            as C
 import           Data.Proxy
 import           Data.QueryPlan.Comp
 import           Data.QueryPlan.MetaOp
@@ -132,20 +133,6 @@ haltPlan matRef mop = do
     frontier=nsDelete matRef (frontier gcs) <> metaOpIn mop}
   extraCost <- metaOpCost [matRef] mop
   haltPlanCost $ fromIntegral $ costAsInt extraCost
-
--- | Make a plan for a node to be concrete.
-instance PlanMech CostTag n where
-  type PlanMechVal CostTag n = PlanCost n
-  mcIsMatProc _ref _proc = arr $ const $ BndRes zero
-  mcMechMapLens =
-    Lens { getL = gcMechMap
-          ,modL = (\f gsc -> gsc { gcMechMap = f $ gcMechMap gsc })
-         }
-  mcMkCost Proxy ref cost = PlanCost { pcPlan = Just  $ nsSingleton ref,pcCost = cost }
-  mcCompStackVal n = BndErr $ ErrCycleEphemeral n
-
-
-instance HasLens (Min (PlanCost n)) (Min (PlanCost n))
 haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier

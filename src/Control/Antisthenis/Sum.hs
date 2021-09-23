@@ -20,12 +20,14 @@ import           Control.Utils.Free
 import           Data.Coerce
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
 
-data SumTag p v
+data SumTag p
+type SumExtParams p = ExtParams (SumTag p) p
 
 -- | Addition does not have an absorbing element. Therefore all
 -- elements need to be evaluated to get a rigid result. However it is
@@ -34,43 +36,48 @@ data SumTag p v
 -- to have a bound derivative and to move in the most promising side
 -- but we do not so we will follow the greedy approach of finishing
 -- with each element in sequence.
-instance ExtParams p => BndRParams (SumTag p v) where
-  type ZErr (SumTag p v) = ExtError p
-  type ZBnd (SumTag p v) = Min v
-  type ZRes (SumTag p v) = Sum v
+instance (Ord (ZBnd (SumTag p)),SumExtParams p) => BndRParams (SumTag p) where
+  type ZErr (SumTag p) = ExtError p
+  type ZBnd (SumTag p) = Min (MechVal p)
+  type ZRes (SumTag p) = Sum (MechVal p)
+  bndLt Proxy = (<)
+  exceedsCap _ = extExceedsCap (Proxy :: Proxy (p,SumTag p))
 
-data SumPartialRes p v
-  = SumPartErr (ZErr (SumTag p v))
-  | SumPart (Sum v)
+
+data SumPartialRes p
+  = SumPartErr (ZErr (SumTag p))
+  | SumPart (Sum (MechVal p))
   | SumPartInit
   deriving Generic
-instance Default (SumPartialRes p v) where def = SumPartInit
+instance Default (SumPartialRes p) where def = SumPartInit
 
-sprMap :: (Sum v -> Sum v) -> SumPartialRes p v -> SumPartialRes p v
+sprMap
+  :: (Sum (MechVal p) -> Sum (MechVal p)) -> SumPartialRes p -> SumPartialRes p
 sprMap f = \case
   SumPart a -> SumPart $ f a
   a         -> a
-instance (AShow v,AShow (ZErr (SumTag p v)))
-  => AShow (SumPartialRes p v)
+instance (AShow (MechVal p),AShow (ZErr (SumTag p)))
+  => AShow (SumPartialRes p)
 
-instance (AShow v
+instance (AShow (MechVal p)
          ,AShow (ExtCap p)
-         ,Ord v
-         ,Subtr v
-         ,Semigroup v
-         ,Zero v
-         ,HasLens (ExtCap p) (Min v)
+         ,Ord (MechVal p) -- for ZBnd
+         ,Subtr (MechVal p)
+         ,Semigroup (MechVal p)
+         ,Zero (MechVal p)
+         -- For updating the cap
+         ,HasLens (ExtCap p) (Min (MechVal p))
          ,Zero (ExtCap p)
-         ,ExtParams p
+         ,SumExtParams p
          ,AShow (ExtError p)
          ,AShow (ExtEpoch p)
-         ,AShow (ExtCoEpoch p)) => ZipperParams (SumTag p v) where
-  type ZEpoch (SumTag p v) = ExtEpoch p
-  type ZCoEpoch (SumTag p v) = ExtCoEpoch p
-  type ZCap (SumTag p v) = ExtCap p
-  type ZPartialRes (SumTag p v) = SumPartialRes p v
-  type ZItAssoc (SumTag p v) =
-    SimpleAssoc [] (ZBnd (SumTag p v))
+         ,AShow (ExtCoEpoch p)) => ZipperParams (SumTag p) where
+  type ZEpoch (SumTag p) = ExtEpoch p
+  type ZCoEpoch (SumTag p) = ExtCoEpoch p
+  type ZCap (SumTag p) = ExtCap p
+  type ZPartialRes (SumTag p) = SumPartialRes p
+  type ZItAssoc (SumTag p) =
+    SimpleAssoc [] (ZBnd (SumTag p))
   zprocEvolution =
     ZProcEvolution
     { evolutionControl = sumEvolutionControl
@@ -124,43 +131,44 @@ subCap cap s = modL defLens (coerce . go . coerce :: Min v -> Min v) cap where
 -- that needs to happen before a valid (ie that satisfies the cap)
 -- result can be produced. This can only return bounds.
 sumEvolutionControl
-  :: forall v p m .
-  (HasLens (ZCap (SumTag p v)) (Min v)
-  ,Semigroup v
-  ,Zero v
-  ,Ord v
-  ,AShow v
+  :: forall p m .
+  (Semigroup (MechVal p)
+  -- ,HasLens (ZCap (SumTag p)) (Min (MechVal p))
+  ,Zero (ZCap (SumTag p))
+  ,Zero (ZBnd (SumTag p))
+  ,Ord (MechVal p)
+  ,AShow (MechVal p)
   ,AShow (ExtError p)
-  ,ExtParams p)
-  => GConf (SumTag p v)
-  -> Zipper (SumTag p v) (ArrProc (SumTag p v) m)
-  -> Maybe (BndR (SumTag p v))
+  ,SumExtParams p)
+  => GConf (SumTag p)
+  -> Zipper (SumTag p) (ArrProc (SumTag p) m)
+  -> Maybe (BndR (SumTag p))
 sumEvolutionControl conf z = fmap traceRes $ case zFullResSum z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     -- If the local bound is negative then
-    CapVal cap -> if negativeCap cap then Just $ BndBnd zero else Nothing
+    CapVal cap -> if isNegative cap then Just $ BndBnd zero else Nothing
     _          -> Nothing
   SumPart bnd -> case confCap conf of
     CapVal cap ->
-      ifLt cap (coerce bnd :: Min v) (Just $ BndBnd $ coerce bnd) Nothing
+      if exceedsCap @(SumTag p) Proxy cap (coerce bnd :: ZBnd (SumTag p))
+      then Just $ BndBnd $ coerce bnd else Nothing
     ForceResult -> Nothing
   where
-    negativeCap cap = getL defLens cap < (zero :: Min v)
     traceRes = id
-    -- traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
+-- traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
 
 -- | The full result includes both zRes and zCursor.
-zFullResSum :: Semigroup v => Zipper (SumTag p v) p0 -> SumPartialRes p v
+zFullResSum :: Semigroup (MechVal p) => Zipper (SumTag p) p0 -> SumPartialRes p
 zFullResSum z = sprMap (maybe id ((<>) . coerce) cursorM) $ zRes z where
   cursorM = fst3 $ runIdentity $ zCursor z
 
 sumEvolutionStrategy
-  :: (Zero v,Monad m)
-  => FreeT (Cmds (SumTag p v)) m x
+  :: (Zero (MechVal p),Monad m)
+  => FreeT (Cmds (SumTag p)) m x
   -> m
-    (Maybe (ResetCmd (FreeT (Cmds (SumTag p v)) m x))
-    ,Either (BndR (SumTag p v)) x)
+    (Maybe (ResetCmd (FreeT (Cmds (SumTag p)) m x))
+    ,Either (BndR (SumTag p)) x)
 sumEvolutionStrategy = recur Nothing
   where
     recur rst (FreeT m) = m >>= \case

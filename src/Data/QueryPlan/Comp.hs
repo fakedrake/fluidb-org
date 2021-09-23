@@ -9,11 +9,14 @@ import           Data.Utils.AShow.Print
 import           Data.Utils.Nat
 
 -- | An integer binomial that assumes that we will be adding.
-data Comp a = Comp Double a deriving (Functor,Show,Eq)
+data Comp a = Comp { cProbNonComp :: Double,cValue :: a }
+  deriving (Functor,Show,Eq)
 
 instance AShow a => AShow (Comp a) where
   ashow' (Comp i a) =
     Sym $ show i ++ "w+" ++ showSExpOneLine False (ashow' a)
+
+-- |Note: ord is ambiguous.
 instance (Ord a,Scalable a) => Ord (Comp a) where
   compare (Comp c1 a) (Comp c2 b) =
     compare (scale (1 - c1) a) (scale (1 - c2) b)
@@ -47,4 +50,6 @@ nonComp = Comp 1 zero
 
 toComp :: a -> Comp a
 toComp = Comp 0
-instance Zero a => Zero (Comp a) where zero = point zero
+instance Zero a => Zero (Comp a) where
+  zero = point zero
+  isNegative (Comp _ a) = isNegative a

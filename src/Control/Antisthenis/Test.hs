@@ -98,11 +98,13 @@ withTrail insUniq = handleBndErr $ \handle -> asks insUniq >>= \case
 
 
 data TestParams
-instance ExtParams TestParams where
+instance (ZBnd w ~ Min' Int) => ExtParams w TestParams where
+  type MechVal TestParams = Int
   type ExtEpoch TestParams = Int
   type ExtCoEpoch TestParams = Min Int
   type ExtCap TestParams = Min' Int
   type ExtError TestParams = IndexErr Int
   -- | If we create
+  extExceedsCap _ = (<)
   extCombEpochs _ coe e a =
     if coe < Min (Just e) then ShouldReset else DontReset a

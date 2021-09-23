@@ -28,9 +28,10 @@ import           Data.Utils.Hashable
 import           Data.Utils.Nat
 import           GHC.Generics
 
-
 data PlanCost n = PlanCost { pcPlan :: Maybe (NodeSet n),pcCost :: Cost }
   deriving (Show,Generic,Eq)
+instance Scalable (PlanCost n) where
+  scale sc pc = pc { pcCost = scale sc $ pcCost pc }
 instance AShow (PlanCost n)
 instance Zero (PlanCost n) where zero = mempty
 instance Subtr (PlanCost n) where

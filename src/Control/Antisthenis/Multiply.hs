@@ -90,6 +90,9 @@ instance BndRParams (MulTag p a) where
   type ZRes (MulTag p a) = Mul a
 
   type ZErr (MulTag p a) = ExtError p
+  cmpBnd :: Proxy (Min) -> ZBnd w -> ZBnd w -> Bool
+  exceedsCap :: Proxy w -> ZCap w -> ZBnd w -> Bool
+
 
 instance (ExtParams p,AShow a,Eq a,Num a,Integral a)
   => ZipperParams (MulTag p a) where

@@ -22,6 +22,7 @@
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE TypeApplications       #-}
 module Control.Antisthenis.Minimum
   (MinTag) where
 
@@ -41,7 +42,8 @@ import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
 
-data MinTag p v
+data MinTag p
+type MinExtParams p = ExtParams (MinTag p) p
 
 data ConcreteVal w
   = OnlyErrors [ZErr w]
@@ -79,14 +81,14 @@ data SecondaryBound w
 instance (AShow (ZRes w),AShow (ZBnd w))
   => AShow (SecondaryBound w)
 zSecondaryBound
-  :: forall f r x p v .
-  (Foldable f,Functor f,Ord v)
-  => Zipper' (MinTag p v) f r x
-  -> SecondaryBound (MinTag p v)
+  :: forall f r x p .
+  (Foldable f,Functor f,Ord (MechVal p),MinExtParams p)
+  => Zipper' (MinTag p) f r x
+  -> SecondaryBound (MinTag p)
 zSecondaryBound z = case malConcrete mal of
   OnlyErrors _ -> noSecondaryBound
   FoundResult firstRes -> case elemBnd of
-    Just bnd -> if firstRes < bnd then SecRes firstRes
+    Just bnd -> if bndLt @(MinTag p) Proxy firstRes bnd then SecRes firstRes
       else SecBnd (Just firstRes) bnd
     Nothing -> SecRes firstRes -- there are no other results.
   where
@@ -101,11 +103,21 @@ zSecondaryBound z = case malConcrete mal of
     mal = bgsIts $ zBgState z
     elemBnd = foldl' go Nothing $ fst <$> malElements mal
       where
-        go :: Maybe (ZBnd (MinTag p v))
-           -> ZBnd (MinTag p v)
-           -> Maybe (ZBnd (MinTag p v))
+        go :: Maybe (ZBnd (MinTag p))
+           -> ZBnd (MinTag p)
+           -> Maybe (ZBnd (MinTag p))
         go Nothing r   = Just r
-        go (Just r0) r = Just $ min r0 r
+        go (Just r0) r = Just $ minBnd @p Proxy r0 r
+
+minBnd
+  :: forall p .
+  (Ord (MechVal p),MinExtParams p)
+  => Proxy p
+  -> ZBnd (MinTag p)
+  -> ZBnd (MinTag p)
+  -> ZBnd (MinTag p)
+minBnd _ a b = if bndLt @(MinTag p) Proxy a b then a else b
+
 
 zModConcrete
   :: (ZItAssoc w ~ MinAssocList [] w)
@@ -149,7 +161,7 @@ popMinAssocList
   :: (Ord (ZBnd w),AShowV (ZBnd w))
   => MinAssocList L1 w a
   -> (ZBnd w,a,MinAssocList [] w a)
-popMinAssocList arg@(MinAssocList m c) = check (v,a,res)
+popMinAssocList (MinAssocList m c) = check (v,a,res)
   where
     check x =
       if any (\(bnd,_a) -> v > bnd) $ malElements res
@@ -163,26 +175,29 @@ topMinAssocList mal = elemBnd
   where
     elemBnd = let x NEL.:| xs = fst <$> malElements mal in foldl' min x xs
 
-instance BndRParams (MinTag p v) where
-  type ZErr (MinTag p v) = ExtError p
-  type ZBnd (MinTag p v) = Min v
-  type ZRes (MinTag p v) = Min v
+instance (MinExtParams p,Ord (MechVal p)) => BndRParams (MinTag p) where
+  type ZErr (MinTag p) = ExtError p
+  type ZBnd (MinTag p) = Min (MechVal p)
+  type ZRes (MinTag p) = Min (MechVal p)
+  bndLt Proxy = (<)
+  exceedsCap _ = extExceedsCap (Proxy :: Proxy (p,MinTag p))
 
-instance (AShow a
+instance (AShow (MechVal p)
          ,AShow (ExtCoEpoch p)
-         ,Ord a
+         ,Ord (MechVal p)
          ,AShow (ExtCap p)
          ,Zero (ExtCap p)
-         ,ExtParams p
+         ,Zero (MechVal p)
+         ,MinExtParams p
          ,NoArgError (ExtError p)
-         ,HasLens (ExtCap p) (Min a)
-         ,AShow (ExtError p)) => ZipperParams (MinTag p a) where
-  type ZCap (MinTag p a) = ExtCap p
-  type ZEpoch (MinTag p a) = ExtEpoch p
-  type ZCoEpoch (MinTag p a) = ExtCoEpoch p
-  type ZPartialRes (MinTag p a) = ()
-  type ZItAssoc (MinTag p a) =
-    MinAssocList [] (MinTag p a)
+         ,HasLens (ExtCap p) (Min (MechVal p))
+         ,AShow (ExtError p)) => ZipperParams (MinTag p) where
+  type ZCap (MinTag p) = ExtCap p
+  type ZEpoch (MinTag p) = ExtEpoch p
+  type ZCoEpoch (MinTag p) = ExtCoEpoch p
+  type ZPartialRes (MinTag p) = ()
+  type ZItAssoc (MinTag p) =
+    MinAssocList [] (MinTag p)
   zprocEvolution =
     ZProcEvolution
     { evolutionControl = minEvolutionControl
@@ -225,22 +240,33 @@ instance (AShow a
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (zSecondaryBound z,confCap conf) of
-      (NeverSec,_)               -> conf
-      (NoSec,_)                  -> conf { confCap = CapVal zero }
-      (SecRes res,CapVal c)      -> conf { confCap = CapVal $ min2l c res }
-      (SecBnd _ bnd,CapVal c)    -> conf { confCap = CapVal $ min2l c bnd }
-      (SecRes res,ForceResult)   -> conf { confCap = CapVal $ rgetL res }
+      (NeverSec,_) -> conf
+      (NoSec,_) -> conf { confCap = CapVal zero }
+      (SecRes res,CapVal c) -> conf { confCap = CapVal $ chooseCapRes c res }
+      (SecBnd _ bnd,CapVal c) -> conf { confCap = CapVal $ chooseCapBnd c bnd }
+      (SecRes res,ForceResult) -> conf { confCap = CapVal $ rgetL res }
       (SecBnd _ bnd,ForceResult) -> conf { confCap = CapVal $ rgetL bnd }
+    where
+      chooseCapBnd :: ZCap (MinTag p) -> ZBnd (MinTag p) -> ZCap (MinTag p)
+      chooseCapBnd cap res =
+        if exceedsCap @(MinTag p) Proxy cap res then cap else rgetL res
+      chooseCapRes :: ZCap (MinTag p) -> ZRes (MinTag p) -> ZCap (MinTag p)
+      chooseCapRes cap res =
+        if exceedsCap @(MinTag p) Proxy cap res then cap else rgetL res
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
 -- the zipper should keep evolving to get to a proper resilt.
 minEvolutionControl
-  :: forall v p r x .
-  (HasLens (ExtCap p) (Min v),AShow v,AShow (ExtError p),Ord v)
-  => GConf (MinTag p v)
-  -> Zipper' (MinTag p v) Identity r x
-  -> Maybe (BndR (MinTag p v))
+  :: forall p r x .
+  (AShow (MechVal p)
+  ,AShow (ExtCap p)
+  ,AShow (ExtError p)
+  ,Ord (MechVal p)
+  ,MinExtParams p)
+  => GConf (MinTag p)
+  -> Zipper' (MinTag p) Identity r x
+  -> Maybe (BndR (MinTag p))
 minEvolutionControl conf z = case confCap conf of
   ForceResult -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
@@ -249,17 +275,13 @@ minEvolutionControl conf z = case confCap conf of
       _               -> Nothing
     x -> return x
   CapVal cap -> res >>= \case
-    -- BUG: we are using the secondary cap to cap the value we produce
-    -- here. This is fine if the secondary cap is soft but if it is
-    -- concrete it wint change. In fact if the local cap comes from a
-    -- concrete secondary cap it means we have already come up with
-    -- the correct result. This check must be performed BEFORE
-    -- comparing `cap` to `bnd` because `bnd` may by far surpass the
-    -- concrete secondary
     BndBnd bnd -> case zSecondaryBound z of
-      SecRes r -> if r < bnd then Just $ BndRes r
-        else ifLt cap bnd (Just $ BndBnd bnd) Nothing
-      _ -> ifLt cap bnd (Just $ BndBnd bnd) Nothing
+      SecRes r -> if bndLt @(MinTag p) Proxy r bnd then Just $ BndRes r
+        else if exceedsCap @(MinTag p) Proxy cap bnd
+          then Just $ BndBnd bnd else Nothing
+      sec -> trace ("min-cap-check:" <: (bnd,cap,sec))
+        $ if exceedsCap @(MinTag p) Proxy cap bnd
+        then Nothing else Just $ BndBnd bnd
     x -> Just x
   where
     -- THE result so far. The cursor is assumed to always be either an
@@ -272,17 +294,21 @@ minEvolutionControl conf z = case confCap conf of
         SecRes r   -> Just $ BndRes r
         SecBnd _ b -> Just $ BndBnd b
 
-minBndR :: Ord v => BndR (MinTag p v) -> BndR (MinTag p v) -> BndR (MinTag p v)
+minBndR
+  :: forall p .
+  (Ord (MechVal p),MinExtParams p)
+  => BndR (MinTag p)
+  -> BndR (MinTag p)
+  -> BndR (MinTag p)
 minBndR = curry $ \case
   (_,e@(BndErr _))    -> e
   (e@(BndErr _),_)    -> e
-  (BndBnd a,BndBnd b) -> BndBnd $ min a b
-  (BndRes a,BndRes b) -> BndRes $ min a b
+  (BndBnd a,BndBnd b) -> BndBnd $ minBnd @p Proxy a b
+  (BndRes a,BndRes b) -> BndRes $ minBnd @p Proxy a b
   (BndRes a,BndBnd b) -> if a < b then BndRes a else BndBnd b
   (BndBnd a,BndRes b) -> if a < b then BndBnd a else BndRes b
 
-
-zIsFinished :: Zipper' (MinTag p v) f r x -> Bool
+zIsFinished :: Zipper' (MinTag p) f r x -> Bool
 zIsFinished z =
   null (bgsInits $ zBgState z)
   && isNothing (acNonEmpty $ bgsIts $ zBgState z)
@@ -292,9 +318,9 @@ zIsFinished z =
 -- XXX: if the cap is DoNothing we shoudl return the minimum
 -- bound. even if Nothing is encountered.
 zFullResultMin
-  :: (Foldable f,AShow v,Ord v)
-  => Zipper' (MinTag p v) f r x
-  -> Maybe (BndR (MinTag p v))
+  :: (Foldable f,AShow (MechVal p),Ord (MechVal p),MinExtParams p)
+  => Zipper' (MinTag p) f r x
+  -> Maybe (BndR (MinTag p))
 zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
   where
     minBndR' Nothing Nothing   = Nothing
@@ -309,11 +335,11 @@ zFullResultMin z = (curs `minBndR'` softBound `minBndR'` hardBound) <|> Nothing
       FoundResult r    -> Just $ BndRes r
 
 minEvolutionStrategy
-  :: (Ord v,Monad m,AShow v)
-  => FreeT (Cmds (MinTag p v)) m x
+  :: (Ord (MechVal p),Monad m,AShow (MechVal p),MinExtParams p)
+  => FreeT (Cmds (MinTag p)) m x
   -> m
-    (Maybe (ResetCmd (FreeT (Cmds (MinTag p v)) m x))
-    ,Either (BndR (MinTag p v)) x)
+    (Maybe (ResetCmd (FreeT (Cmds (MinTag p)) m x))
+    ,Either (BndR (MinTag p)) x)
 minEvolutionStrategy = recur Nothing
   where
     recur rst (FreeT m) = m >>= \case

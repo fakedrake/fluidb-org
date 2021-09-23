@@ -8,52 +8,30 @@ import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
-import           Control.Applicative
 import           Control.Monad.Reader
 import           Data.NodeContainers
 import           Data.Pointed
 import           Data.Proxy
+import           Data.QueryPlan.Cert
 import           Data.QueryPlan.Comp
 import           Data.QueryPlan.CostTypes
+import           Data.QueryPlan.HistBnd
 import           Data.QueryPlan.NodeProc
-import           Data.QueryPlan.Scalable
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.ListT
 import           Data.Utils.Nat
-import           GHC.Generics
 
--- | The trailsize indicates "how many" (maximum depth) materialized
--- nodes were traversed to come up with this value. It is only useful
--- in conjuntion with the cap.
-data Cert a = Cert { cTrailSize :: Int,cData :: a }
-  deriving (Eq,Generic,Functor,Show)
-instance AShow a => AShow (Cert a)
-instance Pointed Cert where point = Cert 0
-instance Zero a => Zero (Cert a) where zero = point zero
--- There are no circumnstances under which we are going to chose a
--- value that has come throgh more materialied nodes. The scaling will
--- have damped it enough.
-instance Ord a => Ord (Cert a) where
-  compare (Cert _ a') (Cert _ b') = compare a' b'
-instance Semigroup a => Semigroup (Cert a) where (<>) = liftA2 (<>)
-instance Applicative Cert where
-  pure = point
-  Cert a f <*> Cert b x = Cert (max a b) $ f x
-instance Scalable a => Scalable (Cert a) where scale sc = fmap $ scale sc
-instance Subtr a => Subtr (Cert a) where subtr = liftA2 subtr
 
-type HCost = Comp (Cert Cost)
+type HCost = Cert (Comp Cost)
 instance PlanMech HistTag n where
-  type PlanMechVal HistTag n = HCost
   mcMechMapLens = Lens { getL = gcHistMechMap,modL = \f gc ->
     gc { gcHistMechMap = f $ gcHistMechMap gc } }
-  mcMkCost Proxy _ref cost = toComp $ point cost
+  mcMkCost Proxy _ref cost = point $ toComp cost
   mcIsMatProc = isMatCost
-  mcCompStackVal _ref = BndRes $ point nonComp
+  mcCompStackVal _ref = BndRes $ point $ point nonComp
 
-instance HasLens (Min (Comp Cost)) (Min (Comp Cost))
 -- | The expected cost of the next query.
 pastCosts :: Monad m => NodeSet n -> ListT (PlanT t n m) (Maybe HCost)
 pastCosts extraMat = do
@@ -84,7 +62,7 @@ isMatCost _ref matCost0 = wrapMealy matCost0 guardedGo
       conf' <- yieldMB $ case r of
         BndBnd bnd -> BndBnd $ incrementCert $ scaleMin bnd
         BndRes res -> BndRes $ scaleSum res
-        _e         -> BndRes $ point $ Comp 0.5 zero -- error is more highly non-computable but it's free
+        _e         -> BndRes $ point $ point $ Comp 0.5 zero -- error is more highly non-computable but it's free
       return (conf',nxt)
     guardedGo conf matCost = if isTooDeep conf then do
       conf' <- yieldMB $ BndRes zero
@@ -97,8 +75,8 @@ isMatCost _ref matCost0 = wrapMealy matCost0 guardedGo
 -- computable.
 
 incrementCert :: Min HCost -> Min HCost
-incrementCert (Min (Just (Comp d (Cert c i)))) =
-  Min (Just (Comp d (Cert (c + 1) i)))
+incrementCert (Min (Just (Cert c (Comp d i)))) =
+  Min (Just (Cert (c + 1) (Comp d i)))
 incrementCert a = a
 matComputability :: Double -> Double
 matComputability d = 1 - 0.8 * (1 - d)
@@ -107,9 +85,9 @@ scaleCost (Cost r w) = Cost (r `div` 2) (w `div` 2)
 
 scaleMin :: Min HCost -> Min HCost
 scaleMin m@(Min Nothing)         = m
-scaleMin (Min (Just  (Comp d (Cert c i)))) =
-  Min $ Just $ Comp (matComputability d) (Cert c $ scaleCost i)
+scaleMin (Min (Just (Cert c (Comp d  i)))) =
+  Min $ Just $ Cert c $ Comp (matComputability d) $ scaleCost i
 scaleSum :: Sum HCost -> Sum HCost
 scaleSum m@(Sum Nothing)         = m
-scaleSum (Sum (Just (Comp d (Cert c i)))) =
-  Sum $ Just $ Comp (matComputability d) (Cert c $ scaleCost i)
+scaleSum (Sum (Just (Cert c (Comp d i)))) =
+  Sum $ Just $ Cert c $ Comp (matComputability d) $ scaleCost i

@@ -19,6 +19,7 @@ import           Data.Coerce
 import           Data.Pointed
 import           Data.Utils.AShow
 import           GHC.Generics
+
 newtype Sum a = Sum { unSum :: Maybe a } deriving (Show,Eq,Generic)
 newtype Min a = Min { unMin :: Maybe a }
   deriving (Show,Eq,Generic)
@@ -59,6 +60,10 @@ class Zero a where
   zero  :: a
   default zero :: Num a => a
   zero = 0
+  isNegative :: a -> Bool
+  default isNegative :: Ord a => a -> Bool
+  isNegative = (< zero)
+
 class Subtr a where
   subtr :: a -> a -> a
   default subtr :: Num a => a -> a -> a
@@ -77,5 +82,11 @@ instance Zero Double
 instance Zero Float
 instance Pointed Sum where point = Sum . Just
 instance Pointed Min where point = Min . Just
-instance Zero v => Zero (Sum v) where zero = point zero
-instance Zero v => Zero (Min v) where zero = point zero
+instance Zero v => Zero (Sum v) where
+  zero = point zero
+  isNegative (Sum Nothing)  = False
+  isNegative (Sum (Just a)) = isNegative a
+instance Zero v => Zero (Min v) where
+  zero = point zero
+  isNegative (Min Nothing)  = False
+  isNegative (Min (Just a)) = isNegative a

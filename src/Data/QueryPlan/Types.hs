@@ -18,12 +18,11 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
-{-# OPTIONS_GHC -Wno-orphans -Wno-name-shadowing -Wno-unused-top-binds #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module Data.QueryPlan.Types
   (Transition(..)
   ,HistTag
-  ,HistCap(..)
   ,CostTag
   ,HistProc
   ,CostProc
@@ -76,9 +75,11 @@ module Data.QueryPlan.Types
 import           Control.Antisthenis.Bool
 import           Control.Antisthenis.Convert
 import           Control.Antisthenis.Lens
+import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Sum
 import           Control.Antisthenis.Types
 import           Control.Applicative
+import           Control.Arrow
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
@@ -96,8 +97,10 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Proxy
 import           Data.Query.QuerySize
+import           Data.QueryPlan.Cert
 import           Data.QueryPlan.Comp
 import           Data.QueryPlan.CostTypes
+import           Data.QueryPlan.HistBnd
 import           Data.String
 import           Data.Utils.AShow
 import           Data.Utils.Debug
@@ -515,60 +518,74 @@ instance Semigroup (PlanCoEpoch n) where
 data HistTag
 data CostTag
 
-type CostParams tag n = SumTag (PlanParams tag n) (PlanMechVal tag n)
+type CostParams tag n = SumTag (PlanParams tag n)
 type NoMatProc tag t n =
   NodeRef n
   -> NodeProc t n (CostParams tag n) -- The mat proc constructed by the node under consideration
   -> NodeProc t n (CostParams tag n)
 
-class ExtParams (PlanParams tag n) => PlanMech tag n where
-  type PlanMechVal tag n :: *
-
+class PlanMech tag n where
   mcMechMapLens :: GCState t n :>: RefMap n (NodeProc t n (CostParams tag n))
-  mcMkCost :: Proxy tag -> NodeRef n -> Cost -> PlanMechVal tag n
+  mcMkCost :: Proxy tag -> NodeRef n -> Cost -> MechVal (PlanParams tag n)
   mcIsMatProc :: NoMatProc tag t n
   mcCompStackVal :: NodeRef n -> BndR (CostParams tag n)
 
 
-instance ExtParams (PlanParams CostTag n) where
+instance ZBnd w ~ ExtCap (PlanParams CostTag n)
+  => ExtParams w (PlanParams CostTag n) where
+  type MechVal (PlanParams CostTag n) = PlanCost n
   type ExtError (PlanParams CostTag n) =
     IndexErr (NodeRef n)
   type ExtEpoch (PlanParams CostTag n) = PlanEpoch n
   type ExtCoEpoch (PlanParams CostTag n) = PlanCoEpoch n
   type ExtCap (PlanParams CostTag n) =
-    Min (PlanMechVal CostTag n)
+    Min (MechVal (PlanParams CostTag n))
+  extExceedsCap Proxy cap bnd = cap < bnd
   extCombEpochs _ = planCombEpochs
-
-data HistCap a = HistCap { hcMatsEncountered :: Int,hcValCap :: Min a }
-  deriving Generic
-instance AShow a => AShow (HistCap a)
-instance Zero a => Zero (HistCap a) where
-  zero = HistCap { hcMatsEncountered = 0,hcValCap = zero }
-instance HasLens (HistCap a) (Min a) where
-  defLens =
-    Lens { getL = hcValCap,modL = \f c -> c { hcValCap = f $ hcValCap c } }
-instance ExtParams (PlanParams HistTag n) where
+maxMatTrail :: Int
+maxMatTrail = 4
+instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
+  => ExtParams w (PlanParams HistTag n) where
+  type MechVal (PlanParams HistTag n) =
+    Cert (Comp Cost)
   type ExtError (PlanParams HistTag n) =
     IndexErr (NodeRef n)
   type ExtEpoch (PlanParams HistTag n) = PlanEpoch n
   type ExtCoEpoch (PlanParams HistTag n) = PlanCoEpoch n
-  type ExtCap (PlanParams HistTag n) =
-    HistCap (PlanMechVal HistTag n)
+  type ExtCap (PlanParams HistTag n) = HistCap Cost
+  extExceedsCap _ HistCap {..} (Min (Just bnd)) =
+    maybe False (cValue (cData bnd) >) (unMin hcValCap)
+    || cTrailSize bnd > (maxMatTrail - hcMatsEncountered)
+  extExceedsCap _ _ (Min Nothing) = False
   extCombEpochs _ = planCombEpochs
 
+-- | Make a plan for a node to be concrete.
+instance PlanMech CostTag n where
+  mcIsMatProc _ref _proc = arr $ const $ BndRes zero
+  mcMechMapLens =
+    Lens { getL = gcMechMap
+          ,modL = (\f gsc -> gsc { gcMechMap = f $ gcMechMap gsc })
+         }
+  mcMkCost Proxy ref cost = PlanCost { pcPlan = Just  $ nsSingleton ref,pcCost = cost }
+  mcCompStackVal n = BndErr $ ErrCycleEphemeral n
+
+--  | All the constraints required to run both min and sum
 type IsPlanParams tag n =
   (ExtError (PlanParams tag n) ~ IndexErr
      (NodeRef n)
   ,ExtEpoch (PlanParams tag n) ~ PlanEpoch n
   ,ExtCoEpoch (PlanParams tag n) ~ PlanCoEpoch n
-  ,AShow (PlanMechVal tag n)
-  ,Ord (PlanMechVal tag n)
-  ,Semigroup (PlanMechVal tag n)
-  ,Subtr (PlanMechVal tag n)
-  ,Zero (PlanMechVal tag n)
+  ,AShow (MechVal (PlanParams tag n))
+  ,Ord (MechVal (PlanParams tag n))
+  ,Semigroup (MechVal (PlanParams tag n))
+  ,Subtr (MechVal (PlanParams tag n))
+  ,Zero (MechVal (PlanParams tag n))
   ,Zero (ExtCap (PlanParams tag n))
   ,AShow (ExtCap (PlanParams tag n))
-  ,HasLens (ExtCap (PlanParams tag n)) (Min (PlanMechVal tag n))
+  -- For updating the cap
+  ,HasLens (ExtCap (PlanParams tag n)) (Min (MechVal (PlanParams tag n)))
+  ,ExtParams (MinTag (PlanParams tag n)) (PlanParams tag n)
+  ,ExtParams (SumTag (PlanParams tag n)) (PlanParams tag n)
   ,PlanMech tag n)
 
 -- | When the coepoch is older than the epoch we must reset and get

@@ -34,3 +34,5 @@ min2l :: (Ord b,HasLens a b) => a -> b -> a
 min2l a b = modL defLens (min b) a
 rgetL :: (Zero a,HasLens a b) => b -> a
 rgetL b = modL defLens (const b) zero
+instance HasLens (Min a) (Min a)
+instance HasLens (Sum a) (Sum a)

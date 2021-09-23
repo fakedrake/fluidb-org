@@ -302,19 +302,25 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
         MooreMech iniZ iniMealy = mkZCatIni zid procs
     zNext :: ZState w m -> Conf w -> MBF (ArrProc w m) Void
     zNext zs@ZState {..} gconf = do
+      "zLocalizeConf" <<: (confCap gconf,zipperShape zsZipper)
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
           let zs' = zs { zsCoEpoch = mempty,zsItCmd = zsReset }
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
         DontReset lconf -> do
+          "zLocalizeConf:res" <<: confCap lconf
           case evolutionControl zprocEvolution gconf zsZipper of
-            Just res -> yieldMB (zsCoEpoch,res) >>= zNext zs
+            Just res -> do
+              ("resultFin(" ++ ashow zid ++ ")") <<: res
+              yieldMB (zsCoEpoch,res) >>= zNext zs
             Nothing -> do
               a <- fromArrow zsItCmd lconf
               (rstM,upd) <- lift $ runCmdSequence a
               let zs' = zs { zsReset = fromMaybe zsReset rstM }
               case upd of
-                Left finRes -> yieldMB (zsCoEpoch,finRes) >>= zNext zs'
+                Left finRes -> do
+                  ("result(" ++ ashow zid ++ ")") <<: finRes
+                  yieldMB (zsCoEpoch,finRes) >>= zNext zs'
                 Right ((nxt,z),coepoch) -> do
                   let zs'' =
                         zs' { zsItCmd = nxt,zsZipper = z,zsCoEpoch = coepoch }

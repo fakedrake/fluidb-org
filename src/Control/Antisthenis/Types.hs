@@ -21,6 +21,7 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
+{-# LANGUAGE TypeApplications       #-}
 
 module Control.Antisthenis.Types
   (IndexErr(..)
@@ -75,6 +76,7 @@ import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.OptSet
+import           Data.Utils.Tup
 import           GHC.Generics
 
 data Cap b
@@ -168,6 +170,8 @@ class BndRParams w where
 
   type ZRes w :: *
 
+  bndLt :: Proxy w -> ZBnd w -> ZBnd w -> Bool
+  exceedsCap :: Proxy w -> ZCap w -> ZBnd w -> Bool
 
 type Old a = a
 type New a = a
@@ -323,13 +327,32 @@ instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
      ,zId = zId
     }
 
-incrZipperUId :: Zipper' w cursf p pr -> Zipper' w cursf p pr
+incrZipperUId
+  :: Foldable (ZItAssoc w)
+  => Zipper' w Identity p pr
+  -> Zipper' w Identity p pr
+#if 0
 incrZipperUId z = case zidVersion $ zId z of
   Just v -> z
-    { zId = (zId z) { zidVersion = if v < 10 then Just $ 1 + v else Nothing } }
+    { zId = (zId z)
+        { zidVersion =
+            if noInits && noIts && cursorLocked then Nothing else Just $ 1 + v
+        }
+    }
   Nothing -> error "Trying to increment closed zipper."
+  where
+    cursorLocked = not (isBnd $ zCursor z)
+    noIts = null (bgsIts (zBgState z))
+    noInits = null (bgsInits (zBgState z))
+    isBnd (Identity (Just _,_,_)) = True
+    isBnd _                       = False
+#else
+incrZipperUId z =
+  z { zId = (zId z) { zidVersion = (+ 1) <$> zidVersion (zId z) } }
+#endif
 
-class (Monoid (ExtCoEpoch p)) => ExtParams p where
+
+class (Monoid (ExtCoEpoch p)) => ExtParams w p where
   type ExtEpoch p :: *
 
   type ExtCoEpoch p :: *
@@ -338,6 +361,9 @@ class (Monoid (ExtCoEpoch p)) => ExtParams p where
 
   type ExtError p :: *
 
+  type MechVal p :: *
+
+  extExceedsCap :: Proxy (p,w) -> ExtCap p -> ZBnd w -> Bool
   extCombEpochs
     :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> Conf w -> MayReset (Conf w)
 

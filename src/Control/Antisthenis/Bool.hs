@@ -242,13 +242,16 @@ instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
      ,assocData = acUnlift $ assocData cass
     }
 
+type BoolExtParams op p = ExtParams (BoolTag op p) p
 data BoolTag op p
 instance BndRParams (BoolTag op p) where
   type ZErr (BoolTag op p) = Err
   type ZBnd (BoolTag op p) = BoolBound op
   type ZRes (BoolTag op p) = BoolV op
+  bndLt = undefined
+  exceedsCap = undefined
 
-instance (AShow (ExtCoEpoch p),ExtParams p,BoolOp op)
+instance (AShow (ExtCoEpoch p),BoolExtParams op p,BoolOp op)
   => ZipperParams (BoolTag op p) where
   type ZEpoch (BoolTag op p) = ExtEpoch p
   type ZCoEpoch (BoolTag op p) = ExtCoEpoch p
@@ -377,7 +380,8 @@ interpretBExp
   ,Eq (ZCoEpoch (BoolTag AnyOp p))
   ,AShow (ExtCoEpoch p)
   ,AShow (ExtEpoch p)
-  ,ExtParams p)
+  ,BoolExtParams Or p
+  ,BoolExtParams And p)
   => BExp
   -> ArrProc (BoolTag AnyOp p) m
 interpretBExp = recur

@@ -51,22 +51,21 @@ data DSetR v p = DSetR { dsetConst :: Sum v,dsetNeigh :: [p] }
   deriving (Functor,Foldable,Traversable)
 
 -- | The dependency set in terms of processes.
-type DSet t n p v = DSetR v (NodeProc t n (SumTag p v))
+type DSet t n p v = DSetR v (NodeProc t n (SumTag p))
 
 makeCostProc
   :: forall t n tag .
   IsPlanParams tag n
   => NodeRef n
-  -> [DSet t n (PlanParams tag n) (PlanMechVal tag n)]
-  -> NodeProc t n (SumTag (PlanParams tag n) (PlanMechVal tag n))
+  -> [DSet t n (PlanParams tag n) (MechVal (PlanParams tag n))]
+  -> NodeProc t n (SumTag (PlanParams tag n))
 makeCostProc ref deps =
   convArrProc convMinSum $ procMin $ zipWith go [1 ..] deps
   where
-    go i DSetR {..} =
-      convArrProc convSumMin $ procSum i $ constArr : dsetNeigh
+    go i DSetR {..} = convArrProc convSumMin $ procSum i $ constArr : dsetNeigh
       where
         constArr = arr $ const $ BndRes dsetConst
-    procMin :: (mintag ~ MinTag (PlanParams tag n) (PlanMechVal tag n)
+    procMin :: (mintag ~ MinTag (PlanParams tag n)
                ,NodeProc0 t n (CostParams tag n) mintag ~ p)
             => [p]
             -> p
@@ -252,12 +251,12 @@ planQuickRun m = do
 
 getCost
   :: forall tag t n m .
-  (Monad m,IsPlanParams tag n,AShow (PlanMechVal tag n))
+  (Monad m,IsPlanParams tag n,AShow (MechVal (PlanParams tag n)))
   => Proxy tag
   -> NodeSet n
   -> Cap (ExtCap (PlanParams tag n))
   -> NodeRef n
-  -> PlanT t n m (Maybe (PlanMechVal tag n))
+  -> PlanT t n m (Maybe (MechVal (PlanParams tag n)))
 getCost _ extraMat cap ref = wrapTrace ("getCost" <: ref) $ do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
