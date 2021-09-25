@@ -556,6 +556,7 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   extExceedsCap _ HistCap {..} (Min (Just bnd)) =
     maybe False (cValue (cData bnd) >) (unMin hcValCap)
     || cTrailSize bnd > (maxMatTrail - hcMatsEncountered)
+    || cProbNonComp (cData bnd) > hcNonCompTolerance
   extExceedsCap _ _ (Min Nothing) = False
   extCombEpochs _ = planCombEpochs
 

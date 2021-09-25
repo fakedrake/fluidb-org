@@ -110,8 +110,12 @@ mkZCat
     (Zipper w (ArrProc w m))
 mkZCat coepoch0 (incrZipperUId -> prevz) =
   MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
-    let Identity (_bnd,inip,cursProc) = zCursor prevz
+    let Identity (bnd0,inip,cursProc) = zCursor prevz
+    "runningCursorOf" <<: (zId prevz,confCap lconf,bnd0)
     (coepoch,(p',val)) <- runArrProc cursProc lconf
+    -- XXX: The bound returned does not respect the cap and also is
+    -- not the bound emitted.
+    "doneWithCursor" <<: (zId prevz,val)
     let coepoch' = coepoch <> coepoch0
     -- Update the cursor value and rotate the zipper.
     return
@@ -302,16 +306,16 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
         MooreMech iniZ iniMealy = mkZCatIni zid procs
     zNext :: ZState w m -> Conf w -> MBF (ArrProc w m) Void
     zNext zs@ZState {..} gconf = do
-      "zLocalizeConf" <<: (confCap gconf,zipperShape zsZipper)
+      -- "zLocalizeConf" <<: (confCap gconf,zipperShape zsZipper)
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
           let zs' = zs { zsCoEpoch = mempty,zsItCmd = zsReset }
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
         DontReset lconf -> do
-          "zLocalizeConf:res" <<: confCap lconf
+          -- "zLocalizeConf:res" <<: confCap lconf
           case evolutionControl zprocEvolution gconf zsZipper of
             Just res -> do
-              ("resultFin(" ++ ashow zid ++ ")") <<: res
+              -- ("resultFin(" ++ ashow zid ++ ")") <<: res
               yieldMB (zsCoEpoch,res) >>= zNext zs
             Nothing -> do
               a <- fromArrow zsItCmd lconf
@@ -319,7 +323,7 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
               let zs' = zs { zsReset = fromMaybe zsReset rstM }
               case upd of
                 Left finRes -> do
-                  ("result(" ++ ashow zid ++ ")") <<: finRes
+                  -- ("result(" ++ ashow zid ++ ")") <<: finRes
                   yieldMB (zsCoEpoch,finRes) >>= zNext zs'
                 Right ((nxt,z),coepoch) -> do
                   let zs'' =

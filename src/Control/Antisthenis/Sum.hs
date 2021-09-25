@@ -65,7 +65,7 @@ instance (AShow (MechVal p)
          ,Subtr (MechVal p)
          ,Semigroup (MechVal p)
          ,Zero (MechVal p)
-         -- For updating the cap
+          -- For updating the cap
          ,HasLens (ExtCap p) (Min (MechVal p))
          ,Zero (ExtCap p)
          ,SumExtParams p
@@ -139,7 +139,7 @@ sumEvolutionControl
   ,Ord (MechVal p)
   ,AShow (MechVal p)
   ,AShow (ExtError p)
-  ,SumExtParams p)
+  ,SumExtParams p, AShow (ExtCap p))
   => GConf (SumTag p)
   -> Zipper (SumTag p) (ArrProc (SumTag p) m)
   -> Maybe (BndR (SumTag p))
@@ -159,9 +159,13 @@ sumEvolutionControl conf z = fmap traceRes $ case zFullResSum z of
 -- traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
 
 -- | The full result includes both zRes and zCursor.
-zFullResSum :: Semigroup (MechVal p) => Zipper (SumTag p) p0 -> SumPartialRes p
-zFullResSum z = sprMap (maybe id ((<>) . coerce) cursorM) $ zRes z where
-  cursorM = fst3 $ runIdentity $ zCursor z
+zFullResSum
+  :: (AShow2 (ExtError p) (MechVal p),Semigroup (MechVal p))
+  => Zipper (SumTag p) p0
+  -> SumPartialRes p
+zFullResSum z = sprMap (maybe id ((<>) . coerce) cursorM) $ zRes z
+  where
+    cursorM = fst3 $ runIdentity $ zCursor z
 
 sumEvolutionStrategy
   :: (Zero (MechVal p),Monad m)

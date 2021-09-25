@@ -119,7 +119,6 @@ mkNewMech ref =
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       (nxt,r) <- toKleisli f c
-      -- ("result(" ++ ashow ref ++ ")") <<: r
       lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 

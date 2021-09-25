@@ -9,6 +9,7 @@ import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
 import           Control.Monad.Reader
+import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Pointed
 import           Data.Proxy
@@ -40,29 +41,41 @@ pastCosts extraMat = do
   q <- mkListT $ return qs
   lift
     $ wrapTrace ("pastCosts " ++ ashow q)
-    $ getCost @HistTag Proxy extraMat ForceResult q
+    $ getCost @HistTag Proxy extraMat (CapVal maxCap) q
 
-incrMats :: Conf (CostParams HistTag n)
-         -> Conf (CostParams HistTag n)
-incrMats conf =
-  conf { confCap = case confCap conf of
-    ForceResult -> CapVal HistCap { hcMatsEncountered = 1,hcValCap = MinInf }
-    CapVal
-      cap -> CapVal $ cap { hcMatsEncountered = 1 + hcMatsEncountered cap } }
+maxCap :: HistCap Cost
+maxCap =
+  HistCap { hcMatsEncountered = 1,hcValCap = MinInf,hcNonCompTolerance = 0.7 }
+
+bndVal :: Min (Cert (Comp v)) -> Maybe v
+bndVal (Min (Just Cert{..})) = Just $ cValue cData
+bndVal (Min Nothing)         = Nothing
+
+capVal :: Cap (HistCap v) -> Maybe v
+capVal (CapVal HistCap {..}) = unMin hcValCap
+capVal ForceResult           = Nothing
 
 -- | The materialized node indeed has a cost. That cost is
 -- calculated by imposing a scaling on the cost it would have if it
 -- were not materialized. This opens the door to an explosion in
 -- computation.
 isMatCost :: forall t n . NodeRef n -> HistProc t n -> HistProc t n
-isMatCost _ref matCost0 = wrapMealy matCost0 guardedGo
+isMatCost ref matCost0 = wrapMealy matCost0 guardedGo
   where
     go conf matCost = do
-      (nxt,r) <- lift $ toKleisli (runMealyArrow matCost) $ incrMats conf
+      let conf0 = mapCap unscaleCap conf
+      -- The cap used to run the arror will not match the scaled
+      -- result. If that happens the outside process will fail to
+      -- proceed and will keep asking for a larger result.
+      (nxt,r) <- lift $ toKleisli (runMealyArrow matCost) conf0
+      "result" <<: (ref,confCap conf,confCap conf0,r)
+      let checkBnd bnd =
+            if fromMaybe True $ (<=) <$> bndVal bnd <*> capVal (confCap conf0)
+            then error "oops" else id
       conf' <- yieldMB $ case r of
-        BndBnd bnd -> BndBnd $ incrementCert $ scaleMin bnd
+        BndBnd bnd -> BndBnd $ checkBnd bnd $ incrementCert $ scaleMin bnd
         BndRes res -> BndRes $ scaleSum res
-        _e         -> BndRes $ point $ point $ Comp 0.5 zero -- error is more highly non-computable but it's free
+        _e         -> BndRes $ point $ point $ Comp 0.5 zero -- error is more highly non-computable but it's fre
       return (conf',nxt)
     guardedGo conf matCost = if isTooDeep conf then do
       conf' <- yieldMB $ BndRes zero
@@ -80,12 +93,26 @@ incrementCert (Min (Just (Cert c (Comp d i)))) =
 incrementCert a = a
 matComputability :: Double -> Double
 matComputability d = 1 - 0.8 * (1 - d)
+
+halfCeil :: Int -> Int
+halfCeil i = if m > 0 then d + 1 else d
+  where
+    (d,m) = divMod i 2
 scaleCost :: Cost -> Cost
-scaleCost (Cost r w) = Cost (r `div` 2) (w `div` 2)
+scaleCost (Cost r w) = Cost (halfCeil r) (halfCeil w)
+mapCap :: (ZCap w -> ZCap w) -> Conf w -> Conf w
+mapCap f conf = conf { confCap = f <$> confCap conf }
+unscaleCap :: HistCap Cost -> HistCap Cost
+unscaleCap hc =
+  hc { hcValCap = Min $ fmap unscaleCost $ unMin $ hcValCap hc
+      ,hcMatsEncountered = 1 + hcMatsEncountered hc
+     }
+  where
+    unscaleCost (Cost r w) = Cost (r * 2) (w * 2)
 
 scaleMin :: Min HCost -> Min HCost
 scaleMin m@(Min Nothing)         = m
-scaleMin (Min (Just (Cert c (Comp d  i)))) =
+scaleMin (Min (Just (Cert c (Comp d i)))) =
   Min $ Just $ Cert c $ Comp (matComputability d) $ scaleCost i
 scaleSum :: Sum HCost -> Sum HCost
 scaleSum m@(Sum Nothing)         = m

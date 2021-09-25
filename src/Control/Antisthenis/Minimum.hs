@@ -279,9 +279,8 @@ minEvolutionControl conf z = case confCap conf of
       SecRes r -> if bndLt @(MinTag p) Proxy r bnd then Just $ BndRes r
         else if exceedsCap @(MinTag p) Proxy cap bnd
           then Just $ BndBnd bnd else Nothing
-      sec -> trace ("min-cap-check:" <: (bnd,cap,sec))
-        $ if exceedsCap @(MinTag p) Proxy cap bnd
-        then Nothing else Just $ BndBnd bnd
+      sec -> if exceedsCap @(MinTag p) Proxy cap bnd
+        then Just $ BndBnd bnd else Nothing
     x -> Just x
   where
     -- THE result so far. The cursor is assumed to always be either an

@@ -19,7 +19,13 @@ instance AShow a => AShow (Comp a) where
 -- |Note: ord is ambiguous.
 instance (Ord a,Scalable a) => Ord (Comp a) where
   compare (Comp c1 a) (Comp c2 b) =
-    compare (scale (1 - c1) a) (scale (1 - c2) b)
+    if
+      | c1 > thr && c2 > thr -> compare (scale c1 a) (scale c2 b)
+      | c1 > thr             -> GT
+      | c2 > thr             -> LT
+      | otherwise            -> compare a b
+    where
+      thr = 0.7
 
 instance Applicative Comp where
   pure = Comp 0
