@@ -20,6 +20,7 @@ import           Control.Utils.Free
 import           Data.Coerce
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Const
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Nat
@@ -172,7 +173,7 @@ sumEvolutionStrategy
   => FreeT (Cmds (SumTag p)) m x
   -> m
     (Maybe (ResetCmd (FreeT (Cmds (SumTag p)) m x))
-    ,Either (BndR (SumTag p)) x)
+    ,Either (ZCoEpoch (SumTag p),BndR (SumTag p)) x)
 sumEvolutionStrategy = recur Nothing
   where
     recur rst (FreeT m) = m >>= \case
@@ -182,7 +183,7 @@ sumEvolutionStrategy = recur Nothing
           CmdItInit _it ini -> recur' ini
           CmdIt it -> recur' $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
           CmdInit ini -> recur' ini
-          CmdFinished (ExZipper z) -> return (rst,Left $ zToRes z)
+          CmdFinished (ExZipper z) -> return (rst,Left (getConst $ zCursor z,zToRes z))
           where
             recur' = recur $ Just $ cmdReset cmds
             zToRes z = case zRes z of

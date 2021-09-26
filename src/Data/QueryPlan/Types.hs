@@ -567,7 +567,8 @@ instance PlanMech CostTag n where
     Lens { getL = gcMechMap
           ,modL = (\f gsc -> gsc { gcMechMap = f $ gcMechMap gsc })
          }
-  mcMkCost Proxy ref cost = PlanCost { pcPlan = Just  $ nsSingleton ref,pcCost = cost }
+  mcMkCost Proxy ref cost =
+    PlanCost { pcPlan = Just $ nsSingleton ref,pcCost = cost }
   mcCompStackVal n = BndErr $ ErrCycleEphemeral n
 
 --  | All the constraints required to run both min and sum

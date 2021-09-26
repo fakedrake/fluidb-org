@@ -40,7 +40,7 @@ pastCosts extraMat = do
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return qs
   lift
-    $ wrapTrace ("pastCosts " ++ ashow q)
+    -- $ wrapTrace ("pastCosts " ++ ashow q)
     $ getCost @HistTag Proxy extraMat (CapVal maxCap) q
 
 maxCap :: HistCap Cost
@@ -68,12 +68,9 @@ isMatCost ref matCost0 = wrapMealy matCost0 guardedGo
       -- result. If that happens the outside process will fail to
       -- proceed and will keep asking for a larger result.
       (nxt,r) <- lift $ toKleisli (runMealyArrow matCost) conf0
-      "result" <<: (ref,confCap conf,confCap conf0,r)
-      let checkBnd bnd =
-            if fromMaybe True $ (<=) <$> bndVal bnd <*> capVal (confCap conf0)
-            then error "oops" else id
+      -- "result" <<: (ref,confCap conf,confCap conf0,r)
       conf' <- yieldMB $ case r of
-        BndBnd bnd -> BndBnd $ checkBnd bnd $ incrementCert $ scaleMin bnd
+        BndBnd bnd -> BndBnd $ incrementCert $ scaleMin bnd
         BndRes res -> BndRes $ scaleSum res
         _e         -> BndRes $ point $ point $ Comp 0.5 zero -- error is more highly non-computable but it's fre
       return (conf',nxt)
@@ -94,8 +91,16 @@ incrementCert a = a
 matComputability :: Double -> Double
 matComputability d = 1 - 0.8 * (1 - d)
 
+
+-- | we may be overshooting here and there but it's ok
+double :: Int -> Int
+double i = if i < 0 then i else i * 2
 halfCeil :: Int -> Int
-halfCeil i = if m > 0 then d + 1 else d
+halfCeil i =
+  if
+    | i <= 0    -> i
+    | m > 0     -> d + 1
+    | otherwise -> d
   where
     (d,m) = divMod i 2
 scaleCost :: Cost -> Cost
@@ -108,7 +113,7 @@ unscaleCap hc =
       ,hcMatsEncountered = 1 + hcMatsEncountered hc
      }
   where
-    unscaleCost (Cost r w) = Cost (r * 2) (w * 2)
+    unscaleCost (Cost r w) = Cost (double r) (double w)
 
 scaleMin :: Min HCost -> Min HCost
 scaleMin m@(Min Nothing)         = m

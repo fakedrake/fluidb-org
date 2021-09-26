@@ -106,8 +106,7 @@ mkNewMech ref =
   where
     costProcess = squashMealy $ \conf -> do
       mops <- lift $ findCostedMetaOps ref
-      -- ("metaops("++ ashow ref ++ ")") <<: mops
-      -- Should never see the same val twice.
+      -- ("metaops(" ++ ashow ref ++ ")") <<: mops
       let mechs =
             [DSetR
               { dsetConst = Sum $ Just $ mcMkCost (Proxy :: Proxy tag) ref cost
@@ -119,6 +118,7 @@ mkNewMech ref =
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       (nxt,r) <- toKleisli f c
+        -- "result" <<: (ref,r,coepoch)
       lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 
@@ -172,6 +172,7 @@ satisfyComputability = go mempty
         assumedNonComputables -> do
           actuallyComputables
             <- filterM (isComputableM conf) assumedNonComputables
+          -- "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
           let conf' = foldl' (flip markComputable) conf actuallyComputables
           runNodeProc (go trail ref nxt0) conf'
       where
@@ -212,9 +213,11 @@ getOrMakeMech ref = squashMealy $ \conf -> do
 -- uncomputable.
 cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
 cycleProc ref =
-  MealyArrow $ rmap (first $ const $ getOrMakeMech ref) $ runMealyArrow go
-  where
-    go = arrCoListen' $ arr $ const (markNonComputable ref,mcCompStackVal ref)
+  MealyArrow
+  $ WriterArrow
+  $ Kleisli
+  $ const
+  $ return (markNonComputable ref,(getOrMakeMech ref,mcCompStackVal ref))
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
@@ -231,14 +234,29 @@ censorPredicate
   => NodeRef n
   -> NodeProc t n (CostParams tag n)
   -> NodeProc t n (CostParams tag n)
-censorPredicate ref c = arrCoListen' $ rmap go $ arrListen' c
+censorPredicate ref c =
+  MealyArrow
+  $ WriterArrow
+  $ dimap censorCopred go
+  $ runWriterArrow
+  $ runMealyArrow c
   where
-    go (coepoch,ret) = case ret of
+    -- Copredicates for nodes that are in the computation stack a)
+    -- don't make sense and b) will cause the top node to reset as
+    -- predicate censoring happens at the outer bound of the process
+    -- while copredicates penetrate the outer bound and cause the
+    -- process to reset.
+    censorCopred conf =
+      conf { confEpoch = (confEpoch conf)
+               { peCoPred = nsDelete ref $ peCoPred $ confEpoch conf }
+           }
+    go (coepoch,(nxt,ret)) = case ret of
       BndErr ErrCycleEphemeral {} ->
         (unmarkNonComputable ref coepoch
-        ,BndErr
-           ErrCycle { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch })
-      _ -> (unmarkNonComputable ref coepoch,ret)
+        ,(nxt
+         ,BndErr
+            ErrCycle { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch }))
+      _ -> (unmarkNonComputable ref coepoch,(nxt,ret))
 
 planQuickRun :: Monad m => PlanT t n Identity a -> PlanT t n m a
 planQuickRun m = do
@@ -256,7 +274,7 @@ getCost
   -> Cap (ExtCap (PlanParams tag n))
   -> NodeRef n
   -> PlanT t n m (Maybe (MechVal (PlanParams tag n)))
-getCost _ extraMat cap ref = wrapTrace ("getCost" <: ref) $ do
+getCost _ extraMat cap ref = wrapTr $ do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let extraStates = nsToRef (const True) extraMat
   (res,_coepoch) <- planQuickRun
@@ -271,4 +289,8 @@ getCost _ extraMat cap ref = wrapTrace ("getCost" <: ref) $ do
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just zero
     BndBnd _bnd -> return Nothing
-    BndErr e -> throwPlan $ "getCost:antisthenis error: " ++ ashow e
+    BndErr e ->
+      throwPlan $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
+  where
+    -- wrapTr = wrapTrace ("getCost" <: ref)
+    wrapTr = id

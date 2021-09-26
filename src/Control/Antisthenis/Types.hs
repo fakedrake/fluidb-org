@@ -59,7 +59,7 @@ module Control.Antisthenis.Types
   ,ItProc
   ,CoitProc
   ,AShowW
-  ,incrZipperUId) where
+  ,incrZipperUId,zNamed,trZ) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
@@ -71,8 +71,12 @@ import           Control.Arrow                               hiding (first,
 import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Bifunctor
+import           Data.Either
+import           Data.List
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Const
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.OptSet
@@ -157,7 +161,7 @@ data ZProcEvolution w m k =
    ,evolutionStrategy
       :: forall x .
       FreeT (Cmds w) m x
-      -> m (Maybe (RstCmd w m x),Either (BndR w) x)
+      -> m (Maybe (RstCmd w m x),Either (ZCoEpoch w,BndR w) x)
      -- Empty error is the error emitted when there are no arguments
      -- to an operator.
    ,evolutionEmptyErr :: ZErr w
@@ -279,15 +283,20 @@ data Zipper' w cursf (p :: *) pr =
 instance Functor (Zipper' w cursf p) where
   fmap f Zipper {..} =
     Zipper { zCursor = zCursor,zBgState = zBgState,zRes = f zRes,zId = zId }
+zNamed :: Zipper'  w cursf p pr -> String -> Bool
+zNamed z  = zidNamed (zId z)
 
-lengthZBgState :: Foldable (ZItAssoc w) => ZipState w p -> (Int,Int,Int)
-lengthZBgState ZipState {..} = (length bgsInits,length bgsIts,length bgsCoits)
+lengthZBgState :: Foldable (ZItAssoc w) => ZipState w p -> (Int,Int,(Int,Int))
+lengthZBgState ZipState {..} =
+  (length bgsInits
+  ,length bgsIts
+  ,bimap length length $ partition (isLeft . fst) bgsCoits)
 
 data ZShape =
   ZShape
   { zshInits :: Int
    ,zshIts   :: Int
-   ,zshCoits :: Int
+   ,zshCoits :: (Int,Int)
    ,zshCurs  :: Int
    ,zshId    :: ZipperId
   }
@@ -316,7 +325,7 @@ instance (AShow (ZItAssoc w (p,p))
   => AShow (Zipper' w f p pr)
 
 -- | A zipper without a cursor.
-type FinZipper w p = Zipper' w EmptyF p (ZPartialRes w)
+type FinZipper w p = Zipper' w (Const (ZCoEpoch w)) p (ZPartialRes w)
 type Zipper w p = Zipper' w Identity p (ZPartialRes w)
 instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
   bimap f g Zipper {..} =
@@ -331,25 +340,25 @@ incrZipperUId
   :: Foldable (ZItAssoc w)
   => Zipper' w Identity p pr
   -> Zipper' w Identity p pr
-#if 0
-incrZipperUId z = case zidVersion $ zId z of
-  Just v -> z
-    { zId = (zId z)
-        { zidVersion =
-            if noInits && noIts && cursorLocked then Nothing else Just $ 1 + v
-        }
-    }
-  Nothing -> error "Trying to increment closed zipper."
-  where
-    cursorLocked = not (isBnd $ zCursor z)
-    noIts = null (bgsIts (zBgState z))
-    noInits = null (bgsInits (zBgState z))
-    isBnd (Identity (Just _,_,_)) = True
-    isBnd _                       = False
-#else
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 incrZipperUId z =
   z { zId = (zId z) { zidVersion = (+ 1) <$> zidVersion (zId z) } }
-#endif
+
 
 
 class (Monoid (ExtCoEpoch p)) => ExtParams w p where
@@ -387,3 +396,13 @@ mapCursor :: (forall a . f a -> g a) -> Zipper' w f p r -> Zipper' w g p r
 mapCursor f Zipper {..} =
   Zipper
   { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
+
+trZ :: (Monad m,AShow a)
+    => String
+    -> Zipper' w cursf p pr
+    -> [String]
+    -> a
+    -> m ()
+trZ msg z fltr d =
+  when (null fltr || any (zNamed z) fltr)
+  $ (msg ++ "(" ++ ashow (zId z) ++ ")") <<: d

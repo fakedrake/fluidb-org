@@ -45,6 +45,7 @@ import           Data.Maybe
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Const
 import           Data.Utils.Default
 import           GHC.Generics
 
@@ -305,7 +306,7 @@ boolEvolutionStrategy
   => FreeT (Cmds (BoolTag op p)) m x
   -> m
     (Maybe (ResetCmd (FreeT (Cmds (BoolTag op p)) m x))
-    ,Either (BndR (BoolTag op p)) x)
+    ,Either (ExtCoEpoch p,BndR (BoolTag op p)) x)
 boolEvolutionStrategy = recur Nothing
   where
     recur rst (FreeT m) = m >>= \case
@@ -316,7 +317,10 @@ boolEvolutionStrategy = recur Nothing
           $ it (error "Unimpl: function to select the cheapest")
         CmdInit ini -> recur (Just $ cmdReset cmd) ini
         CmdFinished (ExZipper z) -> return
-          (rst,Left $ maybe (BndErr undefined) (either BndErr BndRes) (zRes z))
+          (rst
+          ,Left
+             (getConst $ zCursor z
+             ,maybe (BndErr undefined) (either BndErr BndRes) (zRes z)))
 
 -- | Return Just when we have a result the could be the restult of the
 -- poperator. This decides when to stop working.

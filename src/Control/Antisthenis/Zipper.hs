@@ -110,13 +110,13 @@ mkZCat
     (Zipper w (ArrProc w m))
 mkZCat coepoch0 (incrZipperUId -> prevz) =
   MealyArrow $ WriterArrow $ Kleisli $ \lconf -> FreeT $ do
-    let Identity (bnd0,inip,cursProc) = zCursor prevz
-    "runningCursorOf" <<: (zId prevz,confCap lconf,bnd0)
+    let Identity (_bnd0,inip,cursProc) = zCursor prevz
+    -- "runningCursorOf" <<: (zId prevz,confCap lconf,bnd0)
     (coepoch,(p',val)) <- runArrProc cursProc lconf
     -- XXX: The bound returned does not respect the cap and also is
     -- not the bound emitted.
-    "doneWithCursor" <<: (zId prevz,val)
     let coepoch' = coepoch <> coepoch0
+    -- "doneWithCursor" <<: (zId prevz,val,coepoch')
     -- Update the cursor value and rotate the zipper.
     return
       $ Free
@@ -205,7 +205,7 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
     newRes = either BndErr BndRes $ fst newCoit
     finZipper =
       Zipper
-      { zCursor = EmptyF
+      { zCursor = Const coepoch
        ,zBgState = zBgState { bgsCoits = newCoit : bgsCoits zBgState }
        ,zRes = ()
        ,zId = zId
@@ -218,6 +218,7 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
        ,zId = zidReset zId
       }
     cmdItCoit' = case (bgsInits zBgState,acNonEmpty $ bgsIts zBgState) of
+      -- XXX: CmdFinished loses the coepoch
       ([],Nothing) -> CmdFinished $ ExZipper $ putRes newRes (zRes,finZipper)
       (ini:inis,Nothing) -> CmdInit $ evolve $ mkIniZ ini inis
       ([],Just nonempty) -> CmdIt $ \pop -> evolve
@@ -256,10 +257,11 @@ pushCoit coepoch Zipper {zCursor = Const newCoit,..} =
 
 data ZState w m =
   ZState
-  { zsCoEpoch :: ZCoEpoch w
-   ,zsZipper  :: Zipper w (ArrProc w m)
-   ,zsItCmd   :: ZCat w m
-   ,zsReset   :: ZCat w m
+  { zsCoEpoch   :: ZCoEpoch w
+   ,zsZipper    :: Zipper w (ArrProc w m)
+   ,zsItCmd     :: ZCat w m
+   ,zsReset     :: ZCat w m
+   ,zsResetLoop :: Bool
   }
 
 type family MBF a :: * -> * where
@@ -278,7 +280,9 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
       :: FreeT (Cmds w) m ((ZCat w m,Zipper w (ArrProc w m)),ZCoEpoch w)
       -> m
         (Maybe (ZCat w m)
-        ,Either (BndR w) ((ZCat w m,Zipper w (ArrProc w m)),ZCoEpoch w))
+        ,Either
+           (ZCoEpoch w,BndR w)
+           ((ZCat w m,Zipper w (ArrProc w m)),ZCoEpoch w))
     runCmdSequence cmds = do
       (rstCmdM,r) <- evolutionStrategy zprocEvolution cmds
       rstM <- forM rstCmdM $ \(DoReset (FreeT rst)) -> rst <&> \case
@@ -300,34 +304,49 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
        ,zsZipper = iniZ
        ,zsReset = iniMealy
        ,zsItCmd = iniMealy
+       ,zsResetLoop = True
       }
       where
         iniZ :: Zipper w (ArrProc w m)
         MooreMech iniZ iniMealy = mkZCatIni zid procs
     zNext :: ZState w m -> Conf w -> MBF (ArrProc w m) Void
     zNext zs@ZState {..} gconf = do
-      -- "zLocalizeConf" <<: (confCap gconf,zipperShape zsZipper)
+      -- let tr :: AShow a => String -> a -> MBF (ArrProc w m) ()
+      --     tr msg arg =
+      --       trZ
+      --         (if zsResetLoop then "reset:" ++ msg else msg)
+      --         zsZipper
+      --         ["N6","N25"]
+      --         arg
+      -- tr "zLocalizeConf" (confCap gconf,confEpoch gconf,zsCoEpoch)
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
-          let zs' = zs { zsCoEpoch = mempty,zsItCmd = zsReset }
+          -- tr "zLocalizeConf:reset" (zsCoEpoch,confEpoch gconf)
+          let zs' =
+                zs { zsCoEpoch = mempty,zsItCmd = zsReset,zsResetLoop = True }
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
         DontReset lconf -> do
-          -- "zLocalizeConf:res" <<: confCap lconf
+          -- tr "zLocalizeConf:res" $ confCap lconf
           case evolutionControl zprocEvolution gconf zsZipper of
             Just res -> do
-              -- ("resultFin(" ++ ashow zid ++ ")") <<: res
-              yieldMB (zsCoEpoch,res) >>= zNext zs
+              -- tr "result" (res,zsCoEpoch)
+              yieldMB (zsCoEpoch,res) >>= zNext zs { zsResetLoop = False }
             Nothing -> do
-              a <- fromArrow zsItCmd lconf
-              (rstM,upd) <- lift $ runCmdSequence a
+              cmdM <- fromArrow zsItCmd lconf
+              (rstM,upd) <- lift $ runCmdSequence cmdM
               let zs' = zs { zsReset = fromMaybe zsReset rstM }
               case upd of
-                Left finRes -> do
-                  -- ("result(" ++ ashow zid ++ ")") <<: finRes
-                  yieldMB (zsCoEpoch,finRes) >>= zNext zs'
+                Left (coepoch,res) -> do
+                  -- tr "resultFin" (res,coepoch)
+                  yieldMB (coepoch,res) >>= zNext zs' { zsResetLoop = False }
                 Right ((nxt,z),coepoch) -> do
+                  -- tr "cont-from:" (zipperShape z,coepoch)
                   let zs'' =
-                        zs' { zsItCmd = nxt,zsZipper = z,zsCoEpoch = coepoch }
+                        zs' { zsItCmd = nxt
+                             ,zsZipper = z
+                             ,zsCoEpoch = coepoch
+                             ,zsResetLoop = False
+                            }
                   zNext zs'' gconf
 
 runMech :: ArrowFunctor c => MealyArrow c a b -> a -> ArrFunctor c b

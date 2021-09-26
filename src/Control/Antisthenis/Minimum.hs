@@ -29,7 +29,7 @@ module Control.Antisthenis.Minimum
 import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
-import           Control.Applicative
+import           Control.Applicative                hiding (Const (..))
 import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Foldable
@@ -37,6 +37,7 @@ import qualified Data.List.NonEmpty                 as NEL
 import           Data.Maybe
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Const
 import           Data.Utils.Debug
 import           Data.Utils.Nat
 import           Data.Utils.Tup
@@ -279,7 +280,7 @@ minEvolutionControl conf z = case confCap conf of
       SecRes r -> if bndLt @(MinTag p) Proxy r bnd then Just $ BndRes r
         else if exceedsCap @(MinTag p) Proxy cap bnd
           then Just $ BndBnd bnd else Nothing
-      sec -> if exceedsCap @(MinTag p) Proxy cap bnd
+      _sec -> if exceedsCap @(MinTag p) Proxy cap bnd
         then Just $ BndBnd bnd else Nothing
     x -> Just x
   where
@@ -338,7 +339,7 @@ minEvolutionStrategy
   => FreeT (Cmds (MinTag p)) m x
   -> m
     (Maybe (ResetCmd (FreeT (Cmds (MinTag p)) m x))
-    ,Either (BndR (MinTag p)) x)
+    ,Either (ZCoEpoch (MinTag p),BndR (MinTag p)) x)
 minEvolutionStrategy = recur Nothing
   where
     recur rst (FreeT m) = m >>= \case
@@ -347,5 +348,6 @@ minEvolutionStrategy = recur Nothing
         CmdItInit _it ini -> recur (Just $ cmdReset cmd) ini
         CmdIt it -> recur (Just $ cmdReset cmd) $ it popMinAssocList
         CmdInit ini -> recur (Just $ cmdReset cmd) ini
-        CmdFinished (ExZipper x) ->
-          return (rst,Left $ fromMaybe undefined $ zFullResultMin x)
+        CmdFinished (ExZipper x) -> return
+          (rst
+          ,Left (getConst $ zCursor x,fromMaybe undefined $ zFullResultMin x))
