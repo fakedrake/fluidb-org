@@ -61,14 +61,11 @@ import           Data.Utils.HContT
 import           Data.Utils.ListT
 import           Data.Utils.Tup
 
-import           Control.Antisthenis.Lens
-import           Control.Arrow
-import qualified Control.Category            as C
 import           Data.Proxy
-import           Data.QueryPlan.Comp
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
+import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Nat
 
@@ -94,10 +91,9 @@ warmupCache node = do
 
 setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
 setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
-  sizes <- asks nodeSizes
-  traceM $ "Node sizes:" ++  ashow sizes
+  -- sizes <- asks nodeSizes
   -- Populate the metaop cache
-  when False $ warmupCache node
+  -- warmupCache node
   setNodeStateSafe node Mat
   cost <- totalTransitionCost
   trM $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
@@ -147,7 +143,7 @@ haltPlanCost concreteCost = do
         maybe (return ()) tell $ pcPlan c
         return $ pcCost c
   let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  histCosts <- takeListT 0 $ pastCosts extraNodes
+  histCosts <- takeListT 5 $ pastCosts extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
   halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
@@ -194,7 +190,10 @@ setNodeStateSafe' getFwdOp node goalState =
               trM $ "Materializing dependencies: " ++ show depset
               setNodesMatSafe depset
               trM $ "Intermediates: " ++ show interm
-              cutPlanT $ garbageCollectFor $ node : interm
+              cutPlanT
+                $ wrapTrace ("gc" <: node)
+                $ garbageCollectFor
+                $ node : interm
               -- Automatically set the states of intermediates
               forM_ interm $ \ni -> do
                 prevState' <- getNodeState ni
@@ -338,15 +337,17 @@ newEpoch = wrapTrM "newEpoch" $ do
            }
          trM $ "New epoch. Demoted refs: " ++ show updatedRefs
 
-eitherlReader :: BotMonad m =>
-                ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
+eitherlReader
+  :: BotMonad m
+  => ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
 eitherlReader = splitProvenance (EitherLeft,EitherRight) id eitherl'
-lsplitReader :: MonadPlus m =>
-                ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
+lsplitReader
+  :: MonadPlus m
+  => ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
 lsplitReader = splitProvenance (SplitLeft,SplitRight) id
   $ \(ReaderT l) (ReaderT r) -> ReaderT $ \s -> mplusPlanT (l s) (r s)
 
@@ -417,9 +418,8 @@ killIntermediates :: forall t n m . MonadLogic m =>
                     ReaderT PageNum (PlanT t n m) ()
 killIntermediates = do
   matInterm <- filterM (lift . fmap not . isProtected)
-              =<< filterM (lift . isMaterialized)
-              =<< toNodeList . intermediates
-              <$> lift ask
+    =<< filterM (lift . isMaterialized)
+    =<< toNodeList . intermediates <$> lift ask
   forM_ matInterm $ \x -> lift $ do
     delDepMatCache x
     x `setNodeStateUnsafe` Concrete Mat NoMat
@@ -526,10 +526,12 @@ withNodeState nodeState refs m = do
   ret <- m
   zipWithM_ setSt refs sts
   return ret
+
 -- | Get exactly one solution. Schedule this as if it were a single thread.
-cutPlanT :: (v ~ HValue m,MonadLogic m) =>
-           PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
-         -> PlanT t n m a
+cutPlanT
+  :: (v ~ HValue m,MonadLogic m)
+  => PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
+  -> PlanT t n m a
 cutPlanT plan = do
   st <- get
   conf <- ask

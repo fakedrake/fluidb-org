@@ -189,7 +189,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
           -- Note that sizes will be computed lazily.
          ,nodeSizes = refFromAssocs nodeSizes'
          ,intermediates = mempty
-         ,budget = Nothing
+         ,budget = pgcBudget
          ,maxBranching = Nothing
          ,maxTreeDepth = Nothing
         }

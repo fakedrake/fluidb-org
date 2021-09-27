@@ -143,6 +143,7 @@ data PreGlobalConf e0 e s =
    ,pgcPrimKeyAssoc   :: [(s,[e])]          -- Primary keys of each table
    ,pgcSchemaAssoc    :: SchemaAssoc e s     -- The schema of each table
    ,pgcTableSizeAssoc :: [(s,TableSize)]          -- Size of each table in bytes
+   ,pgcBudget         :: Maybe PageNum
   }
 
 data GlobalConf e s t n = forall e0 . GlobalConf {

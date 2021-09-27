@@ -9,7 +9,6 @@ import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
 import           Control.Monad.Reader
-import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Pointed
 import           Data.Proxy

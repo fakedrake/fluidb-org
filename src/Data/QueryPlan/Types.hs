@@ -383,9 +383,6 @@ mplusPlanT = mplusPlanT'
 
 
 -- | For epoch
-isMoreRecent :: Ord v => RefMap n v -> RefMap n v -> Bool
-isMoreRecent delta = or . refIntersectionWithKey (const (>=)) delta
-
 mplusPlanT' :: MonadPlus m =>
               StateT s (ReaderT r (ExceptT e m)) a
             -> StateT s (ReaderT r (ExceptT e m)) a
@@ -456,7 +453,6 @@ instance Eq (MetaOp t n) where
 -- | NodeProc t n ()
 type NodeProc t n w = NodeProc0 t n w w
 
-type Scaling = Double
 -- | A node process. The outer
 type NodeProc0 t n w w0 =
   ArrProc w0 (PlanT t n Identity)
@@ -480,8 +476,6 @@ data PlanParams tag n
 newtype Predicates n = Predicates { pNonComputables :: NodeSet n }
   deriving (Eq,Show,Generic)
 instance AShow (Predicates n)
-isEmptyPredicates :: Predicates n -> Bool
-isEmptyPredicates = nsNull . pNonComputables
 instance Semigroup (Predicates n) where
   p <> p' =
     Predicates { pNonComputables = pNonComputables p <> pNonComputables p' }

@@ -27,6 +27,7 @@ getSsbGlobalConf = do
         {pgcPrimKeyAssoc=first TSymbol <$> fmap3 ESym ssbPrimKeys
         ,pgcSchemaAssoc=bimap TSymbol (fmap2 ESym) <$> ssbSchema
         ,pgcTableSizeAssoc=sizes
+        ,pgcBudget=Just 5000
         ,pgcExpIso=(id,id)
         ,pgcToUniq=genUniqName
         ,pgcToFileSet= \case
