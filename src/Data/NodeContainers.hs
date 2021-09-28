@@ -52,6 +52,7 @@ module Data.NodeContainers
   , refUnionWithKey
   , refUnionWithKeyA
   , refAlter
+  , nsToRef
   , nsNull
   , nsMap
   , nsInsert
@@ -95,14 +96,14 @@ pattern N :: Int -> NodeRef n
 pattern N i = NodeRef i
 
 instance AShow (NodeRef n) where
-  ashow' (NodeRef r) = sexp "N" [ashow' r]
+  ashow' (NodeRef r) = Sym $ "N" ++ show r
 instance ARead (NodeRef n) where
   aread' = \case
     Sub [Sym "N", r]       -> N <$> aread' r
     Sub [Sym "NodeRef", r] -> N <$> aread' r
     _                      -> Nothing
 instance Show (NodeRef n) where
-  show (NodeRef n) = "<" ++ show n ++ ">"
+  show (NodeRef n) = "N" ++ show n
 instance Read (NodeRef a) where
   readsPrec _ x = if
     | "NodeRef " `isPrefixOf` norm' x -> go 8
@@ -303,7 +304,8 @@ nsFold :: (NodeRef n -> a -> a) -> NodeSet n -> a -> a
 nsFold f ns ini = foldr f ini $ toNodeList ns
 nsSize :: NodeSet n -> Int
 nsSize = IS.size . runNodeSet
-
+nsToRef :: (NodeRef n -> a) -> NodeSet n -> RefMap n a
+nsToRef f (NodeSet ns) = RefMap $ IM.fromSet (f . NodeRef) ns
 -- # /NODESTRUCT
 -- data FieldFormat = FieldFormat {
 --   fmtWidth     :: Maybe Int,       -- ^ Total width of the field.

@@ -10,115 +10,118 @@
 {-# LANGUAGE TupleSections       #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Data.Query.QuerySchema.SchemaBase
-  ( planSymOrig
-  , isUniqueSel
-  , mkQueryPlan
-  , mkPlanSym
-  , setPlanSymOrig
-  , refersToPlan
-  , querySchema
-  , primKeys
-  , joinPlans
-  , planAllSyms
-  , planProject
-  , planSymIsSym
-  , planSymTypeSym'
-  , mkSymPlanSymNM
-  , complementProj
-  , mkLitPlanSym
-  , schemaQP
-  , lookupQP
-  , planSymEqs
-  , translatePlan
-  , translatePlan'
-  , translatePlanMap''
-  ) where
+  (shapeSymOrig
+  ,LookupSide(..)
+  ,isUniqueSel
+  ,mkQueryShape
+  ,mkShapeSym
+  ,setShapeSymOrig
+  ,refersToShape
+  ,querySchema
+  ,primKeys
+  ,joinShapes
+  ,shapeAllSyms
+  ,shapeProject
+  ,shapeSymIsSym
+  ,shapeSymTypeSym'
+  ,mkSymShapeSymNM
+  ,complementProj
+  ,mkLitShapeSym
+  ,schemaQP
+  ,lookupQP
+  ,shapeSymEqs
+  ,translateShape'
+  ,translateShapeMap'') where
 
 import           Control.Monad.Reader
+import           Data.Bifunctor
 import           Data.Bitraversable
-import           Data.QnfQuery.Build
-import           Data.QnfQuery.Types
 import           Data.CppAst
 import           Data.Functor.Identity
 import qualified Data.HashMap.Strict          as HM
 import           Data.List
 import qualified Data.List.NonEmpty           as NEL
 import           Data.Maybe
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
+import           Data.Query.QuerySize
 import           Data.Tuple
 import           Data.Utils.AShow
-import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
+import           GHC.Generics
 
-mkLitPlanSym :: e -> PlanSym e s
-mkLitPlanSym e = mkPlanSym (NonSymbolName e) e
+mkLitShapeSym :: e -> ShapeSym e s
+mkLitShapeSym e = mkShapeSym (NonSymbolName e) e
 
-mkSymPlanSymNM :: Hashables2 e s =>
-                 NameMap e s -> e -> Either (QNFError e s) (PlanSym e s)
-mkSymPlanSymNM nm e = (`mkPlanSym` e) . (`Column` 0) <$> getName nm e
+mkSymShapeSymNM :: Hashables2 e s =>
+                 NameMap e s -> e -> Either (QNFError e s) (ShapeSym e s)
+mkSymShapeSymNM nm e = (`mkShapeSym` e) . (`Column` 0) <$> getName nm e
 
-planSymIsSym :: PlanSym e s -> Bool
-planSymIsSym ps = case  planSymQnfName ps of
+shapeSymIsSym :: ShapeSym e s -> Bool
+shapeSymIsSym ps = case  shapeSymQnfName ps of
   NonSymbolName _ -> False
   _               -> True
 
-planSymOrig :: PlanSym e s -> e
-planSymOrig = planSymQnfOriginal
+shapeSymOrig :: ShapeSym e s -> e
+shapeSymOrig = shapeSymQnfOriginal
 
-mkPlanSym :: QNFName e s -> e -> PlanSym e s
-mkPlanSym qnfn e = PlanSym{planSymQnfOriginal=e,planSymQnfName=qnfn}
+mkShapeSym :: QNFName e s -> e -> ShapeSym e s
+mkShapeSym qnfn e = ShapeSym{shapeSymQnfOriginal=e,shapeSymQnfName=qnfn}
 
-setPlanSymOrig :: e -> PlanSym e s -> PlanSym e s
-setPlanSymOrig e ps = ps{planSymQnfOriginal=e}
+setShapeSymOrig :: e -> ShapeSym e s -> ShapeSym e s
+setShapeSymOrig e ps = ps{shapeSymQnfOriginal=e}
 
 -- | Nothing means it's a literal.
-refersToPlan :: Hashables2 e s => PlanSym e s -> QueryPlan e s -> Maybe Bool
-refersToPlan ps plan = case planSymQnfName ps of
+refersToShape :: Hashables2 e s => ShapeSym e s -> QueryShape e s -> Maybe Bool
+refersToShape ps shape = case shapeSymQnfName ps of
   NonSymbolName _ -> Nothing
-  _               -> Just $ isJust $ lookupQP ps plan
+  _               -> Just $ isJust $ lookupQP ps shape
 
 -- | NOT AN ISOMORPHISM
-schemaQP :: QueryPlan e s -> [(PlanSym e s,ColumnProps)]
+schemaQP :: QueryShape e s -> [(ShapeSym e s,ColumnProps)]
 schemaQP = qpSchema
 
-primKeys :: QueryPlan e s -> NEL.NonEmpty (NEL.NonEmpty (PlanSym e s))
+primKeys :: QueryShape e s -> NEL.NonEmpty (NEL.NonEmpty (ShapeSym e s))
 primKeys = qpUnique
 
-planAllSyms :: QueryPlan e s -> [PlanSym e s]
-planAllSyms = fmap fst . schemaQP
+shapeAllSyms :: QueryShape e s -> [ShapeSym e s]
+shapeAllSyms = fmap fst . schemaQP
 
-querySchema :: QueryPlan e s -> CppSchema' (PlanSym e s)
-querySchema plan = [(columnPropsCppType,ps)
-                   | (ps,ColumnProps{..}) <- schemaQP plan]
+querySchema :: QueryShape e s -> CppSchema' (ShapeSym e s)
+querySchema
+  shape = [(columnPropsCppType,ps) | (ps,ColumnProps {..}) <- schemaQP shape]
 
 -- XXX: increment indices
 
-
 -- | Filter the unique ones. None means there were no uniques (or the
--- plan was empty.
-mkQueryPlan :: [(CppType,(e,Bool))] -> Maybe (QueryPlan' e)
-mkQueryPlan sch =
+-- shape was empty.
+mkQueryShape
+  :: forall a e . a -> [(CppType,(e,Bool))] -> Maybe (QueryShape' a e)
+mkQueryShape size sch =
   fromSchemaQP
     [(sym
      ,ColumnProps { columnPropsConst = False,columnPropsCppType = ty }
      ,uniq) | (ty,(sym,uniq)) <- sch]
   where
-    fromSchemaQP :: [(e,ColumnProps,Bool)] -> Maybe (QueryPlan' e)
+    fromSchemaQP :: [(e,ColumnProps,Bool)] -> Maybe (QueryShape' a e)
     fromSchemaQP
-      sch = NEL.nonEmpty [s | (s,_,isU) <- sch,isU] <&> \uniq -> QueryPlan
-      { qpSchema = [(s,prop) | (s,prop,_isU) <- sch],qpUnique = return uniq }
+      sch' = NEL.nonEmpty [s | (s,_,isU) <- sch',isU] <&> \uniq -> QueryShape
+      { qpSchema = [(s,prop) | (s,prop,_isU) <- sch']
+       ,qpUnique = return uniq
+       ,qpSize = size
+      }
 
-
-planSymTypeSym' :: Hashables2 e s =>
-                  [QueryPlan e s]
-                -> PlanSym e s
+shapeSymTypeSym' :: Hashables2 e s =>
+                  [QueryShape e s]
+                -> ShapeSym e s
                 -> Maybe (Either e CppType)
-planSymTypeSym' plans ps = case planSymQnfName ps of
+shapeSymTypeSym' shapes ps = case shapeSymQnfName ps of
   NonSymbolName e -> Just $ Left e
   _ -> Right . columnPropsCppType
-    <$> listToMaybe (catMaybes $ lookupQP ps <$> plans)
+    <$> listToMaybe (catMaybes $ lookupQP ps <$> shapes)
 
 
 
@@ -168,26 +171,26 @@ planSymTypeSym' plans ps = case planSymQnfName ps of
 
 
 hardLookupQP :: Hashables2 e s =>
-               PlanSym e s -> QueryPlan e s -> Maybe ColumnProps
+               ShapeSym e s -> QueryShape e s -> Maybe ColumnProps
 hardLookupQP ps' = lookup ps' . schemaQP
 lookupQP :: Hashables2 e s =>
-           PlanSym e s -> QueryPlan e s -> Maybe ColumnProps
+           ShapeSym e s -> QueryShape e s -> Maybe ColumnProps
 lookupQP = hardLookupQP
 complementProj :: forall e s . Hashables2 e s =>
-                 QueryPlan e s
-               -> [(PlanSym e s, Expr (PlanSym e s))]
-               -> [(PlanSym e s, Expr (PlanSym e s))]
-complementProj plan prj = invPrj `union`
+                 QueryShape e s
+               -> [(ShapeSym e s, Expr (ShapeSym e s))]
+               -> [(ShapeSym e s, Expr (ShapeSym e s))]
+complementProj shape prj = invPrj `union`
   [(e, E0 e) | e <- qsyms, e `notElem` map fst invPrj]
   where
-    qsyms :: [PlanSym e s]
-    qsyms = planAllSyms plan
-    invPrj :: [(PlanSym e s, Expr (PlanSym e s))]
+    qsyms :: [ShapeSym e s]
+    qsyms = shapeAllSyms shape
+    invPrj :: [(ShapeSym e s, Expr (ShapeSym e s))]
     invPrj = mapMaybe (invExpr . snd) prj
 
-invExpr :: Expr (PlanSym e s)
-        -> Maybe (PlanSym e s, Expr (PlanSym e s))
-invExpr expr = runIdentity $ exprInverse (return . planSymIsSym) expr <&> \case
+invExpr :: Expr (ShapeSym e s)
+        -> Maybe (ShapeSym e s, Expr (ShapeSym e s))
+invExpr expr = runIdentity $ exprInverse (return . shapeSymIsSym) expr <&> \case
   EInv (x,toX) -> Just (x,toX x)
   _            -> Nothing
 
@@ -197,59 +200,64 @@ assocToMap assoc = foldl' (\m (s,d) -> HM.alter (Just . maybe [d] (d:)) s m) mem
   $ reverse assoc
 
 -- | Given an association of in/out versions of the same symbol
--- translate a plan expressed in terms of input symbols as in terms of
--- output symbols. Note that plans should not have literals but we
+-- translate a shape expressed in terms of input symbols as in terms of
+-- output symbols. Note that shapes should not have literals but we
 -- pass them through.
 --
 -- Always hard lookups here.
-translatePlan' :: forall e s . (HasCallStack, Hashables2 e s) =>
-                 [(PlanSym e s, PlanSym e s)]
-               -> QueryPlan e s
-               -> Either (AShowStr e s) (QueryPlan e s)
-translatePlan' = translatePlanMap'' listToMaybe
+translateShape'
+  :: forall a e s .
+  (HasCallStack,Hashables2 e s)
+  => (QuerySize -> a)
+  -> [(ShapeSym e s,ShapeSym e s)]
+  -> QueryShape e s
+  -> Either (AShowStr e s) (QueryShapeNoSize a e s)
+translateShape' = translateShapeMap'' listToMaybe
 
-translatePlanMap'' :: forall e s . (HasCallStack, Hashables2 e s) =>
-                     (forall a . [a] -> Maybe a)
-                   -> [(PlanSym e s, PlanSym e s)]
-                   -> QueryPlan e s
-                   -> Either (AShowStr e s) (QueryPlan e s)
-translatePlanMap'' f assoc p =
-  traverse (bitraverse safeLookup pure) (qpSchema p)
-  >>= \sch -> do
+translateShapeMap''
+  :: forall a e s .
+  (HasCallStack,Hashables2 e s)
+  => (forall x . [x] -> Maybe x)
+  -> (QuerySize -> a)
+  -> [(ShapeSym e s,ShapeSym e s)]
+  -> QueryShape e s
+  -> Either (AShowStr e s) (QueryShapeNoSize a e s)
+translateShapeMap'' f modSize assoc p =
+  traverse (bitraverse safeLookup pure) (qpSchema p) >>= \sch -> do
     qpu <- traverse2 safeLookup $ qpUnique p
-    return QueryPlan{qpSchema=sch,qpUnique=qpu}
+    return
+      QueryShape { qpSchema = sch,qpUnique = qpu,qpSize = modSize $ qpSize p }
   where
     symsMap = assocToMap assoc
-    safeLookup :: PlanSym e s -> Either (AShowStr e s) (PlanSym e s)
-    safeLookup e = case planSymQnfName e of
-      PrimaryCol{} -> undefined
-      _            -> safeLookup0
+    safeLookup :: ShapeSym e s -> Either (AShowStr e s) (ShapeSym e s)
+    safeLookup e = case shapeSymQnfName e of
+      PrimaryCol {} -> error
+        "We encountered a primary column on the output side of an operation."
+      _ -> safeLookup0
       where
-        safeLookup0 :: Either (AShowStr e s) (PlanSym e s)
-        safeLookup0 = lookup_e `alt` asLiteral where
-          asLiteral :: Either (AShowStr e s) (PlanSym e s)
-          asLiteral = case planSymQnfName e of
-            NonSymbolName _ -> Right e
-            _               -> throwAStr $ "Expected literal:" ++ ashow e
-          lookup_e :: Either (AShowStr e s) (PlanSym e s)
-          lookup_e = case HM.lookup e symsMap >>= f of
-            Nothing -> throwAStr $ "Lookup failed:"
-              ++ ashow (e,planAllSyms p,HM.toList symsMap)
-            Just x -> Right x
-          -- | Prefer the left hand side error
-          alt l@(Right _) _ = l
-          alt _ r@(Right _) = r
-          alt l _           = l
+        safeLookup0 :: Either (AShowStr e s) (ShapeSym e s)
+        safeLookup0 = lookup_e `alt` asLiteral
+          where
+            asLiteral :: Either (AShowStr e s) (ShapeSym e s)
+            asLiteral = case shapeSymQnfName e of
+              NonSymbolName _ -> Right e
+              _               -> throwAStr $ "Expected literal:" ++ ashow e
+            lookup_e :: Either (AShowStr e s) (ShapeSym e s)
+            lookup_e = case HM.lookup e symsMap >>= f of
+              Nothing -> throwAStr
+                $ "Lookup failed:"
+                ++ ashow (e,shapeAllSyms p,HM.toList symsMap)
+              Just x -> Right x
+            -- | Prefer the left hand side error
+            alt l@(Right _) _ = l
+            alt _ r@(Right _) = r
+            alt l _           = l
 
-translatePlan :: (HasCallStack, Hashables2 e s) =>
-                [(PlanSym e s, PlanSym e s)]
-              -> QueryPlan e s
-              -> Maybe (QueryPlan e s)
-translatePlan = either (const Nothing) Just ... translatePlan'
-isUniqueSel :: Hashables2 e s =>
-              QueryPlan e s
-            -> [(Expr (PlanSym e s),Expr (PlanSym e s))]
-            -> Bool
+isUniqueSel
+  :: Hashables2 e s
+  => QueryShape e s
+  -> [(Expr (ShapeSym e s),Expr (ShapeSym e s))]
+  -> Bool
 isUniqueSel qp eqs = (`any` qpUnique qp) $ \ukeys ->
   (`all` ukeys)
   $ \uk -> (`any` (eqs ++ fmap flip eqs))
@@ -257,24 +265,32 @@ isUniqueSel qp eqs = (`any` qpUnique qp) $ \ukeys ->
       E0 uk == el && not ((`any` er) $ \e -> e `elem` allKeys)
   where
     flip (a,b) = (b,a)
-    allKeys = planAllSyms qp
+    allKeys = shapeAllSyms qp
 
-planProject :: forall e s . Hashables2 e s =>
-              ([QueryPlan e s] ->
-               Expr (Either CppType (PlanSym e s)) ->
-               Maybe ColumnProps)
-            -> [(PlanSym e s, Expr (Either CppType (PlanSym e s)))]
-            -> QueryPlan e s
-            -> Maybe (QueryPlan e s)
-planProject exprColumnProps prj plan = do
-  symProps <- forM prj $ \(sym,expr) -> (sym,) <$> exprColumnProps [plan] expr
-  uniq <- NEL.nonEmpty $ mapMaybe translUniq $ toList $ qpUnique plan
-  return $ QueryPlan {qpSchema=symProps,
-                      qpUnique=uniq}
+shapeProject
+  :: forall e s .
+  Hashables2 e s
+  => ([QueryShape e s]
+      -> Expr (Either CppType (ShapeSym e s))
+      -> Maybe ColumnProps)
+  -> [(ShapeSym e s,Expr (Either CppType (ShapeSym e s)))]
+  -> QueryShape e s
+  -> Maybe (QueryShape e s)
+shapeProject exprColumnProps prj shape = do
+  symProps <- forM prj $ \(sym,expr) -> (sym,) <$> exprColumnProps [shape] expr
+  uniq <- NEL.nonEmpty $ mapMaybe translUniq $ toList $ qpUnique shape
+  rowSize <- schemaSize $ fmap ((,()) . columnPropsCppType . snd) symProps
+  return
+    $ QueryShape
+    { qpSchema = symProps
+     ,qpUnique = uniq
+     ,qpSize = putRowSize rowSize $ qpSize shape
+    }
   where
-    keyAssoc = mapMaybe
-      (\case {(e,E0 (Right ev)) -> Just (ev,e); _ -> Nothing})
-      prj
+    keyAssoc =
+      mapMaybe (\case
+                  (e,E0 (Right ev)) -> Just (ev,e)
+                  _                 -> Nothing) prj
     translUniq ukeys = mapM (`lookup` keyAssoc) ukeys
 
 -- | Given an assoc and a list all the possible
@@ -294,39 +310,71 @@ substitutions eqs uniqs0 =
       then Just $ (\e -> if e == f then t else e) <$> es
       else Nothing
 
--- | Concatenate plans given an equality between them. The equality
--- makes for different unique sets.
-joinPlans :: forall e . Eq e =>
-            [(e,e)]
-          -> QueryPlan' e
-          -> QueryPlan' e
-          -> Maybe (QueryPlan' e)
-joinPlans eqs qpL qpR = uniqDropConst QueryPlan {
-  qpSchema=sch,
-  qpUnique=uniq
-  }
+data LookupSide
+  = LeftForeignKey
+  -- ^ Foreign key join right to left
+  | RightForeignKey
+  -- ^ Foreign key join left to right
+  | NoLookup
+  -- ^ No foreign key join
+  deriving (Eq,Show,Generic)
+instance AShow LookupSide
+
+instance Semigroup LookupSide where
+  a <> b = case a of
+    LeftForeignKey  -> a
+    RightForeignKey -> a
+    NoLookup        -> b
+
+instance Monoid LookupSide where
+  mempty = NoLookup
+
+-- | Concatenate shapes given an equality between them. The equality
+-- makes for different unique sets. We remove the const
+-- columns. Nothing means there is no non-const column in the shape.
+joinShapes
+  :: forall e .
+  Eq e
+  => [(e,e)]
+  -> QueryShape' QuerySize e
+  -> QueryShape' QuerySize e
+  -> Maybe (LookupSide,QueryShape' QuerySize e)
+joinShapes eqs qpL qpR =
+  (luSide,)
+  <$> uniqDropConst
+    QueryShape
+    { qpSchema = sch
+     ,qpUnique = uniq
+     ,qpSize = joinQuerySizes luSide (qpSize qpL) (qpSize qpR)
+    }
   where
     sch = qpSchema qpL ++ qpSchema qpR
-    uniq :: NEL.NonEmpty (NEL.NonEmpty e)
-    uniq = do
+    (luSide,uniq) = bimap (mconcat . toList) join $ NEL.unzip uniqAnnot
+    -- For each pair of unique subtuples.
+    uniqAnnot :: NEL.NonEmpty (LookupSide,NEL.NonEmpty (NEL.NonEmpty e))
+    uniqAnnot = do
       usetL :: NEL.NonEmpty e <- qpUnique qpL
       usetR :: NEL.NonEmpty e <- qpUnique qpR
       -- Check if the equalities are lookups
       let luOnL = all (`elem` fmap fst normEqs) usetL
       let luOnR = all (`elem` fmap snd normEqs) usetR
-      case (luOnR,luOnL) of
-        (False,True)  -> substitutions normEqs usetL
-        (True,False)  -> substitutions (swap <$> normEqs) usetR
-        (_,_)   -> NEL.nub
+      return $ case (luOnL,luOnR) of
+        (True,False) -> (LeftForeignKey,) $ substitutions normEqs usetL
+        (False,True) -> (RightForeignKey,)
+          $ substitutions (swap <$> normEqs) usetR
+        (_,_) -> (NoLookup,)
+          $ NEL.nub
           $ substitutions normEqs usetL
           <> substitutions (swap <$> normEqs) usetR
     normEqs = mapMaybe (uncurry go) eqs
       where
-        go l r = if | linl && not linr && rinr && not rinl -> Just (l,r)
-                    | not linl && linr && not rinr && rinl -> Just (r,l)
-                    | (linl && linr) || (rinl && rinr) ->
-                      error "Exposed symbols should be disjoint in products"
-                    | otherwise -> Nothing
+        go l r =
+          if
+            | linl && not linr && rinr && not rinl -> Just (l,r)
+            | not linl && linr && not rinr && rinl -> Just (r,l)
+            | (linl && linr) || (rinl && rinr)
+              -> error "Exposed symbols should be disjoint in products"
+            | otherwise -> Nothing
           where
             linl = l `inAndNonConst` qpSchema qpL
             linr = l `inAndNonConst` qpSchema qpR
@@ -336,27 +384,53 @@ joinPlans eqs qpL qpR = uniqDropConst QueryPlan {
               Just False -> True
               _          -> False
 
-uniqDropConst :: Eq e => QueryPlan' e -> Maybe (QueryPlan' e)
-uniqDropConst p = fmap (\uniq -> p{qpUnique=uniq})
+-- | Drop constant columns
+joinQuerySizes :: LookupSide -> QuerySize -> QuerySize -> QuerySize
+joinQuerySizes luType qs qs' = case luType of
+  NoLookup -> QuerySize
+    { qsTables = mkTables combJoin
+     ,qsCertainty = qsCertainty qs * qsCertainty qs' * 0.5
+    }
+  RightForeignKey -> QuerySize
+    { qsTables = mkTables $ \_ x -> x,qsCertainty = qsCertainty qs' }
+  LeftForeignKey -> QuerySize
+    { qsTables = mkTables $ \x _ -> x,qsCertainty = qsCertainty qs }
+  where
+    combJoin x y = (x * y) `div` 3
+    mkTables combCard = case (qsTables qs,qsTables qs') of
+      (x:xs,y:ys) -> TableSize
+        { tsRows = combCard (tsRows x) (tsRows y)
+         ,tsRowSize = tsRowSize x + tsRowSize y
+        }
+        : xs ++ ys
+      _ -> error "Empty table sizes encountered."
+
+-- | Drop the constants. Nothing means there is no non-const column.
+uniqDropConst
+  :: Eq e => QueryShape' QuerySize e -> Maybe (QueryShape' QuerySize e)
+uniqDropConst p =
+  fmap (\uniq -> p { qpUnique = uniq })
   $ NEL.nonEmpty
   -- Note: if we have ONLY consts in a unique set something is wrong
   -- or we called this function at the wrong place (not over a
   -- product-like)
   $ mapMaybe (NEL.nonEmpty . filter isNotConst . toList)
-  $ toList $ qpUnique p
+  $ toList
+  $ qpUnique p
   where
     isNotConst e = case fmap columnPropsConst $ lookup e $ qpSchema p of
       Just False -> True
       _          -> False
 
-planSymEqs :: Hashables2 e s =>
-             Prop (Rel (Expr (PlanSym e s)))
-           -> [(PlanSym e s,PlanSym e s)]
-planSymEqs p = mapMaybe asEq $ toList $ propQnfAnd p where
-  asEq :: Prop (Rel (Expr (PlanSym e s))) -> Maybe (PlanSym e s,PlanSym e s)
-  asEq = \case
-    P0 (R2 REq (R0 (E0 l)) (R0 (E0 r))) ->
-      if planSymIsSym l && planSymIsSym r
-      then Just (l,r)
-      else Nothing
-    _ -> Nothing
+shapeSymEqs
+  :: Hashables2 e s
+  => Prop (Rel (Expr (ShapeSym e s)))
+  -> [(ShapeSym e s,ShapeSym e s)]
+shapeSymEqs p = mapMaybe asEq $ toList $ propQnfAnd p
+  where
+    asEq :: Prop (Rel (Expr (ShapeSym e s)))
+         -> Maybe (ShapeSym e s,ShapeSym e s)
+    asEq = \case
+      P0 (R2 REq (R0 (E0 l)) (R0 (E0 r)))
+        -> if shapeSymIsSym l && shapeSymIsSym r then Just (l,r) else Nothing
+      _ -> Nothing

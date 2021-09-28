@@ -1,40 +1,49 @@
+{-# LANGUAGE Arrows                #-}
 {-# LANGUAGE DeriveFoldable        #-}
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveTraversable     #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
-module Data.QueryPlan.NodeProc (NodeProc,getCost) where
+module Data.QueryPlan.NodeProc (NodeProc,getCost,(:>:)(..)) where
 
-import           Control.Antisthenis.ATL.Common
+import           Control.Antisthenis.ATL.Class.Functorial
+import           Control.Antisthenis.ATL.Class.Writer
 import           Control.Antisthenis.ATL.Transformers.Mealy
+import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Convert
+import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.Zipper
-import           Control.Arrow                              hiding ((>>>))
+import           Control.Antisthenis.ZipperId
+import           Control.Arrow                               hiding ((>>>))
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Writer                       hiding (Sum)
-import           Data.List.NonEmpty                         as NEL
+import           Control.Monad.Writer                        hiding (Sum)
+import           Data.Foldable
+import qualified Data.List.NonEmpty                          as NEL
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.Profunctor
+import           Data.Proxy
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
-import           Data.QueryPlan.ProcTrail
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
-import           Data.Utils.Functors
-import           Data.Utils.Monoid
-
+import           Data.Utils.Nat
 
 -- | depset has a constant part that is the cost of triggering and a
 -- variable part.
@@ -42,68 +51,213 @@ data DSetR v p = DSetR { dsetConst :: Sum v,dsetNeigh :: [p] }
   deriving (Functor,Foldable,Traversable)
 
 -- | The dependency set in terms of processes.
-type DSet t n p v = DSetR v (NodeProc t n (SumTag p v))
+type DSet t n p v = DSetR v (NodeProc t n (SumTag p))
 
 makeCostProc
-  :: forall v t n .
-  (Num v,Ord v,AShow v)
+  :: forall t n tag .
+  IsPlanParams tag n
   => NodeRef n
-  -> [DSet t n (PlanParams n) v]
-  -> NodeProc t n (SumTag (PlanParams n) v)
-makeCostProc ref deps = convArrProc convMinSum $ procMin $ go <$> deps
+  -> [DSet t n (PlanParams tag n) (MechVal (PlanParams tag n))]
+  -> NodeProc t n (SumTag (PlanParams tag n))
+makeCostProc ref deps =
+  convArrProc convMinSum $ procMin $ zipWith go [1 ..] deps
   where
-    go DSetR {..} = convArrProc convSumMin $ procSum $ constArr : dsetNeigh
+    go i DSetR {..} = convArrProc convSumMin $ procSum i $ constArr : dsetNeigh
       where
         constArr = arr $ const $ BndRes dsetConst
-    procMin
-      :: [NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)]
-      -> NodeProc0 t n (SumTag (PlanParams n) v) (MinTag (PlanParams n) v)
-    procMin ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+    procMin :: (mintag ~ MinTag (PlanParams tag n)
+               ,NodeProc0 t n (CostParams tag n) mintag ~ p)
+            => [p]
+            -> p
+    procMin ns = mkProcId mid ns
       where
-        mid = "min:" ++ ashow ref
-    procSum :: [NodeProc t n (SumTag (PlanParams n) v)]
-            -> NodeProc t n (SumTag (PlanParams n) v)
-    procSum ns = arr (\conf -> conf { confTrPref = mid }) >>> mkProcId mid ns
+        mid = zidDefault $ "min:" ++ ashow ref
+    procSum :: Int
+            -> [NodeProc t n (CostParams tag n)]
+            -> NodeProc t n (CostParams tag n)
+    procSum i ns = mkProcId mid ns
       where
-        mid = "sum:" ++ ashow ref
+        mid = zidDefault $ "sum[" ++ show i ++ "]:" ++ ashow ref
 
-type CostParams n = SumTag (PlanParams n) Cost
-type NoMatProc t n =
-  NodeRef n
-  -> NodeProc t n (SumTag (PlanParams n) Cost) -- The mat proc constructed by the node under consideration
-  -> NodeProc t n (SumTag (PlanParams n) Cost)
+-- | Check that a node is materialized and add mark it as such in the
+-- coepoch.
+ifMaterialized
+  :: IsPlanParams tag n
+  => NodeRef n
+  -> NodeProc t n (CostParams tag n)
+  -> NodeProc t n (CostParams tag n)
+  -> NodeProc t n (CostParams tag n)
+ifMaterialized ref t e = proc conf -> do
+  let isMater = fromMaybe False $ ref `refLU` peParams (confEpoch conf)
+  () <- arrTell -< (mempty { pceParams = refFromAssocs [(ref,isMater)] })
+  case isMater of
+    True -> t -< conf
+    False -> e -< conf
 
--- | Build AND INSERT a new mech in the mech directory.
+-- | Build AND INSERT a new mech in the mech directory. The mech does
+-- not update it's place in the mech map.α
 mkNewMech
-  :: NoMatProc t n
-  -> NodeRef n
-  -> NodeProc t n (CostParams n)
-mkNewMech noMatProc ref = squashMealy $ do
-  mops <- lift3 $ findCostedMetaOps ref
-  -- Should never see the same val twice.
-  let mechs =
-        [DSetR { dsetConst = Sum $ Just cost
-                ,dsetNeigh =
-                   [getOrMakeMech noMatProc n | n <- toNodeList $ metaOpIn mop]
-               } | (mop,cost) <- mops]
-  let costProcess = makeCostProc ref mechs
-  let ret =
-        withTrail (ErrCycle ref) ref
-        $ mkEpoch id ref >>> noMatProc ref costProcess ||| costProcess
-  lift2 $ modify $ \gcs
-    -> gcs { gcMechMap = refInsert ref ret $ gcMechMap gcs }
-  return ret
+  :: forall t n tag .
+  IsPlanParams tag n
+  => NodeRef n
+  -> NodeProc t n (CostParams tag n)
+mkNewMech ref =
+  asSelfUpdating $ ifMaterialized ref (mcIsMatProc ref costProcess) costProcess
+  where
+    costProcess = squashMealy $ \conf -> do
+      mops <- lift $ findCostedMetaOps ref
+      -- ("metaops(" ++ ashow ref ++ ")") <<: mops
+      let mechs =
+            [DSetR
+              { dsetConst = Sum $ Just $ mcMkCost (Proxy :: Proxy tag) ref cost
+               ,dsetNeigh = [getOrMakeMech n | n <- toNodeList $ metaOpIn mop]
+              } | (mop,cost) <- mops]
+      return (conf,makeCostProc ref mechs)
+    asSelfUpdating :: NodeProc t n (CostParams tag n)
+                   -> NodeProc t n (CostParams tag n)
+    asSelfUpdating
+      (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
+      (nxt,r) <- toKleisli f c
+        -- "result" <<: (ref,r,coepoch)
+      lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
+      return (getOrMakeMech ref,r)
+
+markComputable
+  :: IsPlanParams tag n
+  => NodeRef n
+  -> Conf (CostParams tag n)
+  -> Conf (CostParams tag n)
+markComputable ref conf =
+  conf { confEpoch = (confEpoch conf)
+           { peCoPred = nsInsert ref $ peCoPred $ confEpoch conf }
+       }
+
+setComputables
+  :: IsPlanParams tag n
+  => NodeSet n
+  -> Conf (CostParams tag n)
+  -> Conf (CostParams tag n)
+setComputables refs conf =
+  conf { confEpoch = (confEpoch conf) { peCoPred = refs } }
+
+-- | Run the machine and see if there are any pradicates. Remember
+-- that predicates of a result are a set of nodes that need to be
+-- non-compuatable (cycle error) for the result to be valid. As
+-- results are solved the predicates are erased by the machines of the
+-- predicated nodes. When a predicated node is not computable and is
+-- predicated as such it is simply deleted. When a node is predicated
+-- as non computable and it turns out to be computable the exact same
+-- happens, but the reason is slightly different: due to
+-- non-oscillation property (xxx: define it more carefully) while its
+-- value turns out to be computable its presence does not change the
+-- value itself.
+--
+-- The property is that assuming a value is not computable while
+-- computing the value itself should not affact the final result.
+satisfyComputability
+  :: IsPlanParams tag n
+  => NodeRef n
+  -> NodeProc t n (CostParams tag n)
+  -> NodeProc t n (CostParams tag n)
+satisfyComputability = go mempty
+  where
+    mkNodeProc = MealyArrow . WriterArrow . fromKleisli
+    runNodeProc = toKleisli . runWriterArrow . runMealyArrow
+    go trail ref c = mkNodeProc $ \conf -> do
+      -- first run normally.
+      r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
+      -- Solve each predicate.
+      case toNodeList $ pNonComputables $ pcePred coepoch of
+        [] -> return r
+        assumedNonComputables -> do
+          actuallyComputables
+            <- filterM (isComputableM conf) assumedNonComputables
+          -- "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
+          let conf' = foldl' (flip markComputable) conf actuallyComputables
+          runNodeProc (go trail ref nxt0) conf'
+      where
+        isComputableM conf ref' = do
+          (_coproc,(_nxt,ret)) <- runNodeProc
+            (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
+            $ setComputables trail conf
+          return $ case ret of
+            BndErr _ -> False
+            _        -> True
+
+markNonComputable :: NodeRef n -> PlanCoEpoch n
+markNonComputable
+  n = mempty { pcePred = mempty { pNonComputables = nsSingleton n } }
+unmarkNonComputable :: NodeRef n -> PlanCoEpoch n -> PlanCoEpoch n
+unmarkNonComputable ref pe =
+  pe { pcePred = (pcePred pe)
+         { pNonComputables = nsDelete ref $ pNonComputables $ pcePred pe }
+     }
 
 getOrMakeMech
-  :: NoMatProc t n -> NodeRef n -> NodeProc t n (SumTag (PlanParams n) Cost)
-getOrMakeMech noMatProc ref =
-  squashMealy
-  $ lift2
-  $ gets
-  $ fromMaybe (mkNewMech noMatProc ref) . refLU ref . gcMechMap
+  :: forall tag t n .
+  IsPlanParams tag n
+  => NodeRef n
+  -> NodeProc t n (CostParams tag n)
+getOrMakeMech ref = squashMealy $ \conf -> do
+  -- "ref-lu" <<: ref
+  mechM <- lift $ gets $ refLU ref . getL mcMechMapLens
+  lift
+    $ modify
+    $ modL mcMechMapLens
+    $ refInsert ref
+    $ cycleProc @tag ref
+  return (conf,fromMaybe (mkNewMech ref) mechM)
 
+-- | Return an error (uncomputable) and insert a predicate that
+-- whatever results we come up with are predicated on ref being
+-- uncomputable.
+cycleProc :: IsPlanParams tag n => NodeRef n -> NodeProc t n (CostParams tag n)
+cycleProc ref =
+  MealyArrow
+  $ WriterArrow
+  $ Kleisli
+  $ const
+  $ return (markNonComputable ref,(getOrMakeMech ref,mcCompStackVal ref))
 
--- | Run PlanT in the Identity monad.
+-- | Make sure the predicate of a node being non-computable does not
+-- propagate outside of the process. This is useful for wrapping
+-- processes that may recurse. If the predicate at NodeRef is indeed
+-- non-computable then the predicate holds and we should remove it
+-- from the coepoch. If the predicate of ref being non-computable does
+-- not hold then the function of assuming non-computability when
+-- coming up with said result was to avoid a fixpoint.
+--
+-- We need a good theoretical foundation on how fixpoints are handled
+-- for the particular operators we use.
+censorPredicate
+  :: IsPlanParams tag n
+  => NodeRef n
+  -> NodeProc t n (CostParams tag n)
+  -> NodeProc t n (CostParams tag n)
+censorPredicate ref c =
+  MealyArrow
+  $ WriterArrow
+  $ dimap censorCopred go
+  $ runWriterArrow
+  $ runMealyArrow c
+  where
+    -- Copredicates for nodes that are in the computation stack a)
+    -- don't make sense and b) will cause the top node to reset as
+    -- predicate censoring happens at the outer bound of the process
+    -- while copredicates penetrate the outer bound and cause the
+    -- process to reset.
+    censorCopred conf =
+      conf { confEpoch = (confEpoch conf)
+               { peCoPred = nsDelete ref $ peCoPred $ confEpoch conf }
+           }
+    go (coepoch,(nxt,ret)) = case ret of
+      BndErr ErrCycleEphemeral {} ->
+        (unmarkNonComputable ref coepoch
+        ,(nxt
+         ,BndErr
+            ErrCycle { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch }))
+      _ -> (unmarkNonComputable ref coepoch,(nxt,ret))
+
 planQuickRun :: Monad m => PlanT t n Identity a -> PlanT t n m a
 planQuickRun m = do
   st0 <- get
@@ -113,35 +267,30 @@ planQuickRun m = do
     Right (a,st) -> put st >> return a
 
 getCost
-  :: Monad m
-  => NoMatProc t n
-  -> Cap (Min' Cost)
+  :: forall tag t n m .
+  (Monad m,IsPlanParams tag n,AShow (MechVal (PlanParams tag n)))
+  => Proxy tag
+  -> NodeSet n
+  -> Cap (ExtCap (PlanParams tag n))
   -> NodeRef n
-  -> PlanT t n m (Maybe Cost)
-getCost noMatProc cap ref = do
+  -> PlanT t n m (Maybe (MechVal (PlanParams tag n)))
+getCost _ extraMat cap ref = wrapTr $ do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
-  ((res,_coepoch),_trail) <- planQuickRun
-    $ (`runReaderT` 1)
-    $ (`runStateT` def)
+  let extraStates = nsToRef (const True) extraMat
+  (res,_coepoch) <- planQuickRun
     $ runWriterT
-    $ runMech (getOrMakeMech noMatProc ref)
+    $ runMech (satisfyComputability @tag ref $ getOrMakeMech ref)
     $ Conf
-    { confCap = cap,confEpoch = states,confTrPref = "topLevel:" ++ ashow ref }
+    { confCap = cap
+     ,confEpoch = def { peParams = states <> extraStates }
+     ,confTrPref = ()
+    }
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
-    BndRes (Sum Nothing)  -> return $ Just 0
-    BndBnd _bnd           -> return Nothing
-    BndErr e              -> throwPlan $ "antisthenis error: " ++ ashow e
-
--- Arrow choice
-
--- TODO: methods to
---
--- * Fix the trail (done)
---
--- * Check that the epoch meaningfully changed and return the old
---   result. Use the ZipperMonadExt implementation. (done)
---
--- * Connect to the PlanT (done)
---
--- * Connect to isMatable
+    BndRes (Sum Nothing) -> return $ Just zero
+    BndBnd _bnd -> return Nothing
+    BndErr e ->
+      throwPlan $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
+  where
+    -- wrapTr = wrapTrace ("getCost" <: ref)
+    wrapTr = id

@@ -28,7 +28,7 @@ module Data.Codegen.Build.Monads
   , SoftCodeBuilderT
   , ScopeEnv(..)
   , CodeBuilderT
-  , QueryPlan
+  , QueryShape
   , MonadSchemaScope
   , throwCodeErrStr
   , clusterLiftCB
@@ -58,14 +58,14 @@ module Data.Codegen.Build.Monads
   , getClusterConfig
   ) where
 
-import Data.Utils.Functors
-import Data.QueryPlan.Types
 import           Control.Monad.State.Class
 import           Control.Monad.Trans
 import           Data.Bipartite
 import           Data.Cluster.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.Codegen.Build.Monads.CodeBuilder
+import           Data.QueryPlan.Types
+import           Data.Utils.Functors
 
 type CodeBuilderT e s t n m = CodeBuilderT' e s t n (PlanT t n m)
 getGCState :: Monad m => CodeBuilderT e s t n m (GCState t n)

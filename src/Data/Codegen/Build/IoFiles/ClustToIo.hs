@@ -96,7 +96,7 @@ clustToIoFiles =
   . putVoidAny
   . first (const ())
   . (putIdentity :: AnyCluster e s t n
-                 -> AnyCluster' (PlanSym e s) Identity (NodeRef t) (NodeRef n))
+                 -> AnyCluster' (ShapeSym e s) Identity (NodeRef t) (NodeRef n))
 
 putVoidAny :: forall e n . AnyCluster' e Identity () (NodeRef n)
            -> AnyCluster' Void Identity () (NodeRef n)

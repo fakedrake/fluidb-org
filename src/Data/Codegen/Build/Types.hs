@@ -11,7 +11,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Data.Codegen.Build.Types
-  (QueryPlan
+  (QueryShape
   ,PrimKeys
   ,StringSymbol
   ,LiteralType
@@ -23,10 +23,10 @@ module Data.Codegen.Build.Types
   ,SizeInferenceError(..)
   ,QueryCppConf(..)) where
 
-import           Data.QnfQuery.Types
 import qualified Data.CppAst                  as CC
 import qualified Data.HashSet                 as HS
 import           Data.NodeContainers
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
 import           Data.Query.SQL.FileSet
@@ -69,14 +69,14 @@ data CodeBuildErr e s t n
     -- The epoch attempts to overwrite an already cache query.
   | OverwritingFile (NodeRef n) FileSet (Query e s)
     -- Union types are not equal
-  | UnionTypeError (CppSchema' (PlanSym e s)) (CppSchema' (PlanSym e s))
+  | UnionTypeError (CppSchema' (ShapeSym e s)) (CppSchema' (ShapeSym e s))
     -- A forward transition created a symbol. Only reverse transitions
     -- can create symvbols.
   | ForwardCreateSymbol (NodeRef n)
     -- Types on either side of an equality in a join do not match.
   | BinOpTypeMismatch String (Expr CC.CppType) (Expr CC.CppType)
     -- The symbol does not correspond to the queries.
-  | InvalidSymbol Int (PlanSym e s)
+  | InvalidSymbol Int (ShapeSym e s)
     -- Array is too short for the operation (TooShortArray minLen len expr)
   | TooShortArray Int Int (Expr CC.CppType)
     -- Expected an array but got type
@@ -88,8 +88,8 @@ data CodeBuildErr e s t n
     -- In a code block all symbol definitions need to have unique names.x
   | DuplicateSymbols [CC.CodeSymbol]
     -- Misc (for printing unshowable stuff)
-  | Misc (QueryPlan e s,[Expr (PlanSym e s)])
-         (QueryPlan e s,[Expr (PlanSym e s)])
+  | Misc (QueryShape e s,[Expr (ShapeSym e s)])
+         (QueryShape e s,[Expr (ShapeSym e s)])
     -- This is a bug where there is a circular reference between
     -- classes.
   | CircularReference String
@@ -100,13 +100,13 @@ data CodeBuildErr e s t n
     --
     -- XXX: the way to fix this is to have ScopeEnv be a GADT (or some
     -- other dependent type).
-  | WrongNumQueriesInScope Int [QueryPlan e s]
+  | WrongNumQueriesInScope Int [QueryShape e s]
     -- This is thrown in places that should not have been reached.
   | Unreachable
     -- All unique must always be projected through the projections.
-  | UniqueKeyNotProjected (PlanSym e s) (QueryPlan e s)
+  | UniqueKeyNotProjected (ShapeSym e s) (QueryShape e s)
     -- Expected a symbol but this is a literal.
-  | ExpectedSymbol (PlanSym e s)
+  | ExpectedSymbol (ShapeSym e s)
     -- Tried to reverse a symbol (rather than an operator).
   | CantFindScore String (NodeRef n) [NodeRef n]
   | BuildErrMsg String
@@ -123,7 +123,7 @@ instance IsString (CodeBuildErr e s t n) where fromString = BuildErrMsg
 data CBState e s t n = CBState {
   -- XXX: move this to a reader.
   cbQueryCppConf   :: QueryCppConf e s,
-  cbMatNodePlans   :: RefMap n (QueryPlan e s),
+  cbMatNodePlans   :: RefMap n (QueryShape e s),
   cbIncludes       :: HS.HashSet CC.Include,
   cbClasses        :: CC.CodeCache CC.Class,
   cbFunctions      :: CC.CodeCache CC.Function,

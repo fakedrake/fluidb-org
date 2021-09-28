@@ -5,26 +5,28 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 module Data.Utils.Debug
-  ( wrapTrace
-  , HasCallStack
-  , wrapTraceShow
-  , traceM
-  , traceTM
-  , trace
-  , traceT
-  , wrapTraceT
-  , assertM
-  , printf
-  , ashow
-  , traceV
-  , assert
-  ) where
+  (wrapTrace
+  ,HasCallStack
+  ,wrapTraceShow
+  ,traceM
+  ,traceTM
+  ,trace
+  ,traceT
+  ,wrapTraceT
+  ,assertM
+  ,printf
+  ,ashow
+  ,traceV
+  ,assert
+  ,(<<:)
+  ,wrapTraceP) where
 
-import GHC.Stack
 import           Data.Utils.AShow
+import           GHC.Stack
 import           Text.Printf
 #if ! defined(QUIET_MODE)
 import           Control.Exception
+import           Data.Profunctor
 import           Data.Time.Clock
 import           Debug.Trace
 import           System.IO.Unsafe
@@ -73,6 +75,9 @@ wrapTraceT msg x = do
 
 traceV :: AShow v => String -> v -> a -> a
 traceV msg val = trace (msg ++ ": " ++ ashow val)
+wrapTraceP :: Profunctor p => String -> p a b -> p a b
+wrapTraceP msg =
+  dimap (trace $ "[Before (p)] " ++ msg) $ trace $ "[After (p)] " ++ msg
 #else
 trace :: String -> a -> a
 trace = const id
@@ -90,4 +95,8 @@ traceTM :: Applicative m => String -> m ()
 traceTM _ = pure ()
 wrapTraceT :: Monad m => String -> m a -> m a
 wrapTraceT = wrapTrace
+wrapTraceP :: Profunctor p => String -> p a b -> p a b
+wrapTraceP _ = id
 #endif
+(<<:) :: (AShow a,Monad m) => String -> a -> m ()
+msg <<: a = traceM $ msg ++ ": " ++ ashow a

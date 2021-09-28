@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -6,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
@@ -24,14 +24,14 @@ module FluiDB.Schema.TPCH.Schemata
   ,Table(..)
   ,tpchTableSizes) where
 
-import Data.Utils.Functors
-import Data.Utils.Unsafe
-import Data.Codegen.SchemaAssocClass
-import Data.Query.QuerySize
-import Data.Query.SQL.Types
-import Data.CppAst
 import           Control.Monad
+import           Data.Codegen.SchemaAssocClass
+import           Data.CppAst
+import           Data.Query.QuerySize
+import           Data.Query.SQL.Types
 import           Data.String
+import           Data.Utils.Functors
+import           Data.Utils.Unsafe
 
 type GenSchema = forall a x . IsString a => [(CppTypeF x, a)]
 
@@ -48,22 +48,26 @@ tpchTablePrimKeys = [
 
 
 tpchTableSizes :: [(Table,TableSize)]
-tpchTableSizes = fmap check $ fromJustErr $ toTableSizes tpchSchemaAssoc $ [
-  ("part",34136064),
-  ("customer",33336),
-  ("lineitem",857324),
-  ("partsupp",182046720),
-  ("region",4096),
-  ("supplier",2158592),
-  ("orders",214292),
-  ("nation",8192)]
+tpchTableSizes =
+  fmap check
+  $ fromJustErr
+  $ toTableSizes
+    tpchSchemaAssoc
+    [("part",34136064)
+    ,("customer",33336)
+    ,("lineitem",857324)
+    ,("partsupp",182046720)
+    ,("region",4096)
+    ,("supplier",2158592)
+    ,("orders",214292)
+    ,("nation",8192)]
   where
-    check p@(_,TableSize{tableSizeRowSize=r}) = if r <= 0 then error "yes" else p
+    check p@(_,TableSize {tsRowSize = r}) = if r <= 0 then error "yes" else p
 
 toTableSizes :: Ord s => SchemaAssoc e s -> [(s,Int)] -> Maybe [(s,TableSize)]
 toTableSizes schemaAssoc tableBytes = do
   rs <- traverse2 schemaSize schemaAssoc
-  forM_ rs (\(_,x) -> if x < 0 then error "Ooops" else return ())
+  forM_ rs (\(_,x) -> when (x < 0) $ error "Ooops")
   return
     [(tbl,tableSize' 4096 thisTableBytes rowSize)
     | (tbl,(rowSize,thisTableBytes)) <- alignMaps rs tableBytes]

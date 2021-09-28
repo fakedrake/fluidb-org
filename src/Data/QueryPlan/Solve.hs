@@ -17,21 +17,20 @@
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Data.QueryPlan.Solve
-  ( setNodeMaterialized
-  , setNodeStateSafe
-  , setNodeStateUnsafe
-  , planSanityCheck
-  , newEpoch
-  , withProtected
-  , isMaterializable
-  , makeMaterializable
-  , isMaterialized
-  , matNeighbors
-  , getDependencies
-  , garbageCollectFor
-  , killPrimaries
-  , isDeletable
-  ) where
+  (setNodeMaterialized
+  ,setNodeStateSafe
+  ,setNodeStateUnsafe
+  ,planSanityCheck
+  ,newEpoch
+  ,withProtected
+  ,isMaterializable
+  ,makeMaterializable
+  ,isMaterialized
+  ,matNeighbors
+  ,getDependencies
+  ,garbageCollectFor
+  ,killPrimaries
+  ,isDeletable) where
 
 import           Control.Antisthenis.Types
 import           Control.Monad.Cont
@@ -40,7 +39,7 @@ import           Control.Monad.Extra
 import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Writer
+import           Control.Monad.Writer        hiding (Sum)
 import           Data.Bipartite
 import           Data.Functor.Identity
 import qualified Data.HashSet                as HS
@@ -62,11 +61,13 @@ import           Data.Utils.HContT
 import           Data.Utils.ListT
 import           Data.Utils.Tup
 
-import           Control.Arrow
+import           Data.Proxy
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
+import           Data.Utils.AShow
 import           Data.Utils.Default
+import           Data.Utils.Nat
 
 
 -- | run a bunch of common stuff to make the following more responsive.
@@ -89,9 +90,10 @@ warmupCache node = do
       mapM_ findMetaOps =<< asks (refKeys . nodeSizes)
 
 setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
-setNodeMaterialized node = wrapTraceT "setNodeMaterialized" $ do
+setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
+  -- sizes <- asks nodeSizes
   -- Populate the metaop cache
-  when False $ warmupCache node
+  -- warmupCache node
   setNodeStateSafe node Mat
   cost <- totalTransitionCost
   trM $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
@@ -122,29 +124,34 @@ makeMaterializable ref =
 
 haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
+  -- From the frontier replace matRef with it's dependencies.
   modify $ \gcs -> gcs{
     frontier=nsDelete matRef (frontier gcs) <> metaOpIn mop}
   extraCost <- metaOpCost [matRef] mop
   haltPlanCost $ fromIntegral $ costAsInt extraCost
-
 haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
-  star :: Double <- sum . fmap (maybe 0 (fromIntegral . costAsInt))
-    <$> mapM
-      (getCost (\_ref _mech -> arr $ const $ BndRes 0) ForceResult)
-      frefs
-  histCosts <- takeListT 5 pastCosts
+  (costs,extraNodes) <- runWriterT $ forM frefs $ \ref -> do
+    cost <- lift
+      $ wrapTrace ("planCost " ++ ashow ref)
+      $ getCost @CostTag Proxy mempty ForceResult ref
+    case cost of
+      Nothing -> return zero
+      Just c -> do
+        maybe (return ()) tell $ pcPlan c
+        return $ pcCost c
+  let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
+  histCosts <- takeListT 5 $ pastCosts extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
   halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
 
--- | Make a plan for a node to be concrete.
-setNodeStateSafe :: MonadLogic m =>
-                   NodeRef n -> IsMat -> PlanT t n m ()
+setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
 setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
 {-# INLINE setNodeStateSafe' #-}
+
 setNodeStateSafe' :: MonadLogic m =>
                     PlanT t n m (MetaOp t n)
                   -> NodeRef n -> IsMat -> PlanT t n m ()
@@ -327,21 +334,23 @@ newEpoch = wrapTrM "newEpoch" $ do
            }
          trM $ "New epoch. Demoted refs: " ++ show updatedRefs
 
-eitherlReader :: BotMonad m =>
-                ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
+eitherlReader
+  :: BotMonad m
+  => ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
 eitherlReader = splitProvenance (EitherLeft,EitherRight) id eitherl'
-lsplitReader :: MonadPlus m =>
-                ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
-              -> ReaderT a (PlanT t n m) x
+lsplitReader
+  :: MonadPlus m
+  => ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
+  -> ReaderT a (PlanT t n m) x
 lsplitReader = splitProvenance (SplitLeft,SplitRight) id
   $ \(ReaderT l) (ReaderT r) -> ReaderT $ \s -> mplusPlanT (l s) (r s)
 
 
-garbageCollectFor :: forall t n m .
-                    MonadLogic m => [NodeRef n] -> PlanT t n m ()
+garbageCollectFor
+  :: forall t n m . MonadLogic m => [NodeRef n] -> PlanT t n m ()
 garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
   lift preReport
   go `eitherlReader` (lift newEpoch >> go)
@@ -352,8 +361,13 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
       totalSize <- getDataSize
       budget <- asks $ maybe "<unboundend>" show . budget
       nsmap <- forM ns $ \n -> (n,) <$> totalNodePages n
-      trM $ printf "Starting GC to make (%d / %s) %s: %d"
-        totalSize budget (show nsmap) nsize
+      trM
+        $ printf
+          "Starting GC to make (%d / %s) %s: %d"
+          totalSize
+          budget
+          (show nsmap)
+          nsize
     withGC m = do
       isGC <- gets garbageCollecting
       if isGC then bot "nested GCs" else do
@@ -362,8 +376,8 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
         neededPages <- sum <$> traverse totalNodePages ns
         runReaderT (whenM isOversized m) neededPages
         setGC False
-          where
-            setGC b = modify $ \x -> x{garbageCollecting=b}
+      where
+        setGC b = modify $ \x -> x { garbageCollecting = b }
     go :: ReaderT PageNum (PlanT t n m) ()
     go = do
       assertGcIsPossible
@@ -401,9 +415,8 @@ killIntermediates :: forall t n m . MonadLogic m =>
                     ReaderT PageNum (PlanT t n m) ()
 killIntermediates = do
   matInterm <- filterM (lift . fmap not . isProtected)
-              =<< filterM (lift . isMaterialized)
-              =<< toNodeList . intermediates
-              <$> lift ask
+    =<< filterM (lift . isMaterialized)
+    =<< toNodeList . intermediates <$> lift ask
   forM_ matInterm $ \x -> lift $ do
     delDepMatCache x
     x `setNodeStateUnsafe` Concrete Mat NoMat
@@ -424,13 +437,14 @@ isOversized = do
     else return False
 
 killPrimaries :: MonadLogic m => ReaderT PageNum (PlanT t n m) ()
-killPrimaries = hoist (wrapTrM "killPrimaries") $ (safeDelInOrder =<<) $ lift $ do
-  nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
-  nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
-  nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
-  guardl "No killable primaries" $ not $ null nsUnord
-  -- XXX: We are having no priority in deleting these.
-  return nsUnord
+killPrimaries =
+  hoist (wrapTrM "killPrimaries") $ (safeDelInOrder =<<) $ lift $ do
+    nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
+    nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
+    nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
+    guardl "No killable primaries" $ not $ null nsUnord
+    -- XXX: We are having no priority in deleting these.
+    return nsUnord
 
 safeDelInOrder :: MonadLogic m =>
                  [NodeRef n] -> ReaderT PageNum (PlanT t n m) ()
@@ -510,14 +524,16 @@ withNodeState nodeState refs m = do
   ret <- m
   zipWithM_ setSt refs sts
   return ret
+
 -- | Get exactly one solution. Schedule this as if it were a single thread.
-cutPlanT :: (v ~ HValue m,MonadLogic m) =>
-           PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
-         -> PlanT t n m a
+cutPlanT
+  :: (v ~ HValue m,MonadLogic m)
+  => PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
+  -> PlanT t n m a
 cutPlanT plan = do
   st <- get
   conf <- ask
   hoistPlanT
     (cutContT
-       (runExceptT $ (`runReaderT` conf) $ (`runStateT` st) $ lift3 $ mzero))
+       (runExceptT $ (`runReaderT` conf) $ (`runStateT` st) $ lift3 mzero))
     plan

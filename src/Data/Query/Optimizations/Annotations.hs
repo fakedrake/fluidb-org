@@ -20,39 +20,40 @@ import           Data.List
 import           Data.Maybe
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
-import           Data.Query.QuerySchema.GetQueryPlan
+import           Data.Query.QuerySchema.GetQueryShape
 import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.Unsafe
 
--- | We use unwrapped e symbols because PlanSym contains information
+-- | We use unwrapped e symbols because ShapeSym contains information
 -- about the position of a symbol in the query and we are about to
 -- move them all around.
-annotateQueryPlan :: (MonadError err m,AShowError e s err,Hashables2 e s) =>
-                    (e -> Maybe CppType)
-                  -> Query (e,uid) (s,QueryPlan e s)
-                  -> m (Query ((e,uid),(Maybe s,CppType)) (s,QueryPlan e s))
+annotateQueryPlan
+  :: (MonadError err m,AShowError e s err,Hashables2 e s)
+  => (e -> Maybe CppType)
+  -> Query (e,uid) (s,QueryShape e s)
+  -> m (Query ((e,uid),(Maybe s,CppType)) (s,QueryShape e s))
 annotateQueryPlan litType =
   fmap (first (\((x,y),z) -> (x, (fmap fst z,y)))
         . annotateTables
         (\((e,_),_) (_,qp) ->
-           isJust $ lookup e (first planSymOrig <$> qpSchema qp)))
+           isJust $ lookup e (first shapeSymOrig <$> qpSchema qp)))
   . annotateTypes
   ((==) `on` fst)
   (\(e,_) (_,qp) ->
-     columnPropsCppType <$> lookup e (first planSymOrig <$> qpSchema qp))
+     columnPropsCppType <$> lookup e (first shapeSymOrig <$> qpSchema qp))
   (litType . fst)
 
 -- | Annotate e with types
-annotateTypes :: forall e' s s' e uid err m .
-                (e' ~ (e,uid),MonadError err m,
-                 AShowError e s' err, Hashables2 e s) =>
-                (e' -> e' -> Bool)
-              -> (e' -> s -> Maybe CppType)
-              -> (e' -> Maybe CppType)
-              -> Query e' s
-              -> m (Query (e',CppType) s)
+annotateTypes
+  :: forall e' s s' e uid err m .
+  (e' ~ (e,uid),MonadError err m,AShowError e s' err,Hashables2 e s)
+  => (e' -> e' -> Bool)
+  -> (e' -> s -> Maybe CppType)
+  -> (e' -> Maybe CppType)
+  -> Query e' s
+  -> m (Query (e',CppType) s)
 annotateTypes eqE colType litType = recur
   where
     recur :: Query e' s -> m (Query (e',CppType) s)
@@ -116,32 +117,26 @@ annotateTypes eqE colType litType = recur
         luE :: [(e',CppType)] -> Maybe (e',CppType)
         luE = find (eqE e . fst)
 
-annotateTables :: forall e' s .
-                 (e' -> s -> Bool)
-               -> Query e' s
-               -> Query (e',Maybe s) s
+annotateTables
+  :: forall e' s . (e' -> s -> Bool) -> Query e' s -> Query (e',Maybe s) s
 annotateTables isInCol = \case
-  Q2 o l r -> let
-    l' = recur l
-    r' = recur r
-    syms = lefts $ [l',r'] >>= querySchemaNaive
+  Q2 o l r -> let l' = recur l
+                  r' = recur r
+                  syms = lefts $ [l',r'] >>= querySchemaNaive
     in Q2 ((`f` syms) <$> o) l' r'
-  Q1 o l -> let
-    l' = recur l
-    syms = lefts $ querySchemaNaive l'
-    in case o of
-         QGroup p es ->
-           Q1 (QGroup
-               [((e,Nothing),fmap3 (`f` syms) expr) | (e,expr) <- p]
-               (fmap2 (`f` syms) es))
-               l'
-         QProj p ->
-           Q1 (QProj
-               [((e,Nothing),(`f` syms) <$> expr) | (e,expr) <- p])
-           l'
-         _ -> Q1 ((`f` syms) <$> o) l'
+  Q1 o l -> let l' = recur l
+                syms = lefts $ querySchemaNaive l' in case o of
+    QGroup p es -> Q1
+      (QGroup
+         [((e,Nothing),fmap3 (`f` syms) expr) | (e,expr) <- p]
+         (fmap2 (`f` syms) es))
+      l'
+    QProj p -> Q1
+      (QProj [((e,Nothing),(`f` syms) <$> expr) | (e,expr) <- p])
+      l'
+    _ -> Q1 ((`f` syms) <$> o) l'
   Q0 s -> Q0 s
   where
-    f :: e' -> [s] -> (e', Maybe s)
+    f :: e' -> [s] -> (e',Maybe s)
     f e ss = (e,listToMaybe $ filter (isInCol e) ss)
     recur = annotateTables isInCol

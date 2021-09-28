@@ -4,12 +4,12 @@
 {-# LANGUAGE DeriveTraversable #-}
 module Data.Utils.Compose (Compose(..),interleaveComp) where
 
-import           Control.Monad
 import           Control.Applicative
-import           Data.Utils.Hashable
+import           Control.Monad
 import           Data.Functor.Classes
-import           GHC.Generics
 import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           GHC.Generics
 
 newtype Compose f g a = Compose {getCompose :: f (g a)}
   deriving (Generic, Functor, Traversable,Foldable,Eq,Show, Read)
@@ -21,7 +21,7 @@ instance (Applicative f, Applicative g) =>  Applicative (Compose f g) where
 instance (Monad f, Monad g, Traversable g) => Monad (Compose f g) where
   return = pure
   Compose xM >>= fM = Compose
-    $ fmap join $ join $ sequenceA <$> fmap2 (getCompose . fM) xM
+    $ fmap join $ sequenceA =<< fmap2 (getCompose . fM) xM
 instance Hashable (f (g a)) => Hashable (Compose f g a)
 instance (Applicative g,Alternative f) => Alternative (Compose f g) where
   Compose x <|> Compose y = Compose $ x <|> y

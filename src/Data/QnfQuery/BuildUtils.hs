@@ -1,8 +1,8 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# OPTIONS_GHC -Wno-unused-local-binds -Wno-simplifiable-class-constraints #-}
@@ -31,22 +31,21 @@ module Data.QnfQuery.BuildUtils
   , chainAssoc
   ) where
 
-import Data.Utils.Tup
-import Data.Utils.Function
-import Data.Utils.Functors
-import Data.Utils.Unsafe
-import Data.Utils.Const
-import Data.Utils.Hashable
 import           Data.Bifunctor
 import           Data.Bitraversable
 import           Data.Functor.Identity
-import qualified Data.HashMap.Lazy                as HM
-import qualified Data.HashSet                     as HS
-import           Data.Query.Algebra
-import           Data.Utils.AShow
+import qualified Data.HashMap.Lazy     as HM
+import qualified Data.HashSet          as HS
 import           Data.QnfQuery.HashBag
 import           Data.QnfQuery.Types
+import           Data.Query.Algebra
+import           Data.Utils.AShow
+import           Data.Utils.Const
 import           Data.Utils.EmptyF
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Data.Utils.Tup
+import           Data.Utils.Unsafe
 
 qnfOrigDEBUG :: QNFQuery e s -> Query e s
 qnfOrigDEBUG = runIdentity . qnfOrigDEBUG'
@@ -124,12 +123,15 @@ qnfAsProd qnf = updateHash QNFQuery {
   qnfOrigDEBUG'=qnfOrigDEBUG' qnf
   }
 
-qnfMapColumns :: (HashableQNFSPCF  sel_f prod_f col_f' f e s,
-                 HashableQNFSPCF  sel_f prod_f col_f' f' e s) =>
-                (col_f (QNFProj f e s) (QNFAggr f e s) ->
-                  col_f' (QNFProj f' e s) (QNFAggr f' e s))
-               -> QNFQuerySPDCF sel_f prod_f EmptyF col_f f e s
-               -> QNFQuerySPDCF sel_f prod_f EmptyF col_f' f' e s
+
+-- | Modify the column set.
+qnfMapColumns
+  :: (HashableQNFSPCF sel_f prod_f col_f' f e s
+     ,HashableQNFSPCF sel_f prod_f col_f' f' e s)
+  => (col_f (QNFProj f e s) (QNFAggr f e s)
+      -> col_f' (QNFProj f' e s) (QNFAggr f' e s))
+  -> QNFQuerySPDCF sel_f prod_f EmptyF col_f f e s
+  -> QNFQuerySPDCF sel_f prod_f EmptyF col_f' f' e s
 qnfMapColumns f = updateHashCol . qnfMapColumns' f
 -- | Map but retain the hash. UNSAFE
 qnfMapColumns' :: (HashableQNFSPCF  sel_f prod_f col_f' f e s,
@@ -153,12 +155,15 @@ qnfMapName :: forall c c' e s . HashableQNFC c' Identity e s =>
            -> QNFNameC c e s
            -> QNFNameC c' e s
 qnfMapName f = \case
-  Column c i -> Column (qnfMapColumns f c) i
-  NonSymbolName e -> NonSymbolName e
+  Column c i       -> Column (qnfMapColumns f c) i
+  NonSymbolName e  -> NonSymbolName e
   PrimaryCol e s i -> PrimaryCol e s i
 
-aggrColToProjCol :: Hashables2 e s =>
-                   QNFQueryAggr e s -> Expr (QNFColAggr e s) -> QNFColProj e s
+aggrColToProjCol
+  :: Hashables2 e s
+  => QNFQueryAggr e s
+  -> Expr (QNFColAggr e s)
+  -> QNFColProj e s
 aggrColToProjCol qnfAggr expr = updateHash QNFQuery {
   qnfColumns=
       Const $ Identity $ (`Column` 0) . qnfGeneralizeQueryF . Right <$> expr,
@@ -177,39 +182,49 @@ nqnfAggrAsProj :: forall f e s .
 nqnfAggrAsProj (nm,qnfAggr) = (nmProj,qnfProj)
   where
     qnfProj :: QNFQueryDCF EmptyF Const f e s
-    qnfProj = updateHash QNFQuery {
-      qnfColumns=Const cols,
-      qnfSel=mempty,
-      qnfProd=bagSingleton $ HS.singleton $ Q0 $ Right prod,
-      qnfHash=(fst3 $ qnfHash qnfAggr,undefined,undefined),
-      qnfOrigDEBUG'=qnfOrigDEBUG' qnfAggr
-      }
+    qnfProj =
+      updateHash
+        QNFQuery
+        { qnfColumns = Const cols
+         ,qnfSel = mempty
+         ,qnfProd = bagSingleton $ HS.singleton $ Q0 $ Right prod
+         ,qnfHash = (fst3 $ qnfHash qnfAggr,undefined,undefined)
+         ,qnfOrigDEBUG' = qnfOrigDEBUG' qnfAggr
+        }
     prod :: (QNFQueryI e s)
-    prod = qnfMapColumns (bimap toHashBag $ first toHashBag)
-           $ qnfGeneralizeQueryF $ Right qnfAggr
+    prod =
+      qnfMapColumns (bimap toHashBag $ first toHashBag)
+      $ qnfGeneralizeQueryF
+      $ Right qnfAggr
     nmProj :: NameMapProj e s
-    nmProj = HM.map toProjCol nm where
-      toProjCol :: QNFColC CoConst e s -> QNFColC Const e s
-      toProjCol = qnfColAggrToProj
-                   $ ((Identity . E0 . (`Column` 0) . fromJustErr)
-                       ... flip lookup)
-                   $ extractAggr
-                   <$> toList cols
+    nmProj = HM.map toProjCol nm
+      where
+        toProjCol :: QNFColC CoConst e s -> QNFColC Const e s
+        toProjCol = qnfColAggrToProj $ \aggrE -> Identity
+          $ E0
+          $ (`Column` 0)
+          $ fromJustErr
+          $ lookup aggrE
+          $ extractAggr <$> toList cols
     extractAggr :: Expr (QNFName e2 s2)
-                -> (Aggr (Expr (QNFName e2 s2)), QNFCol e2 s2)
+                -> (Aggr ((QNFName e2 s2)),QNFCol e2 s2)
     extractAggr = \case
-      WrappedAggrColumn qnf ag -> (ag, qnf);
-      _ -> error "qnfAggrAsProjCol ret val does not match WrappedAggrColumn pattern"
-    qnfColAggrToProj :: (Aggr (Expr (QNFName e s)) -> QNFProj Identity e s)
-                      -> QNFColAggr e s -> QNFColProj e s
-    qnfColAggrToProj f = qnfMapColumns $ Const . f . runIdentity . fst . getCoConst
+      WrappedAggrColumn qnf ag -> (ag,qnf)
+      _ -> error
+        "qnfAggrAsProjCol ret val does not match WrappedAggrColumn pattern"
+    qnfColAggrToProj
+      :: (Aggr ((QNFName e s)) -> QNFProj Identity e s)
+      -> QNFColAggr e s
+      -> QNFColProj e s
+    qnfColAggrToProj
+      f = qnfMapColumns $ Const . f . runIdentity . fst . getCoConst
     cols :: QNFProj f e s
     cols = qnfAggrAsProjCol qnfAggr
 
 -- |The expected pattern of all the proj wrapped columns.
 pattern WrappedAggrColumn :: forall e s .
                             QNFCol e s
-                          -> Aggr (Expr (QNFName e s))
+                          -> Aggr ((QNFName e s))
                           -> Expr (QNFName e s)
 pattern WrappedAggrColumn qnf aggr <-
   E0 (Column qnf@QNFQuery{qnfColumns=Right (Identity aggr,_)} 0)
@@ -358,32 +373,35 @@ nqnfModQueryDebug f (nm,qnf) = (nm,qnf{qnfOrigDEBUG'=f $ qnfOrigDEBUG' qnf})
 
 -- |Assuming the qnf has been updated internally, update the namemap
 -- too.
-sanitizeNameMap :: forall d c f e s .
-                  (Hashables2 e s, HashableQNFC c Identity e s) =>
-                  NQNFQueryDCF d c f e s
-                -> ([((e,QNFColC c e s),(e,QNFColC c e s))],
-                   NQNFQueryDCF d c f e s)
-sanitizeNameMap (nm,qnf) = -- assertSane
-  (toList nmPairs, (snd . snd <$> nmPairs,qnf))
+sanitizeNameMap
+  :: forall d c f e s .
+  (Hashables2 e s,HashableQNFC c Identity e s)
+  => NQNFQueryDCF d c f e s
+  -> ([((e,QNFColC c e s),(e,QNFColC c e s))],NQNFQueryDCF d c f e s)
+sanitizeNameMap (nm,qnf)   -- assertSane
+   = (toList nmPairs,(snd . snd <$> nmPairs,qnf))
   where
-    nmPairs :: HM.HashMap e ((e, QNFColC c e s),(e, QNFColC c e s))
-    nmPairs = HM.mapWithKey promoteCol nm where
-      promoteCol :: a
-                 -> QNFQueryDCF EmptyF c Identity e s
-                 -> ((a,QNFQueryDCF EmptyF c Identity e s),
-                    (a,QNFQueryDCF EmptyF c Identity e s))
-      promoteCol e col = -- XXX: do we really need to update all hashes?
-        ((e,col),(e,col{
-                     qnfProd=qnfProd qnf,
-                     qnfSel=qnfSel qnf,
-                     qnfHash=(fst3 $ qnfHash col,
-                              snd3 $ qnfHash qnf,
-                              trd3 $ qnfHash qnf)}))
-
+    nmPairs :: HM.HashMap e ((e,QNFColC c e s),(e,QNFColC c e s))
+    nmPairs = HM.mapWithKey promoteCol nm
+      where
+        promoteCol
+          :: a
+          -> QNFQueryDCF EmptyF c Identity e s
+          -> ((a,QNFQueryDCF EmptyF c Identity e s)
+             ,(a,QNFQueryDCF EmptyF c Identity e s))
+        promoteCol e col   -- XXX: do we really need to update all hashes?
+          =
+          ((e,col)
+          ,(e
+           ,col { qnfProd = qnfProd qnf
+                 ,qnfSel = qnfSel qnf
+                 ,qnfHash =
+                    (fst3 $ qnfHash col,snd3 $ qnfHash qnf,trd3 $ qnfHash qnf)
+                }))
     assertSane x =
-      if all (\c -> qnfSel qnf == qnfSel c && qnfProd c == qnfProd qnf) outColumns
-      then x
-      else error "bad sanitization of namemaps"
+      if all
+        (\c -> qnfSel qnf == qnfSel c && qnfProd c == qnfProd qnf)
+        outColumns then x else error "bad sanitization of namemaps"
     outColumns = snd . snd <$> toList nmPairs
 
 chainAssoc :: Eq b => [(a,b)] -> [(b,c)] -> Maybe [(a,c)]

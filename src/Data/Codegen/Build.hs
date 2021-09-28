@@ -43,8 +43,8 @@ module Data.Codegen.Build
   , evalQueryEnv
   , getQuerySolutionCpp
   , evaluationValue
-  , QueryPlan
-  , PlanSym
+  , QueryShape
+  , ShapeSym
   ) where
 
 import           Control.Monad.Except
@@ -57,13 +57,13 @@ import           Data.Cluster.Types
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.Constructors
 import           Data.Codegen.Build.Monads
-import           Data.Codegen.Build.UpdateMatPlans
+import           Data.Codegen.Build.UpdateMatShapes
 import           Data.Codegen.TriggerCode
-import qualified Data.CppAst                       as CC
+import qualified Data.CppAst                        as CC
 import           Data.Either
-import qualified Data.HashSet                      as HS
+import qualified Data.HashSet                       as HS
 import           Data.List
-import qualified Data.List.NonEmpty                as NEL
+import qualified Data.List.NonEmpty                 as NEL
 import           Data.Maybe
 import           Data.Monoid
 import           Data.NodeContainers
@@ -80,7 +80,7 @@ import           Data.Utils.ListT
 import           Data.Utils.MTL
 import           Data.Utils.Tup
 import           GHC.Generics
-import           Prelude                           hiding (exp)
+import           Prelude                            hiding (exp)
 
 data Evaluation e s t n q
   = ForwardEval (AnyCluster e s t n) (Tup2 [NodeRef n]) q
@@ -110,7 +110,7 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
       lift $ triggerCluster clust
       mkCodeBlock ts clust ReverseTrigger revTriggerCode
     DeleteTransitionBundle n -> do
-      lift $ delMatPlan n
+      lift $ delMatShape n
       fileM <- dropReader (lift getClusterConfig) $ getNodeFile n
       queryView <- dropState (lift getClusterConfig,const $ return ())
         $ (maybe (throwError $ NodeNotFoundN n) return =<<)
@@ -146,7 +146,7 @@ mkCodeBlock
         (CC.Statement CC.CodeSymbol))
   -> StateT Int (CodeBuilderT e s t n m) [CC.Statement CC.CodeSymbol]
 mkCodeBlock _io clust triggerDirection internalMkCode = do
-  let trigOps = fmap (bimap (nub . fmap2 planSymOrig) (nub . fmap2 planSymOrig))
+  let trigOps = fmap (bimap (nub . fmap2 shapeSymOrig) (nub . fmap2 shapeSymOrig))
                 $ fst $ primaryNRef clust
   let comment = CC.Comment $ show triggerDirection ++ ": " ++ ashow trigOps
   let cout = ashowCout (show triggerDirection ++ ": ") trigOps

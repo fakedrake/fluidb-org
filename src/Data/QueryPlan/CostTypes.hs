@@ -5,56 +5,86 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeFamilies        #-}
 module Data.QueryPlan.CostTypes
   (GCCache(..)
   ,StarScore(..)
   ,MatCache(..)
   ,Frontiers(..)
   ,Cost(..)
+  ,PlanCost(..)
   ,mkStarScore
   ,costAsInt
 ) where
 
 import           Data.Foldable
-import qualified Data.HashMap.Strict as HM
-import qualified Data.HashSet        as HS
+import qualified Data.HashMap.Strict     as HM
+import qualified Data.HashSet            as HS
 import           Data.NodeContainers
+import           Data.QueryPlan.Scalable
 import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Hashable
+import           Data.Utils.Nat
 import           GHC.Generics
 
+data PlanCost n = PlanCost { pcPlan :: Maybe (NodeSet n),pcCost :: Cost }
+  deriving (Show,Generic,Eq)
+instance Scalable (PlanCost n) where
+  scale sc pc = pc { pcCost = scale sc $ pcCost pc }
+instance AShow (PlanCost n)
+instance Zero (PlanCost n) where zero = mempty
+instance Subtr (PlanCost n) where
+  subtr (PlanCost _ a) (PlanCost _ b) = PlanCost Nothing $ subtr a b
+
+instance Ord (PlanCost n) where
+  compare c1 c2 = compare (pcCost c1) (pcCost c2)
+  {-# INLINE compare #-}
+
+instance Semigroup (PlanCost n) where
+  c1 <> c2 =
+    PlanCost
+    { pcPlan = go (pcPlan c1) (pcPlan c1),pcCost = pcCost c1 <> pcCost c2 }
+    where
+      go Nothing a         = a
+      go a Nothing         = a
+      go (Just a) (Just b) = Just $ a <> b
+instance Monoid (PlanCost n) where
+  mempty = PlanCost { pcCost = mempty,pcPlan = mempty }
 
 data Cost = Cost { costReads :: Int,costWrites :: Int }
   deriving (Show,Eq,Generic)
+
+instance Zero Cost where
+  zero = Cost 0 0
+instance Subtr Cost where
+  subtr (Cost a b) (Cost a' b') = Cost (a - a') (b - b')
+
 -- XXX: Here we are INCONSISTENT in assuming that reads and writes
 -- cost the same.
 instance Ord Cost where
-  compare (Cost r w) (Cost r' w') = compare (r + w) (r' + w')
-instance Num Cost where
-  signum (Cost a b) = Cost (signum a) (signum b)
-  abs (Cost a b) = Cost (abs a) (abs b)
-  fromInteger x = Cost (fromInteger x) (fromInteger x)
-  Cost a b + Cost a' b' = Cost (a + a') (b + b')
-  Cost a b - Cost a' b' = Cost (a - a') (b - b')
-  Cost a b * Cost a' b' = Cost (a * a') (b * b')
+  compare a b = compare (costAsInt a) (costAsInt b)
+  {-# INLINE compare #-}
 
-instance AShow Cost
+instance AShow Cost where
+  ashow' c = Sym $ show (costReads c) ++ "/" ++ show (costWrites c)
 instance Semigroup Cost where
   c1 <> c2 =
-    Cost { costReads = costReads c1 + costReads c1
+    Cost { costReads = costReads c1 + costReads c2
           ,costWrites = costWrites c1 + costWrites c2
          }
 instance Monoid Cost where
-  mempty = Cost  0 0
+  mempty = Cost 0 0
 costAsInt :: Cost -> Int
 costAsInt Cost{..} = costReads + costWrites * 10
-
+instance Scalable Cost where
+  scale sc (Cost r w) = Cost (scale sc r) (scale sc w)
 data GCCache mop t n =
-  GCCache { materializedMachines  :: RefMap n ()
-          , isMaterializableCache :: MatCache mop t n
-          , metaOpCache           :: RefMap n [(mop, Cost)]
-          }
+  GCCache
+  { materializedMachines  :: RefMap n ()
+   ,isMaterializableCache :: MatCache mop t n
+   ,metaOpCache           :: RefMap n [(mop,Cost)]
+  }
   deriving Generic
 instance Default (GCCache mop t n)
 data StarScore mop t n =

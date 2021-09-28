@@ -362,10 +362,10 @@ finalNum = read' . go where
   go x = if C8.null res then x else go res where
     res = C8.dropWhile (not . isNumber) $ C8.dropWhile isNumber x
 
-unsafeLast :: [a] -> a
-unsafeLast [x]    = x
-unsafeLast (_:xs) = unsafeLast xs
-unsafeLast []     = error "Unsafe last on empty list"
+safeLast :: a -> [a] -> a
+safeLast _ [x]    = x
+safeLast e (_:xs) = safeLast e xs
+safeLast e []     = e
 
 main :: IO ()
 main = (`evalStateT` []) $ do
@@ -390,9 +390,10 @@ main = (`evalStateT` []) $ do
         let fname = printf "%s/branch%04d.txt" branchDir (ib :: Int)
         -- let (old, new) = splitWhen1 (uncurry (/=)) $ zip b $ oldBranch ++ repeat ""
         -- let curatedBranch = fmap fst old ++ ["[NEW STUFF]"] ++ fmap fst new
-        let curatedBranch = b
+        let curatedBranch :: [StringType] = b
         let (off,outLines) = indentLines 0 curatedBranch
-        let result = lastLineToResult $ unsafeLast curatedBranch
+        let result =
+              safeLast BranchResultUnknown $ lastLineToResult <$> curatedBranch
         when (case result of
                 BranchSuccess -> True
                 _             -> False || ib `mod` 100 == 0)

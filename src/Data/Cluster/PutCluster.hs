@@ -3,12 +3,11 @@
 {-# LANGUAGE TypeFamilies        #-}
 
 module Data.Cluster.PutCluster
-  ( putBinCluster
-  , putUnCluster
-  , putNCluster
-  , idempotentClusterInsert
-  , planSymAssoc
-  ) where
+  (putBinCluster
+  ,putUnCluster
+  ,putNCluster
+  ,idempotentClusterInsert
+  ,shapeSymAssoc) where
 
 import           Control.Applicative
 import           Control.Monad
@@ -18,6 +17,7 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Monad
 import           Data.CppAst.CppType
 import           Data.NodeContainers
 import           Data.QnfQuery.BuildUtils
@@ -32,8 +32,8 @@ import           Data.Utils.Tup
 -- | Create the T node and connect it to the inputs
 putBinCluster
   :: (Hashables2 e s,Monad m)
-  => [(PlanSym e s,PlanSym e s)]
-  -> BQOp (PlanSym e s)
+  => [(ShapeSym e s,ShapeSym e s)]
+  -> BQOp (ShapeSym e s)
   -> (NodeRef n,NQNFQuery e s) -- inL
   -> (NodeRef n,NQNFQuery e s) -- inR
   -> (NodeRef n,NQNFQuery e s) -- Out
@@ -74,18 +74,22 @@ putBinCluster symAssoc op (l,_nqnfL) (r,_nqnfR) (out,nqnfO) = do
       return clust
 
 -- PUTPROP
-putBClustPropagator :: (Hashables2 e s, Monad m) =>
-                      BinClust e s t n
-                    -> [(PlanSym e s,PlanSym e s)]
-                    -> BQOp (PlanSym e s)
-                    -> CGraphBuilderT e s t n m ()
-putBClustPropagator clust assoc op = putPlanPropagator
-  (BinClustW clust)
-  (cPropToACProp $ binClustPropagator assoc op, assoc)
+putBClustPropagator
+  :: (Hashables2 e s,Monad m)
+  => BinClust e s t n
+  -> [(ShapeSym e s,ShapeSym e s)]
+  -> BQOp (ShapeSym e s)
+  -> CGraphBuilderT e s t n m ()
+putBClustPropagator clust assoc op =
+  putShapePropagator (BinClustW clust)
+  $ ACPropagatorAssoc
+  { acpaPropagator = cPropToACProp $ binClustPropagator assoc op
+   ,acpaInOutAssoc = assoc
+  }
 
-planSymAssoc :: Hashables2 e s => NQNFResultDF d f a e s -> [(PlanSym e s,PlanSym e s)]
-planSymAssoc = fmap (bimap mkSym mkSym) . nqnfResInOutNames where
-  mkSym (e,col) = mkPlanSym (Column col 0) e
+shapeSymAssoc :: Hashables2 e s => NQNFResultDF d f a e s -> [(ShapeSym e s,ShapeSym e s)]
+shapeSymAssoc = fmap (bimap mkSym mkSym) . nqnfResInOutNames where
+  mkSym (e,col) = mkShapeSym (Column col 0) e
 
 -- | Connect 3 nodes with a unary cluster. Note that it is possible
 -- for clusters to have coinciding input/output eg it is possible
@@ -93,10 +97,10 @@ planSymAssoc = fmap (bimap mkSym mkSym) . nqnfResInOutNames where
 putUnCluster
   :: forall e s t n m .
   (Hashables2 e s,Monad m)
-  => ([(PlanSym e s,PlanSym e s)],[(PlanSym e s,PlanSym e s)])
+  => ([(ShapeSym e s,ShapeSym e s)],[(ShapeSym e s,ShapeSym e s)])
   -- ^ Only the primary is required
   -> (e -> Maybe CppType)
-  -> (UQOp (PlanSym e s),Maybe (UQOp (PlanSym e s)))
+  -> (UQOp (ShapeSym e s),Maybe (UQOp (ShapeSym e s)))
   -> (NodeRef n,NQNFQuery e s)
   -> (NodeRef n,NQNFQuery e s)
   -> (NodeRef n,NQNFQuery e s)
@@ -149,24 +153,30 @@ putUnCluster
 
 putUnClustPropagator
   :: (Hashables2 e s,Monad m)
-  => Tup2 [(PlanSym e s,PlanSym e s)]
+  => Tup2 [(ShapeSym e s,ShapeSym e s)]
   -> (e -> Maybe CppType)
   -> UnClust e s t n
-  -> UQOp (PlanSym e s)
+  -> UQOp (ShapeSym e s)
   -> CGraphBuilderT e s t n m ()
 putUnClustPropagator symAssocs literalType clust op =
-  putPlanPropagator (UnClustW clust)
-  (cPropToACProp $ unClustPropagator symAssocs literalType op,
-   concat symAssocs)
+  putShapePropagator
+    (UnClustW clust)
+    ACPropagatorAssoc
+    { acpaPropagator =
+        cPropToACProp $ unClustPropagator symAssocs literalType op
+     ,acpaInOutAssoc = concat symAssocs
+    }
 
 putNCluster
   :: (Hashables2 e s,Monad m)
-  => QueryPlan e s
+  => QueryShape e s
   -> (NodeRef n,NQNFQuery e s)
   -> CGraphBuilderT e s t n m (NClust e s t n)
-putNCluster plan (ref,nqnf) = idempotentClusterInsert [(nClustNode,ref)] $ do
+putNCluster shape (ref,nqnf) = idempotentClusterInsert [(nClustNode,ref)] $ do
   linkQnfClust (nqnfToQnf nqnf) $ NClustW $ NClust ref
-  putPlanPropagator
-    (NClustW $ NClust ref)
-    (cPropToACPropN $ nClustPropagator plan,[])
+  putShapePropagator (NClustW $ NClust ref)
+    $ ACPropagatorAssoc
+    { acpaPropagator = cPropToACPropN $ nClustPropagator shape
+     ,acpaInOutAssoc = []
+    }
   return $ NClust ref

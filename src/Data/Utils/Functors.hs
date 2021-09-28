@@ -1,5 +1,6 @@
 module Data.Utils.Functors
-  (traverse4
+  (iterateM_
+  ,traverse4
   ,traverse5
   ,traverse3
   ,traverse2
@@ -14,6 +15,7 @@ module Data.Utils.Functors
   ,toList2
   ,toList3
   ,toList4
+  ,toList5
   ,all2
   ,all3
   ,any2
@@ -25,10 +27,13 @@ module Data.Utils.Functors
   ,lift4
   ,lift5
   ,bitraverse2
-  ,(<&>)) where
+  ,cofmap
+  ,(<&>)
+  ,bivoid) where
 
 import           Control.Monad
 import           Control.Monad.Trans
+import           Data.Bifunctor
 import           Data.Bitraversable
 import           Data.Foldable
 import           Data.Utils.Function
@@ -116,6 +121,12 @@ toList4 :: (Foldable t1, Foldable t2, Foldable t3, Foldable t4) =>
           t1 (t2 (t3 (t4 m))) -> [m]
 toList4 = toList >=> toList >=> toList >=> toList
 
+toList5 :: (Foldable t1,Foldable t2,Foldable t3,Foldable t4,Foldable t5)
+        => t1 (t2 (t3 (t4 (t5 m))))
+        -> [m]
+toList5 = toList >=> toList >=> toList >=> toList >=> toList
+
+
 toList3 :: (Foldable t1, Foldable t2, Foldable t3) => t1 (t2 (t3 m)) -> [m]
 toList3 = toList >=> toList >=> toList
 
@@ -133,3 +144,13 @@ any2 = any . any
 
 any3 :: (Foldable t1, Foldable t2, Foldable t3) => (m -> Bool) -> t1 (t2 (t3 m)) -> Bool
 any3 = any . any . any
+
+cofmap :: (forall a . f a -> f' a) -> f x -> f' x
+cofmap = id
+
+bivoid :: Bifunctor f => f a b -> f () ()
+bivoid = bimap (const ()) (const ())
+
+iterateM_ :: Monad m => a -> (a -> m a) ->  m b
+iterateM_ x0 f = g x0
+    where g x = f x >>= g

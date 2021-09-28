@@ -35,14 +35,16 @@ graphGlobalConf sch =
   fromRightErr
   $ mkGlobalConf
   $ PreGlobalConf
-    (ESym,\case
+  { pgcExpIso = (ESym,\case
       ESym a -> a
       e      -> error $ "Graph has only syms: " ++ show (void e))
-    (\_ _ -> Nothing)
-    (graphToFileSet sch)
-    (graphPrimKeys sch)
-    (graphSchemaAssoc sch)
-    (graphTableBytes sch)
+   ,pgcToUniq = \_ _ -> Nothing
+   ,pgcToFileSet = graphToFileSet sch
+   ,pgcPrimKeyAssoc = graphPrimKeys sch
+   ,pgcSchemaAssoc = graphSchemaAssoc sch
+   ,pgcTableSizeAssoc = graphTableBytes sch
+   ,pgcBudget = Nothing
+  }
 
 graphRelationColumns :: GraphTypeVars e s t n => GraphSchema e s -> s -> Maybe [e]
 graphRelationColumns GraphSchema{..} sym = do

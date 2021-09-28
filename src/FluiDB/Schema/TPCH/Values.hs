@@ -69,6 +69,7 @@ tpchGlobalConf =
    ,pgcPrimKeyAssoc = tpchSqlPrimKeys
    ,pgcSchemaAssoc = tpchSqlSchemaAssoc
    ,pgcTableSizeAssoc = tpchSqlTableSizes
+   ,pgcBudget = Nothing
   }
   where
     asUniq i = \case

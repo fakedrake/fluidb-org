@@ -1,0 +1,13 @@
+cradle:
+  stack:
+    - path: "./src/"
+      component: "fluidb:lib"
+
+    - path: "./tools/Benchmark/Main.hs"
+      component: "fluidb:exe:benchmark"
+
+    - path: "./tools/ReadDump/Main.hs"
+      component: "fluidb:exe:readdump"
+
+    - path: "./tools/Bamify/Main.hs"
+      component: "fluidb:exe:readdump"

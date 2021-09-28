@@ -15,11 +15,11 @@ module FluiDB.Runner.DefaultGlobal
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.QnfQuery.Build
 import           Data.Codegen.Build.Types
 import           Data.Codegen.Schema
 import           Data.CppAst.ExpressionLike
 import           Data.Proxy
+import           Data.QnfQuery.Build
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
@@ -45,11 +45,11 @@ class (ExpressionLike e,MonadFakeIO m,Hashables2 e s)
   => DefaultGlobal e s t n m q | q -> e,q -> s,q -> t,q -> n where
   defGlobalConf :: Proxy m -> [q] -> GlobalConf e s t n
   getIOQuery
-    :: q -> GlobalSolveT e s t n m (Query (PlanSym e s) (QueryPlan e s,s))
+    :: q -> GlobalSolveT e s t n m (Query (ShapeSym e s) (QueryShape e s,s))
   putPS :: Monad m
         => Proxy q
         -> Query e s
-        -> GlobalSolveT e s t n m (Query (PlanSym e s) (QueryPlan e s,s))
+        -> GlobalSolveT e s t n m (Query (ShapeSym e s) (QueryShape e s,s))
 
 instance DefaultGlobal e s t n m q => DefaultGlobal e s t n m (Query e s,q) where
   defGlobalConf p = defGlobalConf p . fmap snd
@@ -62,7 +62,8 @@ instance MonadFakeIO m
   defGlobalConf _ _ = tpchGlobalConf
   getIOQuery i = do
     seed <- globalPopUniqueNum
-    (qtext,_) <- ioCmd ioOps
+    (qtext,_) <- ioCmd
+      ioOps
       "/bin/bash"
       ["-c"
       ,printf
@@ -75,7 +76,9 @@ instance MonadFakeIO m
     parseTpchQuery qtext
   putPS _ q = do
     cppConf <- gets globalQueryCppConf
-    either throwError return $ annotateQuery cppConf q
+    symSizeAssoc <- gets globalTableSizeAssoc
+    let luSize s = lookup s symSizeAssoc
+    either throwError return $ annotateQuery cppConf luSize q
 
 qgenRoot :: FilePath
 
@@ -85,8 +88,12 @@ qgenRoot = "/Users/drninjabatman/Projects/UoE/fluidb/resources/tpch-dbgen"
 
 
 -- Join-only
-instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s),AShowV s)
-  => DefaultGlobal (s,s) s () () m [(s,s)] where
+instance (MonadFakeIO m
+         ,Ord s
+         ,Hashable s
+         ,CodegenSymbol s
+         ,ExpressionLike (s,s)
+         ,AShowV s) => DefaultGlobal (s,s) s () () m [(s,s)] where
   defGlobalConf _ x = graphGlobalConf $ mkGraphSchema $ join x
   getIOQuery js = do
     schemaAssoc <- gets globalSchemaAssoc
@@ -94,9 +101,14 @@ instance (MonadFakeIO m,Ord s,Hashable s,CodegenSymbol s,ExpressionLike (s,s),AS
       $ eqJoinQuery schemaAssoc [((s,s'),(s',s')) | (s,s') <- js]
   putPS _ q' = do
     cppConf <- gets globalQueryCppConf
-    either (throwError . toGlobalError) (return . first (uncurry mkPlanSym))
+    symSizeAssoc <- gets globalTableSizeAssoc
+    let luSize s = lookup s symSizeAssoc
+    let mkShape s = do
+          size <- luSize s
+          mkShapeFromTbl cppConf size s
+    either (throwError . toGlobalError) (return . first (uncurry mkShapeSym))
       $ (>>= maybe (throwAStr "No qnf found") return)
-      $ fmap (>>= traverse (\s -> (,s) <$> mkPlanFromTbl cppConf s) . snd)
+      $ fmap (>>= traverse (\s -> (,s) <$> mkShape s) . snd)
       $ (`evalStateT` def)
       $ listTMaxQNF fst
       $ toQNF (fmap2 snd . tableSchema cppConf) q'

@@ -18,7 +18,9 @@ module Control.Antisthenis.ATL.Transformers.Mealy
   ,mealyScan
   ,mealyLift
   ,yieldMB
-  ,finishMB) where
+  ,finishMB
+  ,wrapMealy
+  ,yieldMealy) where
 
 import           Control.Antisthenis.ATL.Class.Bind
 import           Control.Antisthenis.ATL.Class.Functorial
@@ -30,6 +32,8 @@ import           Control.Antisthenis.ATL.Common
 import           Control.Arrow                            hiding ((>>>))
 import           Control.Category                         hiding ((>>>))
 import           Control.Monad.Fix
+import           Control.Monad.Identity
+import           Control.Monad.Loops
 import           Control.Utils.Free
 import           Data.Bifunctor                           (bimap)
 import           Data.Maybe
@@ -39,7 +43,8 @@ import           Prelude                                  hiding (id, (.))
 
 -- | Note that this is not a transformer because it is not isomorphic
 -- to c.
-newtype MealyArrow c a b = MealyArrow { runMealyArrow :: c a (MealyArrow c a b,b) }
+newtype MealyArrow c a b =
+  MealyArrow { runMealyArrow :: c a (MealyArrow c a b,b) }
 
 
 -- NOTE: MACHINES DO NOT SUPPORT APPLY: Apply is unchanged to the next
@@ -156,7 +161,7 @@ instance ArrowReader c  => ArrowReader (MealyArrow c) where
   {-# INLINE arrCoLocal' #-}
 
 
-
+-- | Modify mealy chain.
 hoistMealy
   :: Profunctor c'
   => (c a (MealyArrow c a b,b) -> c' a' (MealyArrow c a b,b'))
@@ -185,12 +190,28 @@ instance Functor (MealyF a b) where
 
 type MB a b = FreeT (MealyF a b)
 
-
 yieldMB :: Monad m => b -> MB a b m a
 yieldMB b = FreeT $ return $ Free $ MealyF (return,b)
 finishMB ::Monad m => b -> MB a b m Void
 finishMB b = fix (yieldMB b >>)
 
+-- The mealy hijacks the MB
+yieldMealy
+  :: (Monad (ArrFunctor c),ArrowFunctor c)
+  => MealyArrow c a b
+  -> a
+  -> MB a b (ArrFunctor c) b
+yieldMealy (MealyArrow m) a = FreeT $ do
+  (nxt,b) <- toKleisli m a
+  return $ Free $ MealyF (yieldMealy nxt,b)
+
+-- | Build a mealy arrow and transfer state between the iterations.
+wrapMealy
+  :: (Monad (ArrFunctor c),ArrowFunctor c)
+  => r
+  -> (a -> r -> MB a b (ArrFunctor c) (a,r))
+  -> MealyArrow c a b
+wrapMealy r f = mkMealy $ \a -> iterateM_  (uncurry f) (a,r)
 
 -- | Use yieldMB and finishMB and yieldMB and make sure to never
 -- return.
@@ -211,11 +232,23 @@ mealyLift c = res
   where
     res = MealyArrow $ rmap (res,) c
 
--- | A mealy wrapped in a functor could become a mealy.
+-- | A mealy wrapped in a functor could become a mealy. The argument
+-- is a mealy arrow wrapped in a boilerplate computation. The result
+-- is a mealy arrow where the wrapped computation happens before the
+-- first iteration.
 squashMealy
   :: (ArrowFunctor c,Monad (ArrFunctor c))
-  => ArrFunctor c (MealyArrow c a b)
+  => (a -> ArrFunctor c (a,MealyArrow c a b))
   -> MealyArrow c a b
 squashMealy m = MealyArrow $ fromKleisli $ \a -> do
-  MealyArrow m' <- m
-  toKleisli m' a
+  (a',MealyArrow m') <- m a
+  toKleisli m' a'
+
+test :: [Int]
+test = runIdentity $ mealyScan (mkMealy go) [1..10] where
+  go :: Int -> MB Int Int Identity Void
+  go i = do
+    i' <- yieldMB 1
+    yieldMealy (arr  (\x -> x + 1) :: MealyArrow (Kleisli Identity) Int Int) i'
+    yieldMB 50
+    finishMB 1000

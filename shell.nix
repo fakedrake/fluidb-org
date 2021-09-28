@@ -2,8 +2,10 @@
 with nixpkgs; let
   haskellPackages = haskell.packages.ghc8104;
   # Haskell tools
-  ghc = haskellPackages.ghcWithPackages (ps: with ps; [
+  ghc = haskell.packages.ghc8104.ghcWithPackages (ps: with ps; [
+    template-haskell
     base
+    czipwith
     shake
     hasktags
     profiteur
@@ -12,12 +14,10 @@ with nixpkgs; let
     haskell-language-server
     # implicit-hie
   ]);
-  rnix = import (fetchTarball {
-    url = https://github.com/nix-community/rnix-lsp/archive/master.tar.gz;
-    sha256="08dahxyn75w3621jc62w0vp0nn2zim2vn7kfw2s2rk93bdjf7bq7";
-  });
+  rash = callPackage ./nix/rash {};
   ssb = callPackage ./nix/ssb {};
   nixPackages = [
+    # rash
     clang
     ssb
     ghc

@@ -68,6 +68,13 @@ import           Data.Utils.Hashable
 import           Data.Utils.Unsafe
 import           GHC.Generics
 
+-- | This is a box that holds an annotated value of type `f b`. We use
+-- it to insert a value at the edges of a cluster but also annotate
+-- them with operators. A cluster may have at it's outputs values of
+-- type `WMetaD (BQOp e) (Defaulting (QueryShape e s))`. The important
+-- value is `Defaulting (QueryShape e s)` which we use for hashing and
+-- equality and other interactions with other clusters but the
+-- operator is useful as provenance.
 newtype WMetaD a f b = WMetaD { unMetaD :: (a,f b)}
   deriving (Generic,Functor,Traversable,Foldable,Show)
 instance (AShow a, AShow (f b)) => AShow (WMetaD a f b)
@@ -82,17 +89,17 @@ instance Eq (f b) => Eq (WMetaD a f b) where
 -- node. Note that the shape of the cluster is useful even if it does
 -- not contain NodeRefs. For example we may want to have a mask of
 -- which nodes in a cluster are materialized.
-type AnyCluster e s = AnyCluster' (PlanSym e s) NodeRef
+type AnyCluster e s = AnyCluster' (ShapeSym e s) NodeRef
 data AnyCluster' e f t n =
   JoinClustW (JoinClust' f (ComposedType JoinClust' e f) t n)
   | BinClustW (BinClust' f (ComposedType BinClust' e f) t n)
   | UnClustW (UnClust' f (ComposedType UnClust' e f) t n)
   | NClustW (NClust' f (ComposedType NClust' e f) t n)
   deriving (Eq, Generic)
-type JoinClust e s = JoinClust' NodeRef (ComposedType JoinClust' (PlanSym e s) NodeRef)
-type BinClust e s = BinClust' NodeRef (ComposedType BinClust' (PlanSym e s) NodeRef)
-type UnClust e s = UnClust' NodeRef (ComposedType UnClust' (PlanSym e s) NodeRef)
-type NClust e s = NClust' NodeRef (ComposedType NClust' (PlanSym e s) NodeRef)
+type JoinClust e s = JoinClust' NodeRef (ComposedType JoinClust' (ShapeSym e s) NodeRef)
+type BinClust e s = BinClust' NodeRef (ComposedType BinClust' (ShapeSym e s) NodeRef)
+type UnClust e s = UnClust' NodeRef (ComposedType UnClust' (ShapeSym e s) NodeRef)
+type NClust e s = NClust' NodeRef (ComposedType NClust' (ShapeSym e s) NodeRef)
 
 instance (Hashables2 (f n) (g t), AShow (g t), AShow (f n)) =>  AShow (JoinClust' g f t n) where
   ashow' JoinClust{..} = Rec "JoinClust" [
@@ -436,22 +443,34 @@ instance CanPutIdentity (AnyCluster' e f) (AnyCluster' e Identity) f f where
     NClustW (NClust x) -> NClustW $ NClust $ runIdentity x
 
 -- Type tetris here.
-putId' :: (Bifunctor (c Identity Identity),
-          CanPutIdentity (c Identity (WMetaD a Identity)) (c Identity Identity) Identity (WMetaD a Identity),
-          CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g)) =>
-         c g (WMetaD a g) t n
-       -> c Identity (WMetaD a Identity) (g t) (g n)
-putId' x = dropIdentity
-           $ bimap Identity (WMetaD . second Identity . unMetaD)
-           $ putIdentity x
-dropId' :: (Bifunctor (c Identity Identity),
-          CanPutIdentity (c Identity (WMetaD a Identity)) (c Identity Identity) Identity (WMetaD a Identity),
-          CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g)) =>
-          c Identity (WMetaD a Identity) (g t) (g n)
-        -> c g (WMetaD a g) t n
-dropId' x = dropIdentity
-            $ bimap runIdentity (WMetaD . second runIdentity . unMetaD)
-            $ putIdentity x
+putId'
+  :: (Bifunctor (c Identity Identity)
+     ,CanPutIdentity
+        (c Identity (WMetaD a Identity))
+        (c Identity Identity)
+        Identity
+        (WMetaD a Identity)
+     ,CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g))
+  => c g (WMetaD a g) t n
+  -> c Identity (WMetaD a Identity) (g t) (g n)
+putId' x =
+  dropIdentity
+  $ bimap Identity (WMetaD . second Identity . unMetaD)
+  $ putIdentity x
+dropId'
+  :: (Bifunctor (c Identity Identity)
+     ,CanPutIdentity
+        (c Identity (WMetaD a Identity))
+        (c Identity Identity)
+        Identity
+        (WMetaD a Identity)
+     ,CanPutIdentity (c g (WMetaD a g)) (c Identity Identity) g (WMetaD a g))
+  => c Identity (WMetaD a Identity) (g t) (g n)
+  -> c g (WMetaD a g) t n
+dropId' x =
+  dropIdentity
+  $ bimap runIdentity (WMetaD . second runIdentity . unMetaD)
+  $ putIdentity x
 
 instance CanPutIdentity (JoinClust' g f) (JoinClust' Identity Identity) g f where
   putIdentity JoinClust{..} = updateCHash JoinClust {

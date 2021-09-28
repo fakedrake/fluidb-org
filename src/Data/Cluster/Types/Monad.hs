@@ -23,10 +23,13 @@ module Data.Cluster.Types.Monad
   ,CGraphBuilderT
   ,CPropagator
   ,ACPropagator
-  ,PlanCluster
+  ,ShapeCluster
   ,PropCluster
   ,Defaulting
-  ,CPropagatorPlan
+  ,CPropagatorShape
+  ,Tunnel(..)
+  ,ACPropagatorAssoc(..)
+  ,tqueryToForest
   ,forestToQuery
   ,queryToForest
   ,freeToForest
@@ -40,7 +43,8 @@ module Data.Cluster.Types.Monad
   ,getDefaultingFull
   ,getDefaultingDef
   ,defaultingLe
-  ,getDef) where
+  ,getDef
+  ,ashowACPA,(<||>)) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -51,14 +55,16 @@ import           Control.Utils.Free
 import           Data.Bipartite
 import           Data.Bits
 import           Data.Cluster.Types.Clusters
-import qualified Data.HashMap.Strict         as HM
-import qualified Data.HashSet                as HS
+import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as HS
+import qualified Data.IntMap                   as IM
 import           Data.List.Extra
-import qualified Data.List.NonEmpty          as NEL
+import qualified Data.List.NonEmpty            as NEL
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
+import           Data.Query.Optimizations.Echo
 import           Data.Query.QuerySchema
 import           Data.Utils.AShow
 import           Data.Utils.Compose
@@ -77,54 +83,73 @@ data ClusterError e s =
 instance AShowError e s (ClusterError e s)
 instance (AShowV e, AShowV s) => AShow (ClusterError e s)
 
+data Tunnel n = Tunnel { tExits :: [NodeRef n],tEntrys :: [NodeRef n] }
+
 -- | ClusterConfig is empty in the initial stage.
-data ClusterConfig e s t n = ClusterConfig {
-  -- |If this is False throw an en error when there is a bottom that
-  -- does not correspond to a node.
-  qnfInsertBottoms :: Bool,
-  -- | All nodes of each cluster and their corresponding cluister
-  qnfToClustMap    :: HM.HashMap (QNFQuery e s) [AnyCluster e s t n],
-  nrefToQnfs       :: RefMap n [QNFQuery e s],
-  -- ^ All these will be equiv: (schema, query)
-  trefToQnf        :: RefMap t (QNFQuery e s),
-  qnfTableColumns  :: s -> Maybe [e],
-  qnfNodePlans     :: RefMap n (Defaulting (QueryPlan e s)),
-  -- ^ The plan that we expect to find in each node.
-  qnfPropagators   :: HM.HashMap (AnyCluster e s t n) (ClustPropagators e s t n),
-  -- Update the map between nodes and queries. The same cluster is
-  -- associated with multiple equivalent name translations with
-  -- equivalent qnfs. Each propagator in the list deals withy a
-  -- separate naming pattern.
-  clustBuildCache  :: ClustBuildCache e s t n
+data ClusterConfig e s t n =
+  ClusterConfig
+  { qnfTunels :: IM.IntMap (Tunnel n)
+    -- |If this is False throw an en error when there is a bottom that
+    -- does not correspond to a node.
+   ,qnfInsertBottoms :: Bool
+    -- | All nodes of each cluster and their corresponding cluister
+   ,qnfToClustMap :: HM.HashMap (QNFQuery e s) [AnyCluster e s t n]
+   ,nrefToQnfs :: RefMap n [QNFQuery e s]
+    -- ^ All these will be equiv: (schema, query)
+   ,trefToQnf :: RefMap t (QNFQuery e s)
+   ,qnfTableColumns :: s -> Maybe [e]
+   ,qnfNodeShapes :: RefMap n (Defaulting (QueryShape e s))
+    -- ^ The shape that we expect to find in each node.
+   ,qnfPropagators
+      :: HM.HashMap (AnyCluster e s t n) (ClustPropagators e s t n)
+    -- Update the map between nodes and queries. The same cluster is
+    -- associated with multiple equivalent name translations with
+    -- equivalent qnfs. Each propagator in the list deals withy a
+    -- separate naming pattern.
+   ,clustBuildCache :: ClustBuildCache e s t n
   }
 newtype ClustPropagators e s t n = ClustPropagators {
-  planPropagators :: [ACPropagatorAssoc e s t n]
+  shapePropagators :: [ACPropagatorAssoc e s t n]
   } deriving Generic
 instance Default (ClustPropagators e s t n)
 data InsPlanRes e s t n = InsPlanRes {
   insPlanRef   :: NodeRef n,
   insPlanNQNFs :: HS.HashSet (NQNFQueryI e s),
-  insPlanQuery :: Query e (s,QueryPlan e s)
+  insPlanQuery :: Query e (s,QueryShape e s)
   } deriving Generic
 instance (AShowV e,AShowV s) => AShow (InsPlanRes e s t n)
-data QueryForest e s = QueryForest {
-  qfHash :: Int,
-  qfQueries :: Either (NEL.NonEmpty (Query e (QueryForest e s))) (s,QueryPlan e s)
-  } deriving Generic
+data QueryForest e s =
+  QueryForest
+  { qfHash :: Int
+   ,qfQueries
+      :: Either (NEL.NonEmpty (TQuery e (QueryForest e s))) (s,QueryShape e s)
+  }
+  deriving Generic
 
 -- XXX: Each tree is equivalent to each other  so calculating the
 -- qnfquery we can get the hash for "free".
-freeToForest :: Hashables2 e s =>
-               Free (Compose NEL.NonEmpty (Query e)) (s, QueryPlan e s)
-             -> QueryForest e s
+freeToForest
+  :: Hashables2 e s
+  => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryShape e s)
+  -> QueryForest e s
 freeToForest = \case
   FreeT (Identity (Free (Compose a))) -> let v = fmap2 freeToForest a
     in QueryForest {qfHash=hash v,qfQueries=Left v}
   FreeT (Identity (Pure a)) -> QueryForest {qfHash=hash a,qfQueries=Right a}
-forestToQuery :: QueryForest e s -> Query e (s, QueryPlan e s)
-forestToQuery = either (forestToQuery <=<  NEL.head) Q0 . qfQueries
+forestToQuery :: Hashables2 e s => QueryForest e s -> Query e (s,QueryShape e s)
+forestToQuery =
+  either
+    (forestToQuery <=< either (fmap tqueryToForest) id . tqQuery . NEL.head)
+    Q0
+  . qfQueries
+
 queryToForest :: Hashables2 e s => Query e (QueryForest e s) -> QueryForest e s
-queryToForest q = let v = return q in QueryForest {qfHash=hash v,qfQueries=Left v}
+queryToForest = tqueryToForest . tunnelQuery
+
+tqueryToForest
+  :: Hashables2 e s => TQuery e (QueryForest e s) -> QueryForest e s
+tqueryToForest q =
+  let v = return q in QueryForest { qfHash = hash v,qfQueries = Left v }
 
 instance Eq (QueryForest e s) where a == b = qfHash a == qfHash b
 instance Hashable (QueryForest e s) where
@@ -156,15 +181,37 @@ regCall call = modify $ \cc -> cc{
         $ clustBuildCache cc}}
 
 -- | (Propagator,In :-> Out sym)
-type ACPropagatorAssoc e s t n =
-  (ACPropagator (QueryPlan e s) e s t n,[(PlanSym e s,PlanSym e s)])
--- | A value that either has a default value or defaults.
-data Defaulting a = DefaultingEmpty
-                  | DefaultingDef a
-                  | DefaultingFull a a
-                  -- ^ DefaultingFull default_value actual_value
-  deriving (Eq, Generic, Show, Read, Functor, Traversable, Foldable)
+data ACPropagatorAssoc e s t n =
+  ACPropagatorAssoc
+  { acpaPropagator :: ACPropagator (QueryShape e s) e s t n
+   ,acpaInOutAssoc :: [(ShapeSym e s,ShapeSym e s)]
+  }
+
+ashowACPA :: AShow2 e s => ACPropagatorAssoc e s t n -> SExp
+ashowACPA x =
+  Rec
+    "ACPropagatorAssoc"
+    [("acpaPropagator",Sym "<propagator>")
+    ,("acpaInOutAssoc",ashow' $ acpaInOutAssoc x)]
+
+-- | A value that either has a default value or defaults. This more
+-- than just a tuple because it has a meaningful applicative
+-- definition. The non-default value has prescedence over the default
+-- value and applicative is based on zipping the arguments. More
+-- importantly Defaulting values form a hierarchy depending on how
+-- specific they are.
+--
+-- A full defaulting value means that the value corresponds to a real
+-- materialized node, otherwise is information about a potential
+-- value.
+data Defaulting a
+  = DefaultingEmpty
+  | DefaultingDef a
+  | DefaultingFull a a
+    -- ^ DefaultingFull default_value actual_value
+  deriving (Eq,Generic,Show,Read,Functor,Traversable,Foldable)
 instance Hashable a => Hashable (Defaulting a)
+
 instance Applicative Defaulting where
   pure = DefaultingDef
   -- | We want f <$> a <*> b <*> c <*> d to be the minimum of a b c d.
@@ -182,11 +229,24 @@ instance Applicative Defaulting where
 -- value when available.
 instance Alternative Defaulting where
   empty = DefaultingEmpty
-  a <|> DefaultingEmpty                    = a
-  DefaultingEmpty <|> a                    = a
-  a <|> (DefaultingDef _)                  = a
-  (DefaultingDef d) <|> DefaultingFull _ a = DefaultingFull d a
-  a <|> _                                  = a
+  DefaultingEmpty <|> a                  = a
+  a <|> DefaultingEmpty                  = a
+  a <|> DefaultingDef _                  = a
+  DefaultingDef d <|> DefaultingFull _ a = DefaultingFull d a
+  a <|> _                                = a
+
+instance Semigroup (Defaulting a) where
+  a <> b = a <|> b
+instance Monoid (Defaulting a) where
+  mempty = empty
+
+-- | Pesimistic combination of Defaults such that Full and Def are
+-- combined into Def. This us useful when we want to come up with a
+-- default value but nota full value.
+(<||>) :: Defaulting a -> Defaulting a -> Defaulting a
+a <||> DefaultingEmpty = a
+DefaultingEmpty <||> a = a
+a <||> _               = a
 
 promoteDefaulting :: Defaulting a -> Defaulting a
 promoteDefaulting = \case
@@ -223,32 +283,39 @@ ifDefaultingEmpty p isEmpty isntEmpty = case p of
 
 instance AShow a => AShow (Defaulting a)
 type PropCluster a f e s t n =
-  AnyCluster' (PlanSym e s) (WMetaD (Defaulting a) f) t n
-type PlanCluster f e s t n = PropCluster (QueryPlan e s) f e s t n
+  AnyCluster' (ShapeSym e s) (WMetaD (Defaulting a) f) t n
+type ShapeCluster f e s t n = PropCluster (QueryShape e s) f e s t n
 type EndoE e s x = x -> Either (AShowStr e s) x
-type ACPropagator a e s t n = EndoE e s (PropCluster a NodeRef e s t n)
+
+-- | AnyCluster propagator
+type ACPropagator a e s t n =
+  EndoE e s (PropCluster a NodeRef e s t n)
+-- | Special cluster propagator
 type CPropagator a c e s t n =
   EndoE e s (c EmptyF (WMetaD (Defaulting a) NodeRef) t n)
-type CPropagatorPlan c e s t n = CPropagator (QueryPlan e s) c e s t n
+type CPropagatorShape c e s t n = CPropagator (QueryShape e s) c e s t n
 
 instance Hashables2 e s => Default (ClusterConfig e s t n) where
-  def = ClusterConfig {
-    qnfInsertBottoms = False,
-    qnfToClustMap = mempty,
-    nrefToQnfs = mempty,
-    trefToQnf = mempty,
-    qnfTableColumns = const Nothing,
-    qnfPropagators = mempty,
-    qnfNodePlans = mempty,
-    clustBuildCache = def
+  def =
+    ClusterConfig
+    { qnfTunels = mempty
+     ,qnfInsertBottoms = False
+     ,qnfToClustMap = mempty
+     ,nrefToQnfs = mempty
+     ,trefToQnf = mempty
+     ,qnfTableColumns = const Nothing
+     ,qnfPropagators = mempty
+     ,qnfNodeShapes = mempty
+     ,clustBuildCache = def
     }
 
 type CGraphBuilderT e s t n m =
   ExceptT
     (ClusterError e s)
     (StateT (ClusterConfig e s t n) (GraphBuilderT t n m))
-hoistCGraphBuilderT :: Monad m =>
-                      (forall x . m x -> g x)
-                    -> CGraphBuilderT e s t n m a
-                    -> CGraphBuilderT e s t n g a
+hoistCGraphBuilderT
+  :: Monad m
+  => (forall x . m x -> g x)
+  -> CGraphBuilderT e s t n m a
+  -> CGraphBuilderT e s t n g a
 hoistCGraphBuilderT f = hoist (hoist (hoistGraphBuilderT f))

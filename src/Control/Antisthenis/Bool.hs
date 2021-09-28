@@ -31,6 +31,7 @@ import           Control.Antisthenis.Test
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.VarMap
 import           Control.Antisthenis.Zipper
+import           Control.Antisthenis.ZipperId
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -44,6 +45,7 @@ import           Data.Maybe
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Const
 import           Data.Utils.Default
 import           GHC.Generics
 
@@ -241,13 +243,17 @@ instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
      ,assocData = acUnlift $ assocData cass
     }
 
+type BoolExtParams op p = ExtParams (BoolTag op p) p
 data BoolTag op p
 instance BndRParams (BoolTag op p) where
   type ZErr (BoolTag op p) = Err
   type ZBnd (BoolTag op p) = BoolBound op
   type ZRes (BoolTag op p) = BoolV op
+  bndLt = undefined
+  exceedsCap = undefined
 
-instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
+instance (AShow (ExtCoEpoch p),BoolExtParams op p,BoolOp op)
+  => ZipperParams (BoolTag op p) where
   type ZEpoch (BoolTag op p) = ExtEpoch p
   type ZCoEpoch (BoolTag op p) = ExtCoEpoch p
   type ZCap (BoolTag op p) = BoolBound op
@@ -284,27 +290,37 @@ instance (ExtParams p,BoolOp op) => ZipperParams (BoolTag op p) where
       return $ min bnd gcap }
 
 
+-- boolEvolutionStrategy
+--   :: Monad m
+--   => (BndR (BoolTag op p) -> x)
+--   -> FreeT
+--     (ItInit
+--        (ExZipper (BoolTag op p))
+--        (CountingAssoc [] Maybe (ZBnd (BoolTag op p))))
+--     m
+--     (x,BndR (BoolTag op p))
+--   -> m (x,BndR (BoolTag op p))
+
 boolEvolutionStrategy
   :: Monad m
-  => x
-  -> FreeT
-    (ItInit
-       (ExZipper (BoolTag op p))
-       (CountingAssoc [] Maybe (ZBnd (BoolTag op p))))
-    m
-    (x,BndR (BoolTag op p))
-  -> m (x,BndR (BoolTag op p))
-boolEvolutionStrategy fin = recur
+  => FreeT (Cmds (BoolTag op p)) m x
+  -> m
+    (Maybe (ResetCmd (FreeT (Cmds (BoolTag op p)) m x))
+    ,Either (ExtCoEpoch p,BndR (BoolTag op p)) x)
+boolEvolutionStrategy = recur Nothing
   where
-    recur (FreeT m) = m >>= \case
-      Pure a -> return a
-      Free f -> case f of
-        CmdItInit _it ini -> recur ini
-        CmdIt it -> recur
+    recur rst (FreeT m) = m >>= \case
+      Pure a -> return (rst,Right a)
+      Free cmd -> case cmdItCoit cmd of
+        CmdItInit _it ini -> recur (Just $ cmdReset cmd) ini
+        CmdIt it -> recur (Just $ cmdReset cmd)
           $ it (error "Unimpl: function to select the cheapest")
-        CmdInit ini -> recur ini
+        CmdInit ini -> recur (Just $ cmdReset cmd) ini
         CmdFinished (ExZipper z) -> return
-          (fin,maybe (BndErr undefined) (either BndErr BndRes) (zRes z))
+          (rst
+          ,Left
+             (getConst $ zCursor z
+             ,maybe (BndErr undefined) (either BndErr BndRes) (zRes z)))
 
 -- | Return Just when we have a result the could be the restult of the
 -- poperator. This decides when to stop working.
@@ -315,20 +331,12 @@ boolEvolutionControl
   -> Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
   -> Maybe (BndR (BoolTag op p))
 boolEvolutionControl conf z = case confCap conf of
-  CapStruct i -> if
-    | i < 0     -> return $ BndErr undefined
-    | i == 0    -> localRes
-    | otherwise -> either BndErr BndRes <$> zRes z
   ForceResult -> zRes z >>= \case
     Left _e -> Nothing -- xxx: should check if zero is even possible.
     Right x -> if zFinished z then Just $ BndRes x else Nothing
   CapVal cap -> do
     localBnd <- zBound z
     if cap < localBnd then return $ BndBnd localBnd else Nothing
-  where
-    localRes = do
-      if zLocalIsFinal
-        z then either BndErr BndRes <$> zRes z else BndBnd <$> zBound z
 
 zLocalIsFinal
   :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
@@ -373,15 +381,21 @@ interpretBExp
   :: forall m p .
   (MonadState (ProcMap (BoolTag AnyOp p) m) m
   ,MonadReader (IS.IntSet,IM.IntMap Bool) m
-  ,ExtParams p)
+  ,Eq (ZCoEpoch (BoolTag AnyOp p))
+  ,AShow (ExtCoEpoch p)
+  ,AShow (ExtEpoch p)
+  ,BoolExtParams Or p
+  ,BoolExtParams And p)
   => BExp
   -> ArrProc (BoolTag AnyOp p) m
 interpretBExp = recur
   where
     recur :: BExp -> ArrProc (BoolTag AnyOp p) m
     recur = \case
-      e :/\: e' -> convAnd $ mkProc $ convBool . recur <$> [e,e']
-      e :\/: e' -> convOr $ mkProc $ convBool . recur <$> [e,e']
+      e :/\: e' ->
+        convAnd $ mkProcId (zidDefault "and") $ convBool . recur <$> [e,e']
+      e :\/: e' ->
+        convOr $ mkProcId (zidDefault "or") $ convBool . recur <$> [e,e']
       BNot e -> notBool $ recur e
       BLVar k -> mealyLift $ fromKleisli $ const $ asks $ \(_trail,m) -> maybe
         (BndErr $ error $ "Failed to dereference value key: " ++ ashow (k,m))
@@ -391,26 +405,14 @@ interpretBExp = recur
         $ getUpdMech
           (BndErr $ error $ "Failed to dereference expr key: " ++ show k)
           k
-    handleCycles k = withTrail $ \(trail,vals) -> if k `IS.member` trail
-      then Left $ ErrCycle k trail else Right (IS.insert k trail,vals)
+    handleCycles k = withTrail $ \(trail,vals) ->
+      if k `IS.member` trail then Left ErrCycle { ecCur = k,ecPred = mempty }
+      else Right (IS.insert k trail,vals)
     fromBool c = GBool { gbTrue = Exists c,gbFalse = Exists $ not c }
     convOr :: ArrProc (BoolTag Or p) m -> ArrProc (BoolTag op p) m
     convOr = convBool
     convAnd :: ArrProc (BoolTag And p) m -> ArrProc (BoolTag op p) m
     convAnd = convBool
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

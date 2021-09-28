@@ -59,12 +59,12 @@ getQueryDeclarations :: forall c e s t n m .
                         MonadCheckpoint m, MonadSoftCodeBuilder m,
                         Traversable c,
                         CC.ExpressionLike e,
-                        MonadReadScope c (QueryPlan e s) m) =>
-                       m (c (QueryPlan e s, CC.Declaration CC.CodeSymbol))
+                        MonadReadScope c (QueryShape e s) m) =>
+                       m (c (QueryShape e s, CC.Declaration CC.CodeSymbol))
 getQueryDeclarations =
   runScopeEnv <$> getScopeQueries >>= traverse (\x -> (fst x,) <$> mkArg x)
   where
-    mkArg :: (QueryPlan e s, CC.Symbol CC.CodeSymbol)
+    mkArg :: (QueryShape e s, CC.Symbol CC.CodeSymbol)
           -> m (CC.Declaration CC.CodeSymbol)
     mkArg (plan, usym) = do
       schema <- cppSchema $ querySchema plan
@@ -76,9 +76,9 @@ getQueryDeclarations =
         }
 
 translateSym :: (HasCallStack, Hashables2 e s, MonadCodeError e s t n m) =>
-               [(PlanSym e s,PlanSym e s)]
-             -> PlanSym e s -> m (PlanSym e s)
-translateSym assoc sym = if planSymIsSym sym
+               [(ShapeSym e s,ShapeSym e s)]
+             -> ShapeSym e s -> m (ShapeSym e s)
+translateSym assoc sym = if shapeSymIsSym sym
   then maybe (throwAStr $ "Lookup err:" ++ ashow (sym,assoc)) return
        $ lookup sym assoc
   else return sym
@@ -87,12 +87,12 @@ translateSym assoc sym = if planSymIsSym sym
 --
 symbolExpression :: forall c e s t n m .
                    (Hashables2 e s, Monad m, CC.ExpressionLike e, HasCallStack,
-                    MonadReadScope c (QueryPlan e s) m,
+                    MonadReadScope c (QueryShape e s) m,
                     MonadCodeBuilder e s t n m,
                     Traversable c, Functor c, Foldable c,
                     MonadCheckpoint m, MonadSoftCodeBuilder m,
                     MonadCodeError e s t n m) =>
-                   PlanSym e s
+                   ShapeSym e s
                  -> m (CC.Expression CC.CodeSymbol)
 symbolExpression eSym = do
   declNames <- fmap3 CC.declarationNameRef getQueryDeclarations
@@ -108,8 +108,8 @@ symbolExpression eSym = do
       _ -> throwAStr $ "Invalid symbol: " ++ ashow eSym
 
 lookupPlanRef :: Hashables2 e s =>
-                PlanSym e s
-              -> [(QueryPlan e s, b)]
+                ShapeSym e s
+              -> [(QueryShape e s, b)]
               -> Maybe b
 lookupPlanRef e = fmap snd
   . listToMaybe
@@ -142,9 +142,9 @@ anyProjExpression
   ,MonadCheckpoint m
   ,MonadCodeError e s t n m
   ,MonadSoftCodeBuilder m)
-  => ([(PlanSym e s,Expr a)] -> m (CppSchema' (PlanSym e s)))
+  => ([(ShapeSym e s,Expr a)] -> m (CppSchema' (ShapeSym e s)))
   -> (Expr a -> m (CC.Expression (f CC.CodeSymbol)))
-  -> [(PlanSym e s,Expr a)]
+  -> [(ShapeSym e s,Expr a)]
   -> m (CC.Expression (f CC.CodeSymbol))
 anyProjExpression toSchema toExpression proj = do
   schema <- cppSchema =<< toSchema proj
@@ -157,8 +157,8 @@ aggrProjExpression :: forall c e s t n m .
                      (Hashables2 e s, CC.ExpressionLike e,
                       MonadCodeCheckpoint e s t n m,
                       Foldable c, Functor c, Traversable c,
-                      MonadReadScope c (QueryPlan e s) m) =>
-                     [(PlanSym e s, Expr (Aggr (Expr (PlanSym e s))))]
+                      MonadReadScope c (QueryShape e s) m) =>
+                     [(ShapeSym e s, Expr (Aggr (Expr (ShapeSym e s))))]
                    -> m (CC.Expression
                         (Either (CC.Declaration CC.CodeSymbol) CC.CodeSymbol))
 aggrProjExpression = anyProjExpression aggrSchema aggrExpression
@@ -167,8 +167,8 @@ projExpression :: forall c e s t n m .
                  (Hashables2 e s, CC.ExpressionLike e, HasCallStack,
                   MonadCodeBuilder e s t n m, MonadCodeError e s t n m,
                   MonadCheckpoint m, Foldable c, Functor c, Traversable c,
-                  MonadReadScope c (QueryPlan e s) m, MonadSoftCodeBuilder m) =>
-                 [(PlanSym e s, Expr (Either CC.CppType (PlanSym e s)))]
+                  MonadReadScope c (QueryShape e s) m, MonadSoftCodeBuilder m) =>
+                 [(ShapeSym e s, Expr (Either CC.CppType (ShapeSym e s)))]
                -> m (CC.Expression CC.CodeSymbol)
 projExpression = fmap3 runIdentity
   $ anyProjExpression projSchema
@@ -214,9 +214,9 @@ exprExpression :: forall c e s t n m .
                  (Hashables2 e s, CC.ExpressionLike e, MonadCheckpoint m,
                   MonadSoftCodeBuilder m, HasCallStack,
                   Traversable c,
-                  MonadReadScope c (QueryPlan e s) m, MonadCodeBuilder e s t n m,
+                  MonadReadScope c (QueryShape e s) m, MonadCodeBuilder e s t n m,
                   MonadCodeError e s t n m) =>
-                 Expr (Either CC.CppType (PlanSym e s))
+                 Expr (Either CC.CppType (ShapeSym e s))
                -> m (CC.Expression CC.CodeSymbol)
 exprExpression =
   fmap3 runIdentity
@@ -239,16 +239,16 @@ exprExpression =
 -- updating the counter anyway.
 aggrExpression :: forall c' c e s t n m .
                  (Hashables2 e s, MonadSoftCodeBuilder m,
-                  MonadReadScope c (QueryPlan e s) m, MonadCodeBuilder e s t n m,
+                  MonadReadScope c (QueryShape e s) m, MonadCodeBuilder e s t n m,
                   Traversable c,
                   MonadCheckpoint m,
                   MonadCodeError e s t n m,
                   CC.ExpressionLike e) =>
-                 Expr (Aggr (Expr (PlanSym e s)))
+                 Expr (Aggr (Expr (ShapeSym e s)))
                -> m (CC.Expression
                     (Either (CC.Declaration CC.CodeSymbol) CC.CodeSymbol))
 aggrExpression = anyExprExpression buildFunc where
-  buildFunc :: Aggr (Expr (PlanSym e s))
+  buildFunc :: Aggr (Expr (ShapeSym e s))
             -> m (CC.Expression
                  (Either
                   (CC.Declaration CC.CodeSymbol)
@@ -257,7 +257,7 @@ aggrExpression = anyExprExpression buildFunc where
                            <$> mkStatefulFunc e af
                            <*> fmap2 Right (exprExpression $ Right <$> e)
     where
-      mkStatefulFunc :: Expr (PlanSym e s)
+      mkStatefulFunc :: Expr (ShapeSym e s)
                      -> AggrFunction
                      -> m (CC.Symbol
                           (Either (CC.Declaration CC.CodeSymbol) CC.CodeSymbol))
@@ -276,8 +276,8 @@ propExpression :: forall c e s t n m .
                   MonadCodeBuilder e s t n m, MonadCodeError e s t n m,
                   Traversable c,
                   MonadCheckpoint m, MonadSoftCodeBuilder m,
-                  MonadReadScope c (QueryPlan e s) m) =>
-                 Prop (Rel (Expr (Either CC.CppType (PlanSym e s))))
+                  MonadReadScope c (QueryShape e s) m) =>
+                 Prop (Rel (Expr (Either CC.CppType (ShapeSym e s))))
                -> m (CC.Expression CC.CodeSymbol)
 propExpression = recur where
   recur = \case
@@ -296,8 +296,8 @@ relExpression :: forall c e s t n m .
                  MonadCodeBuilder e s t n m, MonadCodeError e s t n m,
                  Traversable c,
                  MonadCheckpoint m, MonadSoftCodeBuilder m,
-                 MonadReadScope c (QueryPlan e s) m, CC.ExpressionLike e) =>
-                Rel (Expr (Either CC.CppType (PlanSym e s)))
+                 MonadReadScope c (QueryShape e s) m, CC.ExpressionLike e) =>
+                Rel (Expr (Either CC.CppType (ShapeSym e s)))
               -> m (CC.Expression CC.CodeSymbol)
 relExpression = recur where
   recur = \case

@@ -36,7 +36,7 @@ import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           GHC.Generics
 
-demoteTightenErr :: TightenErr (PlanSym e s) (QueryPlan e s,s) -> TightenErr e s
+demoteTightenErr :: TightenErr (ShapeSym e s) (QueryShape e s,s) -> TightenErr e s
 demoteTightenErr (TightenErrMsg x) = TightenErrMsg $ demoteAStr (DC.Sub DC.Dict) x
 
 type MonadTighten e s m = (MonadReader (TightenConf e s) m,

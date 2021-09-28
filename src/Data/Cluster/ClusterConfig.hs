@@ -27,12 +27,14 @@ module Data.Cluster.ClusterConfig
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Data.Bifunctor
 import           Data.Bipartite
 import           Data.Cluster.Types
 import qualified Data.HashMap.Strict  as HM
 import           Data.List
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.QnfQuery.AShow
 import           Data.QnfQuery.Types
 import           Data.Utils.AShow
 import           Data.Utils.Functors
@@ -211,7 +213,7 @@ registerClusterInput ref clust = do
 
 linkNRefQnf
   :: forall e s t n m .
-  (Hashables2 e s,MonadState (ClusterConfig e s t n) m)
+  (HasCallStack,Hashables2 e s,MonadState (ClusterConfig e s t n) m)
   => NodeRef n
   -> QNFQuery e s
   -> m ()
@@ -219,7 +221,14 @@ linkNRefQnf ref qnf = do
   refsToQnfs <- gets nrefToQnfs
   -- XXX: If this has worked well for a while remove this check and
   -- enforce the 1-1 corrensondence.
-  when (isJust $ refLU ref refsToQnfs) $ error $ "already linked " ++ show ref
+  case refLU ref refsToQnfs of
+    Just qnfs -> error
+      $ "already linked "
+      ++ ashow
+        (ref
+        ,bimap (fmap hash) hash . qnfToQuery <$> qnfs
+        ,bimap (fmap hash) hash $ qnfToQuery qnf)
+    Nothing -> return ()
   modify $ \r -> r
     { nrefToQnfs = refAlter (Just . maybe [qnf] (qnf :)) ref $ nrefToQnfs r }
 clearNRefQnfs

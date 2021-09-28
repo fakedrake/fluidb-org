@@ -55,10 +55,11 @@ import           Data.Utils.Unsafe
 -- | Turn a query into QNF and map the symbols to the QNFNames. We use
 -- integers to disambiguate between symbols that refer to columns that
 -- have the same data so we return all possible combinations.
-toQNF :: forall e s . (HasCallStack,Hashables2 e s) =>
-        (s -> Maybe [e])
+toQNF :: forall e s .
+      (HasCallStack,Hashables2 e s)
+      => (s -> Maybe [e])
       -> Query e s
-      -> ListT (QNFBuild e s) (QNFQuery e s, Query (QNFName e s,e) s)
+      -> ListT (QNFBuild e s) (QNFQuery e s,Query (QNFName e s,e) s)
 toQNF allSyms query = first snd <$> toNQNF allSyms query
 
 toNQNF
@@ -190,9 +191,8 @@ toNQNFQueryB o l r =
       return $ mapOp' (const $ QRightAntijoin p') $ nqnfRightAntijoin p' l r
     QProjQuery -> lift $ do
       keyAssoc <- leftAsRightKeys
-      ret <- mapOp (\p -> Right $ MkQB $ \_ q -> Q1 (QProj p) (Q0 q))
+      mapOp (\p -> Right $ MkQB $ \_ q -> Q1 (QProj p) (Q0 q))
         <$> nqnfProject [(kl,E0 kr) | (kl,kr) <- keyAssoc] r
-      return ret
     -- All columns in the left appear on the right so just keep the
     -- columns of th right
     QDistinct -> lift $ do
@@ -215,7 +215,7 @@ toNQNFQueryB o l r =
         findColOnR :: (e,QNFCol e s) -> QNFBuild e s (e,e)
         findColOnR lcol =
           maybe
-            (throwAStr $ "Col in lhs not found in rhs")
+            (throwAStr "Col in lhs not found in rhs")
             (return . (fst lcol,) . fst)
           $ find (equivCol lcol)
           $ HM.toList
@@ -360,51 +360,86 @@ nqnfProjectI proj nqnfIn = do
       nqnfResInOutNames=[]
       }
 
-nqnfAggregate :: forall e s e' . (e' ~ (QNFName e s,e), Hashables2 e s) =>
-                [(e,Expr (Aggr (Expr e)))]
-              -> [Expr e]
-              -> NQNFQueryI e s
-              -> QNFBuild e s
-              (NQNFResultI ([(e', Expr (Aggr (Expr e')))],[Expr e']) e s)
+nqnfAggregate
+  :: forall e s e' .
+  (e' ~ (QNFName e s,e),Hashables2 e s)
+  => [(e,Expr (Aggr (Expr e)))]
+  -> [Expr e]
+  -> NQNFQueryI e s
+  -> QNFBuild e s (NQNFResultI ([(e',Expr (Aggr (Expr e')))],[Expr e']) e s)
 nqnfAggregate p g l =
   qnfCached qnfAggregate_cache (\cc x -> cc{qnfAggregate_cache=x}) (p,g,l)
   $ nqnfAggregateI p g l
 
-nqnfAggregateI :: forall e s e' . (e' ~ (QNFName e s,e), Hashables2 e s) =>
-                [(e,Expr (Aggr (Expr e)))]
-              -> [Expr e]
-              -> NQNFQueryI e s
-              -> Either (QNFError e s)
-              (NQNFResultI ([(e', Expr (Aggr (Expr e')))],[Expr e']) e s)
-nqnfAggregateI proj expr nqnfIn@(nmIn,_) = do
-  proj' :: [(e,Expr (Aggr (QNFColProj e s,Expr (QNFName e s,e))))] <-
-    traverse4 (nqnfProjCol nqnfIn) proj
-  exprs :: [(QNFColProj e s,Expr (QNFName e s,e))] <-
-    traverse (nqnfProjCol nqnfIn) expr
-  let projQnf :: QNFQueryProj e s =
-        qnfConcatProjColsUnsafe $ fmap fst $ exprs ++ toList4 proj'
-  let projAggr :: [(e, Expr (QNFColAggr e s))] =
-        fmap3 (qnfAggrCol (projQnf,fmap fst exprs) . fmap fst) proj'
-  let aggrQnf :: QNFQueryAggr e s = qnfConcatAggrColsUnsafe $ toList3 projAggr
-  let nameAssoc :: [(e, QNFColProj e s)] =
-        fmap2 (aggrColToProjCol aggrQnf) projAggr
-  let nmOut :: NameMap e s = HM.fromList
-        $ fmap2 (qnfGeneralizeQueryF . Left) nameAssoc
-  let qnfOut = qnfGeneralizeQueryF
-               $ Left
-               $ qnfConcatProjColsUnsafe
-               $ toList2 nameAssoc
-  return NQNFResult{
-    nqnfResNQNF= (nmOut, qnfOut),
-    nqnfResOrig= (bimap
-                  (\e -> (getNameTrusting nmOut e,e))
-                  (fmap3 $ \e -> (getNameTrusting nmIn e,e))
-                  <$> proj,
-                  fmap2 (\e -> (getNameTrusting nmIn e,e)) expr),
-    -- There is no one-to-one correspondance of in/out names for
-    -- aggregations
-    nqnfResInOutNames =[]
-  }
+nqnfAggregateI
+  :: forall e s e' .
+  (e' ~ (QNFName e s,e),Hashables2 e s)
+  => [(e,Expr (Aggr (Expr e)))]
+  -> [Expr e]
+  -> NQNFQueryI e s
+  -> Either
+    (QNFError e s)
+    (NQNFResultI ([(e',Expr (Aggr (Expr e')))],[Expr e']) e s)
+nqnfAggregateI proj aggrBases0 nqnfIn@(nmIn,_) = do
+  prunnedProj :: [(e,Expr (Aggr (QNFColProj e s,Expr (QNFName e s,e))))]
+    <- traverse4 (nqnfProjCol nqnfIn) proj
+  aggrBases :: [(QNFColProj e s,Expr (QNFName e s,e))]
+    <- traverse (nqnfProjCol nqnfIn) aggrBases0
+  -- Create an inner projection. XXX: check tha it's a noop.
+  let projQnfInner :: QNFQueryProj e s =
+        qnfConcatProjColsUnsafe $ fmap fst $ aggrBases ++ toList4 prunnedProj
+  -- Transform the expression subtrees of the aggregation to become
+  -- projection columns. XXX: If projQnfInner is not the same as nqnfIn
+  let aggrCols :: [(e,Expr (QNFColAggr e s))] =
+        fmap3
+          (qnfAggrCol (projQnfInner,fst <$> aggrBases) . fmap fst)
+          prunnedProj
+  -- Concatenate the aggregation columns to become a qnf.
+  let aggrQnf :: QNFQueryAggr e s = qnfConcatAggrColsUnsafe $ toList3 aggrCols
+  -- If the aggregation columns are trivial (ie. E0 (Aggr...) rather
+  -- than more complex expressions). Then don't wrap
+  let (nmOut,qnfOut) = case trvialColumns aggrCols of
+        Just projAssoc
+          -> let nmOut0 =
+                   HM.fromList $ fmap2 (qnfGeneralizeQueryF . Right) projAssoc
+                     :: NameMap e s
+                 qnfOut0 =
+                   qnfGeneralizeQueryF
+                   $ Right
+                   $ qnfConcatAggrColsUnsafe
+                   $ toList2 projAssoc in (nmOut0,qnfOut0)
+        Nothing
+         -> let nameAssoc =
+                  fmap2 (aggrColToProjCol aggrQnf) aggrCols
+                    :: [(e,QNFColProj e s)]
+                nmOut0 =
+                  HM.fromList $ fmap2 (qnfGeneralizeQueryF . Left) nameAssoc
+                    :: NameMap e s
+                qnfOut0 =
+                  qnfGeneralizeQueryF
+                  $ Left
+                  $ qnfConcatProjColsUnsafe
+                  $ toList2 nameAssoc in (nmOut0,qnfOut0)
+  return
+    NQNFResult
+    { nqnfResNQNF = (nmOut,qnfOut)
+     ,nqnfResOrig =
+        (bimap
+           (\e -> (getNameTrusting nmOut e,e))
+           (fmap3 $ \e -> (getNameTrusting nmIn e,e))
+         <$> proj
+        ,fmap2 (\e -> (getNameTrusting nmIn e,e)) aggrBases0)
+      -- There is no one-to-one correspondance of in/out names for
+      -- aggregations
+     ,nqnfResInOutNames = []
+    }
+
+-- | If the columns are all trivial (ie. all are E0) strip the Expr
+-- layer.
+trvialColumns :: [(e, Expr (QNFColAggr e s))] -> Maybe [(e, QNFColAggr e s)]
+trvialColumns = foldr go (Just []) where
+  go (n,E0 a) rest = ((n,a):) <$> rest
+  go _ _           = Nothing
 
 -- | Concatenate the columns into a single QNF assuming that they are
 -- all columns of the same QNF.
@@ -424,8 +459,8 @@ qnfConcatProjColsUnsafe proj@(p:_) = updateHash QNFQuery {
   qnfOrigDEBUG'=EmptyF}
 -- | Concatenate the columns into a single QNF assuming that they are
 -- all columns of the same QNF.
-qnfConcatAggrColsUnsafe :: forall e s. Hashables2 e s =>
-                          [QNFColAggr e s] -> QNFQueryAggr e s
+qnfConcatAggrColsUnsafe
+  :: forall e s . Hashables2 e s => [QNFColAggr e s] -> QNFQueryAggr e s
 qnfConcatAggrColsUnsafe [] = updateHash QNFQuery {
   qnfColumns=CoConst mempty,
   qnfSel=mempty,
@@ -445,49 +480,64 @@ qnfAggrCol :: Hashables2 e s =>
              (QNFQueryProj e s,[QNFColProj e s])
            -> Aggr (QNFColProj e s)
            -> QNFColAggr e s
-qnfAggrCol (projCols,exps) aggr = updateHash QNFQuery {
+qnfAggrCol (innerQ,exps) aggr = updateHash QNFQuery {
   qnfColumns=CoConst
-    (Identity $ runIdentity . getConst . qnfColumns <$> aggr,
+    (Identity $ (`Column` 0) . qnfGeneralizeQueryF . Left <$> aggr,
+      -- Identity $ runIdentity . getConst . qnfColumns <$> aggr,
      HS.fromList $ E0 . (`Column` 0) . qnfGeneralizeQueryF . Left <$> exps),
   qnfSel=mempty,
   qnfProd=bagSingleton $
-    HS.singleton $ Q0 $ Right $ qnfGeneralizeQueryF $ Left projCols,
-  qnfHash=undefined,
+    HS.singleton $ Q0 $ Right $ qnfGeneralizeQueryF $ Left innerQ,
+  qnfHash=error "Uncomputed hash:qnfAggrCol",
   qnfOrigDEBUG'=EmptyF}
 
-nqnfProjCol :: forall e s . Hashables2 e s =>
-              NQNFQueryI e s
-            -> Expr e
-            -> Either (QNFError e s) (QNFColProj e s,Expr (QNFName e s,e))
+
+-- | Restrict a query to become a projection column.
+nqnfProjCol
+  :: forall e s .
+  Hashables2 e s
+  => NQNFQueryI e s
+  -> Expr e
+  -> Either (QNFError e s) (QNFColProj e s,Expr (QNFName e s,e))
 nqnfProjCol nqnf projExp = nqnfSpecializeQueryF nqnf >>= \case
-  Left (projNm, projQnf) -> let
-    qnf = qnfMapColumns
-          (const $ Const $ Identity
-            -- projNm points to projQnf
-            $ getNameTrusting projNm <$> projExp >>= expandName)
-          projQnf
-    in return (qnf,exprPair)
-  Right (aggrNm,aggrQnf) -> return (
-    updateHash QNFQuery {
-        qnfColumns=
-            Const $ Identity $ generalizeName . getNameTrusting aggrNm <$> projExp,
-        qnfSel=mempty,
-        qnfHash=undefined,
-        qnfProd=bagSingleton
-          $ HS.singleton
-          $ Q0 $ Right
-          $ qnfGeneralizeQueryF $ Right aggrQnf,
-        qnfOrigDEBUG'=EmptyF},exprPair)
+  Left (projNm,projQnf)
+    -> let qnf =
+             qnfMapColumns
+               (const
+                $ Const
+                $ Identity
+                $ projExp >>= generalizeProjName . getNameTrusting projNm)
+               projQnf in return (qnf,exprPair)
+  Right (aggrNm,aggrQnf) -> return
+    (updateHash
+       QNFQuery
+       { qnfColumns = Const
+           $ Identity
+           $ generalizeAggrName . getNameTrusting aggrNm <$> projExp
+        ,qnfSel = mempty
+        ,qnfHash = error "Uncomputed hash:nqnfProjCol"
+        ,qnfProd = bagSingleton
+           $ HS.singleton
+           $ Q0
+           $ Right
+           $ qnfGeneralizeQueryF
+           $ Right aggrQnf
+        ,qnfOrigDEBUG' = EmptyF
+       }
+    ,exprPair)
   where
-    exprPair :: Expr (QNFName e s, e)
-    exprPair = go <$> projExp where
-      go :: e -> (QNFName e s, e)
-      go e = (getNameTrusting (fst nqnf) e,e)
-    generalizeName :: QNFNameC CoConst e s -> QNFName e s
-    generalizeName = qnfMapName $ Right . getCoConst
-    expandName :: QNFNameC Const e s -> Expr (QNFName e s)
-    expandName = \case
-      Column QNFQuery{qnfColumns=Const (Identity expr)} _ -> expr
+    exprPair :: Expr (QNFName e s,e)
+    exprPair = go <$> projExp
+      where
+        go :: e -> (QNFName e s,e)
+        go e = (getNameTrusting (fst nqnf) e,e)
+    -- | Wrap the name
+    generalizeAggrName :: QNFNameC CoConst e s -> QNFName e s
+    generalizeAggrName = qnfMapName $ Right . getCoConst
+    -- | If the name is a column expand the contents.
+    generalizeProjName :: QNFNameC Const e s -> Expr (QNFName e s)
+    generalizeProjName = \case
+      Column QNFQuery {qnfColumns = Const (Identity expr)} _ -> expr
       PrimaryCol e s i -> E0 $ PrimaryCol e s i
       NonSymbolName e -> E0 $ NonSymbolName e
 
@@ -645,7 +695,7 @@ nqnfSelectI p q = nqnfSpecializeQueryF q <&> \case
 -- are inserting into an aggregated query we need to first wrap it
 -- into a projection.
 --
--- Nothing in prop means drop selection from query
+-- Nothing in prop means drop selection from query.
 nqnfSelectInternal :: forall dr f e s . (Functor dr,HashableQNF f e s,Foldable dr) =>
                      dr (Prop (Rel (Expr e)))
                    -> NQNFQueryCF Const f e s

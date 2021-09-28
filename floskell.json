@@ -1,6 +1,6 @@
 {
     "style": "johan-tibell",
-    "extensions": ["Arrows","DerivingVia","LambdaCase","ScopedTypeVariables","TupleSections","RankNTypes","FlexibleContexts","MultiParamTypeClasses","TypeFamilies","RecordWildCards","ViewPatterns","ImplicitParams","GADTs","QuantifiedConstraints","DefaultSignatures","FunctionalDependencies","MultiWayIf","BangPatterns"],
+    "extensions": ["Arrows","DerivingVia","LambdaCase","ScopedTypeVariables","TupleSections","RankNTypes","FlexibleContexts","MultiParamTypeClasses","TypeFamilies","RecordWildCards","ViewPatterns","ImplicitParams","GADTs","QuantifiedConstraints","DefaultSignatures","FunctionalDependencies","MultiWayIf","BangPatterns","PatternSynonyms","TypeApplications"],
     "fixities": [],
     "formatting": {
         "op": {
@@ -25,6 +25,16 @@
                 "linebreaks": "before"
             },
             ". in type": {
+                "force-linebreak": false,
+                "spaces": "both",
+                "linebreaks": "after"
+            },
+            ". in type": {
+                "force-linebreak": false,
+                "spaces": "both",
+                "linebreaks": "after"
+            },
+            "-> in expression": {
                 "force-linebreak": false,
                 "spaces": "both",
                 "linebreaks": "after"

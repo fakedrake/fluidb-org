@@ -20,8 +20,9 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bipartite
-import qualified Data.List.NonEmpty   as NEL
+import qualified Data.List.NonEmpty       as NEL
 import           Data.NodeContainers
+import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.Default
@@ -89,9 +90,10 @@ traverseTransition side f = \case
     Inp -> (\x' -> Trigger x' y z) <$> f x
     Out -> Trigger x y <$> f z
   x -> pure x
-transitionCost :: (MonadError (PlanningError t n) m,
-                  MonadReader (GCConfig t n) m) =>
-                 Transition t n -> m Cost
+transitionCost
+  :: (MonadError (PlanningError t n) m,MonadReader (GCConfig t n) m)
+  => Transition t n
+  -> m Cost
 transitionCost = \case
   Trigger i _ o -> ioCost i o
   RTrigger i _ o -> ioCost i o

@@ -88,7 +88,7 @@ revTriggerCode op ioFiles = fmap CC.Block $ do
         str <- grpStatements q' $ constrArgsRevRight ioFiles
         return $ stl ++ str
         where
-          grpStatements :: QueryPlan e s
+          grpStatements :: QueryShape e s
                         -> Maybe [CC.Expression CC.CodeSymbol]
                         -> m [CC.Statement CC.CodeSymbol]
           grpStatements q = \case

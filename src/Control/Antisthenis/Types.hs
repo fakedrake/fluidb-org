@@ -21,14 +21,16 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
+{-# LANGUAGE TypeApplications       #-}
 
 module Control.Antisthenis.Types
   (IndexErr(..)
   ,ashowItInit
   ,runArrProc
   ,ashowRes
-  ,lengthZ
+  ,zipperShape
   ,mapCursor
+  ,RstCmd
   ,Err
   ,ArrProc'
   ,NoArgError(..)
@@ -56,34 +58,36 @@ module Control.Antisthenis.Types
   ,InitProc
   ,ItProc
   ,CoitProc
-  ,capWasFinished
-  ,AShowW) where
+  ,AShowW
+  ,incrZipperUId,zNamed,trZ) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Moore
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.AssocContainer
+import           Control.Antisthenis.ZipperId
 import           Control.Arrow                               hiding (first,
                                                               second)
 import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Bifunctor
+import           Data.Either
+import           Data.List
 import           Data.Proxy
 import           Data.Utils.AShow
+import           Data.Utils.Const
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.OptSet
+import           Data.Utils.Tup
 import           GHC.Generics
 
 data Cap b
-  = CapStruct Int -- Maximum depth NOT max steps
-  | CapVal b -- Cap val
+  = CapVal b -- Cap val
   | ForceResult
   deriving (Show,Functor,Generic)
 instance AShow b => AShow (Cap b)
-capWasFinished :: Cap b -> Bool
-capWasFinished (CapStruct i) = i < 0
-capWasFinished _             = False
 
 type InitProc a = a
 type ItProc a = a
@@ -92,21 +96,26 @@ type CoitProc a = a
 -- | Error related to indexes
 data IndexErr i
   = ErrMissing i
-  | ErrCycle i (OptSet i)
+  | ErrCycleEphemeral { ecCur :: i }
+  | ErrCycle { ecPred :: OptSet i,ecCur :: i }
   | NoArguments
   deriving Generic
 instance (AShow i,AShow (OptSet i))
   => AShow (IndexErr i)
 type Err = IndexErr Int
 
--- | Either provide a meaningful reset command or delegate to a the
--- previous reset branch.
+-- | Provide a meaningful reset command.
 newtype ResetCmd a = DoReset a deriving Functor
--- Existential zipper
+type RstCmd w m x = (ResetCmd (FreeT (Cmds w) m x))
+
+-- Existential zipper. This zipper does not have a cursor, it just
+-- remembers the structure of the zipper.
 data ExZipper w = forall p . ExZipper { runExZipper :: FinZipper w p }
-data MayReset a = DontReset a | ShouldReset deriving Functor
+data MayReset a = DontReset a | ShouldReset deriving (Generic,Functor)
+instance AShow a => AShow (MayReset a)
 type Cmds w = Cmds' (ExZipper w) (ZItAssoc w)
-data Cmds' r f a = Cmds { cmdReset :: ResetCmd a,cmdItCoit :: MayReset (ItInit r f a) }
+data Cmds' r f a =
+  Cmds { cmdReset :: ResetCmd a,cmdItCoit :: ItInit r f a }
   deriving Functor
 type ItProcF f a =
   ((forall x . AssocContainer f => NonEmptyAC f x -> (KeyAC f,x,f x))
@@ -115,7 +124,9 @@ data ItInit r f a
   = CmdItInit (ItProcF f a) (InitProc a)
   | CmdIt (ItProcF f a)
   | CmdInit (InitProc a)
-  | CmdFinished r
+  | CmdFinished r -- when a process finishes it should stick to a
+                  -- value until the epoch/coepoch pair requests a
+                  -- reset.
 
 ashowItInit :: ItInit r f a -> SExp
 ashowItInit = \case
@@ -135,22 +146,22 @@ type AShowW w =
   ,AShow (ZPartialRes w)
   ,Functor (ZItAssoc w)
   ,BndRParams w
+  ,AShow (ZEpoch w)
+  ,AShow (ZCap w)
   ,AShow (ZItAssoc w ((),())))
 
 -- | Some functions that require shared variables.
 data ZProcEvolution w m k =
   ZProcEvolution
-  {
-    -- Evolution control decides when to return values and when to
+  { -- Evolution control decides when to return values and when to
     -- continue.
-    evolutionControl :: GConf w -> Zipper w (ArrProc w m) -> Maybe k
+    evolutionControl :: GConf w -> Zipper w (ArrProc w m) -> Maybe (BndR w)
     -- Evolution strategy decides which branches to take when
     -- evolving. Get the final.
    ,evolutionStrategy
       :: forall x .
-      x
-      -> FreeT (ItInit (ExZipper w) (ZItAssoc w)) m (x,k)
-      -> m (x,k)
+      FreeT (Cmds w) m x
+      -> m (Maybe (RstCmd w m x),Either (ZCoEpoch w,BndR w) x)
      -- Empty error is the error emitted when there are no arguments
      -- to an operator.
    ,evolutionEmptyErr :: ZErr w
@@ -163,6 +174,8 @@ class BndRParams w where
 
   type ZRes w :: *
 
+  bndLt :: Proxy w -> ZBnd w -> ZBnd w -> Bool
+  exceedsCap :: Proxy w -> ZCap w -> ZBnd w -> Bool
 
 type Old a = a
 type New a = a
@@ -175,6 +188,7 @@ type Local a = a
 class (KeyAC (ZItAssoc w) ~ ZBnd w
       ,BndRParams w
       ,Monoid (ZCoEpoch w)
+      ,AShow (ZCoEpoch w)
       ,AssocContainer (ZItAssoc w)
       ,Default (ZPartialRes w)) => ZipperParams w where
   type ZCap w :: *
@@ -206,7 +220,7 @@ class (KeyAC (ZItAssoc w) ~ ZBnd w
     -> New (Maybe (Zipper' w f p (ZPartialRes w)))
 
   -- | From the configuration that is global to the op make the local
-  -- one to be propagated to the next argument process.β
+  -- one to be propagated to the next argument process.
   zLocalizeConf :: ZCoEpoch w -> GConf w -> Zipper w p -> MayReset (LConf w)
 
 data BndR w
@@ -227,15 +241,13 @@ type ArrProc' w m =
   MooreCat (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
 
 data Conf w =
-  Conf { confCap    :: Cap (ZCap w)
-        ,confEpoch  :: ZEpoch w
-        ,confTrPref :: String
-       }
+  Conf
+  { confCap :: Cap (ZCap w),confEpoch :: ZEpoch w,confTrPref :: () }
   deriving Generic
 instance (AShow (ZEpoch w),AShow (ZCap w))
   => AShow (Conf w)
 instance Default (ZEpoch w) => Default (Conf w) where
-  def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = "no-pref" }
+  def = Conf { confCap = ForceResult,confEpoch = def,confTrPref = () }
 type GConf w = Conf w
 type LConf w = Conf w
 
@@ -265,61 +277,102 @@ data Zipper' w cursf (p :: *) pr =
     -- element to be ran. The bound provided is for the case that.
    ,zCursor  :: cursf (Maybe (ZBnd w),InitProc p,p)
    ,zRes     :: pr -- The result without the cursor.
-   ,zId      :: String
+   ,zId      :: ZipperId
   }
   deriving Generic
 instance Functor (Zipper' w cursf p) where
   fmap f Zipper {..} =
     Zipper { zCursor = zCursor,zBgState = zBgState,zRes = f zRes,zId = zId }
+zNamed :: Zipper'  w cursf p pr -> String -> Bool
+zNamed z  = zidNamed (zId z)
 
-lengthZBgState :: Foldable (ZItAssoc w) => ZipState w p -> (Int,Int,Int)
-lengthZBgState ZipState {..} = (length bgsInits,length bgsIts,length bgsCoits)
+lengthZBgState :: Foldable (ZItAssoc w) => ZipState w p -> (Int,Int,(Int,Int))
+lengthZBgState ZipState {..} =
+  (length bgsInits
+  ,length bgsIts
+  ,bimap length length $ partition (isLeft . fst) bgsCoits)
 
-data ZLen =
-  ZLen
-  { zLenInits :: Int
-   ,zLenIts   :: Int
-   ,zLenCoits :: Int
-   ,zLenCurs  :: Int
-   ,zLenId    :: String
+data ZShape =
+  ZShape
+  { zshInits :: Int
+   ,zshIts   :: Int
+   ,zshCoits :: (Int,Int)
+   ,zshCurs  :: Int
+   ,zshId    :: ZipperId
   }
   deriving Generic
 
-instance AShow ZLen
+instance AShow ZShape
 
-lengthZ :: (Foldable (ZItAssoc w),Foldable cursf) => Zipper' w cursf p pr -> ZLen
-lengthZ z =
-  ZLen
-  { zLenInits = ini
-   ,zLenIts = it
-   ,zLenCoits = coit
-   ,zLenCurs = length (zCursor z)
-   ,zLenId = zId z
+zipperShape
+  :: (Foldable (ZItAssoc w),Foldable cursf) => Zipper' w cursf p pr -> ZShape
+zipperShape z =
+  ZShape
+  { zshInits = ini
+   ,zshIts = it
+   ,zshCoits = coit
+   ,zshCurs = length (zCursor z)
+   ,zshId = zId z
   }
   where
     (ini,it,coit) = lengthZBgState (zBgState z)
 
-instance (AShow (ZItAssoc w (p,p)),AShowBndR w,AShowV p,AShow pr)
-  => AShow (Zipper' w Identity p pr)
+instance (AShow (ZItAssoc w (p,p))
+         ,AShowBndR w
+         ,AShowV p
+         ,AShow pr
+         ,AShow (f (Maybe (ZBnd w),InitProc p,p)))
+  => AShow (Zipper' w f p pr)
 
 -- | A zipper without a cursor.
-type FinZipper w p = Zipper' w EmptyF p (ZPartialRes w)
+type FinZipper w p = Zipper' w (Const (ZCoEpoch w)) p (ZPartialRes w)
 type Zipper w p = Zipper' w Identity p (ZPartialRes w)
 instance (Functor f,Functor (ZItAssoc w)) => Bifunctor (Zipper' w f) where
-  bimap f g (Zipper {..}) =
+  bimap f g Zipper {..} =
     Zipper
     { zBgState = fmap f zBgState
      ,zCursor = (\(a,b,c) -> (a,f b,f c)) <$> zCursor
      ,zRes = g zRes
      ,zId = zId
     }
-class Monoid (ExtCoEpoch p) => ExtParams p where
+
+incrZipperUId
+  :: Foldable (ZItAssoc w)
+  => Zipper' w Identity p pr
+  -> Zipper' w Identity p pr
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+incrZipperUId z =
+  z { zId = (zId z) { zidVersion = (+ 1) <$> zidVersion (zId z) } }
+
+
+
+class (Monoid (ExtCoEpoch p)) => ExtParams w p where
   type ExtEpoch p :: *
 
   type ExtCoEpoch p :: *
 
+  type ExtCap p :: *
+
   type ExtError p :: *
 
+  type MechVal p :: *
+
+  extExceedsCap :: Proxy (p,w) -> ExtCap p -> ZBnd w -> Bool
   extCombEpochs
     :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> Conf w -> MayReset (Conf w)
 
@@ -336,9 +389,20 @@ runArrProc _ _              = error "unreachable"
 ashowRes :: (ZRes w -> SExp) -> BndR w -> String
 ashowRes ashow'' = ashow . \case
   BndRes r ->  ashow'' r
-  BndErr _ -> Sym "<error>"
-  BndBnd _ -> Sym "<bound>"
+  BndErr _ -> Sym "<error-result>"
+  BndBnd _ -> Sym "<bound-result>"
 
 mapCursor :: (forall a . f a -> g a) -> Zipper' w f p r -> Zipper' w g p r
 mapCursor f Zipper {..} =
-  Zipper { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
+  Zipper
+  { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
+
+trZ :: (Monad m,AShow a)
+    => String
+    -> Zipper' w cursf p pr
+    -> [String]
+    -> a
+    -> m ()
+trZ msg z fltr d =
+  when (null fltr || any (zNamed z) fltr)
+  $ (msg ++ "(" ++ ashow (zId z) ++ ")") <<: d

@@ -51,8 +51,10 @@ import           Data.QnfQuery.Build
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations
+import           Data.Query.Optimizations.Echo
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
+import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Solve
 import           Data.QueryPlan.Transitions
@@ -94,17 +96,18 @@ lengthF = \case
 sqlToSolution
   :: forall a e s t n m .
   (Hashables2 e s,MonadFakeIO m,AShow e,AShow s)
-  => Query (PlanSym e s) (QueryPlan e s,s)
+  => Query (ShapeSym e s) (QueryShape e s,s)
   -> (forall x . [x] -> m x) -- a lazy list to a monad we like.
   -> ICodeBuilder e s t n a
   -> GlobalSolveT e s t n m a
 sqlToSolution query serializeSols getSolution = do
   GlobalConf{globalExpTypeSymIso=symIso,globalQueryCppConf=cppConf} <- get
   -- traceM "Orig query:\n"
-  -- traceM $ ashow $ first planSymOrig query
-  qs <- optQueryPlan @e @s (literalType cppConf) symIso query
+  -- traceM $ ashow $ first shapeSymOrig query
+  qs <- optQueryShape @e @s (literalType cppConf) symIso query
   -- SANITY CHECK
-  when False $ wrapTrace "Sanity checking..." $ do
+#if 0
+  wrapTrace "Sanity checking..." $ do
     ioLogMsg ioOps $ "Opt queries: [size:" ++  show (lengthF qs) ++ "]\n"
     let toQnfs q = HS.fromList
           $ fmap fst
@@ -116,6 +119,7 @@ sqlToSolution query serializeSols getSolution = do
           $ fmap toQnfs $ fmap2 fst $ getCompose $ iterA interleaveComp qs
     forM_ (zip [1::Int ..] $ zip qnfs $ tail qnfs) $ \(_i,(bef,aft)) ->
       unless (bef == aft) $ throwAStr $ "UNEQUAL QNFa: "  ++ ashow (bef,aft)
+#endif
   -- /SANITY CHECK
   hoistGlobalSolveT (serializeSols . dissolve @[])
     $ insertAndRun qs getSolution
@@ -166,40 +170,71 @@ insertAndRun
   ,MonadPlus m
   ,BotMonad m
   ,HValue m ~ PlanSearchScore)
-  => Free (Compose NEL.NonEmpty (Query e)) (s,QueryPlan e s)
+  => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryShape e s)
   -> CodeBuilderT e s t n m a
   -> GlobalSolveT e s t n m a
 insertAndRun queries postSolution = do
-  (ret,conf) <- joinExcept $ hoist (runCodeBuild . lift) solveQuery
+  (ret,conf) <- joinExcept $ hoist (runCodeBuild . lift) $ do
+    ref <- insertQueries queries
+    lift $ matNode postSolution ref
   modify $ \gs' -> gs' { globalGCConfig = conf }
-  return ret
-  where
-    solveQuery
-      :: ExceptT
-        (GlobalError e s t n)
-        (CodeBuilderT e s t n m)
-        (a,GCConfig t n)
-    solveQuery = do
-      QueryCppConf {..} <- gets cbQueryCppConf
-      when False $ do
-        matNodes <- lift materializedNodes
-        traceM $ "Mat nodes: " ++ ashow matNodes
-        when (null matNodes) $ throwAStr "No ground truth"
-      nOptqRef :: NodeRef n <- lift3 $ insertQueryPlan literalType queries
-      lift4 clearClustBuildCache
-      -- lift $ reportGraph >> reportClusterConfig/
-      nodeNum <- asks (length . nNodes . propNet)
-      traceM
-        $ printf
-          "Total nodes: %d, solving node: %n, opt DAG size: %d"
-          nodeNum
-          nOptqRef
-          (lengthF queries)
-      (_qcost,conf) <- lift $ planLiftCB $ do
-        setNodeMaterialized nOptqRef
-        fmap mconcat $ mapM transitionCost =<< dropReader get getTransitions
-      (,pushHistory nOptqRef conf) <$> lift (local (const conf) postSolution)
+  case ret of
+    Left e  -> throwError e
+    Right x -> return x
 
+insertQueries
+  :: (Hashables2 e s, Monad m)
+  => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryShape e s)
+  -> ExceptT (GlobalError e s t n) (CodeBuilderT e s t n m) (NodeRef n)
+insertQueries queries = do
+  QueryCppConf {..} <- gets cbQueryCppConf
+  when False $ do
+    matNodes <- lift materializedNodes
+    traceM $ "Mat nodes: " ++ ashow matNodes
+    when (null matNodes) $ throwAStr "No ground truth"
+  nOptqRef :: NodeRef n <- wrapTraceT
+    ("insertQueryForest" ++ show (lengthF queries))
+    $ lift3
+    $ insertQueryForest literalType queries
+  lift4 clearClustBuildCache
+  -- lift $ reportGraph >> reportClusterConfig/
+  nodeNum <- asks (length . nNodes . propNet)
+  traceM
+    $ printf
+      "Total nodes: %d, solving node: %n, opt DAG size: %d"
+      nodeNum
+      nOptqRef
+      (lengthF queries)
+  return nOptqRef
+
+
+-- | Materializ node. If an error occurs return it as Left in order to
+-- avoid losing the entire configuration, it will invariably be useful
+-- for error reporting.
+matNode
+  :: (HValue m ~ PlanSearchScore
+     ,Monad m
+     ,Hashables2 e s
+     ,MonadHalt m
+     ,BotMonad m
+     ,MonadPlus m)
+  => CodeBuilderT e s t n m a
+  -> NodeRef n
+  -> CodeBuilderT e s t n m (Either (GlobalError e s t n) a,GCConfig t n)
+matNode postSolution nOptqRef = do
+  traceTM $ "Updating sizes(and other stuff): " ++ show nOptqRef
+  (errM,conf) <- planLiftCB $ do
+    traceTM $ "sizes updated: " ++ show nOptqRef
+    reifyError (setNodeMaterialized nOptqRef) >>= \case
+      Left e   -> return $ Just $ toGlobalError e
+      Right () -> return Nothing
+  let conf' = pushHistory nOptqRef conf
+  case errM of
+    Just e  -> return (Left e,conf)
+    Nothing -> (,conf') . Right <$> local (const conf) postSolution
+
+reifyError :: MonadError a m => m b -> m (Either a b)
+reifyError m = fmap Right m `catchError` (return . Left)
 
 planFrontier :: [Transition t n] -> [NodeRef n]
 planFrontier
@@ -214,10 +249,9 @@ planFrontier
 type CppCode = String
 runSingleQuery
   :: (Hashables2 e s,AShow e,AShow s,ExpressionLike e,MonadFakeIO m)
-  => Query (PlanSym e s) (QueryPlan e s,s)
+  => Query (ShapeSym e s) (QueryShape e s,s)
   -> GlobalSolveT e s t n m ([Transition t n],CppCode)
-runSingleQuery query =
-  sqlToSolution query popSol $ do
+runSingleQuery query = sqlToSolution query popSol $ do
   ts <- transitions . NEL.head . epochs <$> getGCState
   (ts,) <$> getQuerySolutionCpp
   where
@@ -232,7 +266,7 @@ forEachQuery
   (MonadFail m,AShowV e,AShowV s,DefaultGlobal e s t n m q)
   => (GlobalConf e s t n -> GlobalConf e s t n)
   -> [q]
-  -> (Int -> Query (PlanSym e s) (QueryPlan e s,s) -> GlobalSolveT e s t n m a)
+  -> (Int -> Query (ShapeSym e s) (QueryShape e s,s) -> GlobalSolveT e s t n m a)
   -> m [a]
 forEachQuery modGQnf qios m =
   runGlobalSolve

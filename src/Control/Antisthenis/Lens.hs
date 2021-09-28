@@ -1,20 +1,38 @@
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE RankNTypes #-}
-module Control.Antisthenis.Lens (getL,modL,(:>:)(..)) where
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeOperators     #-}
+module Control.Antisthenis.Lens ((:>:)(..),HasLens(..),ifLt,min2l,rgetL) where
 
-import Data.Utils.Const
-import Control.Monad.Identity
 import qualified Control.Category as C
+import           Data.Utils.Nat
 
 -- | A very simple lens to handle the infinite type problem.
-newtype a :>:  b =
-  Lens' { runLens' :: forall f . Functor f => (b -> f b) -> a -> f a }
+data a :>:  b =
+  Lens
+  { getL :: a -> b,modL :: (b -> b) -> a -> a }
 
 instance C.Category (:>:) where
-  Lens' f . Lens' g = Lens' $ g . f
-  id = Lens' id
+  a . b = Lens { getL = getL a . getL b,modL = modL b . modL a }
+  id = Lens { getL = id,modL = id }
 
-getL :: a :>: b -> a -> b
-getL (Lens' l) = getConst . l Const
-modL :: a :>: b -> (b -> b) -> a -> a
-modL (Lens' l) f = runIdentity . l (Identity . f)
+class HasLens a b where
+  defLens :: a :>: b
+  default defLens :: a ~ b => a :>: b
+  defLens = C.id
+
+instance HasLens (Min a) (Maybe a) where
+  defLens = Lens { getL = \(Min a) ->
+    a,modL = \f (Min a) -> Min $ f a }
+
+instance HasLens (Sum a) (Maybe a) where
+  defLens = Lens { getL = \(Sum a) ->
+    a,modL = \f (Sum a) -> Sum $ f a }
+
+ifLt :: (Ord b,HasLens a b) => a -> b ->  c -> c -> c
+ifLt a b t e = if getL defLens a < b then t else e
+min2l :: (Ord b,HasLens a b) => a -> b -> a
+min2l a b = modL defLens (min b) a
+rgetL :: (Zero a,HasLens a b) => b -> a
+rgetL b = modL defLens (const b) zero
+instance HasLens (Min a) (Min a)
+instance HasLens (Sum a) (Sum a)

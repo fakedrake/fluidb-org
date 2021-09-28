@@ -29,18 +29,16 @@ import           Data.Cluster.InsertQuery
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
-import           Data.QnfQuery.Build
-import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Types
 import           Data.Codegen.SchemaAssocClass
 import           Data.CppAst
 import           Data.Maybe
 import           Data.NodeContainers
+import           Data.QnfQuery.Build
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.Utils
-import           Data.Query.QuerySchema.GetQueryPlan
 import           Data.Query.QuerySchema.Types
-import           Data.Query.QuerySize
 import           Data.Query.SQL.FileSet
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Types
@@ -54,7 +52,8 @@ import           Text.Printf
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bifunctor
-import qualified Data.HashMap.Lazy                   as HM
+import qualified Data.HashMap.Lazy              as HM
+import           Data.Query.QuerySchema
 import           Data.String
 import           Data.Tuple
 import           Data.Utils.AShow
@@ -147,16 +146,6 @@ toTableColumns :: Eq s => SchemaAssoc e s -> s -> Maybe [e]
 toTableColumns schemaAssoc = fmap2 snd . (`lookup` schemaAssoc)
 
 
-data PreGlobalConf e0 e s =
-  PreGlobalConf
-  { pgcExpIso         :: (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
-   ,pgcToUniq         :: Int -> e -> Maybe e
-   ,pgcToFileSet      :: s -> Maybe FileSet -- Embedding of tables in filesets
-   ,pgcPrimKeyAssoc   :: [(s,[e])]          -- Primary keys of each table
-   ,pgcSchemaAssoc    :: SchemaAssoc e s     -- The schema of each table
-   ,pgcTableSizeAssoc :: [(s,TableSize)]          -- Size of each table in bytes
-  }
-
 -- | When calculating the global configuration for tpch we take into
 -- account the follwoing:
 --
@@ -186,6 +175,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
   return
     GlobalConf
     { globalExpTypeSymIso = pgcExpIso
+     ,globalTableSizeAssoc = pgcTableSizeAssoc
      ,globalRunning = def { runningConfBudgetSearch = True }
      ,globalSchemaAssoc = pgcSchemaAssoc
      ,globalMatNodes = nNodes propNetLocal
@@ -199,7 +189,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
           -- Note that sizes will be computed lazily.
          ,nodeSizes = refFromAssocs nodeSizes'
          ,intermediates = mempty
-         ,budget = Nothing
+         ,budget = pgcBudget
          ,maxBranching = Nothing
          ,maxTreeDepth = Nothing
         }
@@ -212,12 +202,16 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
     clusterBuilt = do
       modify $ \cm -> cm { qnfInsertBottoms = True }
       tableMap' <- forM pgcSchemaAssoc $ \(t,_) -> do
-        n <- insertQueryPlan (literalType queryCppConf) . return . (t,)
+        n <- insertQueryForest (literalType queryCppConf) . return . (t,)
           =<< symPlan t
-        triggerClustPropagator $ NClustW $ NClust n
+        _shapeClust <- triggerClustPropagator $ NClustW $ NClust n
         return (n,t)
       modify $ \cm -> cm { qnfInsertBottoms = False }
       (,fromRefAssocs tableMap') <$> lift2 (gets gbPropNet)
-    symPlan :: Monad m => s -> CGraphBuilderT e s t n m (QueryPlan e s)
-    symPlan =
-      getSymPlan (uniqueColumns queryCppConf) (tableSchema queryCppConf)
+    symPlan :: Monad m => s -> CGraphBuilderT e s t n m (QueryShape e s)
+    symPlan s =
+      getSymShape
+        (uniqueColumns queryCppConf s)
+        (tableSchema queryCppConf s)
+        (s `lookup` pgcTableSizeAssoc)
+        s

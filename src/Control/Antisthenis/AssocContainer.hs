@@ -1,22 +1,20 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Arrows                 #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE DeriveFoldable         #-}
+{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Arrows #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE QuantifiedConstraints  #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 module Control.Antisthenis.AssocContainer
   (AssocContainer(..)
@@ -24,12 +22,12 @@ module Control.Antisthenis.AssocContainer
   ,simpleAssocPopNEL
   ,SimpleAssoc(..)) where
 
-import Data.Bifunctor
-import GHC.Generics
-import Data.Utils.AShow
-import Data.List.NonEmpty as NEL
-import Data.Utils.Functors
-import Control.Monad.Identity
+import           Control.Monad.Identity
+import           Data.Bifunctor
+import           Data.List.NonEmpty     as NEL
+import           Data.Utils.AShow
+import           Data.Utils.Functors
+import           GHC.Generics
 
 class (Functor f,Foldable f) => AssocContainer f where
   type KeyAC f :: *
@@ -96,15 +94,15 @@ instance AShow (f (k,v))
 instance AssocContainer (SimpleAssoc [] k) where
   type KeyAC (SimpleAssoc [] k) = k
   type NonEmptyAC (SimpleAssoc [] k) =
-    SimpleAssoc (NEL.NonEmpty) k
+    SimpleAssoc NEL.NonEmpty k
   acInsert k v (SimpleAssoc m) = SimpleAssoc $ (k,v) NEL.:| m
   acUnlift (SimpleAssoc (m NEL.:| ms)) = SimpleAssoc $ m : ms
   acEmpty = SimpleAssoc []
-  acNonEmpty (SimpleAssoc []) = Nothing
+  acNonEmpty (SimpleAssoc [])     = Nothing
   acNonEmpty (SimpleAssoc (x:xs)) = Just $ SimpleAssoc $ x NEL.:| xs
 
 simpleAssocPop :: SimpleAssoc [] k a -> Maybe ((k,a),SimpleAssoc [] k a)
-simpleAssocPop (SimpleAssoc []) = Nothing
+simpleAssocPop (SimpleAssoc [])     = Nothing
 simpleAssocPop (SimpleAssoc (x:xs)) = Just (x,SimpleAssoc xs)
 simpleAssocPopNEL :: SimpleAssoc NEL.NonEmpty k a -> ((k,a),SimpleAssoc [] k a)
 simpleAssocPopNEL (SimpleAssoc (x NEL.:| xs)) = (x,SimpleAssoc xs)

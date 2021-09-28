@@ -50,7 +50,10 @@ import           Data.Utils.Hashable
 import           GHC.Generics
 
 -- | An endomorphism.
-data Table = NoTable | TSymbol String deriving (Show, Eq, Generic, Ord, Read)
+data Table
+  = NoTable
+  | TSymbol String
+  deriving (Show,Eq,Generic,Ord,Read)
 unTable :: Table -> String
 unTable (TSymbol s) = s
 unTable _           = error "No string associated with table."
@@ -60,14 +63,16 @@ type SQLQuery s = Query ExpTypeSym s
 
 instance Hashable Table
 
-data Date = Date {
-  year    :: Integer,
-  month   :: Integer,
-  day     :: Integer,
-  hour    :: Integer,
-  minute  :: Integer,
-  seconds :: Integer
-  } deriving (Show, Eq, Generic)
+data Date =
+  Date
+  { year    :: Integer
+   ,month   :: Integer
+   ,day     :: Integer
+   ,hour    :: Integer
+   ,minute  :: Integer
+   ,seconds :: Integer
+  }
+  deriving (Show,Eq,Generic)
 instance AShow Date
 instance ARead Date
 
@@ -81,8 +86,8 @@ type ExpTypeSym = ExpTypeSym' String
 -- instance IsString e => IsString (ExpTypeSym' e) where
 --   fromString = ESym . fromString
 
-data ExpTypeSym' e =
-  EDate Date
+data ExpTypeSym' e
+  = EDate Date
   | EInterval Date
   | EFloat Double
   | EInt Integer
@@ -90,7 +95,7 @@ data ExpTypeSym' e =
   | ESym e
   | EBool Bool
   | ECount (Maybe e)
-  deriving (Show, Eq, Generic, Functor, Traversable, Foldable)
+  deriving (Show,Eq,Generic,Functor,Traversable,Foldable)
 instance Default (ExpTypeSym' e) where def = EBool False
 instance AShow e => AShow (ExpTypeSym' e)
 instance ARead e => ARead (ExpTypeSym' e)
@@ -148,7 +153,7 @@ instance AShow Table
 instance ARead Table
 
 newtype NestedQueryE s e =
-  NestedQueryE {runNestedQueryE :: Either (Query (NestedQueryE s e) s) e}
+  NestedQueryE { runNestedQueryE :: Either (Query (NestedQueryE s e) s) e }
   deriving (Eq,Show,Generic)
 
 instance Bifunctor NestedQueryE where

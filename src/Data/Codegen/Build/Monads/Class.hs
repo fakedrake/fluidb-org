@@ -20,37 +20,35 @@
 {-# OPTIONS_GHC -Wno-unused-foralls -Wno-name-shadowing -Wno-unused-top-binds #-}
 
 module Data.Codegen.Build.Monads.Class
-  ( MonadReadScope(..)
-  , MonadCodeBuilder(..)
-  , MonadCodeError
-  , QueryCppConf(..)
-  , MonadSoftCodeBuilder(..)
-  , MonadCheckpoint(..)
-  , MonadCodeCheckpoint
-  , CodeBuildErr(..)
-  , CBState(..)
-  , MonadWriteScope(..)
-  , ScopeEnv(..)
-  , QueryPlan
-  , MonadSchemaScope
-  , throwCodeErrStr
-  , emptyCBState
-  , evalAggrEnv
-  , evalQueryEnv
-  , getClassNames
-  , getQueries
-  , getScopeQueries
-  , getQueryCppConf
-  , putQueryCppConf
-  , runSoftCodeBuilder
-  , tellClassM
-  , tellFunctionM
-  , tellInclude
-  , throwCodeErr
-  , tryInsert
-  ) where
+  (MonadReadScope(..)
+  ,MonadCodeBuilder(..)
+  ,MonadCodeError
+  ,QueryCppConf(..)
+  ,MonadSoftCodeBuilder(..)
+  ,MonadCheckpoint(..)
+  ,MonadCodeCheckpoint
+  ,CodeBuildErr(..)
+  ,CBState(..)
+  ,MonadWriteScope(..)
+  ,ScopeEnv(..)
+  ,QueryShape
+  ,MonadSchemaScope
+  ,throwCodeErrStr
+  ,emptyCBState
+  ,evalAggrEnv
+  ,evalQueryEnv
+  ,getClassNames
+  ,getQueries
+  ,getScopeQueries
+  ,getQueryCppConf
+  ,putQueryCppConf
+  ,runSoftCodeBuilder
+  ,tellClassM
+  ,tellFunctionM
+  ,tellInclude
+  ,throwCodeErr
+  ,tryInsert) where
 
-import Data.QueryPlan.Types
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -65,6 +63,7 @@ import qualified Data.HashSet               as HS
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Query.Algebra
+import           Data.QueryPlan.Types
 import           Data.String
 import           Data.Tuple
 import           Data.Utils.AShow
@@ -199,27 +198,27 @@ instance MonadSoftCodeBuilder m => MonadSoftCodeBuilder (ListT m) where
 
 -- Readable scope
 type MonadSchemaScope c e s m =
-  (Hashables2 e s, MonadReadScope c (QueryPlan e s) m)
+  (Hashables2 e s, MonadReadScope c (QueryShape e s) m)
 class (Traversable c, Foldable c, Monad m) => MonadReadScope c a m | m -> c where
   getScope :: m (ScopeEnv c a)
 instance (Traversable c, Foldable c, Monad m) =>
-         MonadReadScope c (QueryPlan e s) (ReaderT (ScopeEnv c (QueryPlan e s)) m) where
+         MonadReadScope c (QueryShape e s) (ReaderT (ScopeEnv c (QueryShape e s)) m) where
   getScope = ask
   {-# INLINE getScope #-}
 instance (Traversable c, Foldable c, Monad m) =>
          MonadReadScope c AggrFunction (StateT (ScopeEnv c AggrFunction) m) where
   getScope = get
   {-# INLINE getScope #-}
-instance (Monoid a, MonadReadScope c (QueryPlan e s) m) =>
-         MonadReadScope c (QueryPlan e s) (WriterT a m) where
+instance (Monoid a, MonadReadScope c (QueryShape e s) m) =>
+         MonadReadScope c (QueryShape e s) (WriterT a m) where
   getScope = lift getScope
   {-# INLINE getScope #-}
-instance MonadReadScope c (QueryPlan e s) m =>
-         MonadReadScope c (QueryPlan e s) (StateT (ScopeEnv c AggrFunction) m) where
+instance MonadReadScope c (QueryShape e s) m =>
+         MonadReadScope c (QueryShape e s) (StateT (ScopeEnv c AggrFunction) m) where
   getScope = lift getScope
   {-# INLINE getScope #-}
 instance MonadReadScope c AggrFunction m =>
-         MonadReadScope c AggrFunction (ReaderT (ScopeEnv c (QueryPlan e s)) m) where
+         MonadReadScope c AggrFunction (ReaderT (ScopeEnv c (QueryShape e s)) m) where
   getScope = lift getScope
   {-# INLINE getScope #-}
 instance MonadReadScope c a m => MonadReadScope c a (ListT m) where
@@ -235,7 +234,7 @@ instance Monad m =>
   putScope = put
   {-# INLINE putScope #-}
 instance MonadWriteScope c AggrFunction m =>
-         MonadWriteScope c AggrFunction (ReaderT (ScopeEnv c (QueryPlan e s)) m) where
+         MonadWriteScope c AggrFunction (ReaderT (ScopeEnv c (QueryShape e s)) m) where
   putScope = lift . putScope
   {-# INLINE putScope #-}
 instance (Monoid a, MonadWriteScope c AggrFunction m) =>
@@ -329,25 +328,25 @@ tryInsert ccM tcsM = do
       return (ccBefore,tcs')
 
 getScopeQueries :: forall c e s m .
-                  (Monad m, MonadReadScope c (QueryPlan e s) m) =>
-                  m (ScopeEnv c (QueryPlan e s))
+                  (Monad m, MonadReadScope c (QueryShape e s) m) =>
+                  m (ScopeEnv c (QueryShape e s))
 getScopeQueries = getScope
 getQueries :: forall c e s m .
-                (Monad m, Functor c, MonadReadScope c (QueryPlan e s) m) =>
-                m (c (QueryPlan e s))
+                (Monad m, Functor c, MonadReadScope c (QueryShape e s) m) =>
+                m (c (QueryShape e s))
 getQueries = fmap fst . runScopeEnv <$> getScopeQueries
 
 -- | Use the queries as scope to run the computation.
 evalQueryEnv :: forall c e s m a .
                (Traversable c, MonadSoftCodeBuilder m) =>
-               c (QueryPlan e s)
-             -> ReaderT (ScopeEnv c (QueryPlan e s)) m a
+               c (QueryShape e s)
+             -> ReaderT (ScopeEnv c (QueryShape e s)) m a
              -> m a
 evalQueryEnv queries funcBuilder = do
   x <- ScopeEnv <$> traverse go queries
   runReaderT funcBuilder x
   where
-    go :: QueryPlan e s -> m (QueryPlan e s, CC.Symbol CC.CodeSymbol)
+    go :: QueryShape e s -> m (QueryShape e s, CC.Symbol CC.CodeSymbol)
     go q = do
       sym <- mkUSymbol "record"
       return (q, sym)
