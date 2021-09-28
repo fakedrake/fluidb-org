@@ -143,7 +143,7 @@ main =
     logDump %> \out -> do
       putInfo $ "Making the log dump: " ++ out
       need [benchmarkBranchesExec]
-      noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out) benchmarkExec
+      noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out) benchmarkBranchesExec
     tokenBranch %> \tok -> do
       putInfo $ "Building the branch files. The token required is " ++ tok
       need [logDump,readdumpExec]
