@@ -190,10 +190,7 @@ setNodeStateSafe' getFwdOp node goalState =
               trM $ "Materializing dependencies: " ++ show depset
               setNodesMatSafe depset
               trM $ "Intermediates: " ++ show interm
-              cutPlanT
-                $ wrapTrace ("gc" <: node)
-                $ garbageCollectFor
-                $ node : interm
+              cutPlanT $ garbageCollectFor $ node : interm
               -- Automatically set the states of intermediates
               forM_ interm $ \ni -> do
                 prevState' <- getNodeState ni
@@ -440,13 +437,14 @@ isOversized = do
     else return False
 
 killPrimaries :: MonadLogic m => ReaderT PageNum (PlanT t n m) ()
-killPrimaries = hoist (wrapTrM "killPrimaries") $ (safeDelInOrder =<<) $ lift $ do
-  nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
-  nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
-  nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
-  guardl "No killable primaries" $ not $ null nsUnord
-  -- XXX: We are having no priority in deleting these.
-  return nsUnord
+killPrimaries =
+  hoist (wrapTrM "killPrimaries") $ (safeDelInOrder =<<) $ lift $ do
+    nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
+    nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
+    nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
+    guardl "No killable primaries" $ not $ null nsUnord
+    -- XXX: We are having no priority in deleting these.
+    return nsUnord
 
 safeDelInOrder :: MonadLogic m =>
                  [NodeRef n] -> ReaderT PageNum (PlanT t n m) ()

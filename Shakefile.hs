@@ -82,8 +82,9 @@ execRule conf execName = do
     putInfo $ printf "Building executable %s (%s)" (cnfExecName conf) execPath
     needSrcFiles
     intermPath <- runReaderT (haskellExec $ cnfExecName conf) conf
-    cmd_ (RemEnv "STACK_IN_NIX_SHELL")
-      $ stackCmd conf StackBuild ["fluidb:exe:" ++ cnfExecName conf]
+    let command = stackCmd conf StackBuild ["fluidb:exe:" ++ cnfExecName conf]
+    putInfo $ "Command: " ++ show command
+    cmd_ (RemEnv "STACK_IN_NIX_SHELL") command
     exists <- doesFileExist out
     if exists then cmd_ ["touch",out] else cmd_
       (printf "ln -s %s %s" intermPath out
@@ -141,8 +142,8 @@ main =
     pathsFileRule readdumpConf
     logDump %> \out -> do
       putInfo $ "Making the log dump: " ++ out
-      need [benchmarkExec]
-      noNixCmd (Timeout 10) (EchoStderr False) (FileStderr out) benchmarkExec
+      need [benchmarkBranchesExec]
+      noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out) benchmarkExec
     tokenBranch %> \tok -> do
       putInfo $ "Building the branch files. The token required is " ++ tok
       need [logDump,readdumpExec]

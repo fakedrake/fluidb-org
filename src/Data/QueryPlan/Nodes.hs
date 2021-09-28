@@ -149,7 +149,6 @@ getDataSize = do
           (ashow matNodes)
     else return ret
 
-
 totalUsedPages
   :: (MonadError (PlanningError t n) m
      ,MonadReader (GCConfig t n) m)
