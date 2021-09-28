@@ -72,10 +72,13 @@ runQuery verbosity  query = do
   liftIO $ putStrLn $ ashow transitions
   return transitions
 
-ssbRunGlobalSolve :: SSBGlobalSolveM a -> IO a
+softFail :: AShow a => a -> IO ()
+softFail a = putStrLn $ ashow a
+
+ssbRunGlobalSolve :: SSBGlobalSolveM () -> IO ()
 ssbRunGlobalSolve m = do
   ssbGlobalConf <- getSsbGlobalConf
-  runGlobalSolve ssbGlobalConf (fail . ashow) m
+  runGlobalSolve ssbGlobalConf (softFail . ashow) m
 
 singleQuery :: IO ()
 singleQuery =
