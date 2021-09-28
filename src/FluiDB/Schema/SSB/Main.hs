@@ -75,10 +75,10 @@ runQuery verbosity  query = do
 softFail :: AShow a => a -> IO ()
 softFail a = putStrLn $ ashow a
 
-ssbRunGlobalSolve :: SSBGlobalSolveM () -> IO ()
+ssbRunGlobalSolve :: SSBGlobalSolveM a -> IO ()
 ssbRunGlobalSolve m = do
   ssbGlobalConf <- getSsbGlobalConf
-  runGlobalSolve ssbGlobalConf (softFail . ashow) m
+  runGlobalSolve ssbGlobalConf (softFail . ashow) $ void m
 
 singleQuery :: IO ()
 singleQuery =
