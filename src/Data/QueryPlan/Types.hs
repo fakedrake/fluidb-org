@@ -220,7 +220,7 @@ getGcLog = reverse . gcLog <$> get
 #else
 #ifdef VERBOSE_SOLVING
 trM = traceM <=< traceMsg
-#els
+#else
 trM = const $ return ()
 #endif
 {-# INLINE trM #-}
