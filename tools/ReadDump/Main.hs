@@ -128,13 +128,14 @@ readId errMsg = readStart . C8.unpack
       _        -> error errMsg
 #endif
 
-data ProvenanceAtom = EitherLeft
-                    | EitherRight
-                    | SplitLeft
-                    | SplitRight
-                    | AlsoLeft
-                    | AlsoRight
-  deriving (Show, Read)
+data ProvenanceAtom
+  = EitherLeft
+  | EitherRight
+  | SplitLeft
+  | SplitRight
+  | AlsoLeft
+  | AlsoRight
+  deriving (Show,Read)
 provenanceAsBool :: ProvenanceAtom -> Bool
 provenanceAsBool = \case
   EitherLeft  -> False
@@ -177,26 +178,23 @@ onRightTrie f (TrieNode i l r) = TrieNode i l (Just $ f r)
 onThisTrie :: (Maybe (NodeTrie a) -> NodeTrie a) -> NodeTrie a -> NodeTrie a
 onThisTrie f = f . Just
 
-liftFn :: Monoid a =>
-         (NodeTrie a -> NodeTrie a) -> Maybe (NodeTrie a) -> NodeTrie a
+liftFn
+  :: Monoid a => (NodeTrie a -> NodeTrie a) -> Maybe (NodeTrie a) -> NodeTrie a
 liftFn f = f . fromMaybe (Leaf mempty)
-chainOps :: Monoid a =>
-           ((Maybe (NodeTrie a) -> NodeTrie a) -> NodeTrie a -> NodeTrie a)
-         -> ((Maybe (NodeTrie a) -> NodeTrie a) -> NodeTrie a -> NodeTrie a)
-         -> ((Maybe (NodeTrie a) -> NodeTrie a) -> NodeTrie a -> NodeTrie a)
+chainOps :: Monoid a => TrieOp a -> TrieOp a -> TrieOp a
 chainOps onS onS' f = onS (liftFn $ onS' f)
-boolToOp :: Bool ->
-           ((Maybe (NodeTrie a) -> NodeTrie a) -> NodeTrie a -> NodeTrie a)
+type TrieOp a = ((Maybe (NodeTrie a) -> NodeTrie a) -> NodeTrie a -> NodeTrie a)
+boolToOp :: Bool -> TrieOp a
 boolToOp b = if b then onRightTrie else onLeftTrie
 
-pathToOp :: Monoid a =>
-           [Bool]
-         -> ((Maybe (NodeTrie a) -> NodeTrie a) -> NodeTrie a -> NodeTrie a)
+pathToOp :: Monoid a => [Bool] -> TrieOp a
 pathToOp = foldr (chainOps . boolToOp) onThisTrie
 
-insertToTrie :: Node -> NodeTrie [(Int,StringType)] -> NodeTrie [(Int,StringType)]
-insertToTrie (Node i path a) = pathToOp path $ liftFn
-                               $ \(TrieNode as l r) -> TrieNode ((i,a):as) l r
+insertToTrie
+  :: Node -> NodeTrie [(Int,StringType)] -> NodeTrie [(Int,StringType)]
+insertToTrie (Node i path a) =
+  pathToOp path $ liftFn $ \(TrieNode as l r) ->
+  TrieNode ((i,a) : as) l r
 insertToTrie _               = id
 
 fmap2 :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
@@ -224,31 +222,33 @@ nodeLinum = \case
 reprNode :: Node -> String
 reprNode n = printf "[%d]'%s'" (nodeLinum n) (C8.unpack $ nodeString n)
 toBranches :: [Node] -> [[StringType]]
-toBranches = fmap2 snd
-             . fmap (sortOn fst)
-             . trieToList (++)
-             . foldl (flip insertToTrie) (Leaf mempty)
+toBranches =
+  fmap2 snd
+  . fmap (sortOn fst)
+  . trieToList (++)
+  . foldl (flip insertToTrie) (Leaf mempty)
 
 uniqueSortedOnKeepLast :: Eq b => (a -> b) -> [a] -> [a]
 uniqueSortedOnKeepLast f as = map fst $ foldr go' [] $ zip as $ map f as
   where
     go' a []               = [a]
-    go' (y,b) xs@((_,a):_) = if a == b then xs else (y,b):xs
+    go' (y,b) xs@((_,a):_) = if a == b then xs else (y,b) : xs
 
 readFileCached :: FilePath -> StateT [(FilePath, [StringType])] IO [StringType]
 readFileCached fn = do
-  retM <- lookup fn <$> get
+  retM <- gets $ lookup fn
   case retM of
-    Nothing  -> do
+    Nothing -> do
       ret <- lift $ C8.lines <$> B.readFile fn
-      modify ((fn,ret):)
+      modify ((fn,ret) :)
       return ret
     Just ret -> return ret
 
 type Plans = []
 type Branches = []
-readBranches :: FilePath
-             -> StateT [(FilePath, [StringType])] IO [(Int,Branches [StringType])]
+readBranches
+  :: FilePath
+  -> StateT [(FilePath,[StringType])] IO [(Int,Branches [StringType])]
 readBranches = fmap extractBranches . readFileCached where
   extractBranches :: [StringType] -> [(Int, Branches [StringType])]
   extractBranches =
@@ -353,6 +353,7 @@ data BranchResult = BranchFailure | BranchSuccess | BranchResultUnknown
   deriving (Show, Eq)
 lastLineToResult :: C8.ByteString -> BranchResult
 lastLineToResult x
+  | "ERROR" `B.isPrefixOf` x = BranchFailure
   | "BOT" `B.isPrefixOf` x = BranchFailure
   | "Successfully materialized" `B.isPrefixOf` x = BranchSuccess
   | otherwise = BranchResultUnknown

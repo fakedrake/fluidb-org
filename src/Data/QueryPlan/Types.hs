@@ -213,6 +213,7 @@ instance Default (GCState t n)
 
 
 trM :: Monad m => String -> PlanT t n m ()
+#error "we would like verbose solving"
 #ifdef GHCI
 trM msg = modify $ \gss -> gss{gcLog=msg:gcLog gss}
 getGcLog :: Monad m => PlanT t n m [String]
@@ -220,7 +221,7 @@ getGcLog = reverse . gcLog <$> get
 #else
 #ifdef VERBOSE_SOLVING
 trM = traceM <=< traceMsg
-#else
+#els
 trM = const $ return ()
 #endif
 {-# INLINE trM #-}
