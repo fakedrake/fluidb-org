@@ -323,13 +323,13 @@ stateDescriptions = reverse . (`execState` []) . noDesc where
 -- | Stript the \[[0-9]+\.[0-9]+s\] <line>
 stripTime :: StringType -> (Maybe Double,StringType)
 stripTime str = maybe (Nothing,str) (first Just) $ do
-  rest <- C8.stripPrefix "[" str
-  let (intPart,rest) = C8.span isDigit rest
-  _rest <- C8.stripPrefix "." rest
-  let (decPart,_rest) = C8.span isDigit rest
-  _rest <- C8.stripPrefix "s] " rest
+  rest0 <- C8.stripPrefix "[" str
+  let (intPart,rest1) = C8.span isDigit rest0
+  rest2 <- C8.stripPrefix "." rest1
+  let (decPart,rest3) = C8.span isDigit rest2
+  rest4 <- C8.stripPrefix "] " rest3
   guard $ not $ C8.null intPart || C8.null decPart
-  return (read $ C8.unpack $ intPart <> "." <> decPart,rest)
+  return (read $ C8.unpack $ intPart <> "." <> decPart,rest4)
 
 indentLines :: Int -> [StringType] -> (Int, [StringType])
 indentLines = go [] where
