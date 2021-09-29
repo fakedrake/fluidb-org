@@ -49,13 +49,13 @@ isNewPlan (NewPlan _) = True
 isNewPlan _           = False
 
 pref :: StringType
-pref = "[Before] Solving node:<"
+pref = "[Before] setNodeMaterialized N"
 lineToNode :: Linum -> StringType -> Maybe Node
 lineToNode linum x
   | pref `B.isPrefixOf` x =
     Just
     $ NewPlan
-    $ readWithin pref ">" x
+    $ readAfter pref x
   | "[branch:" `B.isPrefixOf` x =
       Just
       $ uncurry (Node linum)
@@ -68,6 +68,10 @@ intAfter :: StringType -> StringType -> Maybe Int
 intAfter pre str = case dropPref pre str of
   Right _ -> Nothing
   Left x  -> Just $ read' $ C8.takeWhile isDigit x
+
+readAfter :: StringType -> StringType -> Int
+readAfter pre x =
+  read' $ B.drop (B.length pre) x
 
 readWithin :: StringType -> StringType -> StringType -> Int
 readWithin pre suf x =
