@@ -26,6 +26,7 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 import           Data.Char
 import           Data.List
 import           Data.Maybe
+import           Debug.Trace
 import           GHC.Stack
 import           System.Directory
 import           System.Environment
@@ -235,14 +236,12 @@ uniqueSortedOnKeepLast f as = map fst $ foldr go' [] $ zip as $ map f as
     go' (y,b) xs@((_,a):_) = if a == b then xs else (y,b) : xs
 
 readFileCached :: FilePath -> StateT [(FilePath, [StringType])] IO [StringType]
-readFileCached fn = do
-  retM <- gets $ lookup fn
-  case retM of
-    Nothing -> do
-      ret <- lift $ C8.lines <$> B.readFile fn
-      modify ((fn,ret) :)
-      return ret
-    Just ret -> return ret
+readFileCached file = gets (lookup file) >>= \case
+  Just ret -> return ret
+  Nothing -> do
+    ret <- lift $ C8.lines <$> B.readFile file
+    modify ((file,ret) :)
+    return ret
 
 type Plans = []
 type Branches = []
@@ -255,8 +254,11 @@ readBranches = fmap extractBranches . readFileCached where
     map (second toBranches)
     -- . uniqueSortedOnKeepLast fst
     . enumeratePlans
+    . showLen "valid-lines"
     . (catMaybes :: [Maybe Node] -> [Node])
     . zipWith lineToNode [1..]
+    . showLen "all-lines"
+  showLen msg a = trace (msg ++ ": " ++ show (length a)) a
   enumeratePlans :: [Node] -> [(Int, [Node])]
   enumeratePlans = snd . splitWhen (\case {NewPlan i -> Just i; _ -> Nothing})
 
