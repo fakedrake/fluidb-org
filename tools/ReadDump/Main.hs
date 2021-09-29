@@ -252,19 +252,24 @@ type Branches = []
 readBranches
   :: FilePath
   -> StateT [(FilePath,[StringType])] IO [(Int,Branches [StringType])]
-readBranches = fmap extractBranches . readFileCached where
-  extractBranches :: [StringType] -> [(Int, Branches [StringType])]
-  extractBranches =
-    map (second toBranches)
-    -- . uniqueSortedOnKeepLast fst
-    . enumeratePlans
-    . showLen "valid-lines"
-    . (catMaybes :: [Maybe Node] -> [Node])
-    . zipWith lineToNode [1..]
-    . showLen "all-lines"
-  showLen msg a = trace (msg ++ ": " ++ show (length a)) a
-  enumeratePlans :: [Node] -> [(Int, [Node])]
-  enumeratePlans = snd . splitWhen (\case {NewPlan i -> Just i; _ -> Nothing})
+readBranches = fmap extractBranches . readFileCached
+  where
+    extractBranches :: [StringType] -> [(Int,Branches [StringType])]
+    extractBranches =
+      map (second toBranches)
+      -- . uniqueSortedOnKeepLast fst
+      . enumeratePlans
+      . showLen "valid-lines"
+      . (catMaybes :: [Maybe Node] -> [Node])
+      . zipWith lineToNode [1 ..]
+      . fmap (snd . stripTime)
+      . showLen "all-lines"
+    showLen msg a = trace (msg ++ ": " ++ show (length a)) a
+    enumeratePlans :: [Node] -> [(Int,[Node])]
+    enumeratePlans =
+      snd . splitWhen (\case
+                         NewPlan i -> Just i
+                         _         -> Nothing)
 
 readGraphs :: FilePath -> StateT [(FilePath,[StringType])] IO [GraphDescription]
 readGraphs = fmap graphDescriptions . readFileCached
