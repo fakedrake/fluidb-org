@@ -128,8 +128,6 @@ pathsFileRule conf = do
 profileBenchmark :: FilePath
 profileBenchmark = "/tmp/benchmark.prof"
 
-
-
 main :: IO ()
 main =
   shakeArgs shakeOptions { shakeVerbosity = Verbose,shakeFiles = "_build" } $ do
@@ -143,6 +141,7 @@ main =
     logDump %> \out -> do
       putInfo $ "Making the log dump: " ++ out
       need [benchmarkBranchesExec]
+      putInfo $ "Running: " ++ benchmarkBranchesExec
       noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out) benchmarkBranchesExec
     tokenBranch %> \tok -> do
       putInfo $ "Building the branch files. The token required is " ++ tok
