@@ -4,6 +4,7 @@ import           Control.Applicative
 import           Data.Pointed
 import           Data.QueryPlan.Scalable
 import           Data.Utils.AShow
+import           Data.Utils.AShow.Print
 import           Data.Utils.Nat
 import           GHC.Generics
 
@@ -12,12 +13,13 @@ import           GHC.Generics
 -- in conjuntion with the cap.
 data Cert a = Cert { cTrailSize :: Int,cData :: a }
   deriving (Eq,Generic,Functor,Show)
-instance AShow a => AShow (Cert a)
 instance Pointed Cert where point = Cert 0
 instance Zero a => Zero (Cert a) where
   zero = point zero
   isNegative (Cert _ a) = isNegative a
 
+instance AShow a => AShow (Cert a) where
+  ashow' Cert {..} = Sym $ show cTrailSize ++ "m+" ++ ashowLine cData
 -- There are no circumnstances under which we are going to chose a
 -- value that has come throgh more materialied nodes. The scaling will
 -- have damped it enough.

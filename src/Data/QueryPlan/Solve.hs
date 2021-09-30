@@ -41,7 +41,6 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer        hiding (Sum)
 import           Data.Bipartite
-import           Data.Functor.Identity
 import qualified Data.HashSet                as HS
 import           Data.List.Extra
 import qualified Data.List.NonEmpty          as NEL
@@ -66,10 +65,12 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
 import           Data.Utils.AShow
+import           Data.Utils.AShow.Print
 import           Data.Utils.Default
 import           Data.Utils.Nat
 
 
+#ifdef DEPRECATED
 -- | run a bunch of common stuff to make the following more responsive.
 warmupCache :: forall t n m . Monad m => NodeRef n -> PlanT t n m ()
 warmupCache node = do
@@ -88,6 +89,7 @@ warmupCache node = do
         $ printf "Empty depset for %n: %s" node (ashow xs)
       trM $ printf "Deps of %n: %s" node $ ashow xs
       mapM_ findMetaOps =<< asks (refKeys . nodeSizes)
+#endif
 
 setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
 setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
@@ -143,8 +145,9 @@ haltPlanCost concreteCost = do
         maybe (return ()) tell $ pcPlan c
         return $ pcCost c
   let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  histCosts <- takeListT 5 $ pastCosts extraNodes
-  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star,histCosts)
+  histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
+  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star)
+  trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
   halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
 
@@ -313,26 +316,24 @@ newEpoch :: MonadLogic m => PlanT t n m ()
 newEpoch = wrapTrM "newEpoch" $ do
   st <- get
   let protected = nodeProtection st
-  let epoch@GCEpoch{..} NEL.:| rest = epochs st
-  if (epoch, protected) `HS.member` epochFilter st
-    then bot "Epoch already encountered"
-    else let
-      epochFilter' = HS.insert (epoch, protected) $ epochFilter st
-      -- demote all except the protected
-      maybeDemote r x = case x of
-            Concrete _ mat -> if fromMaybe 0 (r `refLU` protected) > 0
-                             then return x
-                             else tell [(r, mat)] >> return (Initial mat)
-            _ -> return x
-      (newStates, updatedRefs) = runWriter $ refTraverseWithKey maybeDemote nodeStates
-    in if newStates == nodeStates
-       then bot "No change in node states."
-       else do
-         put $ st{
-           epochs=GCEpoch{nodeStates=newStates,transitions=[]} NEL.:| (epoch:rest),
-           epochFilter=epochFilter'
-           }
-         trM $ "New epoch. Demoted refs: " ++ show updatedRefs
+  let epoch@GCEpoch {..} NEL.:| rest = epochs st
+  if (epoch,protected)
+    `HS.member` epochFilter st then bot "Epoch already encountered"
+    else let epochFilter' = HS.insert (epoch,protected) $ epochFilter st
+             -- demote all except the protected
+             maybeDemote r x = case x of
+               Concrete _ mat -> if fromMaybe 0 (r `refLU` protected) > 0
+                 then return x else tell [(r,mat)] >> return (Initial mat)
+               _ -> return x
+             (newStates,updatedRefs) =
+               runWriter $ refTraverseWithKey maybeDemote nodeStates
+      in if newStates == nodeStates then bot "No change in node states." else do
+        put
+          $ st { epochs = GCEpoch { nodeStates = newStates,transitions = [] }
+                   NEL.:| (epoch : rest)
+                ,epochFilter = epochFilter'
+               }
+        trM $ "New epoch. Demoted refs: " ++ show updatedRefs
 
 eitherlReader
   :: BotMonad m

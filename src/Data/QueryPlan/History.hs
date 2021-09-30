@@ -1,8 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies     #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Data.QueryPlan.History
-  (pastCosts) where
+module Data.QueryPlan.History (pastCosts,HCost) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Transformers.Mealy
@@ -19,7 +18,6 @@ import           Data.QueryPlan.HistBnd
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.ListT
 import           Data.Utils.Nat
 
@@ -38,28 +36,18 @@ pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return qs
-  lift
-    -- $ wrapTrace ("pastCosts " ++ ashow q)
-    $ getCost @HistTag Proxy extraMat (CapVal maxCap) q
+  lift $ getCost @HistTag Proxy extraMat (CapVal maxCap) q
 
 maxCap :: HistCap Cost
 maxCap =
   HistCap { hcMatsEncountered = 1,hcValCap = MinInf,hcNonCompTolerance = 0.7 }
-
-bndVal :: Min (Cert (Comp v)) -> Maybe v
-bndVal (Min (Just Cert{..})) = Just $ cValue cData
-bndVal (Min Nothing)         = Nothing
-
-capVal :: Cap (HistCap v) -> Maybe v
-capVal (CapVal HistCap {..}) = unMin hcValCap
-capVal ForceResult           = Nothing
 
 -- | The materialized node indeed has a cost. That cost is
 -- calculated by imposing a scaling on the cost it would have if it
 -- were not materialized. This opens the door to an explosion in
 -- computation.
 isMatCost :: forall t n . NodeRef n -> HistProc t n -> HistProc t n
-isMatCost ref matCost0 = wrapMealy matCost0 guardedGo
+isMatCost _ref matCost0 = wrapMealy matCost0 guardedGo
   where
     go conf matCost = do
       let conf0 = mapCap unscaleCap conf

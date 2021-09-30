@@ -16,6 +16,7 @@ module Data.Query.QuerySize
   ,PageSize
   ,Cardinality
   ,Bytes
+  ,tableBytes
   ,schemaSizeModify
   ,tableSizeModify
   ,tableSizeComb) where
@@ -29,8 +30,11 @@ import           GHC.Generics
 type Bytes = Int
 type Cardinality = Int
 data TableSize = TableSize { tsRows :: Cardinality,tsRowSize :: Bytes }
-  deriving (Eq,Show,Ord,Read,Generic)
-
+  deriving (Eq,Show,Read,Generic)
+instance Ord TableSize where
+  compare a b = compare (tableBytes a) (tableBytes b)
+tableBytes :: TableSize -> Bytes
+tableBytes TableSize{..} = tsRows * tsRowSize
 instance AShow TableSize
 instance Hashable TableSize
 instance ARead TableSize

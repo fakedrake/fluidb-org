@@ -21,7 +21,6 @@ import           Data.Coerce
 import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Nat
 import           Data.Utils.Tup

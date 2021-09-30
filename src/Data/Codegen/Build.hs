@@ -104,13 +104,15 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
   ts <- lift $ dropReader (lift2 get) $ bundleTransitions $ transitions ep
   fmap mconcat $ forM ts $ \case
     ForwardTransitionBundle ts clust -> do
-      lift $ triggerCluster clust
+      void $ lift $ triggerCluster clust
+      lift $ mapM_ promoteNodeShape $ clusterOutputs clust
       mkCodeBlock ts clust ForwardTrigger triggerCode
     ReverseTransitionBundle ts clust -> do
-      lift $ triggerCluster clust
+      void $ lift $ triggerCluster clust
+      lift $ mapM_ promoteNodeShape $ clusterInputs clust
       mkCodeBlock ts clust ReverseTrigger revTriggerCode
     DeleteTransitionBundle n -> do
-      lift $ delMatShape n
+      void $ lift $ demoteNodeShape n
       fileM <- dropReader (lift getClusterConfig) $ getNodeFile n
       queryView <- dropState (lift getClusterConfig,const $ return ())
         $ (maybe (throwError $ NodeNotFoundN n) return =<<)

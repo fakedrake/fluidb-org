@@ -328,13 +328,13 @@ clusterCall c = do
         JoinClustW pc -> go (BinClustW $ joinBinCluster pc) assoc
           $ BinClustW
           $ joinBinCluster c
-        _ -> throwAStr
-          $ "Expected join shapeclust but got: " ++ ashow shapeClust
+        _ ->
+          throwAStr $ "Expected join shapeclust but got: " ++ ashow shapeClust
       BinClustW BinClust {..} -> do
         outSyms <- case shapeClust of
           BinClustW BinClust {..} -> getDef' binClusterOut
-          _ -> throwAStr
-            $ "Expected bin shapeclust but got: " ++ ashow shapeClust
+          _ ->
+            throwAStr $ "Expected bin shapeclust but got: " ++ ashow shapeClust
         op <- selectOp (ashow . (,assoc)) (checkBOp outSyms) binClusterOut
         l <- provenanceShape' binClusterLeftIn
         r <- provenanceShape' binClusterRightIn
@@ -342,10 +342,10 @@ clusterCall c = do
         evalQueryEnv (Tup2 l r) $ bopQueryCall (assoc,outShape) op
       UnClustW UnClust {..} -> do
         (inSyms,outSyms) <- case shapeClust of
-          UnClustW UnClust {..}
-            -> (,) <$> getDef' unClusterIn <*> getDef' unClusterPrimaryOut
-          _ -> throwAStr
-            $ "Expected un shapeclust but got: " ++ ashow shapeClust
+          UnClustW UnClust {..} ->
+            (,) <$> getDef' unClusterIn <*> getDef' unClusterPrimaryOut
+          _ ->
+            throwAStr $ "Expected un shapeclust but got: " ++ ashow shapeClust
         op <- selectOp
           (ashow . (,assoc))
           (checkUOp inSyms outSyms)
@@ -356,7 +356,8 @@ clusterCall c = do
         evalQueryEnv (Identity inShape) $ uopQueryCall (assoc,primOutShape) op
       NClustW (NClust r) -> throwCodeErr $ ForwardCreateSymbol r
       where
-        getDef' :: WMetaD x (WMetaD (Defaulting (QueryShape e s)) f) n
+        getDef' :: HasCallStack
+                => WMetaD x (WMetaD (Defaulting (QueryShape e s)) f) n
                 -> m [ShapeSym e s]
         getDef' (WMetaD (_,WMetaD (d,_))) = case getDef d of
           Nothing

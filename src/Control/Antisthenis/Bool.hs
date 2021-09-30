@@ -41,7 +41,6 @@ import           Data.Foldable
 import qualified Data.IntMap                                as IM
 import qualified Data.IntSet                                as IS
 import qualified Data.List.NonEmpty                         as NEL
-import           Data.Maybe
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
@@ -337,21 +336,6 @@ boolEvolutionControl conf z = case confCap conf of
   CapVal cap -> do
     localBnd <- zBound z
     if cap < localBnd then return $ BndBnd localBnd else Nothing
-
-zLocalIsFinal
-  :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
-zLocalIsFinal z = zIsAbsorbing z || (zEmptyInits z && zEmptyIts z)
-zEmptyInits :: Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
-zEmptyInits = null . bgsInits . zBgState
-zEmptyIts :: Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
-zEmptyIts = isNothing . acNonEmpty . bgsIts . zBgState
-zIsAbsorbing
-  :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
-zIsAbsorbing z = case zRes z of
-  Just (Right r) -> case elemType r of
-    AbsorbingElem -> True
-    NormalElem    -> False
-  _ -> False
 
 -- | The problem is that there is no w type in Conf w, just ZCap w so
 -- we need to translate Conf w into a functor of ZCap w. This can be

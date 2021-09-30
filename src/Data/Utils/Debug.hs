@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE CPP                   #-}
+{-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes            #-}
@@ -19,7 +20,8 @@ module Data.Utils.Debug
   ,traceV
   ,assert
   ,(<<:)
-  ,wrapTraceP) where
+  ,wrapTraceP
+  ,withStackFrame) where
 
 import           Data.Utils.AShow
 import           GHC.Stack
@@ -30,6 +32,23 @@ import           Data.Profunctor
 import           Data.Time.Clock
 import           Debug.Trace
 import           System.IO.Unsafe
+
+withStackFrame :: HasCallStack => String -> (HasCallStack => a) -> a
+withStackFrame msg a =
+  let ?callStack =
+        pushCallStack ("StackFrame: " ++ msg,srcl) ?callStack
+  in a
+  where
+    srcl =
+      SrcLoc
+      { srcLocPackage = "<no-pkg>"
+       ,srcLocModule = "<no-module>"
+       ,srcLocFile = "<no-loc>"
+       ,srcLocStartLine = -1
+       ,srcLocStartCol = -1
+       ,srcLocEndLine = -1
+       ,srcLocEndCol = -1
+      }
 
 wrapTrace :: Monad m => String -> m a -> m a
 wrapTrace msg x = do

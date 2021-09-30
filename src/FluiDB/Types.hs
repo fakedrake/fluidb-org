@@ -37,7 +37,7 @@ module FluiDB.Types
   ,r2s
   ,NodeReport(..)
   ,mkGCParams
-  ,RunningConf(..)) where
+  ,RunningConf(..),globalizePlanT) where
 
 import           Control.Monad.Cont
 import           Control.Monad.Except
@@ -63,6 +63,7 @@ import           Data.QueryPlan.Types
 import           Data.String
 import           Data.Utils.AShow
 import           Data.Utils.Default
+import           Data.Utils.Functors
 import           Data.Utils.MTL
 import           FluiDB.SumTypes                 as ST
 import           GHC.Generics
@@ -190,6 +191,16 @@ mkGCParams = foldl go (def,def)
            })
     onHead :: NEL.NonEmpty a -> (a -> a) -> NEL.NonEmpty a
     onHead (a NEL.:| as) f = f a NEL.:| as
+
+globalizePlanT :: Monad m => PlanT t n m a -> GlobalSolveT e s t n m a
+globalizePlanT m = do
+  (st,conf) <- gets $ \g -> (getGlobalConf g,getGlobalConf g)
+  val <- lift2 $ runExceptT $ (`runReaderT` conf) $ (`runStateT` st)  m
+  case val of
+    Left e -> throwError $ toGlobalError e
+    Right (r,st') -> do
+      modify $ modGlobalConf st'
+      return r
 
 type GlobalSolveT e s t n m =
   ExceptT (GlobalError e s t n) (StateT (GlobalConf e s t n) m)

@@ -5,7 +5,6 @@ module FluiDB.Schema.SSB.Main (ssbMain) where
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.State
-import           Data.Bipartite
 import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build
 import           Data.Codegen.Run
@@ -19,10 +18,8 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
-import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.MTL
-import           Data.Utils.Ranges
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
 import           FluiDB.Schema.SSB.Values
@@ -54,6 +51,7 @@ finallyError m hndl = do
   hndl
   return ret
 
+shouldRender :: Verbosity -> Bool
 shouldRender Verbose = True
 shouldRender Quiet   = False
 
@@ -80,6 +78,7 @@ ssbRunGlobalSolve m = do
   ssbGlobalConf <- getSsbGlobalConf
   runGlobalSolve ssbGlobalConf (softFail . ashow) $ void m
 
+#ifdef EXAMPLE
 singleQuery :: IO ()
 singleQuery =
   void
@@ -97,7 +96,7 @@ singleQuery =
     ,"and d_year >= 1992 and d_year <= 1997" -- this
     ,"group by c_city, s_city, d_year"
     ,"order by d_year, revenue desc"]
--- XXX: removing any of the "this" lines makes singleQuery run.
+#endif
 
 data Verbosity = Verbose | Quiet
 actualMain :: Verbosity -> [Int] -> IO ()
@@ -107,8 +106,7 @@ actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
       _transitions <- runQuery verbosity query
-      pgs <- dropExcept (throwError . toGlobalError)
-        $ dropReader (gets globalGCConfig) totalUsedPages
+      pgs <- globalizePlanT getDataSize
       lift2 $ putStrLn $ "Pages used: " ++ show pgs
 
 type ImagePath = FilePath
@@ -143,6 +141,7 @@ renderGraph query = do
         (mkProc "dot" ["-o" ++ imgPath,"-Tsvg"]) { std_in = UseHandle hndl }
     return (isPath,qPath,imgPath,grPath)
 
+#ifdef EXAMPLE
 getInputNodes :: NodeRef N -> GraphBuilderT T N IO [(NodeRef T,[NodeRef N])]
 getInputNodes ref = do
   ts <- getNodeLinksN
@@ -160,6 +159,7 @@ readGraph gpath m = do
   case gr of
     Nothing -> fail $ "Failed to read graph at: " ++ gpath
     Just g  -> evalStateT m def{gbPropNet = g}
+#endif
 
 ssbMain :: IO ()
 ssbMain = do

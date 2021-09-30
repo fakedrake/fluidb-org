@@ -155,12 +155,15 @@ data ProvenanceAtom
   | SplitLeft
   | SplitRight
   deriving Show
+
+#ifdef EXAMPLE
 provenanceAsBool :: ProvenanceAtom -> Bool
 provenanceAsBool = \case
   EitherLeft  -> False
   SplitLeft   -> False
   EitherRight -> True
   SplitRight  -> True
+#endif
 
 type PCost = Comp Cost
 type IsMatable = Bool
@@ -219,13 +222,6 @@ getGcLog :: Monad m => PlanT t n m [String]
 getGcLog = reverse . gcLog <$> get
 #else
 #ifdef VERBOSE_SOLVING
-trM = traceM <=< traceMsg
-#else
-trM = const $ return ()
-#endif
-{-# INLINE trM #-}
-#endif
-
 traceMsg :: Monad m => String -> PlanT t n m String
 traceMsg = branchingIdTrace
 
@@ -238,6 +234,12 @@ branchingIdTrace msg = do
     $ provenance st)
     msg
 
+trM = traceM <=< traceMsg
+#else
+trM = const $ return ()
+#endif
+{-# INLINE trM #-}
+#endif
 
 -- | Without the continuation monad, whenever a sub chain of monads is
 -- evaluated (eg `a >> b >> c` in `(a >> b >> c) >> d`), all it's
@@ -308,13 +310,15 @@ bot msg = do
 top :: MonadPlus m => PlanT t n m ()
 top = return ()
 
+#ifdef EXAMPLE
 -- |Incrment the tree depth counter.
-incTreeProp :: MonadPlus m =>
-              String
-            -> PlanT t n m Int
-            -> PlanT t n m (Maybe Int)
-            -> PlanT t n m ()
-            -> PlanT t n m ()
+incTreeProp
+  :: MonadPlus m
+  => String
+  -> PlanT t n m Int
+  -> PlanT t n m (Maybe Int)
+  -> PlanT t n m ()
+  -> PlanT t n m ()
 incTreeProp label getProp getMaxProp modProp  = do
   br <- getProp
   maxBr <- getMaxProp
@@ -322,6 +326,7 @@ incTreeProp label getProp getMaxProp modProp  = do
   modProp
   newBr <- getProp
   when (newBr < 0) $ error $ "sub zero " ++ label
+#endif
 
 data PlanSanityError t n
   = MissingScore (NodeRef n) (RefMap n Double)
@@ -365,14 +370,14 @@ hoistPlanT
       -> g (Either (PlanningError t n) (a,GCState t n)))
   -> PlanT t n m a
   -> PlanT t n g a
-hoistPlanT f = hoistStateT $ hoistReaderT $ hoistExceptT f
+hoistPlanT = hoistStateT . hoistReaderT . hoistExceptT
   where
-    hoistStateT :: (m (a, s) -> g (a, s)) -> StateT s m a -> StateT s g a
+    hoistStateT :: (m (a,s) -> g (a,s)) -> StateT s m a -> StateT s g a
     hoistStateT f (StateT m) = StateT $ \s -> f $ m s
     hoistReaderT :: (m a -> g a) -> ReaderT s m a -> ReaderT s g a
     hoistReaderT f (ReaderT m) = ReaderT $ \r -> f $ m r
-    hoistExceptT ::
-         (m (Either e a) -> g (Either e a)) -> ExceptT e m a -> ExceptT e g a
+    hoistExceptT
+      :: (m (Either e a) -> g (Either e a)) -> ExceptT e m a -> ExceptT e g a
     hoistExceptT f (ExceptT m) = ExceptT $ f m
 
 liftPlanT :: Monad m => m a -> PlanT t n m a
@@ -399,10 +404,11 @@ mplusPlanT' :: MonadPlus m =>
             -> StateT s (ReaderT r (ExceptT e m)) a
 mplusPlanT' s s' = s `mplusState` s'
   where
-    mplusState (StateT f) (StateT f') = StateT $ \s -> f s `mplusReader` f' s
+    mplusState (StateT f) (StateT f') =
+      StateT $ \s0 -> f s0 `mplusReader` f' s0
       where
-        mplusReader (ReaderT v) (ReaderT v') =
-          ReaderT $ \r -> v r `mplusExcept` v' r
+        mplusReader (ReaderT v0) (ReaderT v0') =
+          ReaderT $ \r -> v0 r `mplusExcept` v0' r
           where
             mplusExcept (ExceptT v) (ExceptT v') = ExceptT $ v `mplus` v'
 

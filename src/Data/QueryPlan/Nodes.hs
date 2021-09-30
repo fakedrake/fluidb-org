@@ -25,7 +25,7 @@ module Data.QueryPlan.Nodes
   ,unprotect
   ,protect
   ,getNodeProtection
-  ,isMaterialized,totalUsedPages) where
+  ,isMaterialized) where
 
 -- import Data.QueryPlan.Frontiers
 import           Control.Monad.Except
@@ -138,28 +138,15 @@ getDataSize = do
   matNodes <- mapM (\(st,n) -> (st,n,) <$> totalNodePages n)
     $ matIni ++ matConcN ++ matConcM
   let ret = sum $ trd3 <$> matNodes
-  if maybe False (ret >) budgetM
-    then do
-      trM "ERROR!!"
-      throwPlan
-        $ printf
-          "Data size exceeds budget (%d / %s)\nMat: %s"
-          ret
-          (maybe "<unbounded>" show budgetM)
-          (ashow matNodes)
-    else return ret
-
-totalUsedPages
-  :: (MonadError (PlanningError t n) m
-     ,MonadReader (GCConfig t n) m)
-  => m PageNum
-totalUsedPages = do
-  let pageSize = 4096
-  sizes <- asks $ toList . nodeSizes >=> fst
-  fmap sum $ forM sizes $ \size -> case pageNum pageSize size of
-    Nothing    -> throwPlan "oops"
-    Just pgNum -> return pgNum
-
+  if maybe False (ret >) budgetM then do
+    let msg =
+          printf
+            "Data size exceeds budget (%d / %s)\nMat: %s"
+            ret
+            (maybe "<unbounded>" show budgetM)
+            (ashow matNodes)
+    trM $ "ERROR: " ++ msg
+    throwPlan msg else return ret
 
 totalNodePages
   :: (MonadError (PlanningError t n) m
@@ -210,19 +197,27 @@ isMat = \case
   Initial m    -> m == Mat
   Concrete _ m -> m == Mat
 
-setNodeStateUnsafe :: forall t n m . Monad m =>
-                     NodeRef n -> NodeState -> PlanT t n m ()
+setNodeStateUnsafe
+  :: forall t n m . Monad m => NodeRef n -> NodeState -> PlanT t n m ()
 setNodeStateUnsafe = setNodeStateUnsafe' True
-setNodeStateUnsafe' :: forall t n m . Monad m =>
-                     Bool -> NodeRef n -> NodeState -> PlanT t n m ()
+setNodeStateUnsafe'
+  :: forall t n m . Monad m => Bool -> NodeRef n -> NodeState -> PlanT t n m ()
 setNodeStateUnsafe' verbose r s = do
   gcst <- get
   oldState <- getNodeState r
   let epoch = NEL.head $ epochs gcst
-  let epoch' = epoch{nodeStates=r `refInsert` s $ nodeStates epoch}
-  put $ gcst{epochs=epoch' NEL.:| NEL.tail (epochs gcst)}
-  when verbose $
-    trM $ printf "Unsafe shift %s: %s -> %s" (show r) (show oldState) (show s)
+  let epoch' = epoch { nodeStates = r `refInsert` s $ nodeStates epoch }
+  put $ gcst { epochs = epoch' NEL.:| NEL.tail (epochs gcst) }
+  when verbose $ do
+    totalSize <- getDataSize
+    trM
+      $ printf
+        "Unsafe shift %s: %s -> %s [size: %d]"
+        (show r)
+        (show oldState)
+        (show s)
+        totalSize
+
 
 -- | Set a list of nodes to (Initial Mat)
 setNodeStatesToGCState :: forall t n .

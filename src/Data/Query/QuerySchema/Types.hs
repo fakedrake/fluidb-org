@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards      #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Data.Query.QuerySchema.Types
   (ShapeSym(..)
   ,QueryShape'(..)
@@ -16,7 +17,7 @@ module Data.Query.QuerySchema.Types
   ,QueryShapeNoSize
   ,modSize
   ,modCertainty
-  ,useCardinality,modCardinality) where
+  ,useCardinality,modCardinality,querySizeBytes,queryShapeBytes) where
 
 import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
@@ -48,7 +49,8 @@ data QuerySize = QuerySize { qsTables :: [TableSize],qsCertainty :: Double }
 instance Hashable QuerySize
 instance AShow QuerySize
 instance ARead QuerySize
-
+querySizeBytes :: QuerySize -> Bytes
+querySizeBytes QuerySize{..} = sum $ map tableBytes qsTables
 -- | Use all the properties of the second argument except
 -- cardinality. Use the cardinality with the most certain. Also use the qsCa
 useCardinality :: QuerySize -> QuerySize -> QuerySize
@@ -75,9 +77,20 @@ data QueryShape' sizeType e' =
    ,qpSize   :: sizeType
   }
   deriving (Show,Generic,Eq,Functor)
+
+-- | To determine the columns etc use the leftmost, for size inference
+-- choose the most certain.
+instance Semigroup (QueryShape size e') where
+  a <> b =
+    a { qpSize = if qsCertainty (qpSize a)
+          < qsCertainty (qpSize b) then qpSize b else qpSize a
+      }
+
 instance Hashables2 e s => Hashable (QueryShape e s)
 instance (AShow e, AShow s) => AShow (QueryShape e s)
 instance (Hashables2 e s, ARead e, ARead s) => ARead (QueryShape e s)
+queryShapeBytes :: QueryShape e s -> Bytes
+queryShapeBytes QueryShape{..} = querySizeBytes qpSize
 
 putRowSize :: Bytes -> QuerySize -> QuerySize
 putRowSize rs qs =
@@ -85,7 +98,6 @@ putRowSize rs qs =
   where
     onHead f (x:xs) = f x : xs
     onHead _f []    = []
-
 
 -- | Unique symbols
 data ShapeSym e s = ShapeSym {

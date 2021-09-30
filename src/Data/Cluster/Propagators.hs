@@ -22,7 +22,6 @@ module Data.Cluster.Propagators
   , putShapeCluster
   , getNodeShapeFull
   , getNodeShape
-  , delNodeShape
   , triggerClustPropagator
   , nClustPropagator
   , cPropToACPropN
@@ -58,6 +57,7 @@ import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -110,18 +110,19 @@ joinClustPropagator
       oR = s joinClusterRightAntijoin
   -- Create each output shape but without any sizing until we have
   -- access to the actual. Temporarily use the shape of the input.
-  let mkShape :: ([(ShapeSym e s,ShapeSym e s)]
+  let mkShape :: (String
+                  -> [(ShapeSym e s,ShapeSym e s)]
                   -> QueryShape e s
                   -> Either (AShowStr e s) (QueryShapeNoSize QuerySize e s)) =
-        translateShape' id
-  oLRTrans <- mkShape (swap <$> assocOR) `traverse` oR
-  oRRTrans <- mkShape (swap <$> assocOL) `traverse` oL
-  iLTransOL <- mkShape assocOL `traverse` il
-  iRTransOR <- mkShape assocOR `traverse` ir
+        \msg -> withStackFrame msg ... translateShape' id
+  oLRTrans <- mkShape "oLRTrans" (swap <$> assocOR) `traverse` oR
+  oRRTrans <- mkShape "oRRTrans" (swap <$> assocOL) `traverse` oL
+  iLTransOL <- mkShape "iLTransOL" assocOL `traverse` il
+  iRTransOR <- mkShape "iRTransOR" assocOR `traverse` ir
   -- The output is created in two parts: iLTransO and RTransO.
-  iLTransO <- mkShape assocO `traverse` il
+  iLTransO <- mkShape "iLTransO" assocO `traverse` il
   -- Note that there may be different symbols, the rhs will be the latter ones.
-  iRTransO <- mkShape (reverse assocO) `traverse` ir
+  iRTransO <- mkShape "iRTransO" (reverse assocO) `traverse` ir
   let joinShapesGuard =
         maybe
           (throwAStr
@@ -131,11 +132,11 @@ joinClustPropagator
   (luSide,outShape) <- fmap sequenceA
     $ traverse joinShapesGuard
     $ joinShapes (shapeSymEqs p) <$> iLTransO <*> iRTransO
-  let il' = il <|> oLRTrans
-      ir' = ir <|> oRRTrans
-      o' = o <|> outShape
-      oL' = oL <|> iLTransOL
-      oR' = oR <|> iRTransOR
+  let il' = il <> oLRTrans
+      ir' = ir <> oRRTrans
+      o' = o <> outShape
+      oL' = oL <> iLTransOL
+      oR' = oR <> iRTransOR
   -- FIX THE SIZES!
   -- Note that the size should be the same regardles of
   -- defaultiness. Just fmap into it and insert the most certain
@@ -182,7 +183,7 @@ joinClustPropagator
       -> WMetaD (Defaulting (QueryShape e s)) NodeRef n
     c v (WMetaD (_,n)) = WMetaD (v,n)
     s (WMetaD (v,_)) = v
-    clrShape r = WMetaD (empty,snd $ unMetaD r)
+    clrShape r = WMetaD (mempty,snd $ unMetaD r)
 
 type HasForeignKey = Bool
 -- | Update the cardinalities of input and side output. The Defaulting
@@ -230,6 +231,7 @@ unClustPropagator symAssocs literalType op =
     mkIn = uopInput symAssocs op
     Tup2 mkOutPrim mkOutSec = uopOutputs symAssocs literalType op
 
+-- | The nClustPropagator always creates a full node when triggered.
 nClustPropagator
   :: forall e s t n .
   Hashables2 e s
@@ -247,40 +249,27 @@ data G e s x
   | G2 (x -> x -> Either (AShowStr e s) x) -- combine schemata
   | G1 (x -> Either (AShowStr e s) x) -- combine schemata
 
-argsG :: Monoid a => G e s x -> a -> a -> a
-argsG = \case
-  G0 _ -> \_ _ -> mempty
-  G1 _ -> const
-  GL _ -> const
-  GR _ -> \_ x -> x
-  G2 _ -> (<>)
-
--- | The first argument is the lower bound
-promoteN :: Defaulting x -> Defaulting x -> Defaulting x
-promoteN mark d =
-  if mark `defaultingLe` d then d else promoteN mark $ promoteDefaulting d
-
--- | Combine two defaultings.
+-- | Combine two defaultings. Trigger the Gfunc and then combine the
+-- results according to the semigroup semantics
 liftG
   :: forall e s x .
-  Defaulting x
+  Semigroup x
+  => Defaulting x
   -> G e s x
   -> Defaulting x
   -> Defaulting x
   -> Either (AShowStr e s) (Defaulting x)
-liftG old gf l r = promote <$> case gf of
+liftG old gf l r = (<> old) <$> case gf of
   G0 Nothing  -> return old
   G0 (Just x) -> return $ pure x
   G1 f        -> traverse f l
   GL f        -> sequenceA $ f <$> l <*> r
   GR f        -> sequenceA $ f <$> l <*> r
   G2 f        -> sequenceA $ f <$> l <*> r
-  where
-    promote :: Defaulting x -> Defaulting x
-    promote = promoteN (argsG gf l r) . (old <|>)
 
 liftGC
-  :: G e s x
+  :: Semigroup x
+  => G e s x
   -- ^ The group transform
   -> WMetaD (Defaulting x) NodeRef n
   -- ^ Left input
@@ -536,22 +525,21 @@ getShapePropagators
   -> m [ACPropagatorAssoc e s t n]
 getShapePropagators c = maybe [] shapePropagators <$> getPropagators c
 
-getNodeShape :: MonadReader (ClusterConfig e s t n) m =>
-              NodeRef n -> m (Defaulting (QueryShape e s))
-getNodeShape nref = asks (fromMaybe empty . refLU nref . qnfNodeShapes)
+getNodeShape
+  :: MonadReader (ClusterConfig e s t n) m
+  => NodeRef n
+  -> m (Defaulting (QueryShape e s))
+getNodeShape nref = asks (fromMaybe mempty . refLU nref . qnfNodeShapes)
 
-modNodeShape :: MonadState (ClusterConfig e s t n) m =>
-              NodeRef n
-            -> Endo (Defaulting (QueryShape e s))
-            -> m ()
-modNodeShape nref f = modify $ \clustConf -> clustConf {
-  qnfNodeShapes=refAlter
-    (Just . f . fromMaybe empty)
-    nref
-    $ qnfNodeShapes clustConf}
-delNodeShape :: Monad m => NodeRef n -> CGraphBuilderT e s t n m ()
-delNodeShape nref = modify $ \clustConf -> clustConf
-  { qnfNodeShapes = refAdjust demoteDefaulting nref $ qnfNodeShapes clustConf }
+modNodeShape
+  :: MonadState (ClusterConfig e s t n) m
+  => NodeRef n
+  -> Endo (Defaulting (QueryShape e s))
+  -> m ()
+modNodeShape nref f = modify $ \clustConf -> clustConf
+  { qnfNodeShapes = refAlter (Just . f . fromMaybe mempty) nref
+      $ qnfNodeShapes clustConf
+  }
 
 -- | Fill the noderefs with shapes.
 getShapeCluster :: forall e s t n m .
@@ -560,7 +548,7 @@ getShapeCluster :: forall e s t n m .
                -> m (ShapeCluster NodeRef e s t n)
                -- -> CGraphBuilderT e s t n m (ShapeCluster NodeRef e s t n)
 getShapeCluster = fmap dropId
-                 . bitraverse (withComp $ const $ return empty)
+                 . bitraverse (withComp $ const $ return mempty)
                  (withComp getNodeShape)
                  . putId
   where
@@ -579,7 +567,7 @@ getShapeCluster = fmap dropId
 
 putShapeCluster
   :: forall e s t n m .
-  (MonadState (ClusterConfig e s t n) m,Hashables2 e s)
+  (MonadState (ClusterConfig e s t n) m,Hashables2 e s,HasCallStack)
   => ShapeCluster NodeRef e s t n
   -> m ()
 putShapeCluster = void . traverse (uncurry go . unMetaD) . putId
@@ -622,6 +610,7 @@ triggerClustPropagator
   :: (MonadState (ClusterConfig e s t n) m
      ,MonadError err m
      ,AShowError e s err
+     ,HasCallStack
      ,Hashables2 e s)
   => AnyCluster e s t n
   -> m (ShapeCluster NodeRef e s t n)
@@ -640,11 +629,14 @@ getNodeShapeFull r = asks $ getDefaultingFull <=< refLU r . qnfNodeShapes
 -- return a query plen.
 --
 -- XXX: this fails when called on the bottom
-forceQueryShape :: forall e s t n m err .
-                 (MonadState (ClusterConfig e s t n) m,
-                  MonadError err m, AShowError e s err,
-                  Hashables2 e s) =>
-                 NodeRef n -> m (Maybe (QueryShape e s))
+forceQueryShape
+  :: forall e s t n m err .
+  (MonadState (ClusterConfig e s t n) m
+  ,MonadError err m
+  ,AShowError e s err
+  ,Hashables2 e s)
+  => NodeRef n
+  -> m (Maybe (QueryShape e s))
 forceQueryShape n = runMaybeT $ (`evalStateT` mempty) $ go n
   where
     go :: NodeRef n -> StateT (NodeSet n) (MaybeT m) (QueryShape e s)
@@ -670,9 +662,9 @@ forceQueryShape n = runMaybeT $ (`evalStateT` mempty) $ go n
         unlessDone :: (Maybe (Defaulting (QueryShape e s))
                        -> StateT (NodeSet n) (MaybeT m) (QueryShape e s))
                    -> StateT (NodeSet n) (MaybeT m) (QueryShape e s)
-        unlessDone m = do
+        unlessDone m =
           dropReader (lift2 get) (getNodeShapeFull ref) >>= \case
-            Just x -> return x
-            Nothing -> do
-              shape <- lift2 $ gets $ refLU ref . qnfNodeShapes
-              m shape
+          Just x -> return x
+          Nothing -> do
+            shape <- lift2 $ gets $ refLU ref . qnfNodeShapes
+            m shape

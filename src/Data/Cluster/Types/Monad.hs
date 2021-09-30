@@ -44,7 +44,8 @@ module Data.Cluster.Types.Monad
   ,getDefaultingDef
   ,defaultingLe
   ,getDef
-  ,ashowACPA,(<||>)) where
+  ,ashowACPA
+  ,consistentModDefaulting) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -212,6 +213,17 @@ data Defaulting a
   deriving (Eq,Generic,Show,Read,Functor,Traversable,Foldable)
 instance Hashable a => Hashable (Defaulting a)
 
+consistentModDefaulting
+  :: (a -> a -> Bool)
+  -> (Defaulting a -> Defaulting a)
+  -> Defaulting a
+  -> Defaulting a
+consistentModDefaulting check f x = case f x of
+  r@(DefaultingFull _ a) -> case x of
+    DefaultingFull _ a' -> if check a a' then r else error "oops"
+    _                   -> r
+  x' -> x'
+
 instance Applicative Defaulting where
   pure = DefaultingDef
   -- | We want f <$> a <*> b <*> c <*> d to be the minimum of a b c d.
@@ -225,28 +237,33 @@ instance Applicative Defaulting where
   DefaultingFull df vf <*> DefaultingFull d v = DefaultingFull (df d) (vf v)
   DefaultingFull _ vf <*> DefaultingDef v     = DefaultingDef (vf v)
   DefaultingDef f <*> DefaultingFull _ v      = DefaultingDef (f v)
--- | Alternative is left biased, ie l <|> r, l sets the default
--- value when available.
-instance Alternative Defaulting where
-  empty = DefaultingEmpty
-  DefaultingEmpty <|> a                  = a
-  a <|> DefaultingEmpty                  = a
-  a <|> DefaultingDef _                  = a
-  DefaultingDef d <|> DefaultingFull _ a = DefaultingFull d a
-  a <|> _                                = a
 
-instance Semigroup (Defaulting a) where
-  a <> b = a <|> b
-instance Monoid (Defaulting a) where
-  mempty = empty
+-- | More recent values are Combine the default values and use the
+-- rightmost. We always do newerDefaulting <>
+-- olderDefaulting. Remember that semigroups do not support
+-- associativity. The underlying semigroup is expected to "mean"
+-- better <> backup, ie keep as much of the left oparand as possible
+-- unless the right operand is better. Pay attention to the
+-- implementation of the Def <> Full combination: it inverts the order
+-- of combination of the default values.
+--
+-- The reason we do this is to give priority the the full valued
+-- (materialized) nodes when propagating to their immediate
+-- neighbors. We need this when commiting an operator to the
+-- code-generation.
+instance Semigroup a => Semigroup (Defaulting a) where
+  DefaultingEmpty <> a = a
+  a <> DefaultingEmpty = a
+  DefaultingDef a <> DefaultingDef a' = DefaultingDef $ a <> a'
+  DefaultingDef a <> DefaultingFull a' b' =
+    DefaultingFull (a <> a') b'
+  DefaultingFull a b <> DefaultingDef a' =
+    DefaultingFull (a <> a') b
+  DefaultingFull a b <> DefaultingFull a' _ =
+    DefaultingFull (a' <> a) b
 
--- | Pesimistic combination of Defaults such that Full and Def are
--- combined into Def. This us useful when we want to come up with a
--- default value but nota full value.
-(<||>) :: Defaulting a -> Defaulting a -> Defaulting a
-a <||> DefaultingEmpty = a
-DefaultingEmpty <||> a = a
-a <||> _               = a
+instance Semigroup a => Monoid (Defaulting a) where
+  mempty = DefaultingEmpty
 
 promoteDefaulting :: Defaulting a -> Defaulting a
 promoteDefaulting = \case

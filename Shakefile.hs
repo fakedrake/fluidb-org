@@ -148,6 +148,9 @@ main =
       need [logDump,readdumpExec]
       cmd_ ["mkdir","-p",branchesRoot]
       noNixCmd (Timeout 10) readdumpExec
+    phony "clean" $ do
+      cmd_ ["rm","-rf","/tmp/benchmark.out*"]
+      cmd_ ["rm","-rf",benchmarkExec,benchmarkBranchesExec,readdumpExec]
     phony "run-branches" $ do
       need [tokenBranch]
     phony "run-benchmark" $ do

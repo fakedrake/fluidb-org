@@ -1,16 +1,19 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Data.Utils.AShow.Print
-  ( ashow
-  , aprint
-  , gshow
-  , showSExpOneLine
-  ) where
+  (ashow
+  ,aprint
+  ,gshow
+  ,showSExpOneLine
+  ,ashowLine) where
 
 import           Data.List
 import           Data.Utils.AShow.Common
 import           Data.Utils.Functors
 import           Text.Printf
+
+ashowLine :: AShow a => a -> String
+ashowLine = showSExpOneLine False . ashow'
 
 -- |Show an s-expression without any newlines.
 showSExpOneLine :: Bool -> SExp -> String

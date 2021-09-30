@@ -5,7 +5,7 @@ stdenv.mkDerivation {
     owner = "fakedrake";
     repo = "ssb-dbgen";
     rev = "HEAD";
-    sha256 = "10x9f2mqb4vxz1a1grvsnnyrf3pcdd0pc39v0alyd940hx65qzi7"; # lib.fakeSha256;
+    sha256 = "0yr5dr7gjf8a9fnvrz8fdvc6ja7vz0bs2iszf7m9fmzr4sp1fpiv"; # lib.fakeSha256;
   };
   buildInputs = [gcc makeWrapper];
   installPhase = ''
