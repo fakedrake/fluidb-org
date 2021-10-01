@@ -123,8 +123,8 @@ allNodes = do
     $ evalStateT nodeRefs
     $ def { gbPropNet = pn }
 
-nodesInState :: forall m t n . Monad m =>
-               [NodeState] -> PlanT t n m [NodeRef n]
+nodesInState
+  :: forall m t n . Monad m => [NodeState] -> PlanT t n m [NodeRef n]
 nodesInState st = do
   x <- asks propNet
   dropReader get $ nodesInState' x st

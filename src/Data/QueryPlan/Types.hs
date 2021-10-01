@@ -129,10 +129,10 @@ instance ARead IsMat
 
 -- | Transition actions. Interpretation of each transition action
 -- should be relative to the nodeStates map. Each node is materialized
--- only by the *first* occuring trigger.
+-- only by the *first* occuring trigger. Note that the outputs are curated
 data Transition t n
   = Trigger [NodeRef n] (NodeRef t) [NodeRef n]
-  | RTrigger [NodeRef n] (NodeRef t) [NodeRef n]
+  | RTrigger [NodeRef n] (NodeRef t) [NodeRef n] -- read t write
   | DelNode (NodeRef n)
   deriving (Show, Eq, Generic)
 

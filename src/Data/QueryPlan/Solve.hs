@@ -97,6 +97,7 @@ setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
   -- Populate the metaop cache
   -- warmupCache node
   setNodeStateSafe node Mat
+  curateTransitions
   cost <- totalTransitionCost
   trM $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
 
@@ -136,9 +137,7 @@ haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
   (costs,extraNodes) <- runWriterT $ forM frefs $ \ref -> do
-    cost <- lift
-      $ wrapTrace ("planCost " ++ ashow ref)
-      $ getCost @CostTag Proxy mempty ForceResult ref
+    cost <- lift $ getCost @CostTag Proxy mempty ForceResult ref
     case cost of
       Nothing -> return zero
       Just c -> do
@@ -155,9 +154,12 @@ setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
 setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
 {-# INLINE setNodeStateSafe' #-}
 
-setNodeStateSafe' :: MonadLogic m =>
-                    PlanT t n m (MetaOp t n)
-                  -> NodeRef n -> IsMat -> PlanT t n m ()
+setNodeStateSafe'
+  :: MonadLogic m
+  => PlanT t n m (MetaOp t n)
+  -> NodeRef n
+  -> IsMat
+  -> PlanT t n m ()
 setNodeStateSafe' getFwdOp node goalState =
   wrapTrM (printf "setNodeStateSafe %s %s" (show node) (show goalState)) $ do
     curState <- getNodeState node
@@ -348,7 +350,6 @@ lsplitReader
   -> ReaderT a (PlanT t n m) x
 lsplitReader = splitProvenance (SplitLeft,SplitRight) id
   $ \(ReaderT l) (ReaderT r) -> ReaderT $ \s -> mplusPlanT (l s) (r s)
-
 
 garbageCollectFor
   :: forall t n m . MonadLogic m => [NodeRef n] -> PlanT t n m ()

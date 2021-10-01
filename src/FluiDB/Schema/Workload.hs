@@ -152,8 +152,8 @@ runCodeBuild x = do
                       -> GlobalSolveT e s t n m' a
       globalSolveWrap = hoist lift
 
-materializedNodes :: (Hashables2 e s, Monad m) =>
-                    CodeBuilderT e s t n m [(NodeState, NodeRef n)]
+materializedNodes
+  :: (Hashables2 e s,Monad m) => CodeBuilderT e s t n m [(NodeState,NodeRef n)]
 materializedNodes = lift5 $ do
   matIni <- fmap2 (Initial Mat,) $ nodesInState [Initial Mat]
   matConcN <- fmap2 (Concrete NoMat Mat,) $ nodesInState [Concrete NoMat Mat]
@@ -192,10 +192,7 @@ insertQueries queries = do
     matNodes <- lift materializedNodes
     traceM $ "Mat nodes: " ++ ashow matNodes
     when (null matNodes) $ throwAStr "No ground truth"
-  nOptqRef :: NodeRef n <- wrapTraceT
-    ("insertQueryForest" ++ show (lengthF queries))
-    $ lift3
-    $ insertQueryForest literalType queries
+  nOptqRef :: NodeRef n <- lift3 $ insertQueryForest literalType queries
   lift4 clearClustBuildCache
   -- lift $ reportGraph >> reportClusterConfig/
   nodeNum <- asks (length . nNodes . propNet)
@@ -222,12 +219,10 @@ matNode
   -> NodeRef n
   -> CodeBuilderT e s t n m (Either (GlobalError e s t n) a,GCConfig t n)
 matNode postSolution nOptqRef = do
-  traceTM $ "Updating sizes(and other stuff): " ++ show nOptqRef
-  (errM,conf) <- planLiftCB $ do
-    traceTM $ "sizes updated: " ++ show nOptqRef
-    reifyError (setNodeMaterialized nOptqRef) >>= \case
-      Left e   -> return $ Just $ toGlobalError e
-      Right () -> return Nothing
+  (errM
+    ,conf) <- planLiftCB $ reifyError (setNodeMaterialized nOptqRef) >>= \case
+    Left e   -> return $ Just $ toGlobalError e
+    Right () -> return Nothing
   let conf' = pushHistory nOptqRef conf
   case errM of
     Just e  -> return (Left e,conf)

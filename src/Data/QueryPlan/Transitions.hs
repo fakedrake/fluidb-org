@@ -14,7 +14,7 @@ module Data.QueryPlan.Transitions
   ,totalTransitionCost
   ,putTransition
   ,putDelNode
-  ,mkTriggerUnsafe) where
+  ,mkTriggerUnsafe,curateTransitions) where
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
@@ -25,6 +25,7 @@ import           Data.NodeContainers
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.MTL
 import           Data.Utils.Ranges
@@ -65,8 +66,8 @@ putTransition' msg tr = do
   trM $ printf "Applying transition%s: %s" msg (show tr)
   gcs <- get
   let epoch = NEL.head $ epochs gcs
-  let epoch' = epoch{transitions=tr:transitions epoch}
-  put gcs{epochs=epoch' NEL.:| NEL.tail (epochs gcs)}
+  let epoch' = epoch { transitions = tr : transitions epoch }
+  put gcs { epochs = epoch' NEL.:| NEL.tail (epochs gcs) }
 putRevTrigger :: MonadHaltD m => NodeRef t -> PlanT t n m ()
 putRevTrigger = putTransition <=< revTrigger
 revTrigger :: Monad m => NodeRef t -> PlanT t n m (Transition t n)
@@ -113,3 +114,19 @@ getTransitions = asks (reverse .  (NEL.toList . epochs >=> transitions))
 totalTransitionCost :: Monad m => PlanT t n m Cost
 totalTransitionCost = dropReader get getTransitions
   >>= fmap mconcat . mapM transitionCost
+
+
+-- | Go through the epochs and remove the nodes on the outputs of the
+-- transitions that are not materialized.
+curateTransitions :: Monad m => PlanT t n m ()
+curateTransitions = modify $ \gsc -> gsc { epochs = go <$> epochs gsc }
+  where
+    go :: GCEpoch t n -> GCEpoch t n
+    go e = e { transitions = curateTrns <$> transitions e }
+      where
+        isMat0 n = maybe False isMat $ refLU n $ nodeStates e
+        curateTrns (Trigger i t o) = Trigger i t $ filter isMat0 o
+        curateTrns (RTrigger i t o) = RTrigger i t $ filter isMat0 o
+        curateTrns (DelNode n) =
+          assert (refLU n (nodeStates e) == Just (Concrete Mat NoMat))
+          $ DelNode n

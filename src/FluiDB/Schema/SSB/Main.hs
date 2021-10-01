@@ -19,7 +19,6 @@ import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Functors
-import           Data.Utils.MTL
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
 import           FluiDB.Schema.SSB.Values
@@ -108,6 +107,9 @@ actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
       _transitions <- runQuery verbosity query
       pgs <- globalizePlanT getDataSize
       lift2 $ putStrLn $ "Pages used: " ++ show pgs
+      mats <- globalizePlanT $ nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
+      lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
+
 
 type ImagePath = FilePath
 type QueryPath = FilePath
@@ -167,6 +169,6 @@ ssbMain = do
   -- setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
   let secs = 30
   traceTM "Starting!"
-  timeout (secs * 1000000) (actualMain Quiet [1..12]) >>= \case
+  timeout (secs * 1000000) (actualMain Quiet [6]) >>= \case
     Nothing -> putStrLn $ printf  "TIMEOUT after %ds" secs
     Just () -> putStrLn "Done!"

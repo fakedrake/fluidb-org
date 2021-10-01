@@ -27,7 +27,7 @@ getSsbGlobalConf = do
         {pgcPrimKeyAssoc=first TSymbol <$> fmap3 ESym ssbPrimKeys
         ,pgcSchemaAssoc=bimap TSymbol (fmap2 ESym) <$> ssbSchema
         ,pgcTableSizeAssoc=sizes
-        ,pgcBudget=Just 2500
+        ,pgcBudget=Just 2100
         ,pgcExpIso=(id,id)
         ,pgcToUniq=genUniqName
         ,pgcToFileSet= \case
@@ -47,9 +47,7 @@ ssbDBGen :: FilePath -> IO [(Table,TableSize)]
 ssbDBGen dataDir = do
   let createParents = True
   createDirectoryIfMissing createParents dataDir
-  withCurrentDirectory dataDir $ do
-    ret <- mkAllDataFiles $ ssbTpchDBGenConf $ fst <$> ssbSchema
-    tables <- listDirectory dataDir
-    putStrLn "Created tables:"
-    forM_ tables $ \tbl -> putStrLn $ "\t" ++ tbl
-    return ret
+  withCurrentDirectory dataDir
+    $ mkAllDataFiles
+    $ ssbTpchDBGenConf
+    $ fst <$> ssbSchema
