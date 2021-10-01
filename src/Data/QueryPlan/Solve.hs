@@ -212,11 +212,10 @@ setNodeStateSafe' getFwdOp node goalState =
       Initial Mat -> case goalState of
         Mat -> node `setNodeStateUnsafe` Concrete Mat Mat
         NoMat -> do
-          -- XXX: setNodeNoMatHistoricalCosts node
+          node `setNodeStateUnsafe` Concrete Mat NoMat
           delDepMatCache node
           isMaterializable node
             >>= guardl ("not materializable, can't delete" ++ ashow node)
-          node `setNodeStateUnsafe` Concrete Mat NoMat
           putDelNode node
 
 -- | Set a list of nodes to Mat state in an order that is likely to
