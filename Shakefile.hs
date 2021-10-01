@@ -45,7 +45,6 @@ pathsFileA = do
 noNixCmd :: (Partial, CmdArguments args) => args :-> Action r
 noNixCmd = cmd (RemEnv "STACK_IN_NIX_SHELL")
 
-
 localInstallRoot :: FDBAction FilePath
 localInstallRoot = do
   paths <- pathsFileA
@@ -139,18 +138,16 @@ main =
     pathsFileRule branchesConf
     pathsFileRule readdumpConf
     logDump %> \out -> do
-      putInfo $ "Making the log dump: " ++ out
       need [benchmarkBranchesExec]
-      putInfo $ "Running: " ++ benchmarkBranchesExec
-      noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out) benchmarkBranchesExec
+      putInfo $ "Running: " ++ out
+      noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out)
+        $ stackCmd brancehsConf StackRun []
+      -- noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out) benchmarkBranchesExec
     tokenBranch %> \tok -> do
       putInfo $ "Building the branch files. The token required is " ++ tok
       need [logDump,readdumpExec]
       cmd_ ["mkdir","-p",branchesRoot]
-      noNixCmd (Timeout 10) readdumpExec
-    phony "clean" $ do
-      cmd_ ["rm","-rf","/tmp/benchmark.out*"]
-      cmd_ ["rm","-rf",benchmarkExec,benchmarkBranchesExec,readdumpExec]
+      noNixCmd $ stackCmd readdumpConf StackRun []
     phony "run-branches" $ do
       need [tokenBranch]
     phony "run-benchmark" $ do
