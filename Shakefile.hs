@@ -15,7 +15,7 @@ import           Text.Printf
 data Config =
   Config
   { cnfStackRoot :: Maybe FilePath
-   ,cnfStackArgs :: [String]
+   ,cnfStackArgs :: StackArgs
    ,cnfNeedFiles :: Action ()
    ,cnfExecName  :: String
   }

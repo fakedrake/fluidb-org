@@ -169,6 +169,6 @@ ssbMain = do
   -- setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
   let secs = 30
   traceTM "Starting!"
-  timeout (secs * 1000000) (actualMain Quiet [6]) >>= \case
+  timeout (secs * 1000000) (actualMain Verbose [6]) >>= \case
     Nothing -> putStrLn $ printf  "TIMEOUT after %ds" secs
     Just () -> putStrLn "Done!"

@@ -37,11 +37,13 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Profunctor
 import           Data.Proxy
+import           Data.QueryPlan.Dependencies
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Default
+import           Data.Utils.ListT
 import           Data.Utils.Nat
 
 -- | depset has a constant part that is the cost of triggering and a
@@ -288,8 +290,15 @@ getCost _ extraMat cap ref = wrapTr $ do
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just zero
     BndBnd _bnd -> return Nothing
-    BndErr e ->
-      throwPlan $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
+    BndErr e -> do
+      deps <- headListT $ getDependencies ref
+      mats <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
+      trM $ "Error! getCost " ++ show ref
+      throwPlan
+        $ "getCost("
+        ++ ashow ref
+        ++ "):antisthenis error: "
+        ++ ashow (deps,mats,e)
   where
     -- wrapTr = wrapTrace ("getCost" <: ref)
     wrapTr = id

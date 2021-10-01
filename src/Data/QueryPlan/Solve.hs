@@ -99,7 +99,8 @@ setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
   setNodeStateSafe node Mat
   curateTransitions
   cost <- totalTransitionCost
-  trM $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
+  trM
+    $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
 
 -- | Concretify materializability
 makeMaterializable
@@ -118,8 +119,8 @@ makeMaterializable ref =
   where
     checkCache m = luMatCache ref >>= \case
       Nothing -> m
-      Just (frontierStar -> (deps,_star))
-        -> unlessM (allM isConcreteMat $ toNodeList deps) m
+      Just (frontierStar -> (deps,_star)) ->
+        unlessM (allM isConcreteMat $ toNodeList deps) m
     isConcreteMat =
       fmap (\case
               Concrete _ Mat -> True
@@ -128,10 +129,11 @@ makeMaterializable ref =
 haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
   -- From the frontier replace matRef with it's dependencies.
-  modify $ \gcs -> gcs{
-    frontier=nsDelete matRef (frontier gcs) <> metaOpIn mop}
+  modify $ \gcs -> gcs
+    { frontier = nsDelete matRef (frontier gcs) <> metaOpIn mop }
   extraCost <- metaOpCost [matRef] mop
   haltPlanCost $ fromIntegral $ costAsInt extraCost
+
 haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
