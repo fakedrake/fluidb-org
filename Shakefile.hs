@@ -15,12 +15,21 @@ import           Text.Printf
 data Config =
   Config
   { cnfStackRoot :: Maybe FilePath
-   ,cnfStackArgs :: [String]
+   ,cnfStackArgs :: StackArgs
    ,cnfNeedFiles :: Action ()
    ,cnfExecName  :: String
   }
+data StackArgs = StackArgs { saCompile :: [String],saRun :: [String] }
+emptyArgs :: StackArgs
+emptyArgs = StackArgs [] []
+compileArgs :: [String] -> StackArgs
+compileArgs as = emptyArgs { saCompile = as }
+runArgs :: [String] -> StackArgs
+runArgs as = emptyArgs { saCompile = as }
+anyArgs :: [String] -> StackArgs
+anyArgs as = StackArgs as as
 defConf :: String -> Config
-defConf = Config Nothing [] (return ())
+defConf = Config Nothing emptyArgs (return ())
 type FDBAction = ReaderT Config Action
 
 needSrcFiles :: Action ()
@@ -66,11 +75,13 @@ data StackCmd = StackRun | StackBuild | StackPath
 stackCmd :: Config -> StackCmd -> [String] -> Cmd
 stackCmd conf scmd args = "stack" : workDir ++ rest
   where
-    workDir = maybe [] (\x -> ["--work-dir",x]) $ cnfStackRoot conf
+    workDir = maybe [] (\x -> [ "--work-dir", x ]) $ cnfStackRoot conf
+
     rest = case scmd of
-      StackBuild -> ["build"] ++ cnfStackArgs conf ++ args
-      StackPath  -> "path" : args
-      StackRun   -> cnfStackArgs conf ++ ["run"] ++ args
+        StackBuild -> [ "build" ] ++ saCompile (cnfStackArgs conf) ++ args
+        StackPath -> "path" : args
+        StackRun -> saRun (cnfStackArgs conf)
+            ++ [ "exec", cnfExecName conf ] ++ args
 
 
 execRule :: Config -> String -> Rules FilePath
@@ -98,12 +109,18 @@ tokenBranch = branchesRoot </> "branches000/branch0000.txt"
 
 readdumpConf :: Config
 readdumpConf =
-  (defConf "readdump") { cnfNeedFiles = need ["tools/ReadDump/Main.hs"] }
+  Config
+  { cnfStackRoot = Nothing
+   ,cnfStackArgs = emptyArgs
+   ,cnfNeedFiles = need ["tools/ReadDump/Main.hs"]
+   ,cnfExecName = "readdump"
+  }
+
 branchesConf :: Config
 branchesConf =
   Config
   { cnfStackRoot = Just ".branches-stack-dir/"
-   ,cnfStackArgs = ["--ghc-options","-DVERBOSE_SOLVING"]
+   ,cnfStackArgs = compileArgs ["--ghc-options","-DVERBOSE_SOLVING"]
    ,cnfNeedFiles = needSrcFiles
    ,cnfExecName = "benchmark"
   }
@@ -112,7 +129,7 @@ benchConf :: Config
 benchConf =
   Config
   { cnfStackRoot = Just ".benchmark-stack-dir/"
-   ,cnfStackArgs = ["--profile"]
+   ,cnfStackArgs = anyArgs ["--profile"]
    ,cnfNeedFiles = needSrcFiles
    ,cnfExecName = "benchmark"
   }
@@ -141,7 +158,7 @@ main =
       need [benchmarkBranchesExec]
       putInfo $ "Running: " ++ out
       noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out)
-        $ stackCmd brancehsConf StackRun []
+        $ stackCmd branchesConf StackRun []
       -- noNixCmd (Timeout 60) (EchoStderr False) (FileStderr out) benchmarkBranchesExec
     tokenBranch %> \tok -> do
       putInfo $ "Building the branch files. The token required is " ++ tok
