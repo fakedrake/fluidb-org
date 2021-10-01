@@ -247,7 +247,7 @@ runSingleQuery
   => Query (ShapeSym e s) (QueryShape e s,s)
   -> GlobalSolveT e s t n m ([Transition t n],CppCode)
 runSingleQuery query = sqlToSolution query popSol $ do
-  ts <- transitions . NEL.head . epochs <$> getGCState
+  ts <- dropReader getGCState getTransitions
   (ts,) <$> getQuerySolutionCpp
   where
     popSol :: Monad m => [x] -> m x

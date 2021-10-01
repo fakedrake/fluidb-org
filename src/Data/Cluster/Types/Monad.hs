@@ -45,7 +45,7 @@ module Data.Cluster.Types.Monad
   ,defaultingLe
   ,getDef
   ,ashowACPA
-  ,consistentModDefaulting) where
+  ,consistentModDefaulting,defSyncAndDemote) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -212,6 +212,20 @@ data Defaulting a
     -- ^ DefaultingFull default_value actual_value
   deriving (Eq,Generic,Show,Read,Functor,Traversable,Foldable)
 instance Hashable a => Hashable (Defaulting a)
+
+defSyncAndDemote
+  :: Defaulting (QueryShape' a b)
+  -> Defaulting (QueryShape' a b)
+defSyncAndDemote = \case
+  DefaultingFull d f -> DefaultingDef $ go d f
+  a                  -> a
+  where
+    -- Shape and uniques are constant once evaluated but the default
+    -- value has a more up to date size
+    go d f =
+      QueryShape
+      { qpSchema = qpSchema f,qpUnique = qpUnique f,qpSize = qpSize d }
+
 
 consistentModDefaulting
   :: (a -> a -> Bool)

@@ -24,6 +24,7 @@ import           Data.QnfQuery.BuildUtils
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
+import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.Tup

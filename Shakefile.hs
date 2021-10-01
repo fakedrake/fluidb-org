@@ -53,7 +53,7 @@ stackCmd conf scmd args = "stack" : workDir ++ rest
   where
     workDir = maybe [] (\x -> ["--work-dir",x]) $ cnfStackRoot conf
     rest = case scmd of
-      StackBuild -> ["build"] ++ saCompile (cnfStackArgs conf) ++ args
+      StackBuild -> ["build","-j","4"] ++ saCompile (cnfStackArgs conf) ++ args
       StackPath -> "path" : args
       StackRun ->
         saRun (cnfStackArgs conf) ++ ["exec",cnfExecName conf] ++ args
@@ -127,3 +127,5 @@ main =
     phony "run-benchmark" $ do
       need [benchmarkExecTok]
       noNixCmd $ stackCmd benchConf StackRun ["+RTS","-p"]
+    phony "clean" $ do
+      cmd_ ["rm","-rf",benchmarkExecTok,benchmarkExecTok,readdumpExecTok,branchesRoot,logDump]

@@ -42,6 +42,7 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.ListT
 import           Data.Utils.Nat
@@ -119,7 +120,7 @@ mkNewMech ref =
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       (nxt,r) <- toKleisli f c
-        -- "result" <<: (ref,r,coepoch)
+      -- "result" <<: (ref,r)
       lift $ modify $ modL mcMechMapLens $ refInsert ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 

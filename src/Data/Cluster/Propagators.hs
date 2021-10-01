@@ -110,19 +110,20 @@ joinClustPropagator
       oR = s joinClusterRightAntijoin
   -- Create each output shape but without any sizing until we have
   -- access to the actual. Temporarily use the shape of the input.
-  let mkShape :: (String
-                  -> [(ShapeSym e s,ShapeSym e s)]
-                  -> QueryShape e s
-                  -> Either (AShowStr e s) (QueryShapeNoSize QuerySize e s)) =
-        \msg -> withStackFrame msg ... translateShape' id
-  oLRTrans <- mkShape "oLRTrans" (swap <$> assocOR) `traverse` oR
-  oRRTrans <- mkShape "oRRTrans" (swap <$> assocOL) `traverse` oL
-  iLTransOL <- mkShape "iLTransOL" assocOL `traverse` il
-  iRTransOR <- mkShape "iRTransOR" assocOR `traverse` ir
+  let mkShape :: ([(ShapeSym e s,ShapeSym e s)]
+                  -> Defaulting (QueryShape e s)
+                  -> Either
+                    (AShowStr e s)
+                    (Defaulting (QueryShapeNoSize QuerySize e s))) = \m d ->
+        defSyncAndDemote <$> traverse (translateShape' id m) d
+  oLRTrans <- mkShape (swap <$> assocOR) oR
+  oRRTrans <- mkShape (swap <$> assocOL) oL
+  iLTransOL <- mkShape assocOL il
+  iRTransOR <- mkShape assocOR ir
   -- The output is created in two parts: iLTransO and RTransO.
-  iLTransO <- mkShape "iLTransO" assocO `traverse` il
+  iLTransO <- mkShape assocO il
   -- Note that there may be different symbols, the rhs will be the latter ones.
-  iRTransO <- mkShape "iRTransO" (reverse assocO) `traverse` ir
+  iRTransO <- mkShape (reverse assocO) ir
   let joinShapesGuard =
         maybe
           (throwAStr
@@ -137,7 +138,7 @@ joinClustPropagator
       o' = o <> outShape
       oL' = oL <> iLTransOL
       oR' = oR <> iRTransOR
-  -- FIX THE SIZES!
+  -- FIX THE SIZES FOR EQUIJOINS!
   -- Note that the size should be the same regardles of
   -- defaultiness. Just fmap into it and insert the most certain
   -- one. The certainty if inferred sizes the certainty of the
@@ -252,52 +253,58 @@ data G e s x
 -- | Combine two defaultings. Trigger the Gfunc and then combine the
 -- results according to the semigroup semantics
 liftG
-  :: forall e s x .
-  Semigroup x
-  => Defaulting x
-  -> G e s x
-  -> Defaulting x
-  -> Defaulting x
-  -> Either (AShowStr e s) (Defaulting x)
-liftG old gf l r = (<> old) <$> case gf of
+  :: forall e s .
+  Defaulting (QueryShape e s)
+  -> G e s (QueryShape e s)
+  -> Defaulting (QueryShape e s)
+  -> Defaulting (QueryShape e s)
+  -> Either (AShowStr e s) (Defaulting (QueryShape e s))
+liftG old gf l0 r0 = (<> old) <$> case gf of
   G0 Nothing  -> return old
-  G0 (Just x) -> return $ pure x
+  G0 (Just x) -> error "This doesn't make sence. TODO change the type" -- return $ pure x
   G1 f        -> traverse f l
   GL f        -> sequenceA $ f <$> l <*> r
   GR f        -> sequenceA $ f <$> l <*> r
   G2 f        -> sequenceA $ f <$> l <*> r
+  where
+    -- We don't want full values to be leaked through the propagators
+    l = defSyncAndDemote l0
+    r = defSyncAndDemote r0
 
 liftGC
-  :: Semigroup x
-  => G e s x
+  :: G e s (QueryShape e s)
   -- ^ The group transform
-  -> WMetaD (Defaulting x) NodeRef n
+  -> WMetaD (Defaulting (QueryShape e s)) NodeRef n
   -- ^ Left input
-  -> WMetaD (Defaulting x) NodeRef n
+  -> WMetaD (Defaulting (QueryShape e s)) NodeRef n
   -- ^ Right input
-  -> WMetaD (Defaulting x) NodeRef n
+  -> WMetaD (Defaulting (QueryShape e s)) NodeRef n
   -- ^ Old output
-  -> Either (AShowStr e s) (WMetaD (Defaulting x) NodeRef n)
+  -> Either (AShowStr e s) (WMetaD (Defaulting (QueryShape e s)) NodeRef n)
 liftGC f l r old =
   putMeta old <$> liftG (dropMeta old) f (dropMeta l) (dropMeta r)
   where
     dropMeta (WMetaD (d,_)) = d
     putMeta (WMetaD (_,n)) d = WMetaD (d,n)
 
-mkUnPropagator :: forall e s t n . Hashables2 e s =>
-                 G e s (QueryShape e s)
-               -> G e s (QueryShape e s)
-               -> G e s (QueryShape e s)
-               -> CPropagatorShape UnClust' e s t n
-mkUnPropagator fo1o2_i fio1_o2 fio2_o1 UnClust{..} = do
-  unClusterPrimaryOut <-
-      liftGC fio2_o1 unClusterIn unClusterSecondaryOut unClusterPrimaryOut
-  unClusterSecondaryOut <-
-      liftGC fio1_o2 unClusterIn unClusterPrimaryOut unClusterSecondaryOut
-  unClusterIn <-
-      liftGC fo1o2_i unClusterPrimaryOut unClusterSecondaryOut unClusterIn
-  let unClusterT=EmptyF
-  return UnClust {..}
+mkUnPropagator
+  :: forall e s t n .
+  Hashables2 e s
+  => G e s (QueryShape e s)
+  -> G e s (QueryShape e s)
+  -> G e s (QueryShape e s)
+  -> CPropagatorShape UnClust' e s t n
+mkUnPropagator fo1o2_i fio1_o2 fio2_o1 UnClust {..} = do
+  unClusterPrimaryOut
+    <- liftGC fio2_o1 unClusterIn unClusterSecondaryOut unClusterPrimaryOut
+  unClusterSecondaryOut
+    <- liftGC fio1_o2 unClusterIn unClusterPrimaryOut unClusterSecondaryOut
+  unClusterIn
+    <- liftGC fo1o2_i unClusterPrimaryOut unClusterSecondaryOut unClusterIn
+  let v = void . snd . unMetaD
+  "unCluster" <<: (v unClusterPrimaryOut,v unClusterSecondaryOut,v unClusterIn)
+  let unClusterT = EmptyF
+  return UnClust { .. }
 
 mkBinPropagator
   :: forall e s t n .
@@ -507,16 +514,18 @@ putShapePropagator c p =
     ins a@ACPropagatorAssoc {acpaInOutAssoc = []} as = a : as
     ins a@ACPropagatorAssoc {acpaInOutAssoc = kmap} as =
       if kmap `notElem` fmap acpaInOutAssoc as then a : as else as
-modPropagators :: (Hashables2 e s, Monad m) =>
-                 AnyCluster e s t n
-               -> Endo (Maybe (ClustPropagators e s t n))
-               -- ^(Propagator,In/Out mapping)
-               -> CGraphBuilderT e s t n m ()
+modPropagators
+  :: (Hashables2 e s,Monad m)
+  => AnyCluster e s t n
+  -> Endo (Maybe (ClustPropagators e s t n))
+  -- ^(Propagator,In/Out mapping)
+  -> CGraphBuilderT e s t n m ()
 modPropagators c f = modify $ \clustConf -> clustConf{
   qnfPropagators=HM.alter f c $ qnfPropagators clustConf}
-getPropagators :: (Hashables2 e s, MonadReader (ClusterConfig e s t n) m) =>
-                 AnyCluster e s t n
-               -> m (Maybe (ClustPropagators e s t n))
+getPropagators
+  :: (Hashables2 e s,MonadReader (ClusterConfig e s t n) m)
+  => AnyCluster e s t n
+  -> m (Maybe (ClustPropagators e s t n))
 getPropagators c = asks (HM.lookup c . qnfPropagators)
 
 getShapePropagators
@@ -546,23 +555,23 @@ getShapeCluster :: forall e s t n m .
                  (MonadReader (ClusterConfig e s t n) m, Hashables2 e s) =>
                  AnyCluster e s t n
                -> m (ShapeCluster NodeRef e s t n)
-               -- -> CGraphBuilderT e s t n m (ShapeCluster NodeRef e s t n)
-getShapeCluster = fmap dropId
-                 . bitraverse (withComp $ const $ return mempty)
-                 (withComp getNodeShape)
-                 . putId
+getShapeCluster =
+  fmap dropId
+  . bitraverse (withComp $ const $ return mempty) (withComp getNodeShape)
+  . putId
   where
-    withComp :: (NodeRef a -> m x)
-             -> NodeRef a
-             -> m (WMetaD x NodeRef a)
+    withComp :: (NodeRef a -> m x) -> NodeRef a -> m (WMetaD x NodeRef a)
     withComp f = fmap WMetaD . (\t -> (,t) <$> f t)
     putId :: AnyCluster e s t n
           -> AnyCluster' (ShapeSym e s) Identity (NodeRef t) (NodeRef n)
     putId = putIdentity
-    dropId :: AnyCluster' (ShapeSym e s) Identity
-             (WMetaD (Defaulting (QueryShape e s)) NodeRef t)
-             (WMetaD (Defaulting (QueryShape e s)) NodeRef n)
-           -> ShapeCluster NodeRef e s t n
+    dropId
+      :: AnyCluster'
+        (ShapeSym e s)
+        Identity
+        (WMetaD (Defaulting (QueryShape e s)) NodeRef t)
+        (WMetaD (Defaulting (QueryShape e s)) NodeRef n)
+      -> ShapeCluster NodeRef e s t n
     dropId = dropIdentity
 
 putShapeCluster
@@ -644,27 +653,36 @@ forceQueryShape n = runMaybeT $ (`evalStateT` mempty) $ go n
       trail <- get
       guard $ not $ ref `nsMember` trail
       modify (nsInsert ref)
-      -- Here we actually need `eitherl`...
       clusts <- lift2
         $ filter (elem ref . clusterOutputs) <$> lookupClustersN ref
+      "clusts" <<: (ref,showClust <$> clusts)
       oneOfM clusts
         $ \c -> case partition (elem ref) [clusterInputs c,clusterOutputs c] of
           ([_siblings],[deps]) -> do
+            "deps" <<: (ref,trail,deps)
             guard $ not $ any (`nsMember` trail) deps
             mapM_ go deps
+            "trigger" <<: showClust c
             shapeClust <- lift2 $ triggerClustPropagator c
             unlessDone $ \shape -> throwAStr
               $ "Expected full but got: " ++ ashow (ref,shape,shapeClust)
           _ -> mzero
       where
+        showClust = \case
+          JoinClustW _ -> Sym "JoinClustW"
+          UnClustW _   -> Sym "UnClustW"
+          BinClustW _  -> Sym "BinClustW"
+          NClustW _    -> Sym "NClustW"
         oneOfM [] _  = mzero
         oneOfM cs fm = foldr1Unsafe (<|>) $ fm <$> cs
         unlessDone :: (Maybe (Defaulting (QueryShape e s))
                        -> StateT (NodeSet n) (MaybeT m) (QueryShape e s))
                    -> StateT (NodeSet n) (MaybeT m) (QueryShape e s)
-        unlessDone m =
-          dropReader (lift2 get) (getNodeShapeFull ref) >>= \case
-          Just x -> return x
+        unlessDone m = dropReader (lift2 get) (getNodeShapeFull ref) >>= \case
+          Just x -> do
+            shape <- lift2 $ gets $ refLU ref . qnfNodeShapes
+            throwAStr $ "New shapes should not be full" <: (n,fmap void shape)
+            -- return x
           Nothing -> do
             shape <- lift2 $ gets $ refLU ref . qnfNodeShapes
             m shape

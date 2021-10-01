@@ -314,20 +314,20 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
       --       trZ
       --         (if zsResetLoop then "reset:" ++ msg else msg)
       --         zsZipper
-      --         ["N6","N25"]
+      --         ["none"]
       --         arg
-      -- tr "zLocalizeConf" (confCap gconf,confEpoch gconf,zsCoEpoch)
+      let tr _ _ = return ()
+      tr "zLocalizeConf" (confCap gconf,confEpoch gconf,zsCoEpoch)
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
-          -- tr "zLocalizeConf:reset" (zsCoEpoch,confEpoch gconf)
-          let zs' =
-                zs { zsCoEpoch = mempty,zsItCmd = zsReset,zsResetLoop = True }
+          tr "zLocalizeConf:reset" (zsCoEpoch,confEpoch gconf)
+          let zs' = zsIni { zsItCmd = zsReset }
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
         DontReset lconf -> do
-          -- tr "zLocalizeConf:res" $ confCap lconf
+          tr "zLocalizeConf:res" $ confCap lconf
           case evolutionControl zprocEvolution gconf zsZipper of
             Just res -> do
-              -- tr "result" (res,zsCoEpoch)
+              tr "result" (res,zsCoEpoch)
               yieldMB (zsCoEpoch,res) >>= zNext zs { zsResetLoop = False }
             Nothing -> do
               cmdM <- fromArrow zsItCmd lconf
@@ -335,10 +335,10 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
               let zs' = zs { zsReset = fromMaybe zsReset rstM }
               case upd of
                 Left (coepoch,res) -> do
-                  -- tr "resultFin" (res,coepoch)
+                  tr "resultFin" (res,coepoch)
                   yieldMB (coepoch,res) >>= zNext zs' { zsResetLoop = False }
                 Right ((nxt,z),coepoch) -> do
-                  -- tr "cont-from:" (zipperShape z,coepoch)
+                  tr "cont-from:" (zipperShape z,coepoch)
                   let zs'' =
                         zs' { zsItCmd = nxt
                              ,zsZipper = z
