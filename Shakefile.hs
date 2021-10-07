@@ -93,10 +93,20 @@ branchesConf =
    ,cnfExecName = "benchmark"
   }
 
+
 benchConf :: Config
 benchConf =
   Config
   { cnfStackRoot = Just ".benchmark-stack-dir/"
+   ,cnfStackArgs = mempty
+   ,cnfNeedFiles = needSrcFiles
+   ,cnfExecName = "benchmark"
+  }
+
+benchProfileConf :: Config
+benchProfileConf =
+  Config
+  { cnfStackRoot = Just ".benchmark-profule-stack-dir/"
    ,cnfStackArgs = anyArgs ["--profile"]
    ,cnfNeedFiles = needSrcFiles
    ,cnfExecName = "benchmark"
@@ -109,7 +119,8 @@ main :: IO ()
 main =
   shakeArgs shakeOptions { shakeVerbosity = Verbose,shakeFiles = "_build" } $ do
     -- want [tokenBranch]
-    benchmarkExecTok <- execTokRule benchConf "benchmark"
+    benchmarProfileExecTok <- execTokRule benchProfileConf "benchmark-profile"
+    benchmarkExecTok <- execTokRule benchConf "benchmark-profile"
     benchmarkBranchesExecTok <- execTokRule branchesConf "benchmark-branches"
     readdumpExecTok <- execTokRule readdumpConf "readdump"
     logDump %> \out -> do
@@ -122,10 +133,12 @@ main =
       need [logDump,readdumpExecTok]
       cmd_ ["mkdir","-p",branchesRoot]
       noNixCmd $ stackCmd readdumpConf StackRun []
-    phony "run-branches" $ do
-      need [tokenBranch]
+    phony "run-branches" $ need [tokenBranch]
+    phony "run-benchmark-profile" $ do
+      need [benchmarkProfileExecTok]
+      noNixCmd $ stackCmd benchProfileConf StackRun ["+RTS","-p"]
     phony "run-benchmark" $ do
       need [benchmarkExecTok]
-      noNixCmd $ stackCmd benchConf StackRun ["+RTS","-p"]
+      noNixCmd $ stackCmd benchConf
     phony "clean" $ do
       cmd_ ["rm","-rf",benchmarkExecTok,benchmarkExecTok,readdumpExecTok,branchesRoot,logDump]
