@@ -31,8 +31,8 @@ likesToEquals SymEmbedding{..} q =
       EString pat ->
         if | "%" `isPrefixOf` pat -> eqPattern Suffix r rl $ tail pat
            | "%" `isSuffixOf` pat -> eqPattern Prefix r rl $ cotail pat
-           | '%' `elem` pat -> r
-           | otherwise -> eqPattern AssertLength r rl pat
+           | '%' `elem` pat       -> r
+           | otherwise            -> eqPattern AssertLength r rl pat
       _ -> r
     go x = x
     eqPattern :: (Int -> ElemFunction)
@@ -53,23 +53,20 @@ likesToEquals SymEmbedding{..} q =
 -- equalities to likes. This is not 100% correct as we would be
 -- changing. `x = "hello%"` to `x like "hello%"` but it's fine for
 -- TPC-H.
-equalsToLikes :: forall e s .
-                (e -> Bool)
-              -> (e -> Bool)
-              -> Query e s
-              -> Query e s
+equalsToLikes
+  :: forall e s . (e -> Bool) -> (e -> Bool) -> Query e s -> Query e s
 equalsToLikes isLit isString = runIdentity . traverseProp
   (Identity . fmap replaceRel . fmap2 replaceExpr)
   where
     replaceExpr :: Expr e -> Expr e
     replaceExpr = \case
-      E2 EEq (E0 x) y -> mkLike x y
-      E2 EEq x (E0 y) -> mkLike y x
+      E2 EEq (E0 x) y  -> mkLike x y
+      E2 EEq x (E0 y)  -> mkLike y x
       E2 ENEq (E0 x) y -> E1 ENot $ mkLike x y
       E2 ENEq x (E0 y) -> E1 ENot $ mkLike y x
-      E2 o l r -> E2 o (replaceExpr l) (replaceExpr r)
-      E1 o l -> E1 o $ replaceExpr l
-      E0 s -> E0 s
+      E2 o l r         -> E2 o (replaceExpr l) (replaceExpr r)
+      E1 o l           -> E1 o $ replaceExpr l
+      E0 s             -> E0 s
       where
         mkLike x y = if all isLit y && all isString y && not (isLit x)
                      then E2 ELike (E0 x) y
@@ -78,8 +75,8 @@ equalsToLikes isLit isString = runIdentity . traverseProp
     replaceRel = \case
       R2 REq (R0 (E0 x)) y -> mkLike x y
       R2 REq x (R0 (E0 y)) -> mkLike y x
-      R2 o l r -> R2 o (replaceRel l) (replaceRel r)
-      R0 s -> R0 s
+      R2 o l r             -> R2 o (replaceRel l) (replaceRel r)
+      R0 s                 -> R0 s
       where
         mkLike x y@(R0 _) = if all2 isLit y && all2 isString y && not (isLit x)
           then R2 RLike (R0 (E0 x)) y

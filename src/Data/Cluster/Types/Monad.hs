@@ -45,7 +45,7 @@ module Data.Cluster.Types.Monad
   ,defaultingLe
   ,getDef
   ,ashowACPA
-  ,consistentModDefaulting,defSyncAndDemote) where
+  ,consistentModDefaulting,defSyncAndDemote,mkFull) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -278,6 +278,9 @@ instance Semigroup a => Semigroup (Defaulting a) where
 
 instance Semigroup a => Monoid (Defaulting a) where
   mempty = DefaultingEmpty
+
+mkFull :: a -> Defaulting a
+mkFull a = DefaultingFull a a
 
 promoteDefaulting :: Defaulting a -> Defaulting a
 promoteDefaulting = \case

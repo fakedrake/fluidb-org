@@ -26,6 +26,7 @@ module Data.Cluster.Types.Clusters
   (AnyCluster'(..)
   ,JoinClust'(..)
   ,WMetaD(..)
+  ,ashowCluster
   ,destructCluster
   ,updateCHash
   ,primaryTRef
@@ -101,35 +102,46 @@ type BinClust e s = BinClust' NodeRef (ComposedType BinClust' (ShapeSym e s) Nod
 type UnClust e s = UnClust' NodeRef (ComposedType UnClust' (ShapeSym e s) NodeRef)
 type NClust e s = NClust' NodeRef (ComposedType NClust' (ShapeSym e s) NodeRef)
 
-instance (Hashables2 (f n) (g t), AShow (g t), AShow (f n)) =>  AShow (JoinClust' g f t n) where
-  ashow' JoinClust{..} = Rec "JoinClust" [
-    ("joinBinCluster",ashow' joinBinCluster),
-    ("joinClusterLeftAntijoin",ashow' joinClusterLeftAntijoin),
-    ("joinClusterRightAntijoin",ashow' joinClusterRightAntijoin),
-    ("joinClusterLeftIntermediate",ashow' joinClusterLeftIntermediate),
-    ("joinClusterRightIntermediate",ashow' joinClusterRightIntermediate),
-    ("joinClusterLeftSplit",ashow' joinClusterLeftSplit),
-    ("joinClusterRightSplit",ashow' joinClusterRightSplit),
-    ("joinClusterHash",ashow' joinClusterHash)]
+instance (Hashables2 (f n) (g t),AShow (g t),AShow (f n))
+  => AShow (JoinClust' g f t n) where
+  ashow' JoinClust {..} =
+    Rec
+      "JoinClust"
+      [("joinBinCluster",ashow' joinBinCluster)
+      ,("joinClusterLeftAntijoin",ashow' joinClusterLeftAntijoin)
+      ,("joinClusterRightAntijoin",ashow' joinClusterRightAntijoin)
+      ,("joinClusterLeftIntermediate",ashow' joinClusterLeftIntermediate)
+      ,("joinClusterRightIntermediate",ashow' joinClusterRightIntermediate)
+      ,("joinClusterLeftSplit",ashow' joinClusterLeftSplit)
+      ,("joinClusterRightSplit",ashow' joinClusterRightSplit)
+      ,("joinClusterHash",ashow' joinClusterHash)]
 
-instance (Hashables2 (f n) (g t), AShow (g t), AShow (f n)) =>  AShow (BinClust' g f t n) where
-  ashow' BinClust{..} = Rec "BinClust" [
-    ("binClusterLeftIn",ashow' binClusterLeftIn),
-    ("binClusterRightIn",ashow' binClusterRightIn),
-    ("binClusterOut",ashow' binClusterOut),
-    ("binClusterT",ashow' binClusterT),
-    ("binClusterHash",ashow' binClusterHash)]
+instance (Hashables2 (f n) (g t),AShow (g t),AShow (f n))
+  => AShow (BinClust' g f t n) where
+  ashow' BinClust {..} =
+    Rec
+      "BinClust"
+      [("binClusterLeftIn",ashow' binClusterLeftIn)
+      ,("binClusterRightIn",ashow' binClusterRightIn)
+      ,("binClusterOut",ashow' binClusterOut)
+      ,("binClusterT",ashow' binClusterT)
+      ,("binClusterHash",ashow' binClusterHash)]
 
-instance (Hashables2 (f n) (g t), AShow (g t), AShow (f n)) =>  AShow (UnClust' g f t n) where
-  ashow' UnClust{..} = Rec "UnClust" [
-    ("unClusterIn",ashow' unClusterIn),
-    ("unClusterPrimaryOut",ashow' unClusterPrimaryOut),
-    ("unClusterSecondaryOut",ashow' unClusterSecondaryOut),
-    ("unClusterT",ashow' unClusterT),
-    ("unClusterHash",ashow' unClusterHash)]
+instance (Hashables2 (f n) (g t),AShow (g t),AShow (f n))
+  => AShow (UnClust' g f t n) where
+  ashow' UnClust {..} =
+    Rec
+      "UnClust"
+      [("unClusterIn",ashow' unClusterIn)
+      ,("unClusterPrimaryOut",ashow' unClusterPrimaryOut)
+      ,("unClusterSecondaryOut",ashow' unClusterSecondaryOut)
+      ,("unClusterT",ashow' unClusterT)
+      ,("unClusterHash",ashow' unClusterHash)]
 
-instance (Hashables2 (f n) (g t), AShow (g t), AShow (f n)) =>  AShow (NClust' g f t n)
-instance (Hashables3 e (f n) (f t), AShow e, AShow (f n), AShow (f t), AShow (f n)) =>  AShow (AnyCluster' e f t n)
+instance (Hashables2 (f n) (g t),AShow (g t),AShow (f n))
+  => AShow (NClust' g f t n)
+instance (Hashables3 e (f n) (f t),AShow e,AShow (f n),AShow (f t),AShow (f n))
+  => AShow (AnyCluster' e f t n)
 
 -- instance (ARead e, ARead (f n), ARead (f n)) => ARead (AnyCluster' e f t n)
 -- instance (ARead (g t), ARead (f n)) => ARead (JoinClust' g f t n)
@@ -140,71 +152,78 @@ instance (Hashables3 e (f n) (f t), AShow e, AShow (f n), AShow (f t), AShow (f 
 newtype NClust' (g :: * -> *) f t n = NClust {nClustNode :: f n}
   deriving (Eq, Show, Read, Functor, Foldable, Traversable, Generic)
 
-data JoinClust' g f t n = JoinClust {
-  joinBinCluster               :: BinClust' g f t n,
-  joinClusterLeftAntijoin      :: f n,
-  joinClusterRightAntijoin     :: f n,
-  joinClusterLeftIntermediate  :: f n,
-  joinClusterRightIntermediate :: f n,
-  joinClusterLeftSplit         :: g t,
-  joinClusterRightSplit        :: g t,
-  joinClusterHash              :: Hashables2 (f n) (g t) => Int
+data JoinClust' g f t n =
+  JoinClust
+  { joinBinCluster :: BinClust' g f t n
+   ,joinClusterLeftAntijoin :: f n
+   ,joinClusterRightAntijoin :: f n
+   ,joinClusterLeftIntermediate :: f n
+   ,joinClusterRightIntermediate
+      :: f n
+   ,joinClusterLeftSplit :: g t
+   ,joinClusterRightSplit :: g t
+   ,joinClusterHash :: Hashables2 (f n) (g t) => Int
   }
 instance Hashables2 (f n) (g t) => Eq (JoinClust' g f t n) where
   l == r = hash l == hash r
 
-data BinClust' g f t n = BinClust {
-  binClusterLeftIn  :: f n,
-  binClusterRightIn :: f n,
-  binClusterOut     :: f n,
-  binClusterT       :: g t,
-  binClusterHash    :: Hashables2 (f n) (g t) => Int
+data BinClust' g f t n =
+  BinClust
+  { binClusterLeftIn  :: f n
+   ,binClusterRightIn :: f n
+   ,binClusterOut     :: f n
+   ,binClusterT       :: g t
+   ,binClusterHash    :: Hashables2 (f n) (g t) => Int
   }
 instance Hashables2 (f n) (g t) => Eq (BinClust' g f t n) where
   l == r = hash l == hash r
 
-data UnClust' g f t n = UnClust {
-  unClusterIn           :: f n,
-  unClusterPrimaryOut   :: f n,
-  unClusterSecondaryOut :: f n,
-  unClusterT            :: g t,
-  unClusterHash         :: Hashables2 (f n) (g t) => Int
+data UnClust' g f t n =
+  UnClust
+  { unClusterIn           :: f n
+   ,unClusterPrimaryOut   :: f n
+   ,unClusterSecondaryOut :: f n
+   ,unClusterT            :: g t
+   ,unClusterHash         :: Hashables2 (f n) (g t) => Int
   }
 instance Hashables2 (f n) (g t) => Eq (UnClust' g f t n) where
   l == r = hash l == hash r
 
-allNodeRefsAnyClust :: forall e t n .
-                      AnyCluster' e NodeRef t n
-                    -> ([NodeRef t], [NodeRef n])
+allNodeRefsAnyClust
+  :: forall e t n . AnyCluster' e NodeRef t n -> ([NodeRef t],[NodeRef n])
 allNodeRefsAnyClust = \case
   JoinClustW x -> allNR x
   BinClustW x  -> allNR x
   UnClustW x   -> allNR x
   NClustW x    -> allNodeRefs0 x
   where
-    allNR :: forall c . SpecificCluster c =>
-            c NodeRef (ComposedType c e NodeRef) t n
-          -> ([NodeRef t], [NodeRef n])
+    allNR :: forall c .
+          SpecificCluster c
+          => c NodeRef (ComposedType c e NodeRef) t n
+          -> ([NodeRef t],[NodeRef n])
     allNR = allNodeRefs (Proxy :: Proxy e)
 
-allNodeRefs :: forall c t n e . SpecificCluster c =>
-              Proxy e
-            -> c NodeRef (ComposedType c e NodeRef) t n
-            -> ([NodeRef t], [NodeRef n])
+allNodeRefs
+  :: forall c t n e .
+  SpecificCluster c
+  => Proxy e
+  -> c NodeRef (ComposedType c e NodeRef) t n
+  -> ([NodeRef t],[NodeRef n])
 allNodeRefs _ =
   second (fmap $ snd . extractRef (Proxy :: Proxy c) (Proxy :: Proxy e)) .
   allNodeRefs0
 
-primaryTRef :: forall e f t n .
-  AnyCluster' e f t n -> Maybe (f t)
+primaryTRef :: forall e f t n . AnyCluster' e f t n -> Maybe (f t)
 primaryTRef = \case
-  JoinClustW x ->  Just $ binClusterT $ joinBinCluster x
+  JoinClustW x -> Just $ binClusterT $ joinBinCluster x
   BinClustW x  -> Just $ binClusterT x
   UnClustW x   -> Just $ unClusterT x
   NClustW _    -> Nothing
-primaryNRef :: forall e f t n .
-              AnyCluster' e f t n
-            -> (Maybe (Either [BQOp e] [UQOp e]),f n)
+
+primaryNRef
+  :: forall e f t n .
+  AnyCluster' e f t n
+  -> (Maybe (Either [BQOp e] [UQOp e]),f n)
 primaryNRef = \case
   JoinClustW x ->  first (Just . Left) $ unMetaD $ binClusterOut $ joinBinCluster x
   BinClustW x -> first (Just . Left) $ unMetaD $ binClusterOut x
@@ -212,11 +231,11 @@ primaryNRef = \case
   NClustW x -> (Nothing, nClustNode x)
 
 instance Hashables4
-         (f n)
-         (f t)
-         (ComposedType UnClust' e f n)
-         (ComposedType BinClust' e f n) =>
-         Hashable (AnyCluster' e f t n)
+    (f n)
+    (f t)
+    (ComposedType UnClust' e f n)
+    (ComposedType BinClust' e f n)
+  => Hashable (AnyCluster' e f t n)
 instance Hashables2 (g t) (f n) => Hashable (JoinClust' g f t n) where
   hash = joinClusterHash
   hashWithSalt s = hashWithSalt s . hash
@@ -228,7 +247,10 @@ instance Hashables2 (g t) (f n) => Hashable (UnClust' g f t n) where
   hashWithSalt s = hashWithSalt s . hash
 instance Hashables2 (g t) (f n) => Hashable (NClust' g f t n)
 
-data Direction = ForwardTrigger | ReverseTrigger deriving (Generic, Show, Read, Eq)
+data Direction
+  = ForwardTrigger
+  | ReverseTrigger
+  deriving (Generic,Show,Read,Eq)
 instance Hashable Direction
 
 clusterInputs :: AnyCluster' e f t n -> [f n]
@@ -246,10 +268,14 @@ clusterInterms =
   execWriter
   . traverseAnyRoles return (\x -> tell [x] >> return x) return
   . putIdentity
-traverseAnyRoles :: forall n r t f f' e . (Traversable f, Applicative f') =>
-                    (n -> f' r) -> (n -> f' r) -> (n -> f' r)
-                  -> AnyCluster' e f t n
-                  -> f' (AnyCluster' e f t r)
+traverseAnyRoles
+  :: forall n r t f f' e .
+  (Traversable f,Applicative f')
+  => (n -> f' r)
+  -> (n -> f' r)
+  -> (n -> f' r)
+  -> AnyCluster' e f t n
+  -> f' (AnyCluster' e f t r)
 traverseAnyRoles fInput fInterm fOutput =
   \case
     JoinClustW c ->
@@ -648,20 +674,30 @@ traverseESpecificClust _ f =
            -> c NodeRef (ComposedType c e' NodeRef) t n
     dropId = dropIdentity
     putId :: c NodeRef (ComposedType c e NodeRef) t n
-           -> c Identity Identity (NodeRef t) (ComposedType c e NodeRef n)
+          -> c Identity Identity (NodeRef t) (ComposedType c e NodeRef n)
     putId = putIdentity
     f' :: ComposedType c e NodeRef n
        -> f (ComposedType c e' NodeRef n)
-    f' = fmap ((fromJustErr  . mkComposedType pc pe')
-               . swap)
-         . (traverse3 f :: (NodeRef n,[ClusterOp c e])
-                        -> f (NodeRef n,[ClusterOp c e']))
-         . swap
-         . (extractRef pc pe
-            :: ComposedType c e NodeRef n -> ([ClusterOp c e], NodeRef n))
+    f' =
+      fmap ((fromJustErr . mkComposedType pc pe') . swap)
+      . (traverse3
+           f :: (NodeRef n,[ClusterOp c e]) -> f (NodeRef n,[ClusterOp c e']))
+      . swap
+      . (extractRef pc pe
+           :: ComposedType c e NodeRef n -> ([ClusterOp c e],NodeRef n))
     pe' = Proxy :: Proxy e'
     pe = Proxy :: Proxy e
     pc = Proxy :: Proxy c
     swap (a,b) = (b,a)
+
 destructCluster :: AnyCluster e s t n -> ([NodeRef n],[NodeRef n],[NodeRef n])
 destructCluster c = (clusterInputs c,clusterInterms c,clusterOutputs c)
+
+ashowCluster :: AnyCluster' (ShapeSym e s) NodeRef t n -> SExp
+ashowCluster c = sexp name [ashow' $ destructCluster c]
+  where
+    name = case c of
+      JoinClustW _ -> "JoinClustW"
+      UnClustW _   -> "UnClustW"
+      BinClustW _  -> "BinClustW"
+      NClustW _    -> "NClustW"

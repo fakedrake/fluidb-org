@@ -100,6 +100,8 @@ singleQuery =
 data Verbosity = Verbose | Quiet
 actualMain :: Verbosity -> [Int] -> IO ()
 actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
+  mats <- globalizePlanT $ nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
+  lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
   liftIO $ putStrLn $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
@@ -107,9 +109,6 @@ actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
       _transitions <- runQuery verbosity query
       pgs <- globalizePlanT getDataSize
       lift2 $ putStrLn $ "Pages used: " ++ show pgs
-      mats <- globalizePlanT $ nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
-      lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
-
 
 type ImagePath = FilePath
 type QueryPath = FilePath

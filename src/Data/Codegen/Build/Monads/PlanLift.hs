@@ -125,7 +125,10 @@ putQuerySize ref =
     shapeM <- dropState (gets fst,modify . first . const) (forceQueryShape ref)
     case shapeM of
       Nothing -> throwAStr $ "Can't get plan:" ++ show ref
-      Just shape -> do
+      Just shapeD -> do
+        shape
+          <- maybe (throwAStr $ "Found empty shape for" <: (ref,shapeD)) return
+          $ getDefaultingDef shapeD
         modify $ second $ refInsert ref $ sizeToPair $ qpSize shape
   where
     sizeToPair QuerySize {..} = (qsTables,qsCertainty)

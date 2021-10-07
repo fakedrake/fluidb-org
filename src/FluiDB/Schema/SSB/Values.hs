@@ -1,6 +1,5 @@
 module FluiDB.Schema.SSB.Values (getSsbGlobalConf,T,N) where
 
-import           Control.Monad
 import           Data.Bifunctor
 import           Data.Query.QuerySize
 import           Data.Query.SQL.FileSet

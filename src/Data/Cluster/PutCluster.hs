@@ -17,6 +17,7 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.PutCluster.Common
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
 import           Data.CppAst.CppType
 import           Data.NodeContainers
@@ -24,6 +25,7 @@ import           Data.QnfQuery.BuildUtils
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
+import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Hashable

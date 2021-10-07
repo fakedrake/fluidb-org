@@ -40,6 +40,7 @@ import           Data.Bipartite
 import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
 import           Data.Cluster.Types.Zip
 import           Data.CppAst.CppType
@@ -239,8 +240,7 @@ nClustPropagator
   => QueryShape e s
   -> CPropagatorShape NClust' e s t n
 nClustPropagator p (NClust (WMetaD n)) =
-  return $ NClust $ WMetaD $ first (const $ promoteDefaulting $ pure p) n
-
+  return $ NClust $ WMetaD $ first (const $ mkFull p) n
 
 type SizeOnly x = x
 data G e s x
@@ -301,8 +301,6 @@ mkUnPropagator fo1o2_i fio1_o2 fio2_o1 UnClust {..} = do
     <- liftGC fio1_o2 unClusterIn unClusterPrimaryOut unClusterSecondaryOut
   unClusterIn
     <- liftGC fo1o2_i unClusterPrimaryOut unClusterSecondaryOut unClusterIn
-  let v = void . snd . unMetaD
-  "unCluster" <<: (v unClusterPrimaryOut,v unClusterSecondaryOut,v unClusterIn)
   let unClusterT = EmptyF
   return UnClust { .. }
 
@@ -645,44 +643,25 @@ forceQueryShape
   ,AShowError e s err
   ,Hashables2 e s)
   => NodeRef n
-  -> m (Maybe (QueryShape e s))
-forceQueryShape n = runMaybeT $ (`evalStateT` mempty) $ go n
+  -> m (Maybe (Defaulting (QueryShape e s)))
+forceQueryShape ref0 = runMaybeT $ (`evalStateT` mempty) $ go ref0
   where
-    go :: NodeRef n -> StateT (NodeSet n) (MaybeT m) (QueryShape e s)
-    go ref = unlessDone $ \_ -> do
+    go :: NodeRef n
+       -> StateT (NodeSet n) (MaybeT m) (Defaulting (QueryShape e s))
+    go ref = do
       trail <- get
       guard $ not $ ref `nsMember` trail
       modify (nsInsert ref)
       clusts <- lift2
         $ filter (elem ref . clusterOutputs) <$> lookupClustersN ref
-      "clusts" <<: (ref,showClust <$> clusts)
       oneOfM clusts
         $ \c -> case partition (elem ref) [clusterInputs c,clusterOutputs c] of
           ([_siblings],[deps]) -> do
-            "deps" <<: (ref,trail,deps)
             guard $ not $ any (`nsMember` trail) deps
             mapM_ go deps
-            "trigger" <<: showClust c
-            shapeClust <- lift2 $ triggerClustPropagator c
-            unlessDone $ \shape -> throwAStr
-              $ "Expected full but got: " ++ ashow (ref,shape,shapeClust)
+            void $ lift2 $ triggerClustPropagator c
+            lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
           _ -> mzero
       where
-        showClust = \case
-          JoinClustW _ -> Sym "JoinClustW"
-          UnClustW _   -> Sym "UnClustW"
-          BinClustW _  -> Sym "BinClustW"
-          NClustW _    -> Sym "NClustW"
         oneOfM [] _  = mzero
         oneOfM cs fm = foldr1Unsafe (<|>) $ fm <$> cs
-        unlessDone :: (Maybe (Defaulting (QueryShape e s))
-                       -> StateT (NodeSet n) (MaybeT m) (QueryShape e s))
-                   -> StateT (NodeSet n) (MaybeT m) (QueryShape e s)
-        unlessDone m = dropReader (lift2 get) (getNodeShapeFull ref) >>= \case
-          Just x -> do
-            shape <- lift2 $ gets $ refLU ref . qnfNodeShapes
-            throwAStr $ "New shapes should not be full" <: (n,fmap void shape)
-            -- return x
-          Nothing -> do
-            shape <- lift2 $ gets $ refLU ref . qnfNodeShapes
-            m shape
