@@ -12,19 +12,22 @@ module Control.Antisthenis.ATL.Transformers.ReaderState
   ,StateArrow(..)
   ,arrDropStateR) where
 
-import Control.Antisthenis.ATL.Common
-import Control.Antisthenis.ATL.Class.Machine
-import Control.Antisthenis.ATL.Class.Select
-import Control.Antisthenis.ATL.Class.Reader
-import           Control.Arrow hiding ((>>>))
-import           Control.Category hiding ((>>>))
-import           Data.Functor.Identity
 import           Control.Antisthenis.ATL.Class.Bind
 import           Control.Antisthenis.ATL.Class.Cont
+import           Control.Antisthenis.ATL.Class.Functorial
+import           Control.Antisthenis.ATL.Class.Machine
+import           Control.Antisthenis.ATL.Class.Reader
+import           Control.Antisthenis.ATL.Class.Select
 import           Control.Antisthenis.ATL.Class.State
 import           Control.Antisthenis.ATL.Class.Transformer
 import           Control.Antisthenis.ATL.Class.Writer
-import           Prelude                                hiding (id, (.))
+import           Control.Antisthenis.ATL.Common
+import           Control.Arrow                             hiding ((>>>))
+import           Control.Category                          hiding ((>>>))
+import           Control.Monad.State
+import           Data.Functor.Identity
+import           Data.Utils.Tup
+import           Prelude                                   hiding (id, (.))
 
 newtype ReaderArrow r c x y = ReaderArrow { runReaderArrow :: c (r,x) y }
 instance ArrowApply c => ArrowApply (ReaderArrow r c) where
@@ -121,23 +124,23 @@ instance ArrowChoice c => ArrowChoice (ReaderArrow r c) where
   left (ReaderArrow x) =
     ReaderArrow
     $ arr (\(r,e) -> case e of
-             Left v -> Left (r,v)
+             Left v  -> Left (r,v)
              Right v -> Right v) >>> left x
   right (ReaderArrow x) =
     ReaderArrow
     $ arr (\(r,e) -> case e of
              Right v -> Right (r,v)
-             Left v -> Left v) >>> right x
+             Left v  -> Left v) >>> right x
   ReaderArrow x +++ ReaderArrow y =
     ReaderArrow
     $ arr (\(r,ebb') -> case ebb' of
-             Left x0 -> Left (r,x0)
+             Left x0  -> Left (r,x0)
              Right x0 -> Right (r,x0)) >>> x +++ y
   ReaderArrow x ||| ReaderArrow y =
     ReaderArrow
     $ arr (\(r,e) -> case e of
              Right v -> Right (r,v)
-             Left v -> Left (r,v)) >>> x ||| y
+             Left v  -> Left (r,v)) >>> x ||| y
   {-# INLINE (+++) #-}
   {-# INLINE (|||) #-}
   {-# INLINE left #-}
@@ -222,34 +225,34 @@ instance ArrowChoice a => ArrowChoice (StateArrow s a) where
     StateArrow
     $ arr (\(s,e) -> case e of
              Right y -> Right (s,y)
-             Left y -> Left (s,y))
+             Left y  -> Left (s,y))
     >>> right f
     >>> arr (\e -> case e of
                Right (s,y) -> (s,Right y)
-               Left (s,y) -> (s,Left y))
+               Left (s,y)  -> (s,Left y))
   left (StateArrow f) =
     StateArrow
     $ arr (\(s,e) -> case e of
              Right y -> Right (s,y)
-             Left y -> Left (s,y))
+             Left y  -> Left (s,y))
     >>> left f
     >>> arr (\e -> case e of
                Right (s,y) -> (s,Right y)
-               Left (s,y) -> (s,Left y))
+               Left (s,y)  -> (s,Left y))
   StateArrow f +++ StateArrow g =
     StateArrow
     $ arr (\(s,e) -> case e of
              Right y -> Right (s,y)
-             Left y -> Left (s,y))
+             Left y  -> Left (s,y))
     >>> f +++ g
     >>> arr (\e -> case e of
                Right (s,y) -> (s,Right y)
-               Left (s,y) -> (s,Left y))
+               Left (s,y)  -> (s,Left y))
   StateArrow f ||| StateArrow g =
     StateArrow
     $ arr (\(s,e) -> case e of
              Right y -> Right (s,y)
-             Left y -> Left (s,y)) >>> f ||| g
+             Left y  -> Left (s,y)) >>> f ||| g
   {-# INLINE left #-}
   {-# INLINE right #-}
   {-# INLINE (+++) #-}
@@ -297,3 +300,10 @@ instance (ArrowApply c,ArrowCont c) => ArrowCont (ReaderArrow s c) where
 
 arrDropStateR :: ArrowReader c => StateArrow (AReaderR c) c a b -> c a b
 arrDropStateR (StateArrow c) = arrCoLocal $ c >>> arr snd
+
+instance ArrowFunctor c => ArrowFunctor (StateArrow s c) where
+  type ArrFunctor (StateArrow s c) =
+    (StateT s (ArrFunctor c))
+  toKleisli (StateArrow c) a = StateT $ \s -> swap <$> toKleisli c (s,a)
+  fromKleisli f = StateArrow $ fromKleisli $ \(s,a) -> swap
+    <$> runStateT (f a) s

@@ -139,7 +139,7 @@ haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   -- star :: Double <- sum <$> mapM getAStar frefs
   (costs,extraNodes) <- runWriterT $ forM frefs $ \ref -> do
-    cost <- lift $ getCost @CostTag Proxy mempty ForceResult ref
+    cost <- lift $ getCostPlan @CostTag Proxy mempty ForceResult ref
     case cost of
       Nothing -> return zero
       Just c -> do

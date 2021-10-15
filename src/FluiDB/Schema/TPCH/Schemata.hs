@@ -65,12 +65,12 @@ tpchTableSizes =
     check p@(_,TableSize {tsRowSize = r}) = if r <= 0 then error "yes" else p
 
 toTableSizes :: Ord s => SchemaAssoc e s -> [(s,Int)] -> Maybe [(s,TableSize)]
-toTableSizes schemaAssoc tableBytes = do
+toTableSizes schemaAssoc tableBytes' = do
   rs <- traverse2 schemaSize schemaAssoc
   forM_ rs (\(_,x) -> when (x < 0) $ error "Ooops")
   return
     [(tbl,tableSize' 4096 thisTableBytes rowSize)
-    | (tbl,(rowSize,thisTableBytes)) <- alignMaps rs tableBytes]
+    | (tbl,(rowSize,thisTableBytes)) <- alignMaps rs tableBytes']
   where
     alignMaps l r = [(k,(v,fromJustErr $ lookup k r)) | (k,v) <- l]
 

@@ -29,6 +29,7 @@ module Data.Cluster.Types.Monad
   ,CPropagatorShape
   ,Tunnel(..)
   ,ACPropagatorAssoc(..)
+  ,defaultingSyncShape
   ,tqueryToForest
   ,forestToQuery
   ,queryToForest
@@ -288,6 +289,15 @@ promoteDefaulting = \case
   DefaultingEmpty        -> DefaultingEmpty
   DefaultingDef x        -> DefaultingFull x x
   d@(DefaultingFull _ _) -> d
+
+-- Copy the schema info of the full value to the default value. This
+-- is useful for before we trigger a node.
+defaultingSyncShape
+  :: Defaulting (QueryShape' a b)
+  -> Defaulting (QueryShape' a b)
+defaultingSyncShape = \case
+  DefaultingFull a b -> DefaultingFull b{qpSize=qpSize a} b
+  a                  -> a
 demoteDefaulting :: Defaulting a -> Defaulting a
 demoteDefaulting = \case
   DefaultingFull a _ -> DefaultingDef a

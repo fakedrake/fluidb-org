@@ -7,15 +7,19 @@ import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
+import           Control.Monad.Identity
 import           Control.Monad.Reader
+import           Control.Monad.State
 import           Data.NodeContainers
 import           Data.Pointed
 import           Data.Proxy
+import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.Cert
 import           Data.QueryPlan.Comp
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.HistBnd
 import           Data.QueryPlan.NodeProc
+import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.ListT
@@ -23,12 +27,13 @@ import           Data.Utils.Nat
 
 
 type HCost = Cert (Comp Cost)
-instance PlanMech HistTag n where
-  mcMechMapLens = Lens { getL = gcHistMechMap,modL = \f gc ->
-    gc { gcHistMechMap = f $ gcHistMechMap gc } }
+instance PlanMech (PlanT t n Identity) (CostParams HistTag n) n where
+  mcGetMech Proxy ref = gets $ refLU ref . gcHistMechMap
+  mcPutMech Proxy ref me =
+    modify $ \gc -> gc { gcHistMechMap = refInsert ref me $ gcHistMechMap gc }
   mcMkCost Proxy _ref cost = point $ toComp cost
-  mcIsMatProc = isMatCost
-  mcCompStackVal _ref = BndRes $ point $ point nonComp
+  mcIsMatProc Proxy = isMatCost
+  mcCompStackVal Proxy _ref = BndRes $ point $ point nonComp
 
 -- | The expected cost of the next query.
 pastCosts :: Monad m => NodeSet n -> ListT (PlanT t n m) (Maybe HCost)
@@ -36,7 +41,7 @@ pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return qs
-  lift $ getCost @HistTag Proxy extraMat (CapVal maxCap) q
+  lift $ getCostPlan @HistTag Proxy extraMat (CapVal maxCap) q
 
 maxCap :: HistCap Cost
 maxCap =

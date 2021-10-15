@@ -12,6 +12,7 @@ module Data.Codegen.Build.UpdateMatShapes
 import           Control.Monad.State
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types
+import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build.Monads
 import           Data.NodeContainers
 import           Data.Utils.AShow
@@ -48,22 +49,14 @@ promoteNodeShape ref = do
   dropState (lift3 get,lift2 . put) $ modNodeShape ref promoteDefaulting
   dropReader (lift2 get) $ getNodeShape ref
 
-promoteNodeShape
-  :: (Hashables2 e s,Monad m)
-  => NodeRef n
-  -> CodeBuilderT e s t n m (Defaulting (QueryShape e s))
-promoteNodeShape ref = do
-  dropState (lift3 get,lift2 . put) $ modNodeShape ref promoteDefaulting
-  dropReader (lift2 get) $ getNodeShape ref
-
 -- | Internal synchronization: the full schema is carried to the
 -- default schema but the sizes are not touched.
-internalSyncState
+internalSyncShape
   :: (Hashables2 e s,Monad m)
   => NodeRef n
   -> CodeBuilderT e s t n m (Defaulting (QueryShape e s))
 internalSyncShape ref = do
-  dropState (lift3 get,lift2 . put) $ modNodeShape ref _
+  dropState (lift3 get,lift2 . put) $ modNodeShape ref defaultingSyncShape
   dropReader (lift2 get) $ getNodeShape ref
 
 demoteNodeShape

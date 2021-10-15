@@ -32,7 +32,6 @@ module Control.Antisthenis.Types
   ,mapCursor
   ,RstCmd
   ,Err
-  ,ArrProc'
   ,NoArgError(..)
   ,ExtParams(..)
   ,Zipper'(..)
@@ -235,8 +234,6 @@ instance AShowBndR w => AShow (BndR w)
 
 type ArrProc w m =
   MealyArrow (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
-type ArrProc' w m =
-  MooreCat (WriterArrow (ZCoEpoch w) (Kleisli m)) (LConf w) (BndR w)
 
 data Conf w =
   Conf
@@ -338,26 +335,8 @@ incrZipperUId
   :: Foldable (ZItAssoc w)
   => Zipper' w Identity p pr
   -> Zipper' w Identity p pr
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 incrZipperUId z =
   z { zId = (zId z) { zidVersion = (+ 1) <$> zidVersion (zId z) } }
-
-
 
 class (Monoid (ExtCoEpoch p)) => ExtParams w p where
   type ExtEpoch p :: *
