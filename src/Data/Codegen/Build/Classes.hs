@@ -18,18 +18,21 @@
 {-# OPTIONS_GHC -Wno-unused-foralls -Wno-name-shadowing -Wno-unused-top-binds #-}
 
 module Data.Codegen.Build.Classes
-  ( bundleTransitions
-  , mkCallClass
-  , combinerClass
-  , propCallClass
-  , startNewCallClass
-  , projToFn
-  , schemaProjectionClass
-  , ashowCout
-  , getQueryDeclarations
-  , queryRecord
-  , TransitionBundle(..)
-  ) where
+  (bundleTransitions
+  ,mkCallClass
+  ,combinerClass
+  ,propCallClass
+  ,startNewCallClass
+  ,projToFn
+  ,schemaProjectionClass
+  ,ashowCout
+  ,getQueryDeclarations
+  ,queryRecord
+  ,flipOutShape
+  ,UnDir(..)
+  ,BinDir(..)
+  ,OutShape(..)
+  ,TransitionBundle(..)) where
 
 import           Control.Monad.Except
 import           Control.Monad.Identity
@@ -49,7 +52,6 @@ import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
 import           Data.QueryPlan.Types
 import           Data.String
-import           Data.Tuple
 import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
@@ -84,7 +86,6 @@ mkTransitionBundle = dropState (ask,const $ return ()) . \case
     return $ ForwardTransitionBundle (Tup2 i' o') clust
   DelNode n -> return $ DeleteTransitionBundle n
 
-
 bundleTransitions
   :: forall e s t n m err .
   (Hashables2 e s
@@ -112,13 +113,13 @@ bundleTransitions
       _ -> x : b : bs
 
 -- Call classes
-
-type MonadClassBuilder c e s t n m = (MonadCodeError e s t n m,
-                                      MonadCodeBuilder e s t n m,
-                                      MonadCheckpoint m,
-                                      CC.ExpressionLike e,
-                                      MonadSoftCodeBuilder m,
-                                      MonadSchemaScope c e s m)
+type MonadClassBuilder c e s t n m =
+  (MonadCodeError e s t n m
+  ,MonadCodeBuilder e s t n m
+  ,MonadCheckpoint m
+  ,CC.ExpressionLike e
+  ,MonadSoftCodeBuilder m
+  ,MonadSchemaScope c e s m)
 -- | Make a call class with a single static class
 mkCallClass :: forall c e s t n m .
               MonadClassBuilder c e s t n m =>
@@ -154,20 +155,37 @@ mkCallClass' codomainType body = do
           (CC.Symbol $ fromString $ "Domain" ++ show i),
     classPrivateMembers=[]}
 
-combinerClass :: forall e s t n m .
-                (MonadSchemaScope Tup2 e s m,
-                 MonadCodeCheckpoint e s t n m) =>
-                ([(ShapeSym e s,ShapeSym e s)],QueryShape e s)
-               -> m (CC.Class CC.CodeSymbol)
-combinerClass (assoc,outPlan) = do
+data UnDir f where
+  UnFwd :: f ~ Identity => UnDir f
+  UnRev :: f ~ Tup2 => UnDir f
+data BinDir f where
+  BinFwd :: f ~ Tup2 => BinDir f
+  BinRev :: f ~ Identity => BinDir f
+
+
+data OutShape e s =
+  OutShape
+  { oaIoAssoc :: [(ShapeSym e s,ShapeSym e s)]
+   ,oaShape   :: QueryShape e s
+  }
+
+flipOutShape :: OutShape e s -> OutShape e s
+flipOutShape oa = oa { oaIoAssoc = swap <$> oaIoAssoc oa }
+
+combinerClass
+  :: forall e s t n m .
+  (MonadSchemaScope Tup2 e s m,MonadCodeCheckpoint e s t n m)
+  => OutShape e s
+  -> m (CC.Class CC.CodeSymbol)
+combinerClass OutShape{..} = do
   Tup2 (q1,qs1) (q2,qs2) :: Tup2 (QueryShape e s,Symbol CodeSymbol)
     <- fmap3 CC.declarationNameRef getQueryDeclarations
   let symAssoc1 = mkPs qs1 . snd <$> querySchema q1
   let symAssoc2 = mkPs qs2 . snd <$> querySchema q2
-  outCppSchema :: CppSchema <- cppSchema $ querySchema outPlan
+  outCppSchema :: CppSchema <- cppSchema $ querySchema oaShape
   resType <- CC.classNameRef <$> tellRecordCls outCppSchema
-  let outSyms = snd <$> querySchema outPlan
-  case orderAssoc (\o i -> (i,o) `elem` assoc) outSyms $ symAssoc1 ++ symAssoc2 of
+  let outSyms = snd <$> querySchema oaShape
+  case orderAssoc (\o i -> (i,o) `elem` oaIoAssoc) outSyms $ symAssoc1 ++ symAssoc2 of
     Right symAssocComb -> tellClassM
       $ mkCallClass (CC.ClassType mempty [] resType)
       $ CC.FunctionAp (CC.SimpleFunctionSymbol resType) [] symAssocComb
@@ -194,10 +212,10 @@ orderAssoc cmp order assoc =
   (\x -> maybe (Left x) Right $ lookupWith cmp x assoc)
   `traverse` order
 
-propCallClass :: (MonadCodeCheckpoint e s t n m,
-                 MonadSchemaScope c e s m) =>
-                Prop (Rel (Expr (ShapeSym e s)))
-              -> m (CC.Class CC.CodeSymbol)
+propCallClass
+  :: (MonadCodeCheckpoint e s t n m,MonadSchemaScope c e s m)
+  => Prop (Rel (Expr (ShapeSym e s)))
+  -> m (CC.Class CC.CodeSymbol)
 propCallClass = tellClassM
   . mkCallClass (CC.PrimitiveType mempty CC.CppBool)
   <=< (propExpression . fmap3 Right)
@@ -272,8 +290,8 @@ startNewCallClass exps = tellClassM $ do
 -- The expression could contain nulls in the case of the union but we
 -- still need to know the type in order to operate.
 projToFn :: forall c e s t n m .
-           MonadClassBuilder c e s t n m =>
-           [(ShapeSym e s, Expr (Either CppType (ShapeSym e s)))]
+         MonadClassBuilder c e s t n m
+         => [(ShapeSym e s,Expr (Either CppType (ShapeSym e s)))]
          -> m (CC.Class CC.CodeSymbol)
 projToFn pr = do
   sch <- projSchema pr >>= cppSchema
@@ -295,8 +313,9 @@ schemaProjectionClass sch = tellClassM $ do
 ashowCout :: AShow x => String -> x -> CC.Statement CC.CodeSymbol
 ashowCout msg = CC.coutSt . return . CC.LiteralStringExpression . (msg ++) . ashow
 
-queryRecord :: forall e s t n m .
-              MonadCodeCheckpoint e s t n m =>
-              QueryShape e s
-            -> m (CC.Class CC.CodeSymbol)
+queryRecord
+  :: forall e s t n m .
+  MonadCodeCheckpoint e s t n m
+  => QueryShape e s
+  -> m (CC.Class CC.CodeSymbol)
 queryRecord qp = tellRecordCls =<< cppSchema (querySchema qp)

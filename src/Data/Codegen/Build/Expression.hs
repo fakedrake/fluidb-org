@@ -31,26 +31,26 @@ module Data.Codegen.Build.Expression
   , lookupQP
   ) where
 
-import Data.Utils.Functors
-import Data.Utils.Function
-import Data.Query.QuerySchema.Types
-import Data.Utils.Hashable
 import           Control.Monad.Identity
+import           Data.Codegen.Build.Monads
+import           Data.Codegen.Schema
+import qualified Data.CppAst                  as CC
 import           Data.Either
 import           Data.Foldable
 import           Data.List
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set                             as DS
+import           Data.Query.Algebra
+import           Data.Query.QuerySchema
+import           Data.Query.QuerySchema.Types
+import qualified Data.Set                     as DS
 import           Data.String
 import           Data.Tuple
-import           Data.Query.Algebra
 import           Data.Utils.AShow
-import           Data.Codegen.Build.Monads
-import           Data.Codegen.Schema
-import qualified Data.CppAst               as CC
-import           Data.Query.QuerySchema
-import           Prelude                              hiding (exp)
+import           Data.Utils.Function
+import           Data.Utils.Functors
+import           Data.Utils.Hashable
+import           Prelude                      hiding (exp)
 
 getQueryDeclarations :: forall c e s t n m .
                        (Hashables2 e s,
@@ -163,14 +163,23 @@ aggrProjExpression :: forall c e s t n m .
                         (Either (CC.Declaration CC.CodeSymbol) CC.CodeSymbol))
 aggrProjExpression = anyProjExpression aggrSchema aggrExpression
 
-projExpression :: forall c e s t n m .
-                 (Hashables2 e s, CC.ExpressionLike e, HasCallStack,
-                  MonadCodeBuilder e s t n m, MonadCodeError e s t n m,
-                  MonadCheckpoint m, Foldable c, Functor c, Traversable c,
-                  MonadReadScope c (QueryShape e s) m, MonadSoftCodeBuilder m) =>
-                 [(ShapeSym e s, Expr (Either CC.CppType (ShapeSym e s)))]
-               -> m (CC.Expression CC.CodeSymbol)
-projExpression = fmap3 runIdentity
+projExpression
+  :: forall c e s t n m .
+  (Hashables2 e s
+  ,CC.ExpressionLike e
+  ,HasCallStack
+  ,MonadCodeBuilder e s t n m
+  ,MonadCodeError e s t n m
+  ,MonadCheckpoint m
+  ,Foldable c
+  ,Functor c
+  ,Traversable c
+  ,MonadReadScope c (QueryShape e s) m
+  ,MonadSoftCodeBuilder m)
+  => [(ShapeSym e s,Expr (Either CC.CppType (ShapeSym e s)))]
+  -> m (CC.Expression CC.CodeSymbol)
+projExpression =
+  fmap3 runIdentity
   $ anyProjExpression projSchema
   $ fmap2 Identity . exprExpression
 

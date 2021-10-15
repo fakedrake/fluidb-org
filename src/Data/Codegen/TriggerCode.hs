@@ -34,32 +34,40 @@ triggerCode
   => AnyCluster e s t n
   -> m (CC.Statement CC.CodeSymbol)
 triggerCode clust = do
-  constr <- dropReader (fst <$> ask) $ clusterCall clust
-  ioFiles <- clustToIoFiles clust
+  constr <- dropReader (asks fst) $ clusterCall ForwardTrigger clust
+  ioFiles <- clustToIoFiles ForwardTrigger clust
   case constrBlock constr ioFiles of
-    Just x  -> return x
-    Nothing -> throwCodeErr $ MissingInputFile
-      (clusterInputs clust, clusterOutputs clust)
+    Just x -> return x
+    Nothing -> throwCodeErr
+      $ MissingInputFile (clusterInputs clust,clusterOutputs clust)
 
 -- |Create code that triggers the query in reverse. The IOFiles
 -- provided should already be reversed.
 -- New implementation
-revTriggerCode :: forall e s t n m .
-                 (MonadReader (ClusterConfig e s t n,GCState t n) m,
-                  MonadCodeCheckpoint e s t n m) =>
-                 AnyCluster e s t n
-               -> m (CC.Statement CC.CodeSymbol)
-revTriggerCode = error "revTriggerCode: Not implemented!"
+revTriggerCode
+  :: forall e s t n m .
+  (MonadReader (ClusterConfig e s t n,GCState t n) m
+  ,MonadCodeCheckpoint e s t n m)
+  => AnyCluster e s t n
+  -> m (CC.Statement CC.CodeSymbol)
+revTriggerCode clust = do
+  constr <- dropReader (asks fst) $ clusterCall ReverseTrigger clust
+  ioFiles <- clustToIoFiles ReverseTrigger clust
+  case constrBlock constr ioFiles of
+    Just x -> return x
+    Nothing -> throwCodeErr
+      $ MissingInputFile (clusterInputs clust,clusterOutputs clust)
 
 #if 0
 -- |Create code that triggers the query.
-triggerCode :: forall e s t n m .
-              (MonadReader (ClusterConfig e s t n) m,
-               MonadCodeCheckpoint e s t n m,
-               MonadSchemaScope Identity e s m) =>
-              AnyCluster e s t n
-            -> IOFiles
-            -> m (CC.Statement CC.CodeSymbol)
+triggerCode
+  :: forall e s t n m .
+  (MonadReader (ClusterConfig e s t n) m
+  ,MonadCodeCheckpoint e s t n m
+  ,MonadSchemaScope Identity e s m)
+  => AnyCluster e s t n
+  -> IOFiles
+  -> m (CC.Statement CC.CodeSymbol)
 triggerCode clust ioFiles = do
   constr <- clusterCall clust
   case constrBlock constr ioFiles of
@@ -73,12 +81,12 @@ triggerCode clust ioFiles = do
 -- |Create code that triggers the query in reverse. The IOFiles
 -- provided should already be reversed.
 -- New implementation
-revTriggerCode :: forall e s t n m .
-                 (MonadCodeCheckpoint e s t n m,
-                  MonadSchemaScope Identity e s m) =>
-                 AnyCluster e s t n
-               -> IOFiles
-               -> m (CC.Statement CC.CodeSymbol)
+revTriggerCode
+  :: forall e s t n m .
+  (MonadCodeCheckpoint e s t n m,MonadSchemaScope Identity e s m)
+  => AnyCluster e s t n
+  -> IOFiles
+  -> m (CC.Statement CC.CodeSymbol)
 revTriggerCode op ioFiles = fmap CC.Block $ do
   sch <- runIdentity . getQueries
   case op of

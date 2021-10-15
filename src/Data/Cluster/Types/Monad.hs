@@ -45,7 +45,9 @@ module Data.Cluster.Types.Monad
   ,defaultingLe
   ,getDef
   ,ashowACPA
-  ,consistentModDefaulting,defSyncAndDemote,mkFull) where
+  ,consistentModDefaulting
+  ,defSyncAndDemote
+  ,mkFull) where
 
 import           Control.Applicative
 import           Control.Monad.Except
@@ -225,7 +227,6 @@ defSyncAndDemote = \case
     go d f =
       QueryShape
       { qpSchema = qpSchema f,qpUnique = qpUnique f,qpSize = qpSize d }
-
 
 consistentModDefaulting
   :: (a -> a -> Bool)

@@ -276,26 +276,25 @@ traverseAnyRoles
   -> (n -> f' r)
   -> AnyCluster' e f t n
   -> f' (AnyCluster' e f t r)
-traverseAnyRoles fInput fInterm fOutput =
-  \case
-    JoinClustW c ->
-      JoinClustW <$>
-      traverseJoinRoles
-        (traverse fInput)
-        (traverse fInterm)
-        (traverse fOutput)
-        c
-    BinClustW c ->
-      BinClustW <$> traverseBinRoles (traverse fInput) (traverse fOutput) c
-    UnClustW c ->
-      UnClustW <$> traverseUnRoles (traverse fInput) (traverse fOutput) c
-    NClustW (NClust x) -> NClustW . NClust <$> traverse fOutput x
+traverseAnyRoles fInput fInterm fOutput = \case
+  JoinClustW c -> JoinClustW
+    <$> traverseJoinRoles
+      (traverse fInput)
+      (traverse fInterm)
+      (traverse fOutput)
+      c
+  BinClustW c -> BinClustW
+    <$> traverseBinRoles (traverse fInput) (traverse fOutput) c
+  UnClustW c -> UnClustW
+    <$> traverseUnRoles (traverse fInput) (traverse fOutput) c
+  NClustW (NClust x) -> NClustW . NClust <$> traverse fOutput x
 
-traverseUnRoles :: Applicative f' =>
-                  (g n -> f' (g r))
-                -> (g n -> f' (g r))
-                -> UnClust' f g t n
-                -> f' (UnClust' f g t r)
+traverseUnRoles
+  :: Applicative f'
+  => (g n -> f' (g r))
+  -> (g n -> f' (g r))
+  -> UnClust' f g t n
+  -> f' (UnClust' f g t r)
 traverseUnRoles fInput fOutput UnClust{..} = fmap updateCHash $ UnClust
   <$> fInput unClusterIn
   <*> fOutput unClusterPrimaryOut

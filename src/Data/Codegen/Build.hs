@@ -104,10 +104,12 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
   ts <- lift $ dropReader (lift2 get) $ bundleTransitions $ transitions ep
   fmap mconcat $ forM ts $ \case
     ForwardTransitionBundle ts clust -> do
+      lift $ mapM_ internalSyncState $ clusterInputs clust
       void $ lift $ triggerCluster clust
       lift $ mapM_ promoteNodeShape $ clusterOutputs clust
       mkCodeBlock ts clust ForwardTrigger triggerCode
     ReverseTransitionBundle ts clust -> do
+      lift $ mapM_ internalSyncState $ clusterOutputs clust
       void $ lift $ triggerCluster clust
       lift $ mapM_ promoteNodeShape $ clusterInputs clust
       mkCodeBlock ts clust ReverseTrigger revTriggerCode

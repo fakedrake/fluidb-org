@@ -51,88 +51,84 @@ class PartitionJoin {
     ~PartitionJoin() {}
 
     void run() {
-        if constexpr (OutFile::isNothing &&
-                      RightTriangle::isNothing &&
-                      LeftTriangle::isNothing)
-                             return;
+      if constexpr (OutFile::isNothing && RightTriangle::isNothing &&
+                    LeftTriangle::isNothing)
+        return;
 
-        Writer<Out> output;
-        Writer<size_t> right_dup_index_writer, left_dup_index_writer;
-        Writer<Right> right_triangle_writer;
-        Writer<Left> left_triangle_writer;
-        std::multimap<Key, std::pair<Left, bool> > left_map;
-        size_t out_index = 0;
-        std::string lt_dup_index_file;
+      Writer<Out> output;
+      Writer<size_t> right_dup_index_writer, left_dup_index_writer;
+      Writer<Right> right_triangle_writer;
+      Writer<Left> left_triangle_writer;
+      std::multimap<Key, std::pair<Left, bool> > left_map;
+      size_t out_index = 0;
+      std::string lt_dup_index_file;
 
-        WITH(outfile, output.open(outfile.value));
-        WITH(left_triangle_file,
-             left_triangle_writer.open(left_triangle_file.value.first));
-        WITH(left_triangle_file,
-             left_dup_index_writer.open(left_triangle_file.value.second));
-        WITH(right_triangle_file,
-             right_triangle_writer.open(right_triangle_file.value.first));
-        WITH(right_triangle_file,
-             right_dup_index_writer.open(right_triangle_file.value.second));
+      WITH(outfile, output.open(outfile.value));
+      WITH(left_triangle_file,
+           left_triangle_writer.open(left_triangle_file.value.first));
+      WITH(left_triangle_file,
+           left_dup_index_writer.open(left_triangle_file.value.second));
+      WITH(right_triangle_file,
+           right_triangle_writer.open(right_triangle_file.value.first));
+      WITH(right_triangle_file,
+           right_dup_index_writer.open(right_triangle_file.value.second));
 
-        for (size_t p = 0; p < number_of_partitions; p++) {
-            eachRecord<Left>(
-                generate_partition_name(leftfile, p),
-                [&](const Left& left_record) {
-                    left_map.insert(std::pair(
-                        left_extract(left_record),
-                        std::pair(left_record, false)));
+      for (size_t p = 0; p < number_of_partitions; p++) {
+        eachRecord<Left>(
+            generate_partition_name(leftfile, p), [&](const Left& left_record) {
+              left_map.insert(std::pair<Left, std::pair<Left, bool> >(
+                  left_extract(left_record),
+                  std::pair<Left, bool>(left_record, false)));
+            });
+        eachRecord<Right>(
+            generate_partition_name(rightfile, p),
+            [&](const Right& right_record) {
+              bool right_touched = false;
+              auto lbound = left_map.lower_bound(right_extract(right_record));
+              auto ubound = left_map.upper_bound(right_extract(right_record));
+              // Get the equal range into the output.
+              for (auto it = lbound; it != ubound; it++) {
+                // Skip the first output but then whenever we
+                // reuse the same right.
+                if (right_touched)
+                  WITH(right_triangle_file,
+                       right_dup_index_writer.write(out_index));
+                right_touched = true;
 
-                });
-            eachRecord<Right>(
-                generate_partition_name(rightfile, p),
-                [&](const Right& right_record) {
-                    bool right_touched = false;
-                    auto lbound = left_map.lower_bound(right_extract(right_record));
-                    auto ubound = left_map.upper_bound(right_extract(right_record));
-                    // Get the equal range into the output.
-                    for (auto it = lbound; it != ubound; it++) {
-                        // Skip the first output but then whenever we
-                        // reuse the same right.
-                        if (right_touched)
-                            WITH(right_triangle_file,
-                                 right_dup_index_writer.write(out_index));
-                        right_touched = true;
+                // Write the combination to output
+                WITH(outfile,
+                     output.write(combine(it->second.first, right_record)));
 
-                        // Write the combination to output
-                        WITH(outfile,
-                             output.write(
-                                 combine(it->second.first, right_record)));
-
-                        // If we saw the left before mark as.
-                        if (it->second.second) {
-                            WITH(left_triangle_file,
-                                 left_dup_index_writer.write(out_index));
-                        }
-                        it->second.second = true;
-                        out_index++;
-                    }
-
-                    // Put the right record in the triangle if we didn't use it.
-                    if (!right_touched) {
-                        WITH(right_triangle_file,
-                             right_triangle_writer.write(right_record));
-                    }
-                });
-
-            for (auto p : left_map) {
-                if (!p.second.second) {
-                    WITH(left_triangle_file,
-                         left_triangle_writer.write(p.second.first));
+                // If we saw the left before mark as.
+                if (it->second.second) {
+                  WITH(left_triangle_file,
+                       left_dup_index_writer.write(out_index));
                 }
-            }
-            left_map.clear();
-            fs::remove(generate_partition_name(leftfile, p));
-            fs::remove(generate_partition_name(rightfile, p));
+                it->second.second = true;
+                out_index++;
+              }
+
+              // Put the right record in the triangle if we didn't use it.
+              if (!right_touched) {
+                WITH(right_triangle_file,
+                     right_triangle_writer.write(right_record));
+              }
+            });
+
+        for (auto p : left_map) {
+          if (!p.second.second) {
+            WITH(left_triangle_file,
+                 left_triangle_writer.write(p.second.first));
+          }
         }
-        WITH(left_triangle_file, left_triangle_writer.close());
-        WITH(left_triangle_file, left_dup_index_writer.close());
-        WITH(right_triangle_file, right_dup_index_writer.close());
-        WITH(right_triangle_file, right_triangle_writer.close());
+        left_map.clear();
+        fs::remove(generate_partition_name(leftfile, p));
+        fs::remove(generate_partition_name(rightfile, p));
+      }
+      WITH(left_triangle_file, left_triangle_writer.close());
+      WITH(left_triangle_file, left_dup_index_writer.close());
+      WITH(right_triangle_file, right_dup_index_writer.close());
+      WITH(right_triangle_file, right_triangle_writer.close());
     }
 
  private:
@@ -302,67 +298,6 @@ auto mkEquiJoin(const OutFilePathType& o,
                      OutFilePathType,
                      LeftTriagleFilePathType,
                      RightTriagleFilePathType>(o, lt, rt, l, r);
-}
-
-template<typename Extract>
-class UnJoin {
- private:
-    const std::string out_file, join_file, triangle_file, skip_file;
-    static Extract extract;
-
-    typedef typename Extract::Domain0 Composite;
-    typedef typename Extract::Codomain Record;
-
- public:
-
-    void print_output(size_t x) {
-        print_records<Record>(out_file, x);
-        report();
-    }
-
-    UnJoin(const std::string& o,
-           const std::string& jf,
-           const std::string& tf,
-           const std::string& indf) :
-            out_file(o), join_file(jf), triangle_file(tf), skip_file(indf) {}
-    void run() {
-        Reader<Composite> cread(join_file);
-        Writer<Record> output(out_file);
-        size_t index = 0;
-        eachRecord<size_t>(
-            skip_file,
-            [&](const size_t& skip) {
-                while (cread.hasNext() && skip > index++) {
-                    output.write(extract(cread.nextRecord()));
-                }
-            });
-
-        // Print whatever is in cread after the last skip.
-        while (cread.hasNext()) {
-            output.write(extract(cread.nextRecord()));
-        }
-
-
-        eachRecord<Record>(
-            triangle_file,
-            [&](const Record& rec) {
-                output.write(rec);
-            });
-
-        output.close();
-        cread.close();
-    }
-};
-
-template<typename Extract>
-Extract UnJoin<Extract>::extract;
-
-template<typename Extract>
-auto mkUnJoin(const std::string& o,
-              const std::string& jf,
-              const std::string& tf,
-              const std::string& indf) {
-    return UnJoin<Extract>(o, jf, tf, indf);
 }
 
 #endif /* GRACE_JOIN_H */

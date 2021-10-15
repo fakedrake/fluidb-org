@@ -11,24 +11,22 @@
 #include "print_record.hh"
 
 // Predicates
-template<bool val>
+template <bool val>
 class PredicateConst {
  public:
-    bool operator()(...) {return val;}
+  bool operator()(...) { return val; }
 };
 
-
-template <typename LeftExtract,
-          typename RightExtract,
-          typename Left,
+template <typename LeftExtract, typename RightExtract, typename Left,
           typename Right>
 class EquiJoinPredicate {
-    LeftExtract leftExtract;
-    RightExtract rightExtract;
+  LeftExtract leftExtract;
+  RightExtract rightExtract;
+
  public:
-    bool operator()(const Left & lr, const Right & rr) {
-        return leftExtract(lr) == rightExtract(rr);
-    }
+  bool operator()(const Left& lr, const Right& rr) {
+    return leftExtract(lr) == rightExtract(rr);
+  }
 };
 
 // Joins

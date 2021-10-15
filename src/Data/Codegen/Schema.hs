@@ -116,11 +116,14 @@ projSchema = anySchema ashow' return
 
 keysToProj :: ExprLike e a => [e] -> [(e, a)]
 keysToProj keys = [(k, asExpr $ E0 k) | k <- keys]
-withPrimKeys :: forall m e s t n a .
-               (HasCallStack, CppTypeExprConstraints Identity e s t n m,
-                ExprLike (ShapeSym e s) a,
-                Eq a) =>
-               [(ShapeSym e s, a)] -> m [(ShapeSym e s, a)]
+withPrimKeys
+  :: forall m e s t n a .
+  (HasCallStack
+  ,CppTypeExprConstraints Identity e s t n m
+  ,ExprLike (ShapeSym e s) a
+  ,Eq a)
+  => [(ShapeSym e s,a)]
+  -> m [(ShapeSym e s,a)]
 withPrimKeys prj = do
   Identity q <- getQueries @Identity @e @s
   unless (any (all (`elem` fmap fst prj)) $ primKeys q)

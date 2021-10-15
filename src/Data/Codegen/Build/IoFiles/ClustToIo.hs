@@ -71,7 +71,7 @@ type CanPutIdLocal c op e =
 matMaybe :: MonadReader (ClusterConfig e s t n,GCState t n) m
          => NodeRef n
          -> m (Maybe (NodeRef n))
-matMaybe ref = dropReader (snd <$> ask) $ getNodeStateReader ref <&> \case
+matMaybe ref = dropReader (asks snd) $ getNodeStateReader ref <&> \case
   Concrete _ Mat -> Just ref
   Initial Mat    -> Just ref
   _              -> Nothing
@@ -85,18 +85,23 @@ clustToIoFiles
   ,MonadReader (ClusterConfig e s t n,GCState t n) m
   ,MonadCodeBuilder e s t n m
   ,MonadCodeError e s t n m)
-  => AnyCluster e s t n
+  => Direction
+  -> AnyCluster e s t n
   -> m (IOFiles e s)
-clustToIoFiles =
-  (>>= plansAndFiles)
-  . traverseAnyRoles
-  (fmap Input . matMaybe)
-  (return . Intermediate)
-  (fmap Output . matMaybe)
+clustToIoFiles dir =
+  plansAndFiles
+  <=< traverseAnyRoles
+    (fmap inpSide . matMaybe)
+    (return . Intermediate)
+    (fmap outSide . matMaybe)
   . putVoidAny
   . first (const ())
   . (putIdentity :: AnyCluster e s t n
                  -> AnyCluster' (ShapeSym e s) Identity (NodeRef t) (NodeRef n))
+  where
+    (inpSide,outSide) = case dir of
+      ForwardTrigger -> (Input,Output)
+      ReverseTrigger -> (Output,Input)
 
 putVoidAny :: forall e n . AnyCluster' e Identity () (NodeRef n)
            -> AnyCluster' Void Identity () (NodeRef n)

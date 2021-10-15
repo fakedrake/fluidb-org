@@ -5,6 +5,7 @@
 module Data.Codegen.Build.UpdateMatShapes
   (getMatShape
   ,triggerCluster
+  ,internalSyncShape
   ,promoteNodeShape
   ,demoteNodeShape) where
 
@@ -45,6 +46,24 @@ promoteNodeShape
   -> CodeBuilderT e s t n m (Defaulting (QueryShape e s))
 promoteNodeShape ref = do
   dropState (lift3 get,lift2 . put) $ modNodeShape ref promoteDefaulting
+  dropReader (lift2 get) $ getNodeShape ref
+
+promoteNodeShape
+  :: (Hashables2 e s,Monad m)
+  => NodeRef n
+  -> CodeBuilderT e s t n m (Defaulting (QueryShape e s))
+promoteNodeShape ref = do
+  dropState (lift3 get,lift2 . put) $ modNodeShape ref promoteDefaulting
+  dropReader (lift2 get) $ getNodeShape ref
+
+-- | Internal synchronization: the full schema is carried to the
+-- default schema but the sizes are not touched.
+internalSyncState
+  :: (Hashables2 e s,Monad m)
+  => NodeRef n
+  -> CodeBuilderT e s t n m (Defaulting (QueryShape e s))
+internalSyncShape ref = do
+  dropState (lift3 get,lift2 . put) $ modNodeShape ref _
   dropReader (lift2 get) $ getNodeShape ref
 
 demoteNodeShape

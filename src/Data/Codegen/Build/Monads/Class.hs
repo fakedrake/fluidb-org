@@ -198,27 +198,27 @@ instance MonadSoftCodeBuilder m => MonadSoftCodeBuilder (ListT m) where
 
 -- Readable scope
 type MonadSchemaScope c e s m =
-  (Hashables2 e s, MonadReadScope c (QueryShape e s) m)
-class (Traversable c, Foldable c, Monad m) => MonadReadScope c a m | m -> c where
+  (Hashables2 e s,MonadReadScope c (QueryShape e s) m)
+class (Traversable c,Foldable c,Monad m) => MonadReadScope c a m | m -> c where
   getScope :: m (ScopeEnv c a)
-instance (Traversable c, Foldable c, Monad m) =>
-         MonadReadScope c (QueryShape e s) (ReaderT (ScopeEnv c (QueryShape e s)) m) where
+instance (Traversable c,Foldable c,Monad m)
+  => MonadReadScope c (QueryShape e s) (ReaderT (ScopeEnv c (QueryShape e s)) m) where
   getScope = ask
   {-# INLINE getScope #-}
-instance (Traversable c, Foldable c, Monad m) =>
-         MonadReadScope c AggrFunction (StateT (ScopeEnv c AggrFunction) m) where
+instance (Traversable c,Foldable c,Monad m)
+  => MonadReadScope c AggrFunction (StateT (ScopeEnv c AggrFunction) m) where
   getScope = get
   {-# INLINE getScope #-}
-instance (Monoid a, MonadReadScope c (QueryShape e s) m) =>
-         MonadReadScope c (QueryShape e s) (WriterT a m) where
+instance (Monoid a,MonadReadScope c (QueryShape e s) m)
+  => MonadReadScope c (QueryShape e s) (WriterT a m) where
   getScope = lift getScope
   {-# INLINE getScope #-}
-instance MonadReadScope c (QueryShape e s) m =>
-         MonadReadScope c (QueryShape e s) (StateT (ScopeEnv c AggrFunction) m) where
+instance MonadReadScope c (QueryShape e s) m
+  => MonadReadScope c (QueryShape e s) (StateT (ScopeEnv c AggrFunction) m) where
   getScope = lift getScope
   {-# INLINE getScope #-}
-instance MonadReadScope c AggrFunction m =>
-         MonadReadScope c AggrFunction (ReaderT (ScopeEnv c (QueryShape e s)) m) where
+instance MonadReadScope c AggrFunction m
+  => MonadReadScope c AggrFunction (ReaderT (ScopeEnv c (QueryShape e s)) m) where
   getScope = lift getScope
   {-# INLINE getScope #-}
 instance MonadReadScope c a m => MonadReadScope c a (ListT m) where
@@ -337,19 +337,20 @@ getQueries :: forall c e s m .
 getQueries = fmap fst . runScopeEnv <$> getScopeQueries
 
 -- | Use the queries as scope to run the computation.
-evalQueryEnv :: forall c e s m a .
-               (Traversable c, MonadSoftCodeBuilder m) =>
-               c (QueryShape e s)
-             -> ReaderT (ScopeEnv c (QueryShape e s)) m a
-             -> m a
+evalQueryEnv
+  :: forall c e s m a .
+  (Traversable c,MonadSoftCodeBuilder m)
+  => c (QueryShape e s)
+  -> ReaderT (ScopeEnv c (QueryShape e s)) m a
+  -> m a
 evalQueryEnv queries funcBuilder = do
   x <- ScopeEnv <$> traverse go queries
   runReaderT funcBuilder x
   where
-    go :: QueryShape e s -> m (QueryShape e s, CC.Symbol CC.CodeSymbol)
+    go :: QueryShape e s -> m (QueryShape e s,CC.Symbol CC.CodeSymbol)
     go q = do
       sym <- mkUSymbol "record"
-      return (q, sym)
+      return (q,sym)
 
 evalAggrEnv :: (Monoid (ScopeEnv c AggrFunction), Monad m) =>
               StateT (ScopeEnv c AggrFunction) m a

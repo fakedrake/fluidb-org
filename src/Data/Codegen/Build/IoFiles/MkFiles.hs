@@ -38,33 +38,44 @@ type family ChClust c x where
 type JIOFilesG a b c = ChClust JoinClust' (IOFilesG a b c)
 type JIOFiles e s = ChClust JoinClust' (IOFiles e s)
 
-plansAndFiles :: forall e s t n m . MakeFilesConstr e s t n m =>
-                IOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
-              -> m (IOFiles e s)
+
+-- | Insert file paths where necesary.
+plansAndFiles
+  :: forall e s t n m .
+  MakeFilesConstr e s t n m
+  => IOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
+  -> m (IOFiles e s)
 plansAndFiles = \case
   JoinClustW jclust -> JoinClustW <$> makeFilesJUnsafe jclust
   clust             -> makeFilesNaive clust
-makeFilesNaive :: forall e s t n m . MakeFilesConstr e s t n m =>
-                 IOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
-               -> m (IOFiles e s)
-makeFilesNaive = traverse
+
+-- | Populate the cluster edges with plans and filesets.
+makeFilesNaive
+  :: forall e s t n m .
+  MakeFilesConstr e s t n m
+  => IOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
+  -> m (IOFiles e s)
+makeFilesNaive =
+  traverse
   $ tritraverse
-  (return . \(NodeRef n) -> NodeRef n)
-  (fmap3 dataFilePath . getPlanAndSet DataFile)
+    (return . \(NodeRef n) -> NodeRef n)
+    (fmap3 dataFilePath . getPlanAndSet DataFile)
   $ getPlanAndSet DataFile
 
 
-populateNodeRole :: forall constri constro e s t n m .
-                   (FileSetConstructor constri,
-                    FileSetConstructor constro,
-                    MakeFilesConstr e s t n m) =>
-                   constri
-                 -> constro
-                 -> NodeRole (NodeRef n) (Maybe (NodeRef n)) (Maybe (NodeRef n))
-                 -> m (NodeRole
-                       (NodeRef ())
-                       (Maybe (Maybe (QueryShape e s), FilePath))
-                       (Maybe (Maybe (QueryShape e s), FileSet)))
+populateNodeRole
+  :: forall constri constro e s t n m .
+  (FileSetConstructor constri
+  ,FileSetConstructor constro
+  ,MakeFilesConstr e s t n m)
+  => constri
+  -> constro
+  -> NodeRole (NodeRef n) (Maybe (NodeRef n)) (Maybe (NodeRef n))
+  -> m
+    (NodeRole
+       (NodeRef ())
+       (Maybe (Maybe (QueryShape e s),FilePath))
+       (Maybe (Maybe (QueryShape e s),FileSet)))
 populateNodeRole constri constro =
   fmap coerceI
   . bitraverse
@@ -77,11 +88,13 @@ coerceI = \case
   Output a                 -> Output a
   Intermediate (NodeRef i) -> Intermediate (NodeRef i)
 
-getPlanAndSet :: forall constr e s t n m .
-                (FileSetConstructor constr, MakeFilesConstr e s t n m) =>
-                constr
-              -> Maybe (NodeRef n)
-              -> m (Maybe (Maybe (QueryShape e s), FileSet))
+-- | Lookup the plan and the fileset.
+getPlanAndSet
+  :: forall constr e s t n m .
+  (FileSetConstructor constr,MakeFilesConstr e s t n m)
+  => constr
+  -> Maybe (NodeRef n)
+  -> m (Maybe (Maybe (QueryShape e s),FileSet))
 getPlanAndSet f =
   traverse
   $ distrib
@@ -97,36 +110,36 @@ makeFilesJUnsafe :: forall e s t n m .
              JIOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
            -> m (JIOFiles e s)
 makeFilesJUnsafe jclust = do
-  Tup2 jclAntijoin jcrAntijoin <-
-    traverse2 (populateNodeRole DataFile DataAndSet)
+  Tup2 jclAntijoin jcrAntijoin <- traverse2
+    (populateNodeRole DataFile DataAndSet)
     $ Tup2 (joinClusterLeftAntijoin jclust) (joinClusterRightAntijoin jclust)
-  Tup2 jclIntermediate jcrIntermediate <-
-    traverse2 coerce'
+  Tup2 jclIntermediate jcrIntermediate <- traverse2 coerce'
     $ Tup2
-    (joinClusterLeftIntermediate jclust)
-    (joinClusterRightIntermediate jclust)
+      (joinClusterLeftIntermediate jclust)
+      (joinClusterRightIntermediate jclust)
   jbClust <- makeFilesNaive (BinClustW $ joinBinCluster jclust) <&> \case
     BinClustW c -> c
     _           -> error "Unreachable"
-  return $ updateCHash JoinClust{
-    joinClusterLeftAntijoin=jclAntijoin,
-    joinClusterRightAntijoin=jcrAntijoin,
-    joinClusterLeftIntermediate=jclIntermediate,
-    joinClusterRightIntermediate=jcrIntermediate,
-    joinClusterLeftSplit=joinClusterLeftSplit jclust,
-    joinClusterRightSplit=joinClusterRightSplit jclust,
-    joinBinCluster=jbClust,
-    joinClusterHash=undefined
-    }
+  return
+    $ updateCHash
+      JoinClust
+      { joinClusterLeftAntijoin = jclAntijoin
+       ,joinClusterRightAntijoin = jcrAntijoin
+       ,joinClusterLeftIntermediate = jclIntermediate
+       ,joinClusterRightIntermediate = jcrIntermediate
+       ,joinClusterLeftSplit = joinClusterLeftSplit jclust
+       ,joinClusterRightSplit = joinClusterRightSplit jclust
+       ,joinBinCluster = jbClust
+       ,joinClusterHash = undefined
+      }
   where
-    coerce' :: NodeRole
-              (NodeRef n)
-              (Maybe (NodeRef n))
-              (Maybe (NodeRef n))
-            -> m (NodeRole
-                 (NodeRef ())
-                 (Maybe (Maybe (QueryShape e s), FilePath))
-                 (Maybe (Maybe (QueryShape e s), FileSet)))
+    coerce'
+      :: NodeRole (NodeRef n) (Maybe (NodeRef n)) (Maybe (NodeRef n))
+      -> m
+        (NodeRole
+           (NodeRef ())
+           (Maybe (Maybe (QueryShape e s),FilePath))
+           (Maybe (Maybe (QueryShape e s),FileSet)))
     coerce' = \case
       Intermediate (NodeRef a) -> return $ Intermediate $ NodeRef a
       _                        -> error "oops non-interm role for interm node"
