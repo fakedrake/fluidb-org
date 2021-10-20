@@ -451,10 +451,8 @@ uopQueryCall dir outSh op = case op of
   QLimit i -> limitCall dir outSh i
   QDrop i -> dropCall dir outSh i
 
-opConstructor :: Constr
-              -> IOFiles e s
-              -> Maybe (CC.Expression CC.CodeSymbol)
-opConstructor (name, tmpl) ioFiles = case constrArgs ioFiles of
+opConstructor :: Constr -> IOFiles e s -> Maybe (CC.Expression CC.CodeSymbol)
+opConstructor (name,tmpl) ioFiles = case constrArgs ioFiles of
   Just x  -> Just $ CC.FunctionAp name tmpl x
   Nothing -> Nothing
 
@@ -538,7 +536,7 @@ constrArgs' outs ins = (toConstrArg <$> outs) ++ (toConstrArg <$> ins)
 constrArgs :: IOFiles e s -> Maybe [CC.Expression CC.CodeSymbol]
 constrArgs ioFiles = constrArgs' outs <$> sequenceA inps'
   where
-    (outs, inps') = toFiles ioFiles
+    (outs,inps') = toFiles ioFiles
 
 constrArgsRevSide
   :: (ConstructorArg out,ConstructorArg inp)

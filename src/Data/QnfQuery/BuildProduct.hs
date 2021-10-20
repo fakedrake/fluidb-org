@@ -192,15 +192,20 @@ incrementQNF :: forall f e s . (Functor f, HashableQNF f e s) =>
                HashBag (QNFProd e s)
              -> QNFQueryProjF f e s
              -> QNFQueryProjF f e s
-incrementQNF bag qnf' = updateHashSel $ updateHashCol qnf'{
-  qnfColumns=mapProjAggr (qnfNameIncrementProdsE bag) $ qnfColumns qnf',
-  qnfSel=HS.map (fmap4 $ incrementCol bag) $ qnfSel qnf',
-  qnfHash=qnfHash qnf'}
+incrementQNF bag qnf' =
+  updateHashSel
+  $ updateHashCol
+    qnf'
+    { qnfColumns = mapProjAggr (qnfNameIncrementProdsE bag) $ qnfColumns qnf'
+     ,qnfSel = HS.map (fmap4 $ incrementCol bag) $ qnfSel qnf'
+     ,qnfHash = qnfHash qnf'
+    }
 
-incrementCol :: Hashables2 e s =>
-          HashBag (QNFProd e s)
-        -> QNFQuerySPDCF EmptyF EmptyF EmptyF Const Identity e s
-        -> QNFQuerySPDCF EmptyF EmptyF EmptyF Const Identity e s
+incrementCol
+  :: Hashables2 e s
+  => HashBag (QNFProd e s)
+  -> QNFQuerySPDCF EmptyF EmptyF EmptyF Const Identity e s
+  -> QNFQuerySPDCF EmptyF EmptyF EmptyF Const Identity e s
 incrementCol bag = qnfMapColumns $ first $ fmap2 $ qnfNameIncrementProdsE bag
 
 mapProjAggr :: (Bifunctor c, Functor f, Hashables2 e s) =>
@@ -213,11 +218,14 @@ type SelProdClass s p = (s ~ HS.HashSet, p ~ HashBag)
 -- | If a prod in the bag matches the column of the name increment by
 -- it's multiplicity.
 -- Look for a qnf in product that matches and stop when (if) you find it.
-qnfNameIncrementProdsE :: forall e s qnf_name sel_f prod_f .
-                         (Hashables2 e s,
-                          SelProdClass sel_f prod_f,
-                          qnf_name ~ QNFNameSPC sel_f prod_f Either) =>
-                        HashBag (QNFProd e s) -> qnf_name e s -> qnf_name e s
+qnfNameIncrementProdsE
+  :: forall e s qnf_name sel_f prod_f .
+  (Hashables2 e s
+  ,SelProdClass sel_f prod_f
+  ,qnf_name ~ QNFNameSPC sel_f prod_f Either)
+  => HashBag (QNFProd e s)
+  -> qnf_name e s
+  -> qnf_name e s
 qnfNameIncrementProdsE bag =
   (`evalState` False) . foldr go return (HM.toList $ unHashBag bag)
   where
@@ -232,12 +240,13 @@ qnfNameIncrementProdsE bag =
         False -> rest n
 
 -- | Look for a qnf in product that matches and stop when (if) you find it.
-qnfNameIncrementProd :: forall e s f sel_f prod_f .
-                       (Monad f, SelProdClass sel_f prod_f, Hashables2 e s) =>
-                       (Int -> f Int)
-                     -> QNFProd e s
-                     -> QNFNameSPC sel_f prod_f Either e s
-                     -> f (QNFNameSPC sel_f prod_f Either e s)
+qnfNameIncrementProd
+  :: forall e s f sel_f prod_f .
+  (Monad f,SelProdClass sel_f prod_f,Hashables2 e s)
+  => (Int -> f Int)
+  -> QNFProd e s
+  -> QNFNameSPC sel_f prod_f Either e s
+  -> f (QNFNameSPC sel_f prod_f Either e s)
 qnfNameIncrementProd f qs = (`evalStateT` False) . foldr go return qs where
   go :: Query (QNFName e s) (Either s (QNFQueryI e s))
      -> (QNFNameSPC sel_f prod_f Either e s ->
@@ -281,13 +290,12 @@ qnfNameIncrementProd1 f = \case
 
 -- | If the name refers to something in the bag increment by the
 -- multiplicity in the bag.
-qnfNameIncrementAtom :: (Applicative f,
-                        SelProdClass sel_f prod_f,
-                        Hashables2 e s) =>
-                       (Int -> f Int)
-                     -> Either s (QNFQueryI e s)
-                     -> QNFNameSPC sel_f prod_f Either e s
-                     -> f (QNFNameSPC sel_f prod_f Either e s)
+qnfNameIncrementAtom
+  :: (Applicative f,SelProdClass sel_f prod_f,Hashables2 e s)
+  => (Int -> f Int)
+  -> Either s (QNFQueryI e s)
+  -> QNFNameSPC sel_f prod_f Either e s
+  -> f (QNFNameSPC sel_f prod_f Either e s)
 qnfNameIncrementAtom f = \case
   Left s -> \case
     x@(PrimaryCol e s' i) -> if s == s' then PrimaryCol e s' <$> f i else pure x

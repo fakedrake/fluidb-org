@@ -75,16 +75,21 @@ dropPrefix s l = if s `isPrefixOf` l then Just $ drop (length s) l else Nothing
 
 class (MonadSelect p,MonadPlus p) => MonadParse p where
   modText :: (String -> String) -> p ()
-  default modText :: (MonadParse m,MonadTrans t,p ~ t m) => (String -> String) -> p ()
+  default modText
+    :: (MonadParse m,MonadTrans t,p ~ t m) => (String -> String) -> p ()
   modText = lift . modText
+
   getText :: p String
   default getText :: (MonadParse m,MonadTrans t,p ~ t m) => p String
   getText = lift getText
+
   putText :: String -> p ()
   default putText :: (MonadParse m,MonadTrans t,p ~ t m) => String -> p ()
   putText = lift . putText
+
   throwText :: HasCallStack => String -> p a
-  default throwText :: (HasCallStack,MonadParse m,MonadTrans t,p ~ t m) => String -> p a
+  default throwText
+    :: (HasCallStack,MonadParse m,MonadTrans t,p ~ t m) => String -> p a
   throwText = lift . throwText
 instance MonadParse m => MonadParse (StateT a m)
 instance MonadParse m => MonadParse (ExceptT a m)
@@ -114,7 +119,8 @@ instance (Monoid s,MonadSelect p) => MonadSelect (WriterT s p) where
 instance (MonadSelect p) => MonadSelect (ExceptT s p) where
   select0 isG (ExceptT f) (ExceptT g) =
     ExceptT $ select0 (either (const False) isG) f g
-instance MonadSelect [] where select0 isG l r = uncurry (++) $ span isG $ l ++ r
+instance MonadSelect [] where
+  select0 isG l r = uncurry (++) $ span isG $ l ++ r
 
 select :: MonadSelect p => p a -> p a -> p a
 select = select0 $ const True
@@ -176,10 +182,11 @@ parseFrom rmPref s = do
   word "from"
   tbls <- sep1 (word ",") $ parseTableAsClause rmPref s
   return $ \es -> foldl1 (Q2 QProd) (($ es) <$> tbls)
-parseTableAsClause :: (HasCallStack,MonadParse p,Eq e) =>
-                     (String -> e -> Maybe e)
-                   -> p (Query e s)
-                   -> p ([e] -> Query e s)
+parseTableAsClause
+  :: (HasCallStack,MonadParse p,Eq e)
+  => (String -> e -> Maybe e)
+  -> p (Query e s)
+  -> p ([e] -> Query e s)
 parseTableAsClause rmPref sM = do
   r <- sM
   parseMaybe (word "as" >> parseSym) >>= \case
@@ -197,8 +204,10 @@ parseLimit = do
   return $ if i < 0 then id else Q1 (QLimit i)
 parseNat :: (HasCallStack,MonadParse p) => p Int
 parseNat = read <$> readWhile isDigit
-parseSelectProj :: (HasCallStack,MonadGen e p,MonadParse p) =>
-                  p e -> p (Query e s -> Query e s)
+parseSelectProj
+  :: (HasCallStack,MonadGen e p,MonadParse p)
+  => p e
+  -> p (Query e s -> Query e s)
 parseSelectProj eM = do
   word "select"
   fmap (Q1 . QProj) $ sep1 (word ",") $ do
@@ -261,8 +270,11 @@ parseOrderBy eM = do
 parseSelectStar :: MonadParse p => p (Query e s -> Query e s)
 parseSelectStar = word "select" >> word "*" >> return id
 
-parseNestedQueryE :: (HasCallStack,MonadParse p) =>
-                    p e -> p (Query (NestedQueryE s e) s) -> p (NestedQueryE s e)
+parseNestedQueryE
+  :: (HasCallStack,MonadParse p)
+  => p e
+  -> p (Query (NestedQueryE s e) s)
+  -> p (NestedQueryE s e)
 parseNestedQueryE eM qM =
   fmap NestedQueryE $ Right <$> eM <|> Left <$> parens qM <|> prsIn
   where
@@ -282,8 +294,12 @@ parseNestedQueryE eM qM =
         Q1 _ q -> exposedSymbol q
         q -> throwText $ "Expected a query with unique symbols, not "
             ++ show (bimap (const ()) (const ()) q)
-parseQuery :: (HasCallStack,MonadGen e p,MonadParse p,Eq e) =>
-             (String -> e -> Maybe e) -> p e -> p (Query e s) -> p (Query e s)
+parseQuery
+  :: (HasCallStack,MonadGen e p,MonadParse p,Eq e)
+  => (String -> e -> Maybe e)
+  -> p e
+  -> p (Query e s)
+  -> p (Query e s)
 parseQuery rmPref eM sM = do
   putProjE <- Left <$> (select parseSelectStar $ parseSelectProj eM)
              <|> Right <$> parseSelectGroup eM
@@ -309,25 +325,27 @@ flattenQ = go [] where
     Q1 o l   -> Q1 o $ go (toList o ++ es) l
     Q2 o l r -> Q2 o (go (toList o ++ es) l) (go (toList o ++ es) r)
 
-parseNestedQuery :: forall p e s.
-                   (HasCallStack,Symbolic e,Eq e,Eq s,MonadParse p) =>
-                   (String -> e -> Maybe e)
-                 -> p e
-                 -> p s
-                 -> StateT (Stream e) p (Query (NestedQueryE s e) s)
-parseNestedQuery f eM sM = runReaderT (runRK qM) $ NestedQueryE . Right where
-  qM :: RK
-       (ReaderT (e -> NestedQueryE s e)
-        (StateT (Stream e) p))
-       (Query (NestedQueryE s e) s)
-  qM = parseQuery f' (parseNestedQueryE (lift3 eM) qM) $ lift3 $ Q0 <$> sM
-  f' pref (NestedQueryE (Right e)) = NestedQueryE . Right <$> f pref e
-  f' _ _                           = Nothing
+parseNestedQuery
+  :: forall p e s .
+  (HasCallStack,Symbolic e,Eq e,Eq s,MonadParse p)
+  => (String -> e -> Maybe e)
+  -> p e
+  -> p s
+  -> StateT (Stream e) p (Query (NestedQueryE s e) s)
+parseNestedQuery f eM sM =
+  runReaderT (runRK qM) $ NestedQueryE . Right
+  where
+    qM :: RK
+         (ReaderT (e -> NestedQueryE s e) (StateT (Stream e) p))
+         (Query (NestedQueryE s e) s)
+    qM = parseQuery f' (parseNestedQueryE (lift3 eM) qM) $ lift3 $ Q0 <$> sM
+    f' pref (NestedQueryE (Right e)) = NestedQueryE . Right <$> f pref e
+    f' _ _                           = Nothing
 
 -- | The following should be greedy: parseProp (parseProp ...) should
 -- yield P0 for the inner prop ONLY. Don't backtrack.
-parsePropRelExpr :: forall p e . (HasCallStack,MonadParse p) =>
-                   p e -> p (Prop (Rel (Expr e)))
+parsePropRelExpr
+  :: forall p e . (HasCallStack,MonadParse p) => p e -> p (Prop (Rel (Expr e)))
 parsePropRelExpr eM =
   parseProp $ select (parseExists eM) $ parseRel $ parseExpr $ E0 <$> eM
 parseExists :: (MonadParse p,HasCallStack) => p e -> p (Prop (Rel (Expr e)))
@@ -428,8 +446,19 @@ parseExpr prsSym = tokTree prsTerm prsBOps where
 
 -- | Respect the prescedence. [*,/,+,-]
 -- parse (tokTree (char 'a' >> return [()]) [char '+' >> return (++)]) "a"
-tokTree :: forall p a . (HasCallStack,MonadParse p) =>
-          p a -> [p (a -> a -> a)]  -> p a
+--
+-- This first parses each token and operand "a + 2 * 3 + 7 / 4"
+-- interleaving them and then does a sort of "quicksort", at each step
+-- splitting the prescedence: ev headExpr t:tail -> split tail in a
+-- prefix that has higher prescednence than t and a suffix.  Recurse
+-- in the prefix and combin with headExpr and recur that with the
+-- suffix.
+tokTree
+  :: forall p a .
+  (HasCallStack,MonadParse p)
+  => p a
+  -> [p (a -> a -> a)]
+  -> p a
 tokTree p1 pops = do
   a <- p1
   ev a <$> prsChain
@@ -466,7 +495,8 @@ parseAggr aM = foldr1Unsafe select [
 
 -- | Sort of a right kan. RK *MUST* be the outermost monad otherwise
 -- select will swallow all previously thrown errors.
-newtype RK m a = RK {unRK :: forall b . (a -> m b) -> m b} deriving Functor
+newtype RK m a = RK { unRK :: forall b . (a -> m b) -> m b }
+  deriving Functor
 instance Applicative (RK m) where
   (<*>) = ap
   pure = return
@@ -490,14 +520,16 @@ runRK :: Applicative m => RK m a -> m a
 runRK (RK f) = f pure
 
 parseExpTypeSym :: (HasCallStack,MonadParse p) => p ExpTypeSym
-parseExpTypeSym = foldr1Unsafe select [
-  EDate <$> parseDate,
-  EInterval <$> parseInterval,
-  EFloat <$> parseFloat,
-  EInt <$> parseInt,
-  EString <$> parseString,
-  ESym <$> parseDotSym,
-  EBool <$> parseBool]
+parseExpTypeSym =
+  foldr1Unsafe
+    select
+    [EDate <$> parseDate
+    ,EInterval <$> parseInterval
+    ,EFloat <$> parseFloat
+    ,EInt <$> parseInt
+    ,EString <$> parseString
+    ,ESym <$> parseDotSym
+    ,EBool <$> parseBool]
 
 parseDotSym :: (HasCallStack,MonadParse p) => p String
 parseDotSym = do
@@ -564,7 +596,7 @@ parseTableSym = TSymbol <$> parseSym
 -- aprint $ parseSQL (\_ _ -> Nothing) "select * from A where exists (select *  from B)"
 -- aprint $ parseSQL (\_ _ -> Nothing) "select * from A where a=(select min(b) from B)"
 -- aprint $ parseSQL (\(ESym x) q -> Just $ x `elem` map unTable (toList q)) "select * from a where not exists (select * from b where a = b)"
--- aprint $ parseSQL (\_ _ -> Nothing) "select * as A from A where a between 1 and 2"
+-- aprint $ parseSQL (\_ _ -> Nothing) "select a as A from A where a between 1 and 2"
 -- aprint $ parseSQL (\_ _ -> Nothing) "select * from (select a from A)"
 -- aprint $ parseSQL (\_ _ -> Nothing) "select case when a = b and b <> c then 1 else 2 end from A"
 -- aprint $ parseSQL (\(ESym x) q -> Just $ x `elem` map unTable (toList q)) "select * from a where not exists (select * from b where a = b)"

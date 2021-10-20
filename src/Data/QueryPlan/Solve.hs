@@ -304,8 +304,7 @@ reverseMops fmop = nubMops . filter validate . join
     validate rmop = (metaOpIn rmop `nsIsSubsetOf` metaOpOut fmop)
                     && (metaOpOut rmop `nsIsSubsetOf` metaOpIn fmop)
 
-withProtected :: MonadLogic m =>
-                [NodeRef n] -> PlanT t n m a -> PlanT t n m a
+withProtected :: MonadLogic m => [NodeRef n] -> PlanT t n m a -> PlanT t n m a
 withProtected [] m = m
 withProtected (n:ns) m = do
   prot <- forM (n:ns) $ \nref -> (nref,) <$> getNodeProtection nref
@@ -425,8 +424,8 @@ killIntermediates = do
     x `setNodeStateUnsafe` Concrete Mat NoMat
     putDelNode x
 
-isOversized :: forall t n m . MonadLogic m =>
-              ReaderT PageNum (PlanT t n m) Bool
+isOversized
+  :: forall t n m . MonadLogic m => ReaderT PageNum (PlanT t n m) Bool
 isOversized = do
   nsize <- ask
   totalSize <- lift getDataSize

@@ -663,20 +663,24 @@ nqnfJoin p l r = do
     Nothing    -> throwAStr "Prod/sel symbol translation in/out maps don't match"
     Just finIO -> return resSel{nqnfResInOutNames=finIO}
 
-nqnfSelect :: forall e s . Hashables2 e s =>
-             Prop (Rel (Expr e))
-           -> NQNFQueryI e s
-           -> QNFBuild e s
-           (NQNFResultI (Prop (Rel (Expr (QNFName e s, e)))) e s)
+nqnfSelect
+  :: forall e s .
+  Hashables2 e s
+  => Prop (Rel (Expr e))
+  -> NQNFQueryI e s
+  -> QNFBuild e s (NQNFResultI (Prop (Rel (Expr (QNFName e s,e)))) e s)
 nqnfSelect p l =
   qnfCached qnfSelect_cache (\cc x -> cc{qnfSelect_cache=x}) (p,l)
   $ nqnfSelectI p l
 
-nqnfSelectI :: forall e s . Hashables2 e s =>
-             Prop (Rel (Expr e))
-           -> NQNFQueryI e s
-           -> Either (QNFError e s)
-           (NQNFResultI (Prop (Rel (Expr (QNFName e s, e)))) e s)
+nqnfSelectI
+  :: forall e s .
+  Hashables2 e s
+  => Prop (Rel (Expr e))
+  -> NQNFQueryI e s
+  -> Either
+    (QNFError e s)
+    (NQNFResultI (Prop (Rel (Expr (QNFName e s,e)))) e s)
 nqnfSelectI p q = nqnfSpecializeQueryF q <&> \case
   Left proj  -> putName $ selInternal proj
   Right aggr -> putName $ selInternal $ aggrToProjI aggr
@@ -696,10 +700,12 @@ nqnfSelectI p q = nqnfSpecializeQueryF q <&> \case
 -- into a projection.
 --
 -- Nothing in prop means drop selection from query.
-nqnfSelectInternal :: forall dr f e s . (Functor dr,HashableQNF f e s,Foldable dr) =>
-                     dr (Prop (Rel (Expr e)))
-                   -> NQNFQueryCF Const f e s
-                   -> NQNFResultF f (dr (Prop (Rel (Expr (QNFNameC Const e s, e))))) e s
+nqnfSelectInternal
+  :: forall dr f e s .
+  (Functor dr,HashableQNF f e s,Foldable dr)
+  => dr (Prop (Rel (Expr e)))
+  -> NQNFQueryCF Const f e s
+  -> NQNFResultF f (dr (Prop (Rel (Expr (QNFNameC Const e s,e))))) e s
 nqnfSelectInternal pM (nm,qnf0) =
   NQNFResult
   { nqnfResNQNF = nqnfGeneralizeQueryF $ Left ret
@@ -744,6 +750,7 @@ nqnfSelectInternal pM (nm,qnf0) =
         x -> x
       p' :: dr (Prop (Rel (Expr (QNFNameC Const e s,e))))
       p' = qnfSubstNamesTrusting nm <$> pM
+      -- The heavy lifting: translate a column to a selection.
       dropSelProdN :: QNFNameC Const e s -> QNFSelName e s
       dropSelProdN = \case
         NonSymbolName e -> Left e
@@ -760,9 +767,10 @@ nqnfSelectInternal pM (nm,qnf0) =
                ,qnfHash = undefined
               }
 
-qnfProdSingleton :: Hashables2 e s =>
-                   Query (QNFName e s) (Either s (QNFQueryI e s))
-                 -> HashBag (QNFProd e s)
+qnfProdSingleton
+  :: Hashables2 e s
+  => Query (QNFName e s) (Either s (QNFQueryI e s))
+  -> HashBag (QNFProd e s)
 qnfProdSingleton = bagSingleton . HS.singleton
 qnfProdSingleton2 :: Hashables2 e s =>
                     [(BQOp (QNFName e s), QNFQueryI e s, QNFQueryI e s)]

@@ -349,10 +349,13 @@ qnfSpecializeQueryF qnf = case qnfColumns qnf of
       qnfProd=qnfProd qnf,
       qnfHash=qnfHash qnf,
       qnfOrigDEBUG'=EmptyF}
-nqnfSpecializeQueryF :: forall f e s . HashableQNF f e s =>
-                       NQNFQueryF f e s
-                     -> Either (QNFError e s )
-                     (Either (NQNFQueryProjF f e s) (NQNFQueryAggrF f e s))
+nqnfSpecializeQueryF
+  :: forall f e s .
+  HashableQNF f e s
+  => NQNFQueryF f e s
+  -> Either
+    (QNFError e s)
+    (Either (NQNFQueryProjF f e s) (NQNFQueryAggrF f e s))
 nqnfSpecializeQueryF (nm,qnf) = case qnfSpecializeQueryF qnf of
   Left projQnf -> Left . (,projQnf) <$> HM.traverseWithKey (const go) nm where
     go :: QNFCol e s

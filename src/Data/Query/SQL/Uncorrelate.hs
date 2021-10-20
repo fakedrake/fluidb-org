@@ -46,14 +46,19 @@ data UnnestError s e =
   deriving (Eq, Generic)
 instance AShowError e s (UnnestError s e)
 instance (AShowV e,AShowV s) => AShow (UnnestError e s)
-type UnnestMonad e s = ReaderT (e -> Query e s -> Maybe Bool) (StateT Int (Either (UnnestError s e)))
-data CorrelProp e = CorrelProp {
-  -- The part of the proposition that has no free variables
-  -- p0
-  correlPropNonFree :: Maybe (Prop (Rel (Expr e))),
-  -- The part of the proposition that has free variables
-  -- pi
-  correlPropFree    :: [([e], Prop (Rel (Expr e)))]}
+type UnnestMonad e s =
+  ReaderT
+    (e -> Query e s -> Maybe Bool)
+    (StateT Int (Either (UnnestError s e)))
+data CorrelProp e =
+  CorrelProp
+  { -- The part of the proposition that has no free variables
+    -- p0
+    correlPropNonFree :: Maybe (Prop (Rel (Expr e)))
+    -- The part of the proposition that has free variables
+    -- pi
+   ,correlPropFree    :: [([e],Prop (Rel (Expr e)))]
+  }
   deriving Show
 emptyCorrelProp :: CorrelProp e
 emptyCorrelProp = CorrelProp Nothing []
@@ -65,24 +70,26 @@ mkCorrelProp isFreeVar p = CorrelProp{..} where
   (correlPropNonFree, fmap2 P0 -> correlPropFree) =
     runWriter $ runMaybeT $ extractRelIf isFreeVar p
 
-data ExistentialCorrelRecord e s = ExistentialCorrelRecord {
-  -- p
-  existCorrelSel     :: CorrelProp e,
-  -- B
-  existCorrelQuery   :: Query e (CorrelHead e s),
-  -- A
-  existCorrelSubTree :: Query e (CorrelHead e s)
+data ExistentialCorrelRecord e s =
+  ExistentialCorrelRecord
+  { -- p
+    existCorrelSel     :: CorrelProp e
+    -- B
+   ,existCorrelQuery   :: Query e (CorrelHead e s)
+    -- A
+   ,existCorrelSubTree :: Query e (CorrelHead e s)
   }
-data GroupCorrelRecord e s = GroupCorrelRecord {
-  grpCorrelQueryVal :: Expr (Aggr (Expr e)),
-  -- p
-  grpCorrelSel      :: CorrelProp e,
-  -- R
-  grpCorrelProp     :: e -> UnnestMonad e s (Prop (Rel (Expr e))),
-  -- B
-  grpCorrelQuery    :: Query e (CorrelHead e s),
-  -- A
-  grpCorrelSubTree  :: Query e (CorrelHead e s)
+data GroupCorrelRecord e s =
+  GroupCorrelRecord
+  { grpCorrelQueryVal :: Expr (Aggr (Expr e))
+    -- p
+   ,grpCorrelSel      :: CorrelProp e
+    -- R
+   ,grpCorrelProp     :: e -> UnnestMonad e s (Prop (Rel (Expr e)))
+    -- B
+   ,grpCorrelQuery    :: Query e (CorrelHead e s)
+    -- A
+   ,grpCorrelSubTree  :: Query e (CorrelHead e s)
   }
 
 data CorrelHead e s = NoCorrel s
@@ -109,29 +116,35 @@ normalize = qmap $ \case
           And l r -> breakP l ++ breakP r
           x       -> [x]
 
--- | Extract and-QNF terms of the form (P0 r) where exists e in r . f
+-- | Extract and-CNF terms of the form (P0 r) where exists e in r . f
 -- e. Useful for extracting exists terms.
-extractRelIf :: (e -> Bool)
-              -> Prop (Rel (Expr e))
-              -> MaybeT (Writer [([e], Rel (Expr e))]) (Prop (Rel (Expr e)))
+extractRelIf
+  :: (e -> Bool)
+  -> Prop (Rel (Expr e))
+  -> MaybeT (Writer [([e],Rel (Expr e))]) (Prop (Rel (Expr e)))
 extractRelIf f = extractRelIfM (return . f)
 
-extractRelIfM :: forall e m . Monad m =>
-                (e -> m Bool)
-              -> Prop (Rel (Expr e))
-              -> MaybeT (WriterT [([e], Rel (Expr e))] m) (Prop (Rel (Expr e)))
-extractRelIfM shouldExtract p = MaybeT $ extractTerms go p where
-  go :: Prop (Rel (Expr e)) -> m (Maybe ([e], Rel (Expr e)))
-  go = \case
-    P0 r -> do
-      es <- filterM shouldExtract $ toList2 r
-      return $ if null es then Nothing else Just (es, r)
-    _ -> return Nothing
+extractRelIfM
+  :: forall e m .
+  Monad m
+  => (e -> m Bool)
+  -> Prop (Rel (Expr e))
+  -> MaybeT (WriterT [([e],Rel (Expr e))] m) (Prop (Rel (Expr e)))
+extractRelIfM shouldExtract p = MaybeT $ extractTerms go p
+  where
+    go :: Prop (Rel (Expr e)) -> m (Maybe ([e],Rel (Expr e)))
+    go = \case
+      P0 r -> do
+        es <- filterM shouldExtract $ toList2 r
+        return $ if null es then Nothing else Just (es,r)
+      _ -> return Nothing
 
-extractTerms :: forall r a m . Monad m =>
-               (Prop r -> m (Maybe a))
-             -> Prop r
-             -> WriterT [a] m (Maybe (Prop r))
+extractTerms
+  :: forall r a m .
+  Monad m
+  => (Prop r -> m (Maybe a))
+  -> Prop r
+  -> WriterT [a] m (Maybe (Prop r))
 extractTerms shouldExtr = go where
   go :: Prop r -> WriterT [a] m (Maybe (Prop r))
   go = \case
@@ -153,30 +166,40 @@ hasRelM relTest = fmap (all2 id) . traverse2 relTest
 -- | Remove intermediates: used to find the types as correlation heads
 -- represent selections and do not affect the schema.
 removeInterm :: Query e (CorrelHead e s) -> Query e s
-removeInterm q = q >>=  \case
+removeInterm q = q >>= \case
   NoCorrel s -> Q0 s
-  ExistentialCorrel _ ExistentialCorrelRecord{..} ->
+  ExistentialCorrel _ ExistentialCorrelRecord {..} ->
     removeInterm existCorrelSubTree
-  GroupCorrel GroupCorrelRecord{..} -> removeInterm grpCorrelSubTree
+  GroupCorrel GroupCorrelRecord {..} -> removeInterm grpCorrelSubTree
 
 -- | Match the axiom patterns into CorrelHead constructors so that we
 -- can then rewrite them.
-uncorrelInterm :: forall s e . (Eq e,Symbolic e,SymbolType e ~ String) =>
-                 Query (NestedQueryE s e) s
-               -> UnnestMonad e s (Query e (CorrelHead e s))
+uncorrelInterm
+  :: forall s e .
+  (Eq e,Symbolic e,SymbolType e ~ String)
+  => Query (NestedQueryE s e) s
+  -> UnnestMonad e s (Query e (CorrelHead e s))
 uncorrelInterm = \case
   Q2 o a b -> Q2 <$> coerceOp o <*> recur a <*> recur b
   S p q0 -> mkCorrelHead (p,q0) >>= \case
     Nothing -> case traverse3 coerceESym p of
       Right o' -> S o' <$> recur q0
-      Left _ -> throwAStr $ "Neither a valid correl nor non-correl: " ++ ashow p
+      Left
+        _ -> throwAStr $ "Neither a valid correl nor non-correl: " ++ ashow p
     Just s -> return $ Q0 s
   Q1 o a -> Q1 <$> coerceOp o <*> recur a
   Q0 s -> return $ Q0 $ NoCorrel s
   where
     recur = uncorrelInterm
-    coerceOp :: forall op . (HasCallStack,Traversable op,(forall x . AShow x => AShow (op x))) =>
-               op (NestedQueryE s e) -> UnnestMonad e s  (op e)
+    coerceOp
+      :: forall op .
+      (HasCallStack
+      ,Traversable op
+      ,(forall x .
+        AShow x
+        => AShow (op x)))
+      => op (NestedQueryE s e)
+      -> UnnestMonad e s (op e)
     coerceOp o = case traverse coerceESym o of
       Left _  -> throwAStr $ "Only QSel can contain correl ops: " ++ ashow o
       Right x -> return x
@@ -235,12 +258,15 @@ mkCorrelHead (p,restQ) =
 
 -- | Given B, extract p and B0 where B ~ g (sel (p, B0)) where p is
 -- correlated.
-extractEmptyGrp :: (Eq e, Symbolic e,SymbolType e ~ String) =>
-                  Rel (Expr e)
-                -> Query e (CorrelHead e s)
-                -> UnnestMonad e s
-                  ((Query e (CorrelHead e s), CorrelProp e),
-                   Expr (Aggr (Expr e)))
+extractEmptyGrp
+  :: (Eq e,Symbolic e,SymbolType e ~ String)
+  => Rel (Expr e)
+  -> Query e (CorrelHead e s)
+  -> UnnestMonad
+    e
+    s
+    ((Query e (CorrelHead e s),CorrelProp e)
+    ,Expr (Aggr (Expr e)))
 extractEmptyGrp r = \case
   Q1 (QGroup [(_,grp)] []) q -> (,grp) <$> extractSelection q
   q -> do
