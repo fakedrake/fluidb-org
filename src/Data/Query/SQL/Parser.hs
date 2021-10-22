@@ -598,7 +598,7 @@ parseTableSym = TSymbol <$> parseSym
 -- aprint $ parseSQL (\(ESym x) q -> Just $ x `elem` map unTable (toList q)) "select * from a where not exists (select * from b where a = b)"
 -- aprint $ parseSQL (\_ _ -> Nothing) "select a as A from A where a between 1 and 2"
 -- aprint $ parseSQL (\_ _ -> Nothing) "select * from (select a from A)"
--- aprint $ parseSQL (\_ _ -> Nothing) "select case when a = b and b <> c then 1 else 2 end from A"
+-- aprint $ parseSQL (\_ _ -> Nothing) "select case, when a = b and b <> c then 1 else 2 end from A"
 -- aprint $ parseSQL (\(ESym x) q -> Just $ x `elem` map unTable (toList q)) "select * from a where not exists (select * from b where a = b)"
 parseSQL :: (ExpTypeSym -> Query ExpTypeSym Table -> Maybe Bool)
          -> String

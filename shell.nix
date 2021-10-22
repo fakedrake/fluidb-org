@@ -1,8 +1,8 @@
 { nixpkgs ? import <nixpkgs> {} }:
 with nixpkgs; let
-  haskellPackages = haskell.packages.ghc8104;
+  haskellPackages = haskell.packages.ghc8107;
   # Haskell tools
-  ghc = haskell.packages.ghc8104.ghcWithPackages (ps: with ps; [
+  ghc = haskellPackages.ghcWithPackages (ps: with ps; [
     template-haskell
     base
     czipwith

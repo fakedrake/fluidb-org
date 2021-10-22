@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -10,7 +10,7 @@
 {-# OPTIONS_GHC  -fno-prof-count-entries -fno-prof-auto -Wno-orphans #-}
 
 module Data.Utils.ListT
-  (ListT
+  (ListT(..)
   ,NEListT
   ,headNEListT
   ,maybeToListT
@@ -50,7 +50,7 @@ unconsListT = unListT
 
 instance Monad m => Semigroup (ListT m a) where
   m1 <> m2 = ListT $ unListT m1 >>= \case
-    Nothing -> unListT m2
+    Nothing        -> unListT m2
     Just (h1, s1') -> return $ Just (h1, s1' <> m2)
   {-# INLINE (<>) #-}
 
@@ -86,7 +86,7 @@ instance Monad m => Monad (ListT m) where
   return a = ListT $ return (Just (a, ListT (return Nothing)))
   {-# INLINE return #-}
   s >>= f = ListT $ unListT s >>= \case
-    Nothing -> return Nothing
+    Nothing     -> return Nothing
     Just (h, t) -> unListT $ f h <> (t >>= f)
   {-# INLINE (>>=) #-}
 
@@ -141,18 +141,18 @@ mkListT :: Applicative m => m [a] -> ListT m a
 mkListT m = ListT $ go <$> m where
   go = \case
     v:vs -> Just (v, mkListT $ pure vs)
-    [] -> Nothing
+    []   -> Nothing
 
 runListT :: Monad m => ListT m a -> m [a]
 runListT vM = unListT vM >>= \case
-  Nothing -> return []
+  Nothing       -> return []
   Just (v,rest) -> (v :) <$> runListT rest
 {-# INLINE runListT #-}
 
 eitherlListT :: Monad m => ListT m a -> ListT m a -> ListT m a
 eitherlListT xM yl = ListT $ unListT xM >>= \case
-  Nothing -> case yl of {ListT x' -> x'}
-  x@(Just _)  -> return x
+  Nothing    -> case yl of {ListT x' -> x'}
+  x@(Just _) -> return x
 alsoListT :: Monad m => ListT m a -> ListT m a -> ListT m a
 alsoListT xM yl = ListT $ do
   x <- unListT xM
@@ -163,7 +163,7 @@ alsoFlipListT :: Monad m => ListT m a -> ListT m a -> ListT m a
 alsoFlipListT xM yM = ListT $ unListT xM >>= \case
     Nothing        -> return Nothing
     xMay -> unListT yM >>= \case
-      Nothing -> return xMay
+      Nothing          -> return xMay
       Just (hy, resty) -> return $ Just (hy, resty <|> ListT (return xMay))
 
 instance Monad m => MonadZip (ListT m) where
@@ -179,23 +179,23 @@ instance Monad m => MonadZip (ListT m) where
 
 catMaybesListT :: Monad m => ListT m (Maybe a) -> ListT m a
 catMaybesListT (ListT m) = ListT $ m >>= \case
-  Nothing -> return Nothing
+  Nothing          -> return Nothing
   Just (Nothing,r) -> unListT $ catMaybesListT r
-  Just (Just a,r) -> return $ Just (a,catMaybesListT r)
+  Just (Just a,r)  -> return $ Just (a,catMaybesListT r)
 
 foldrListT :: Monad m => (a -> m b -> m b) -> m b -> ListT m a -> m b
 foldrListT f i = recur where
   recur aM = unListT aM >>= \case
-    Nothing -> i
+    Nothing      -> i
     Just (a, aL) -> f a $ recur aL
 
 foldrListT1 :: Monad m => (b -> m b -> m b) -> m b -> ListT m b -> m b
 foldrListT1 f def aM = unListT aM >>= \case
-    Nothing -> def
+    Nothing     -> def
     Just (b,bL) -> recur b bL
   where
     recur b bM = unListT bM >>= \case
-      Nothing -> return b
+      Nothing       -> return b
       Just (b',bM') -> f b $ recur b' bM'
 
 takeUniqueListT :: forall m a b . (Monad m, Eq b) =>
@@ -232,15 +232,17 @@ lazyProductListT la lb  = ListT $ go [] [] la lb where
           $ Just ((a,b), ListT $ go (prevA ++ [a]) (prevB ++ [b]) aL bL)
 
 -- | Get a sequence of the states.
-hoistRunStateListT :: (Monad m, Monad m') =>
-                     (forall x . m (Maybe x) -> s -> m' (Maybe x, s))
-                   -> s
-                   -> ListT m a -> ListT m' (a, s)
+hoistRunStateListT
+  :: (Monad m,Monad m')
+  => (forall x . m (Maybe x) -> s -> m' (Maybe x,s))
+  -> s
+  -> ListT m a
+  -> ListT m' (a,s)
 hoistRunStateListT runStateT' st aM = ListT $ go <$> runStateT' (unListT aM) st
   where
     recur = hoistRunStateListT runStateT'
     go = \case
-      (Nothing, _) -> Nothing
+      (Nothing, _)        -> Nothing
       (Just (a, aL), st') -> Just ((a, st'), recur st' aL)
 filterListT :: Monad m => (a -> m Bool) -> ListT m a -> ListT m a
 filterListT fM l = ListT $ unListT l >>= \case
@@ -252,7 +254,7 @@ filterListT fM l = ListT $ unListT l >>= \case
 scanlListT :: Monad m => (b -> a -> b) -> b -> ListT m a -> ListT m b
 scanlListT f b (ListT m) = ListT $ m >>= \case
   Just (a,restM) -> let b' = f b a in return $ Just (b',scanlListT f b' restM)
-  Nothing -> return Nothing
+  Nothing        -> return Nothing
 
 
 -- | Non empty ListT.

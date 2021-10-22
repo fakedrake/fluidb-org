@@ -188,10 +188,12 @@ nqnfIncrementProds bag nqnf@(nm,qnf) = do
     nqnfToSymAssoc :: NQNFQueryProjF f e s -> [(e, QNFColProj e s)]
     nqnfToSymAssoc = fmap fst . fst . sanitizeNameMap
 
-incrementQNF :: forall f e s . (Functor f, HashableQNF f e s) =>
-               HashBag (QNFProd e s)
-             -> QNFQueryProjF f e s
-             -> QNFQueryProjF f e s
+incrementQNF
+  :: forall f e s .
+  (Functor f,HashableQNF f e s)
+  => HashBag (QNFProd e s)
+  -> QNFQueryProjF f e s
+  -> QNFQueryProjF f e s
 incrementQNF bag qnf' =
   updateHashSel
   $ updateHashCol

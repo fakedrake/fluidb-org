@@ -8,22 +8,21 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# OPTIONS_GHC -O2 -fno-prof-count-entries -fno-prof-auto #-}
-{-# LANGUAGE TypeApplications      #-}
 
 -- |Best first search monad with continuations.
 
 module Data.Utils.HContT
-  ( HContT(..)
-  , dissolve'
-  , eitherlHCont
-  , dissolve
-  , runHContT'
-  , MonadHalt(..)
-  , Partitionable
-  , cutContT
-  ) where
+  (HContT(..)
+  ,dissolve'
+  ,eitherlHCont
+  ,dissolve
+  ,runHContT'
+  ,MonadHalt(..)
+  ,Partitionable
+  ,cutContT) where
 
 import           Control.Applicative
 import           Control.Monad.Cont
@@ -39,11 +38,12 @@ import           Data.List
 import           Data.Utils.Debug
 
 -- | See: Fischer, Sebastian. "Reinventing Haskell Backtracking." GI
---  Jahrestagung 2009 (2009): 2875-2888.
+-- Jahrestagung 2009 (2009): 2875-2888.
 -- https://www.aaai.org/Papers/AAAI/1987/AAAI87-011.pdf
 
 
 type Partitionable m = (MonadPlus m,Foldable m)
+
 -- | A continuation of steps.
 newtype HContT v r m a = HContT {
   unHContT :: (a -> m (Either (v, HContT v r m r) r))
@@ -71,8 +71,11 @@ instance MonadTrans (HContT v r) where
   lift m = HContT (m >>=)
   {-# INLINE lift #-}
 
-dissolve :: forall m v r . (Ord v, Foldable m, Applicative m, Semigroup v) =>
-           HContT v r m r -> [r]
+dissolve
+  :: forall m v r .
+  (Ord v,Foldable m,Applicative m,Semigroup v)
+  => HContT v r m r
+  -> [r]
 dissolve = dissolve' $ pure . Right
 
 -- | Dissolve a continuation into a lazy list.
@@ -93,8 +96,15 @@ dissolve' f = go . dissolve1 f
             $ first ((`merge` cs) . fmap (first (v <>)))
             $ dissolve1 (pure . Right) c
 
-eitherlHCont :: forall v r m x . (Ord v,Foldable m,MonadPlus m,Group v) =>
-               HContT v r m x -> HContT v r m x -> HContT v r m x
+-- | Dissolve the left hand side until it either yields at least one
+-- result in which case just drop the right, if it finishes execution
+-- without a result switch to the right one.
+eitherlHCont
+  :: forall v r m x .
+  (Ord v,Foldable m,MonadPlus m,Group v)
+  => HContT v r m x
+  -> HContT v r m x
+  -> HContT v r m x
 eitherlHCont = recur [] where
   recur :: forall a . [v] -> HContT v r m a -> HContT v r m a -> HContT v r m a
   recur vs a b = HContT go where
@@ -115,7 +125,6 @@ eitherlHCont = recur [] where
     [x]  -> [f x]
     x:xs -> x:onLast f xs
 
--- XXX: instead of foldable we actually need Ord a => m (Either a b) -> m ([a],[b])
 dissolve1
   :: (Ord v,Foldable m)
   => (x -> m (Either (v,HContT v r m r) r))
@@ -191,7 +200,21 @@ stream = go 0 where
 test2 :: [(Int,Int,Int)]
 test2 = dissolve @[] $ do
   (a,b,c) <- (,,) <$> stream <*> stream <*> stream
-  guard $ a + b - c == 10
+  guard $ a + b + c == 10
   return (a,b,c)
+
+(<//>) :: (Foldable m,MonadPlus m) => a -> a -> HContT () r m a
+a <//> b = eitherlHCont (pure a) (pure b)
+(</>) :: (Foldable m,MonadPlus m) => HContT () r m a -> HContT () r m a -> HContT () r m a
+a </> b = eitherlHCont a b
+
+
+-- | Eitherl
+test3 :: [(Int,Int)]
+test3 = dissolve @[] $ do
+  a :: Int <- msum $ pure <$> [1,2,3]
+  b :: Int <- (a + 2) <//> (a + 1)
+  guard $ a + b <= 6
+  return (a,b)
 
 #endif

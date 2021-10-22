@@ -294,21 +294,29 @@ instance Traversable (FlipQuery s) where
 instance (Hashable e, Hashable s) => Hashable (FlipQuery s e)
 
 -- Expressions
-data BEOp =
-  -- Boolean (truthy)
- EEq | ELike | EAnd | EOr | ENEq
-  -- Numeric
-  | EAdd | ESub | EMul | EDiv
-  deriving (Generic, Eq, Show, Enum, Bounded, Ord, Read)
+data BEOp
+  =  -- Boolean (truthy)
+    EEq
+  | ELike
+  | EAnd
+  | EOr
+  | ENEq
+    -- Numeric
+  | EAdd
+  | ESub
+  | EMul
+  | EDiv
+  deriving (Generic,Eq,Show,Enum,Bounded,Ord,Read)
 
-data ElemFunction = ExtractDay
-                  | ExtractMonth
-                  | ExtractYear
-                  | Prefix Int
-                  | Suffix Int
-                  | SubSeq Int Int
-                  | AssertLength Int
-                  deriving (Eq, Show, Generic, Read)
+data ElemFunction
+  = ExtractDay
+  | ExtractMonth
+  | ExtractYear
+  | Prefix Int
+  | Suffix Int
+  | SubSeq Int Int
+  | AssertLength Int
+  deriving (Eq,Show,Generic,Read)
 instance Hashable ElemFunction
 instance AShow ElemFunction
 instance ARead ElemFunction
@@ -350,12 +358,13 @@ instance AShow AggrFunction
 instance ARead AggrFunction
 instance AShow BEOp
 instance ARead BEOp
-data UEOp =
-  EFun ElemFunction
+data UEOp
+  = EFun ElemFunction
   | ENot
   | EAbs
   | ESig
-  | ENeg deriving (Generic, Eq, Show, Read)
+  | ENeg
+  deriving (Generic,Eq,Show,Read)
 instance Hashable UEOp
 instance AShow UEOp
 instance ARead UEOp
