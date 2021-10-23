@@ -5,24 +5,28 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeFamilies              #-}
-module Data.Utils.HCntT (HCntT,eitherl,dissolve) where
+module Data.Utils.HCntT (HCntT,(<//>),dissolve) where
 
 import           Control.Applicative
 import           Control.Monad.Cont
 import           Control.Monad.State
-import           Data.Bifunctor
 import qualified Data.IntMap.Strict  as IM
 import qualified Data.List.NonEmpty  as NEL
+import           Data.Monoid
 import           Data.Proxy
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.ListT
+import           Data.Utils.Tup
 import           GHC.Generics
 
 
 -- | A stable heap: items with the same key are returned in the order
--- they were inserted.
-class (forall v . Monoid (h v),Functor h,Ord (HeapKey h)) => IsHeap h where
+-- they were inserted. The HeapKey memoty is less than all other
+-- heapkeys.
+class (forall v . Monoid (h v),Functor h,Monoid (HeapKey h),Ord (HeapKey h))
+  => IsHeap h where
   type HeapKey h :: *
 
   popHeap :: h v -> Maybe ((HeapKey h,v),h v)
@@ -30,7 +34,7 @@ class (forall v . Monoid (h v),Functor h,Ord (HeapKey h)) => IsHeap h where
   maxKeyHeap :: h v -> Maybe (HeapKey h)
 
 newtype IntMMap a = IntMMap { unIntMMap :: IM.IntMap (NEL.NonEmpty a) }
-  deriving (Show,Functor)
+  deriving (Show,Functor,Foldable)
 
 instance Semigroup (IntMMap a) where
   IntMMap a <> IntMMap b = IntMMap $ IM.unionWith (<>) a b
@@ -38,10 +42,14 @@ instance Monoid (IntMMap a) where
   mempty = IntMMap mempty
 
 instance IsHeap IntMMap where
-  type HeapKey IntMMap = IM.Key
-  popHeap (IntMMap m) = bimap (fmap NEL.head) IntMMap <$> IM.minViewWithKey m
-  singletonHeap k v = IntMMap $ IM.singleton k (pure v)
-  maxKeyHeap (IntMMap im) = fst . fst <$> IM.maxViewWithKey im
+  type HeapKey IntMMap = Sum IM.Key
+  popHeap (IntMMap m) = do
+    ((k, h NEL.:| xs),rest) <- IM.minViewWithKey m
+    return ((Sum k,h), IntMMap $ case NEL.nonEmpty xs of
+      Nothing -> rest
+      Just xs -> IM.insert k xs rest)
+  singletonHeap k v = IntMMap $ IM.singleton (getSum k) (pure v)
+  maxKeyHeap (IntMMap im) = Sum . fst . fst <$> IM.maxViewWithKey im
 
 instance IsHeap [] where
   type HeapKey [] = ()
@@ -55,58 +63,168 @@ instance IsHeap [] where
 -- results should be passing. It contains a heap of intermediate
 -- values and maybe a value, if there is no value then we may have
 -- pending eithers that we need to check the next set of values for a
--- result. Run the either and get a new result
+-- result. Run the either and get a new result.
+--
+-- We use Tup2 to be able to be flexible on whether we use BFS or DFS
+-- search among the branches. While this is a weighted search, it
+-- remains a question of how the options that have the same value
+-- should be ordered. While it is more commonsensical to use BFS,
+-- especially since most problems have fairly wide branching.
 type Brnch h r m = StateT (CompState h r m) m (HRes h m r)
-newtype HRes h m r = HRes (h (Brnch h r m),[r])
+newtype HRes h m r = HRes (Tup2 (h (Brnch h r m)),[r])
 
 emptyHRes :: (forall v . Monoid (h v)) => HRes h m r
-emptyHRes = HRes (mempty,[])
+emptyHRes = HRes (Tup2 mempty mempty,[])
 
 -- | Continuation based monad that can either jump to a conclusion.
 type HCntT h r m = ContT (HRes h m r) (StateT (CompState h r m) m)
 
-dissolve :: (IsHeap h,Monad m) => HCntT h r m r -> ListT m r
-dissolve = dissolveI (\x -> pure $ HRes (mempty,[x]))
+dissolve :: (Foldable h , IsHeap h,Monad m) => HCntT h r m r -> ListT m r
+dissolve = dissolveI (\x -> pure $ HRes (Tup2 mempty mempty,[x]))
 
+-- | By the name /disolution/ we mean the process of turning an HCntT
+-- value to a ListT value. The ListT will lazily produce just as many
+-- results as are required, and of course just as many effects as
+-- required, and not more.
 dissolveI
   :: forall h m r x .
-  (IsHeap h,Monad m)
+  (IsHeap h,Monad m,Foldable h)
   => (x -> m (HRes h m r))
   -> HCntT h r m x
   -> ListT m r
 dissolveI fin c = ListT $ do
-  (HRes r,st) <- runStateT (runContT c $ lift . fin) def
-  go st r
+  (HRes (Tup2 hl hr,rs),st) <- runStateT (runContT c $ lift . fin) def
+  go st (hl <> hr,rs)
   where
     go :: CompState h r m -> (h (Brnch h r m),[r]) -> m (Maybe (r,ListT m r))
     go st = \case
       (h,r:rs) -> return $ Just (r,ListT $ go st (h,rs))
-      (h,[]) -> case popHeap h of
-        Nothing -> return Nothing
-        Just ((_,c'),h') -> do
-          (HRes (h1,rs),st') <- runStateT c' st
-          go st' (h' <> h1,rs)
+      (h,[]) -> do
+        case popHeap h of
+          Nothing -> return Nothing
+          Just ((_,c'),h') -> do
+            (HRes (Tup2 hl hr,rs),st') <- runStateT c' st
+            -- h1 is the the last subbag. If it is appended on the
+            -- left hand it is a DFS, if on the right it is a BFS. If
+            -- this weren't weighted we would want it to be
+            -- BFS. However we need the eitherl markers to be appended
+            -- from the right. We reconcile this problem by appending
+            -- on both sides.
+            go st' (hl <> h' <> hr,rs)
 
-instance (forall v . Monoid (h v),Monad m) => Alternative (HCntT h r m) where
-  ContT m <|> ContT m' = ContT $ \f -> do
-    HRes (h,r) <- m f
-    HRes (h',r') <- m' f
-    return $ HRes (h <> h',r <> r')
+instance (IsHeap h,Monad m) => Alternative (HCntT h r m) where
+  -- | Split simply introduces two high priority elements in the
+  -- heap. Because the heap is stable, the last one in is the last one
+  -- out, this is fundamentally a BFS search. This is not ideal for
+  -- problems that produce wide search trees. This behavior hinges on
+  -- dissolve pushing concatenating new trees on the right hand side
+  -- of the accumulated heap.
+  ContT m <|> ContT m' = ContT $ \f -> return
+    $ HRes (Tup2 (h (m f) <> h (m' f)) mempty,[])
+    where
+      h = singletonHeap mempty
   empty = ContT $ const $ return emptyHRes
 
+instance (IsHeap h,Monad m) => MonadPlus (HCntT h r m) where
+  mplus = (<|>)
+  mzero = empty
 
--- | If appropriate register an either and insert a corresponding
--- marker at the end of the heap.
-eitherl
-  :: (Monad m,IsHeap h) => HCntT h r m a -> HCntT h r m a -> HCntT h r m a
-eitherl (ContT c) e = ContT $ \nxt -> do
+class Monad m => MonadHalt  m where
+  type HaltKey m :: *
+  halt :: HaltKey m -> m ()
+
+instance (Monad m,IsHeap h) => MonadHalt (HCntT h r m) where
+  type HaltKey (HCntT h r m) = HeapKey h
+  halt v = ContT $ \nxt -> return
+    $ HRes (Tup2 (singletonHeap v $ nxt ()) mempty,[])
+
+
+
+-- | The <//> (pronounced eitherl) does runs the left hand side
+-- operator and if no values are produced in the ENTIRE computation
+-- based on that, only then does it try to evaluate the right hand
+-- side. HCntT does not guarante that the right hand side will be
+-- scheduled immediately after it realizes that there are no
+-- solutions, but it does guarantee that it will be scheduled before
+-- it moves on to a new cost cost value. In other words it is only
+-- guarantted that the priority of the fallback branch will tie the
+-- last failing branch of the left hand side in terms of priority, but
+-- if there are other branches that tie, there is no guarantee of how
+-- those will be scheduled.
+--
+-- There are two challenges that our particular feature set imposes to
+-- implementing this:
+--
+-- - We want <//> to operate on the entire operation, in other words
+--   it is not like Oleg Kiselyov's msplit.
+--
+-- - We are operating in the context of a weihtend search. This means
+--   that control is likely to escape a branch that passes through the
+--   left hand side operator before it is exhausted.
+--
+-- We solve these problems with the use of a special kind of branch we
+-- call a marker and a global state. Since branches are arbitrary
+-- processes we equip them with global lookup table (~CompState~) of
+-- fallback branches. Each marker corresponds to a location in the
+-- lookup table and each valid location references one of the markers
+-- to which it corresponds, specifically the final one. When it is
+-- scheduled the marker looks up the fallback branch in the table and
+-- checks if the correspondence is mutual. There are 3 scenaria that
+-- may play out at this point:
+--
+-- - The fallback location has been invalidated by a branch that
+--   yielded a result.
+--
+-- - The fallback location is valid but does not correspond to the
+--   scheduled marker. This means due to the left hand side branch
+--   spawning expensive sub-branches, another marker has been inserted
+--   to (possibly) trigger the fallback.
+--
+-- - The fallback location is valid and corresponds to the scheduled
+--   marker. This means that the fallback needs to be run and
+--   invalidated.
+--
+-- When an exprssion A <//> B appears we create a new fallback entry
+-- in the lookup table containing B and recursively "infect" all
+-- spawned branches under A to perform two actions immediately after
+-- they generate new branches and results:
+--
+-- - If there is at least one valid result invaludate the fallback in
+--   the lookup table and stop infecting child branches with the
+--   currently  described hook
+--
+-- - If the fallback is invalid it means there have already been valid
+--   results that rendered the fallback obsolete. Stop infecting
+--   sub-branches.
+--
+-- - If none of above happened check the priority of the last marker
+--   corresponding to the fallback (registerd in the lookup table
+--   entry). If it is strictly lower than the lowest priority
+--   subbranch do nothing because there is a well placed marker to
+--   handle it. Otherwise create a new marker of the same priority as
+--   the lowest priority subbranch and put it in the right-append
+--   heap. This way we know it will be scheduled AFTER the last branch
+--   relating to the fallback.
+--
+-- One may think of the scheduler sequence of characters (branches), a
+-- containing a <//> being an opening parenthesis and a marker with
+-- mutual correspondence to the fallback being a closing
+-- parenthesis. We insert new markers when new branches appear that
+-- should be between the "parentheses" and invalidate the old
+-- parenthesis by asserting mutual correspondence between fallback and
+-- marker.
+--
+-- If appropriate register an either and insert a corresponding marker
+-- at the end of the heap.
+(<//>) :: (Monad m,IsHeap h) => HCntT h r m a -> HCntT h r m a -> HCntT h r m a
+ContT c <//> e = ContT $ \nxt -> do
   c nxt >>= \case
     r@(HRes (_,_:_)) -> return r
-    (HRes (heap,[])) -> case maxKeyHeap heap of
+    (HRes (h,[])) -> case maxKeyHeap2 h of
       Nothing -> runContT e nxt
       Just bnd -> do
         (eithId,mrk) <- mkMarker bnd $ runContT e nxt
-        return $ beforeEitherl eithId heap bnd mrk
+        return $ beforeEitherl eithId h bnd mrk
 
 
 type EitherId = Int
@@ -196,12 +314,12 @@ mkMarker b clause = do
 beforeEitherl
   :: (Monad m,IsHeap h)
   => EitherId
-  -> h (Brnch h r m)
+  -> Tup2 (h (Brnch h r m))
   -> HeapKey h
   -> Marker h r m
   -> HRes h m r
-beforeEitherl eithId heap bnd mrk =
-  HRes (fmap (regEither eithId) $ heap <> singletonHeap bnd mrk,[])
+beforeEitherl eithId (Tup2 hl hr) bnd mrk =
+  HRes (fmap2 (regEither eithId) $ Tup2 hl (hr <> singletonHeap bnd mrk),[])
 
 -- | If appropriate register an either and insert a corresponding
 -- marker at the end of the heap. This function delegates to mkMarker'
@@ -209,11 +327,18 @@ beforeEitherl eithId heap bnd mrk =
 regEither :: (Monad m,IsHeap h) => EitherId -> Brnch h r m -> Brnch h r m
 regEither eid c = c >>= \case
   r@(HRes (_,_:_)) -> return r
-  r@(HRes (heap,[])) -> case maxKeyHeap heap of
+  r@(HRes (h,[])) -> case maxKeyHeap2 h of
     Nothing -> return r
     Just bnd -> mkMarker' bnd eid >>= \case
       Nothing  -> return r -- no marker required
-      Just mrk -> return $ beforeEitherl eid heap bnd mrk
+      Just mrk -> return $ beforeEitherl eid h bnd mrk
+
+maxKeyHeap2 :: IsHeap h => Tup2 (h v) -> Maybe (HeapKey h)
+maxKeyHeap2 (Tup2 hl hr) = case (maxKeyHeap hl,maxKeyHeap hr) of
+  (Nothing,Nothing) -> Nothing
+  (Just l,Nothing)  -> Just l
+  (Nothing,Just r)  -> Just r
+  (Just l,Just r)   -> Just $ max l r
 
 whenM :: Monad m => Bool -> m a -> m (Maybe a)
 whenM b m = if b then Just <$> m else return Nothing
@@ -243,13 +368,14 @@ mkMarker' bnd eithId = do
 
 
 #if 1
-
+-- | Try to open a file. If it doesn't exist just fail. If it exists
+-- read the contents
 openFile :: IsHeap v => String -> HCntT v r IO String
 openFile fname = do
   lift2 $ putStrLn $ "Opening: " ++ fname
   case fname of
-    "f1" -> return  "the file is f1"
-    "f2" -> return "(a (sexp))"
+    "f1" -> return  "import f2"
+    "f2" -> return "import f1"
     _    -> do
       lift2 $ putStrLn "No such file"
       empty
@@ -259,10 +385,74 @@ closeFile fname = lift2 $ putStrLn $ "Closing file: " ++ fname
 
 chooseFile :: IsHeap v => [String] -> HCntT v r IO String
 chooseFile []     = empty
-chooseFile (f:fs) = openFile f `eitherl` (closeFile f >> chooseFile fs)
+chooseFile (f:fs) = openFile f <//> (closeFile f >> chooseFile fs)
 
+-- | Try opeining a file, if the file isnt there move on the next one.
+-- Once we leave the next.
 test :: IO [String]
 test = runListT $ dissolve @IntMMap $ do
-  txt <- chooseFile ["f1","nonexistent","f2"]
-  return ("hello:" ++ x) <|> return ("bye:" ++ x)
+  txt <- chooseFile ["nonexistent","f2"]
+  return ("hello:" ++ txt) <|> return ("bye:" ++ txt)
+
+stream :: Monad m => HCntT IntMMap r m Int
+stream = go 0 where
+  go i = do
+    halt $ Sum i
+    return i <|> go (i+1)
+
+-- > test2
+-- [(5,5,0),(5,6,1),(6,4,0),(6,5,1),(6,6,2)]
+test2 :: IO [(Int,Int,Int)]
+test2 = takeListT 5 $ dissolve @IntMMap  $ do
+  (a,b,c) <- (,,) <$> stream <*> stream <*> stream
+  guard $ a + b - c == 10
+  return (a,b,c)
+
+-- The very well know 8 queens problem: How would one position 8
+-- queens on a chess board. This implementation is purposefully naive
+-- get many failures and backtracking as possible. It implements no
+-- halting so none of the tricks that HCntT supports are implemented
+-- it can run with any MonadPlus. We run it with a couple of
+-- reasonable backtracking monads to demonstrate that we are not
+-- missing much in terms of efficiency.
+--
+-- Normal haskell list is, as expected, by far the fastest
+-- implementation but it is usually too inconvenient to. A more
+-- reasonable option is a ListT with a state monad, which is
+-- essentially our predicament.
+type Sq = (Int,Int)
+squares :: MonadPlus m => m Sq
+squares = msum [pure (x,y) | x <- [0..7], y <- [0..7]]
+qTakes :: Sq -> Sq -> Bool
+qTakes (x,y) (x',y') = x == x' || y == y' || x - x' == y - y'
+queensN :: MonadPlus m => Int -> m [Sq]
+queensN 0 = return [] -- no queens
+queensN i = do
+  qs <- queensN (i-1)
+  q <- squares
+  guard $ not $ or [qTakes q q' | q' <- qs]
+  return $ q:qs
+
+-- > :set -XTypeApplications
+-- > :set +s
+-- > import Control.Monad.Identity
+--
+-- Runnint the queens with HCntT
+-- > runIdentity $ takeListT 1 $ dissolve @IntMMap $ queensN 8
+-- [[(7,4),(6,1),(5,3),(4,6),(3,7),(2,5),(1,2),(0,0)]]
+-- (1.18 secs, 752,059,704 bytes)
+--
+-- > runIdentity $ (`runStateT` ()) $ takeListT 1 $ queensN 8
+-- ([[(7,4),(6,1),(5,3),(4,6),(3,7),(2,5),(1,2),(0,0)]],())
+-- (1.14 secs, 675,295,952 bytes)
+--
+-- Runnint the queens with ListT Identity
+-- > runIdentity $ takeListT 1 $ queensN 8
+-- [[(7,4),(6,1),(5,3),(4,6),(3,7),(2,5),(1,2),(0,0)]]
+-- (0.94 secs, 575,001,120 bytes)
+--
+-- Runnint the queens with []
+-- > take 1 $ queensN 8
+-- [[(7,4),(6,1),(5,3),(4,6),(3,7),(2,5),(1,2),(0,0)]]
+-- (0.41 secs, 253,386,736 bytes)
 #endif
