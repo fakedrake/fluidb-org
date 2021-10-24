@@ -63,8 +63,6 @@ runQuery verbosity  query = do
   (transitions,_cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
       (intermPath, queryPath,pngPath,grPath) <- renderGraph query
-      ts <- globalizePlanT $ dropReader get getTransitions
-      traceM $ "Transitions: " ++ ashow ts
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath

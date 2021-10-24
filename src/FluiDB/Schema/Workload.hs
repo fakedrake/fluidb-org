@@ -248,6 +248,7 @@ runSingleQuery
   -> GlobalSolveT e s t n m ([Transition t n],CppCode)
 runSingleQuery query = sqlToSolution query popSol $ do
   ts <- dropReader getGCState getTransitions
+  traceM $ "Transitions: " ++ ashow ts
   (ts,) <$> getQuerySolutionCpp
   where
     popSol :: Monad m => [x] -> m x
