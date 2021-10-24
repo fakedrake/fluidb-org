@@ -20,6 +20,7 @@ import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Functors
+import           Data.Utils.MTL
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
 import           FluiDB.Schema.SSB.Values
@@ -62,7 +63,7 @@ runQuery verbosity  query = do
   (transitions,_cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
       (intermPath, queryPath,pngPath,grPath) <- renderGraph query
-      ts <- globalizePlanT getTransitions
+      ts <- globalizePlanT $ dropReader get getTransitions
       traceM $ "Transitions: " ++ ashow ts
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
