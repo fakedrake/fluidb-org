@@ -61,6 +61,8 @@ runQuery verbosity  query = do
   (transitions,_cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
       (intermPath, queryPath,pngPath,grPath) <- renderGraph query
+      mats <- globalizePlanT $ nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
+      traceM $ ashow "Mats: " ++ ashow mats
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath
