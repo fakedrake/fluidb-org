@@ -9,12 +9,13 @@ import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build
 import           Data.Codegen.Run
 import           Data.DotLatex
-import qualified Data.IntMap               as IM
+import qualified Data.IntMap                as IM
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Nodes
+import           Data.QueryPlan.Transitions
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
@@ -61,8 +62,8 @@ runQuery verbosity  query = do
   (transitions,_cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
       (intermPath, queryPath,pngPath,grPath) <- renderGraph query
-      mats <- globalizePlanT $ nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
-      traceM $ ashow "Mats: " ++ ashow mats
+      ts <- globalizePlanT getTransitions
+      traceM $ "Transitions: " ++ ashow ts
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath
