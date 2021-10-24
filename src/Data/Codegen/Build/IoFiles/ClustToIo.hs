@@ -55,8 +55,7 @@ import           Prelude                               hiding (exp)
 
 -- | Pattern match on the query and cluster that contains the
 -- filepaths to generate code. (output, input)
-toFiles :: IOFilesD e s
-        -> Tup2 [Maybe (Maybe (QueryShape e s),FileSet)] -- out,in
+toFiles :: IOFilesD e s -> Tup2 [Maybe (Maybe (QueryShape e s),FileSet)] -- out,in
 toFiles IOFilesD{..} = maybeSwap $ splitIO $ toList iofCluster where
   maybeSwap (o,fmap3 DataFile -> i) = case iofDir of
     ForwardTrigger -> Tup2 o i

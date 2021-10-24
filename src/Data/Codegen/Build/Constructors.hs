@@ -521,10 +521,11 @@ instance ConstructorArg FilePath where
   toConstrType _ = CC.constString
   toConstrArg = CC.LiteralStringExpression
 
-constrArgs' :: (ConstructorArg out, ConstructorArg inp) =>
-              [out]
-            -> [inp]
-            -> [CC.Expression CC.CodeSymbol]
+constrArgs'
+  :: (ConstructorArg out,ConstructorArg inp)
+  => [out]
+  -> [inp]
+  -> [CC.Expression CC.CodeSymbol]
 constrArgs' outs ins = (toConstrArg <$> outs) ++ (toConstrArg <$> ins)
 
 constrArgs :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]

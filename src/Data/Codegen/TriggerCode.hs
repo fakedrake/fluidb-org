@@ -60,4 +60,5 @@ revTriggerCode clust = do
   case constrBlock constr ioFilesD of
     Just x -> return x
     Nothing -> do
-      throwAStr $ "Missing input files: " ++ ashow (clusterOutputs clust)
+      throwAStr
+        $ "Missing input files: " ++ ashow (clusterOutputs clust,ioFiles)

@@ -17,6 +17,7 @@ import           Data.Codegen.Build.Types
 import           Data.Functor.Identity
 import           Data.NodeContainers
 import           Data.Query.SQL.FileSet
+import           Data.Utils.AShow
 import           Data.Utils.Hashable
 import           Data.Void
 import           GHC.Generics
@@ -27,6 +28,8 @@ data NodeRole interm i o
   | Output o
   | Intermediate interm
   deriving (Eq,Show,Generic)
+instance (AShow interm,AShow i,AShow o)
+  => AShow (NodeRole interm i o)
 instance Hashables3 a b c => Hashable (NodeRole a b c)
 instance Bifunctor (NodeRole x) where
   bimap f g = \case
