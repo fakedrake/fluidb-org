@@ -17,6 +17,7 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
 {-# OPTIONS_GHC -Wno-unused-foralls -Wno-name-shadowing -Wno-unused-top-binds #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Data.Codegen.Build.IoFiles.ClustToIo
   (getClusterT
@@ -48,23 +49,23 @@ import           Data.Utils.Compose
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.MTL
+import           Data.Utils.Tup
 import           Data.Void
 import           Prelude                               hiding (exp)
 
 -- | Pattern match on the query and cluster that contains the
 -- filepaths to generate code. (output, input)
 toFiles :: IOFilesD e s
-        -> ([Maybe (Maybe (QueryShape e s),FileSet)]
-           ,[Maybe (Maybe (QueryShape e s),FilePath)])
+        -> Tup2 [Maybe (Maybe (QueryShape e s),FileSet)] -- out,in
 toFiles IOFilesD{..} = maybeSwap $ splitIO $ toList iofCluster where
-  maybeSwap = case iofDir of
-    ForwardTrigger -> swap
-    ReverseTrigger -> swap
-  splitIO :: [NodeRole a b c] -> ([b], [c])
+  maybeSwap (o,fmap3 DataFile -> i) = case iofDir of
+    ForwardTrigger -> Tup2 o i
+    ReverseTrigger -> Tup2 i o
+  splitIO :: [NodeRole a b c] -> ([c], [b])
   splitIO = partitionEithers . toEithers where
     toEithers []                  = []
-    toEithers (Input x:xs)        = Left x:toEithers xs
-    toEithers (Output x:xs)       = Right x:toEithers xs
+    toEithers (Input x:xs)        = Right x:toEithers xs
+    toEithers (Output x:xs)       = Left x:toEithers xs
     toEithers (Intermediate _:xs) = toEithers xs
 
 type CanPutIdLocal c op e =

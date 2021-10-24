@@ -97,12 +97,15 @@ type OutRef n = NodeRef n
 --   Note that the way to extend inputs is \i -> findOnIn i
 -- for each metaop
 
-data MetaOpFollow t n = MetaOpFollow {
-  refOnOut :: forall m . Monad m =>
-             NodeRef n
-           -> PlanT t n m [(InSet n, OutSet n, NodeRef t)],
-  triggerTRef :: forall m . Monad m =>
-                NodeRef t -> PlanT t n m (Transition t n)
+data MetaOpFollow t n =
+  MetaOpFollow
+  { refOnOut
+      :: forall m .
+      Monad m
+      => NodeRef n
+      -> PlanT t n m [(InSet n,OutSet n,NodeRef t)]
+   ,triggerTRef
+      :: forall m . Monad m => NodeRef t -> PlanT t n m (Transition t n)
   }
 
 -- |`followUnsafe followIns` will result in all input nodes (in
@@ -136,10 +139,12 @@ cleanOutputs mop = do
 -- | Expand the inputs but not the outputs until all inputs are
 -- non-intermediates. Unsafe because we assume the ref provide is not
 -- an intermediate.
-followUnsafe :: forall m t n . Monad m =>
-               MetaOpFollow t n
-             -> NodeRef n
-             -> ListT (PlanT t n m) (MetaOp t n)
+followUnsafe
+  :: forall m t n .
+  Monad m
+  => MetaOpFollow t n
+  -> NodeRef n
+  -> ListT (PlanT t n m) (MetaOp t n)
 followUnsafe mopf@MetaOpFollow{..} ref = do
   (insAll, outRefs, tref) <- mkListT $ refOnOut ref
   (metaOpIntermL, fromNodeList -> inRefs) <-
@@ -157,8 +162,8 @@ followUnsafe mopf@MetaOpFollow{..} ref = do
       return mop
 {-# INLINE followUnsafe #-}
 
-mkMetaOpPlan :: Monad m =>
-               MetaOpFollow t n -> NodeRef t -> PlanT t n m [Transition t n]
+mkMetaOpPlan
+  :: Monad m => MetaOpFollow t n -> NodeRef t -> PlanT t n m [Transition t n]
 mkMetaOpPlan MetaOpFollow{..} tref = fmap return $ triggerTRef tref
   >>= traverseTransition Out (filterM isMaterialized)
 

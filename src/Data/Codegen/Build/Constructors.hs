@@ -39,11 +39,6 @@ module Data.Codegen.Build.Constructors
   , limitCall
   , groupCall
   , constrBlock
-  , constrArgsRevUnary
-  , constrArgsRevRight
-  , constrArgsRevLeft
-  , constrArgsRevLeftStr
-  , constrArgsRevRightStr
   , unJoinCall
   ) where
 
@@ -52,7 +47,6 @@ import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
-import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Propagators
 import           Data.Cluster.Types
@@ -453,7 +447,8 @@ uopQueryCall dir outSh op = case op of
   QDrop i -> dropCall dir outSh i
 
 opConstructor :: Constr -> IOFilesD e s -> Maybe (CC.Expression CC.CodeSymbol)
-opConstructor (name,tmpl) ioFiles = CC.FunctionAp name tmpl <$> constrArgs ioFiles
+opConstructor (name,tmpl) ioFiles =
+  CC.FunctionAp name tmpl <$> constrArgs ioFiles
 
 opStatements :: CC.Expression CC.CodeSymbol
              -> [CC.Statement CC.CodeSymbol]
@@ -535,37 +530,7 @@ constrArgs' outs ins = (toConstrArg <$> outs) ++ (toConstrArg <$> ins)
 constrArgs :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
 constrArgs ioFiles = constrArgs' outs <$> sequenceA inps'
   where
-    (outs,inps') = toFiles ioFiles
-
-constrArgsRevSide
-  :: (ConstructorArg out,ConstructorArg inp)
-  => (([Maybe (Maybe (QueryShape e s),FileSet)]
-      ,[Maybe (Maybe (QueryShape e s),FilePath)])
-      -> Maybe ([out],[inp]))
-  -> IOFilesD e s
-  -> Maybe [CC.Expression CC.CodeSymbol]
-constrArgsRevSide f = fmap (uncurry constrArgs') . f . toFiles
-
-maybeFirst :: [Maybe a] -> Maybe [a]
-maybeFirst =  \case
-  [x,_] -> return <$> x
-  _     -> Nothing
-maybeSecond :: [Maybe a] -> Maybe [a]
-maybeSecond =  \case
-  [x,_] -> return <$> x
-  _     -> Nothing
-constrArgsRevLeft :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
-constrArgsRevLeft = constrArgsRevSide $ traverse maybeFirst
-constrArgsRevRight :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
-constrArgsRevRight = constrArgsRevSide $ traverse maybeSecond
-constrArgsRevRightStr :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
-constrArgsRevRightStr = constrArgsRevSide $ bitraverse sequenceA maybeFirst
-constrArgsRevLeftStr :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
-constrArgsRevLeftStr = constrArgsRevSide $ bitraverse sequenceA maybeSecond
-
-constrArgsRevUnary :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
-constrArgsRevUnary =
-  fmap (uncurry constrArgs') . traverse sequenceA . swap . toFiles
+    Tup2 outs inps' = toFiles ioFiles
 
 constrBlock :: Constr -> IOFilesD e s -> Maybe (CC.Statement CC.CodeSymbol)
 constrBlock c iof = CC.Block . opStatements <$> opConstructor c iof

@@ -1,7 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Data.Codegen.TriggerCode
@@ -10,15 +10,16 @@ module Data.Codegen.TriggerCode
   , delCode
   ) where
 
-import Data.Utils.MTL
-import Data.QueryPlan.Types
-import Data.Codegen.Build.Constructors
-import Data.Codegen.Build.Monads.Class
-import Data.Codegen.Build.IoFiles
-import qualified Data.CppAst as CC
-import Data.Cluster.Types
-import Control.Monad.Reader
-import Data.Codegen.Build.IoFiles.Types
+import           Control.Monad.Reader
+import           Data.Cluster.Types
+import           Data.Codegen.Build.Constructors
+import           Data.Codegen.Build.IoFiles
+import           Data.Codegen.Build.IoFiles.Types
+import           Data.Codegen.Build.Monads.Class
+import qualified Data.CppAst                      as CC
+import           Data.QueryPlan.Types
+import           Data.Utils.AShow
+import           Data.Utils.MTL
 
 
 delCode :: (Applicative m,ConstructorArg fileLike)
@@ -40,8 +41,8 @@ triggerCode clust = do
   let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ForwardTrigger }
   case constrBlock constr ioFilesD of
     Just x -> return x
-    Nothing -> throwCodeErr
-      $ MissingInputFile (clusterInputs clust,clusterOutputs clust)
+    Nothing -> throwAStr
+      $ "Missing input files: " ++ ashow (clusterInputs clust)
 
 -- |Create code that triggers the query in reverse. The IOFiles
 -- provided should already be reversed.
@@ -58,77 +59,5 @@ revTriggerCode clust = do
   let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ReverseTrigger }
   case constrBlock constr ioFilesD of
     Just x -> return x
-    Nothing -> throwCodeErr
-      $ MissingInputFile (clusterInputs clust,clusterOutputs clust)
-
-#if 0
--- |Create code that triggers the query.
-triggerCode
-  :: forall e s t n m .
-  (MonadReader (ClusterConfig e s t n) m
-  ,MonadCodeCheckpoint e s t n m
-  ,MonadSchemaScope Identity e s m)
-  => AnyCluster e s t n
-  -> IOFiles
-  -> m (CC.Statement CC.CodeSymbol)
-triggerCode clust ioFiles = do
-  constr <- clusterCall clust
-  case constrBlock constr ioFiles of
-    Just x  -> return x
     Nothing -> do
-      Identity query <- getQueries
-      throwCodeErr $ MissingInputFile
-        (clusterInputs clust, clusterOutputs clust) query
-
-
--- |Create code that triggers the query in reverse. The IOFiles
--- provided should already be reversed.
--- New implementation
-revTriggerCode
-  :: forall e s t n m .
-  (MonadCodeCheckpoint e s t n m,MonadSchemaScope Identity e s m)
-  => AnyCluster e s t n
-  -> IOFiles
-  -> m (CC.Statement CC.CodeSymbol)
-revTriggerCode op ioFiles0 = fmap CC.Block $ do
-  sch <- runIdentity . getQueries
-  case op of
-    Left o -> case o of
-      QProd -> do
-        stl <- grpStatements q $ constrArgsRevLeft ioFiles
-        str <- grpStatements q' $ constrArgsRevRight ioFiles
-        return $ stl ++ str
-        where
-          grpStatements :: QueryShape e s
-                        -> Maybe [CC.Expression CC.CodeSymbol]
-                        -> m [CC.Statement CC.CodeSymbol]
-          grpStatements q = \case
-            Nothing -> return []
-            Just args -> do
-              (name, tmpl) <- evalQueryEnv (Identity q) unProdCall
-              return $ opStatements $ CC.FunctionAp name tmpl args
-    QJoin _ -> do
-      stl <- unJoinStatements q $ constrArgsRevLeftStr ioFiles
-      str <- unJoinStatements q' $ constrArgsRevRightStr ioFiles
-      return $ stl ++ str
-        where
-          unJoinStatements q = \case
-            Nothing -> return []
-            Just args -> do
-              (name, tmpl) <- evalQueryEnv (Identity q) unJoinCall
-              return $ opStatements $ CC.FunctionAp name tmpl args
-    _ -> throwCodeErr $ UnsupportedReverse query
-  Q1 o q -> evalQueryEnv (Identity q) $ case o of
-    QProj pr -> case constrArgsRevUnary ioFiles of
-      Nothing -> return []
-      Just args -> do
-        (name, tmpl) <- unProjCall pr
-        return $ opStatements $ CC.FunctionAp name tmpl args
-    QSel _ -> do
-      (name, tmpl) <- unionCall
-      return $ case constrArgsRevUnary ioFiles of
-        Nothing   -> []
-        Just args -> opStatements $ CC.FunctionAp name tmpl args
-    _ -> throwCodeErr $ UnsupportedReverse query
-  Q0 s -> throwAStr $ SymbolReverse s
-#endif
+      throwAStr $ "Missing input files: " ++ ashow (clusterOutputs clust)
