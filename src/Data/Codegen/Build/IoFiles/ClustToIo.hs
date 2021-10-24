@@ -39,6 +39,7 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.QuerySchema
+import           Data.Query.SQL.FileSet
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Tuple
@@ -52,8 +53,13 @@ import           Prelude                               hiding (exp)
 
 -- | Pattern match on the query and cluster that contains the
 -- filepaths to generate code. (output, input)
-toFiles :: IOFilesG interm inp out -> ([Maybe out], [Maybe inp])
-toFiles = swap . splitIO . toList where
+toFiles :: IOFilesD e s
+        -> ([Maybe (Maybe (QueryShape e s),FileSet)]
+           ,[Maybe (Maybe (QueryShape e s),FilePath)])
+toFiles IOFilesD{..} = maybeSwap $ splitIO $ toList iofCluster where
+  maybeSwap = case iofDir of
+    ForwardTrigger -> swap
+    ReverseTrigger -> swap
   splitIO :: [NodeRole a b c] -> ([b], [c])
   splitIO = partitionEithers . toEithers where
     toEithers []                  = []

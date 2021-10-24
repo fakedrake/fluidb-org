@@ -45,7 +45,7 @@ plansAndFiles
   MakeFilesConstr e s t n m
   => IOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
   -> m (IOFiles e s)
-plansAndFiles = \case
+plansAndFiles clst = case clst of
   JoinClustW jclust -> JoinClustW <$> makeFilesJUnsafe jclust
   clust             -> makeFilesNaive clust
 
@@ -105,10 +105,11 @@ getPlanAndSet f =
 -- | Join complements have DataSet rather than single files on the
 -- complements. This does not check the existance of input/output
 -- nodefiles.
-makeFilesJUnsafe :: forall e s t n m .
-             MakeFilesConstr e s t n m =>
-             JIOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
-           -> m (JIOFiles e s)
+makeFilesJUnsafe
+  :: forall e s t n m .
+  MakeFilesConstr e s t n m
+  => JIOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
+  -> m (JIOFiles e s)
 makeFilesJUnsafe jclust = do
   Tup2 jclAntijoin jcrAntijoin <- traverse2
     (populateNodeRole DataFile DataAndSet)

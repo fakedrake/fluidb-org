@@ -2,12 +2,12 @@
 {-# LANGUAGE LambdaCase    #-}
 
 module Data.Codegen.Build.IoFiles.Types
-  ( NodeRole(..)
-  , MaybeBuild
-  , IOFilesGF
-  , IOFilesG
-  , IOFiles
-  ) where
+  (NodeRole(..)
+  ,MaybeBuild
+  ,IOFilesGF
+  ,IOFilesG
+  ,IOFiles
+  ,IOFilesD(..)) where
 
 import           Data.Bifoldable
 import           Data.Bifunctor
@@ -46,12 +46,15 @@ instance Bifoldable (NodeRole x) where
     Output x -> g x x0
     _        -> x0
 
+-- | A cluster of io files paired with the direction of tirgger.
+data IOFilesD e s = IOFilesD { iofDir :: Direction,iofCluster :: IOFiles e s }
 -- | The input/output files of an operation.
 type IOFiles e s =
   IOFilesG
     (NodeRef ())
     (Maybe (QueryShape e s),FilePath)
     (Maybe (QueryShape e s),FileSet)
+
 -- | If a file has Nothing in the filename, it means we should not be
 -- making it.
 type IOFilesG interm inp out = IOFilesGF MaybeBuild interm inp out

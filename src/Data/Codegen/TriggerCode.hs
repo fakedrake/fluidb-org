@@ -18,10 +18,11 @@ import Data.Codegen.Build.IoFiles
 import qualified Data.CppAst as CC
 import Data.Cluster.Types
 import Control.Monad.Reader
+import Data.Codegen.Build.IoFiles.Types
 
 
-delCode :: (Applicative m, ConstructorArg fileLike) =>
-          fileLike
+delCode :: (Applicative m,ConstructorArg fileLike)
+        => fileLike
         -> m (CC.Statement CC.CodeSymbol)
 delCode fp = pure
   $ CC.ExpressionSt
@@ -36,7 +37,8 @@ triggerCode
 triggerCode clust = do
   constr <- dropReader (asks fst) $ clusterCall ForwardTrigger clust
   ioFiles <- clustToIoFiles ForwardTrigger clust
-  case constrBlock constr ioFiles of
+  let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ForwardTrigger }
+  case constrBlock constr ioFilesD of
     Just x -> return x
     Nothing -> throwCodeErr
       $ MissingInputFile (clusterInputs clust,clusterOutputs clust)
@@ -53,7 +55,8 @@ revTriggerCode
 revTriggerCode clust = do
   constr <- dropReader (asks fst) $ clusterCall ReverseTrigger clust
   ioFiles <- clustToIoFiles ReverseTrigger clust
-  case constrBlock constr ioFiles of
+  let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ReverseTrigger }
+  case constrBlock constr ioFilesD of
     Just x -> return x
     Nothing -> throwCodeErr
       $ MissingInputFile (clusterInputs clust,clusterOutputs clust)
@@ -87,7 +90,7 @@ revTriggerCode
   => AnyCluster e s t n
   -> IOFiles
   -> m (CC.Statement CC.CodeSymbol)
-revTriggerCode op ioFiles = fmap CC.Block $ do
+revTriggerCode op ioFiles0 = fmap CC.Block $ do
   sch <- runIdentity . getQueries
   case op of
     Left o -> case o of
