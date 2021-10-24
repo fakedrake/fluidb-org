@@ -133,7 +133,6 @@ renderGraph query = do
         grPath = graphBase <.> "graph"
         isPath = graphBase <.> "interm"
         imgPath = graphBase <.> "svg"
-    mats <- globalizePlanT $ nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
     writeFile grPath $ ashow gr
     writeFile qPath $ ashow query
     writeFile isPath $ ashow interms
@@ -141,7 +140,6 @@ renderGraph query = do
     withFile dotPath ReadMode $ \hndl -> do
       runProc
         (mkProc "dot" ["-o" ++ imgPath,"-Tsvg"]) { std_in = UseHandle hndl }
-    traceM $ ashow "Mats: " ++ mats
     return (isPath,qPath,imgPath,grPath)
 
 #ifdef EXAMPLE
