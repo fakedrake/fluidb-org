@@ -40,10 +40,7 @@ triggerCode clust = do
   constr <- dropReader (asks fst) $ clusterCall ForwardTrigger clust
   ioFiles <- clustToIoFiles ForwardTrigger clust
   let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ForwardTrigger }
-  case constrBlock constr ioFilesD of
-    Just x -> return x
-    Nothing -> throwAStr
-      $ "Missing input files: " ++ ashow (clusterInputs clust)
+  constrBlock constr ioFilesD
 
 -- |Create code that triggers the query in reverse. The IOFiles
 -- provided should already be reversed.
@@ -58,10 +55,4 @@ revTriggerCode clust = do
   constr <- dropReader (asks fst) $ clusterCall ReverseTrigger clust
   ioFiles <- clustToIoFiles ReverseTrigger clust
   let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ReverseTrigger }
-  case constrBlock constr ioFilesD of
-    Just x -> return x
-    Nothing -> do
-      throwAStr
-        $ "Missing input files: "
-        ++ ashow
-          (clusterOutputs clust)
+  constrBlock constr ioFilesD
