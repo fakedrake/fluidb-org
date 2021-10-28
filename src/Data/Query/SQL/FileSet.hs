@@ -17,8 +17,10 @@ import           Data.Utils.Hashable
 import           GHC.Generics
 import           Text.Printf
 
-data FileSet = DataFile FilePath | DataAndSet FilePath FilePath
-  deriving (Eq, Show, Generic, Ord)
+data FileSet
+  = DataFile FilePath
+  | DataAndSet FilePath FilePath
+  deriving (Eq,Show,Generic,Ord)
 
 baseName :: FilePath -> FilePath
 baseName = reverse . dropPrefixExt . takeWhile (/= '/') . reverse

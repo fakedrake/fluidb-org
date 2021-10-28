@@ -10,6 +10,7 @@ module Data.Codegen.TriggerCode
   , delCode
   ) where
 
+import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Data.Cluster.Types
 import           Data.Codegen.Build.Constructors
@@ -61,4 +62,10 @@ revTriggerCode clust = do
     Just x -> return x
     Nothing -> do
       throwAStr
-        $ "Missing input files: " ++ ashow (clusterOutputs clust,ioFiles)
+        $ "Missing input files: "
+        ++ ashow
+          (clusterOutputs clust
+          ,fromInput . runIdentity <$> clusterOutputs ioFiles)
+  where
+    fromInput (Input i) = Just i
+    fromInput _         = Nothing

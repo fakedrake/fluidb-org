@@ -87,7 +87,7 @@ runProc prc = do
 -- | Runs C++ code represented as a string. It uses a tempdir to do
 -- all the work.
 runCpp :: String -> IO ()
-runCpp str = tmpDir "runCpp" $ \dirp -> do
+runCpp str = tmpDir' KeepDir "runCpp" $ \dirp -> do
   let cppFile = dirp </> "exec.cpp"
   let exeFile = dirp </> "exec.exe"
   writeFile cppFile str

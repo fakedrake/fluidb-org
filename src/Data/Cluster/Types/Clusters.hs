@@ -689,10 +689,11 @@ traverseESpecificClust _ f =
     pc = Proxy :: Proxy c
     swap (a,b) = (b,a)
 
-destructCluster :: AnyCluster e s t n -> ([NodeRef n],[NodeRef n],[NodeRef n])
+destructCluster
+  :: AnyCluster' e NodeRef t n -> ([NodeRef n],[NodeRef n],[NodeRef n])
 destructCluster c = (clusterInputs c,clusterInterms c,clusterOutputs c)
 
-ashowCluster :: AnyCluster' (ShapeSym e s) NodeRef t n -> SExp
+ashowCluster :: AnyCluster' e NodeRef t n -> SExp
 ashowCluster c = sexp name [ashow' $ destructCluster c]
   where
     name = case c of

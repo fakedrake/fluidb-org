@@ -12,51 +12,50 @@ module Data.Codegen.Examples.TblParser
   ( parseLines
   ) where
 
-import Data.Query.QuerySchema.Types
-import qualified Data.ByteString.Lazy              as BS
 import qualified Data.ByteString.Builder      as BSB
-import qualified Data.ByteString.Lazy.Char8        as BSC
+import qualified Data.ByteString.Lazy         as BS
+import qualified Data.ByteString.Lazy.Char8   as BSC
+import           Data.Query.QuerySchema.Types
 import           GHC.Int
 import           GHC.Word
 
 import           Data.Char
+import           Data.CppAst                  as CC
 import           Data.Maybe
-import           Data.Void
-import           Data.CppAst            as CC
 import           Data.Query.SQL.Types
+import           Data.Void
 import           Text.Megaparsec
 import           Text.Megaparsec.Byte
 
 cppTypeSize :: CppType -> Maybe Int
 cppTypeSize = \case
   CppArray t (LiteralSize l) -> (* l) <$> cppTypeSize t
-  CppArray _ (SizeOf _) -> Nothing
-  CppVoid -> Nothing
-  CppChar -> Just 1
-  CppNat -> Just 4
-  CppInt -> Just 4
-  CppDouble -> Just 8
-  CppBool -> Just 1
+  CppArray _ (SizeOf _)      -> Nothing
+  CppVoid                    -> Nothing
+  CppChar                    -> Just 1
+  CppNat                     -> Just 4
+  CppInt                     -> Just 4
+  CppDouble                  -> Just 8
+  CppBool                    -> Just 1
 
 cppTypeAlignment :: CppType -> Maybe Int
 cppTypeAlignment = \case
   CppArray t _ -> cppTypeSize t
-  x -> cppTypeSize x
+  x            -> cppTypeSize x
 
 schemaPostPaddings :: [CC.CppType] -> Maybe [Int]
 schemaPostPaddings [] = Just []
 schemaPostPaddings [_] = Just [0]
 schemaPostPaddings schema = do
-    elemSizes <- sequenceA [cppTypeSize t | t <- schema]
-    spaceAligns' <- sequenceA [cppTypeAlignment t | t <- schema]
-    let (_:spaceAligns) = spaceAligns' ++ [maximum spaceAligns']
-    let offsets = 0:zipWith3 getOffset' spaceAligns offsets elemSizes
-    return $ zipWith (-) (zipWith (-) (tail offsets) offsets) elemSizes
-    where
-      getOffset' nextAlig off size = (size + off)
-                                    + ((nextAlig -
-                                        ((size + off) `mod` nextAlig))
-                                       `mod` nextAlig)
+  elemSizes <- sequenceA [cppTypeSize t | t <- schema]
+  spaceAligns' <- sequenceA [cppTypeAlignment t | t <- schema]
+  let (_:spaceAligns) = spaceAligns' ++ [maximum spaceAligns']
+  let offsets = 0 : zipWith3 getOffset' spaceAligns offsets elemSizes
+  return $ zipWith (-) (zipWith (-) (tail offsets) offsets) elemSizes
+  where
+    getOffset' nextAlig off size =
+      (size + off)
+      + ((nextAlig - ((size + off) `mod` nextAlig)) `mod` nextAlig)
 
 c2w :: Char -> Word8
 c2w = fromIntegral . ord

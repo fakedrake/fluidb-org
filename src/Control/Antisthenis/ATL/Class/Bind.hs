@@ -6,10 +6,9 @@
 {-# LANGUAGE TypeFamilies           #-}
 
 module Control.Antisthenis.ATL.Class.Bind
-  ( ArrowBind(..)
-  , ArrowFMap(..)
-  , arrBindM
-  ) where
+  (ArrowBind(..)
+  ,ArrowFMap(..)
+  ,arrBindM) where
 
 import           Control.Arrow
 import           Control.Category as Cat

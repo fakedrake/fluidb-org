@@ -28,7 +28,6 @@ module Data.QueryPlan.Solve
   ,isMaterialized
   ,matNeighbors
   ,getDependencies
-  ,garbageCollectFor
   ,killPrimaries
   ,isDeletable) where
 
@@ -177,7 +176,7 @@ setNodeStateSafe' getFwdOp node goalState =
         NoMat -> bot "Tried to set concrete"
       Concrete _ NoMat -> case goalState of
         NoMat -> top
-        Mat   -> bot "Tried to set concrete"
+        Mat   -> bot "Tried to set concrete" -- XXX: Check that it is not in the frontier
       Initial NoMat -> case goalState of
         NoMat -> node `setNodeStateUnsafe` Concrete NoMat NoMat
         Mat       -- just materialize

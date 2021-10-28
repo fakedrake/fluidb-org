@@ -103,7 +103,7 @@ data NodeState =
   Concrete IsMat IsMat
   -- Initial states are subject to change
   | Initial IsMat
-  deriving (Show, Read, Eq, Generic)
+   deriving (Show, Read, Eq, Generic)
 
 instance AShow NodeState
 instance ARead NodeState

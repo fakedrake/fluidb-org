@@ -446,12 +446,14 @@ uopQueryCall dir outSh op = case op of
   QLimit i -> limitCall dir outSh i
   QDrop i -> dropCall dir outSh i
 
+-- | From the constructor and the file constelation make a c++
+-- expression that creates the operation.
 opConstructor :: Constr -> IOFilesD e s -> Maybe (CC.Expression CC.CodeSymbol)
 opConstructor (name,tmpl) ioFiles =
   CC.FunctionAp name tmpl <$> constrArgs ioFiles
 
-opStatements :: CC.Expression CC.CodeSymbol
-             -> [CC.Statement CC.CodeSymbol]
+-- | Construct an operator, run it and print the output.
+opStatements :: CC.Expression CC.CodeSymbol -> [CC.Statement CC.CodeSymbol]
 opStatements ctor = [
   CC.DeclarationSt (CC.Declaration "operation" "auto") $ Just ctor
   , member "operation" "run" []
@@ -528,10 +530,25 @@ constrArgs'
   -> [CC.Expression CC.CodeSymbol]
 constrArgs' outs ins = (toConstrArg <$> outs) ++ (toConstrArg <$> ins)
 
+-- | Create the constructor args for an operator out of the file
+-- cluster.
+--
+-- Reverse triggering join clusters does not require all outputs to be materialized
 constrArgs :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
-constrArgs ioFiles = constrArgs' outs <$> sequenceA inps'
+constrArgs ioFiles = case (iofCluster ioFiles,iofDir ioFiles,outs,inps') of
+  (JoinClustW _,ReverseTrigger,[Just _,Just _],[Just _,Just _,Just _]) ->
+    Just $ constrArgs' outs inps'
+  (JoinClustW _,ReverseTrigger,[Just _,Nothing],[Just _,Just _,Nothing]) ->
+    Just $ constrArgs' outs inps'
+  (JoinClustW _,ReverseTrigger,[Nothing,Just _],[Nothing,Just _,Just _]) ->
+    Just $ constrArgs' outs inps'
+  (JoinClustW _,ReverseTrigger,_,_) -> Nothing
+  _ -> constrArgs' outs <$> sequenceA inps'
   where
     Tup2 outs inps' = toFiles ioFiles
 
+
+-- | First come up witha an expression for building the constructor
+-- and the build the actual expressions.
 constrBlock :: Constr -> IOFilesD e s -> Maybe (CC.Statement CC.CodeSymbol)
 constrBlock c iof = CC.Block . opStatements <$> opConstructor c iof
