@@ -448,7 +448,11 @@ uopQueryCall dir outSh op = case op of
 
 -- | From the constructor and the file constelation make a c++
 -- expression that creates the operation.
-opConstructor :: Constr -> IOFilesD e s -> Maybe (CC.Expression CC.CodeSymbol)
+opConstructor
+  :: MonadCodeError e s t n m
+  => Constr
+  -> IOFilesD e s
+  -> m (CC.Expression CC.CodeSymbol)
 opConstructor (name,tmpl) ioFiles =
   CC.FunctionAp name tmpl <$> constrArgs ioFiles
 
@@ -534,21 +538,28 @@ constrArgs' outs ins = (toConstrArg <$> outs) ++ (toConstrArg <$> ins)
 -- cluster.
 --
 -- Reverse triggering join clusters does not require all outputs to be materialized
-constrArgs :: IOFilesD e s -> Maybe [CC.Expression CC.CodeSymbol]
+constrArgs :: MonadCodeError e s t n m => IOFilesD e s -> m [CC.Expression CC.CodeSymbol]
 constrArgs ioFiles = case (iofCluster ioFiles,iofDir ioFiles,outs,inps') of
   (JoinClustW _,ReverseTrigger,[Just _,Just _],[Just _,Just _,Just _]) ->
-    Just $ constrArgs' outs inps'
+    return $ constrArgs' outs inps'
   (JoinClustW _,ReverseTrigger,[Just _,Nothing],[Just _,Just _,Nothing]) ->
-    Just $ constrArgs' outs inps'
+    return $ constrArgs' outs inps'
   (JoinClustW _,ReverseTrigger,[Nothing,Just _],[Nothing,Just _,Just _]) ->
-    Just $ constrArgs' outs inps'
-  (JoinClustW _,ReverseTrigger,_,_) -> Nothing
-  _ -> constrArgs' outs <$> sequenceA inps'
+    return $ constrArgs' outs inps'
+  (JoinClustW _,ReverseTrigger,_,_) ->
+    throwAStr $ "Inps outs: " ++ ashow (inps',outs)
+  _ -> case  constrArgs' outs <$> sequenceA inps' of
+    Nothing -> throwAStr "oops"
+    Just x  -> return x
   where
     Tup2 outs inps' = toFiles ioFiles
 
 
 -- | First come up witha an expression for building the constructor
 -- and the build the actual expressions.
-constrBlock :: Constr -> IOFilesD e s -> Maybe (CC.Statement CC.CodeSymbol)
+constrBlock
+  :: MonadCodeError e s t n m
+  => Constr
+  -> IOFilesD e s
+  -> m (CC.Statement CC.CodeSymbol)
 constrBlock c iof = CC.Block . opStatements <$> opConstructor c iof
