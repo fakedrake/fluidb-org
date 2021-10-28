@@ -64,8 +64,4 @@ revTriggerCode clust = do
       throwAStr
         $ "Missing input files: "
         ++ ashow
-          (clusterOutputs clust
-          ,fromInput . runIdentity <$> clusterOutputs ioFiles)
-  where
-    fromInput (Input i) = Just i
-    fromInput _         = Nothing
+          (clusterOutputs clust)
