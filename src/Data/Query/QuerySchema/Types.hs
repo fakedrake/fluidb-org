@@ -87,7 +87,8 @@ instance Semigroup (QueryShape size e') where
       }
 
 instance Hashables2 e s => Hashable (QueryShape e s)
-instance (AShow e, AShow s) => AShow (QueryShape e s)
+instance (AShow e, AShow s) => AShow (QueryShape e s) where
+  ashow' = const $ Sym "QueryShape"
 instance (Hashables2 e s, ARead e, ARead s) => ARead (QueryShape e s)
 queryShapeBytes :: QueryShape e s -> Bytes
 queryShapeBytes QueryShape{..} = querySizeBytes qpSize
