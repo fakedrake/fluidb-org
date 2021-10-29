@@ -20,16 +20,13 @@ inline  void print_records(const std::string& filepath, const size_t n)
     }
 }
 
-
-template<typename R, typename I=WrapRecord<size_t>>
-inline  void print_records(
+template <typename R, typename I = WrapRecord<size_t>>
+inline void print_records(
     const std::pair<const std::string, const std::string>& filepath,
-    const size_t n)
-{
-    print_records<R>(filepath.first, n);
-    print_records<I>(filepath.second, n);
+    const size_t n) {
+  print_records<R>(filepath.first, n);
+  print_records<I>(filepath.second, n);
 }
-
 
 template<typename R>
 inline constexpr void print_records(

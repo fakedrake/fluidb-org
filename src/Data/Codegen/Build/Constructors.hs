@@ -54,7 +54,6 @@ import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build.Classes
 import           Data.Codegen.Build.EquiJoinUtils
 import           Data.Codegen.Build.Expression
-import           Data.Codegen.Build.IoFiles
 import           Data.Codegen.Build.IoFiles.Types
 import           Data.Codegen.Build.Monads
 import           Data.Codegen.Schema
@@ -481,7 +480,8 @@ instance ConstructorArg x => ConstructorArg (Identity x) where
   toConstrType = toConstrType . fmap runIdentity
   toConstrArg = toConstrArg . runIdentity
 instance ConstructorArg a => ConstructorArg (Maybe (QueryShape e s), a) where
-  toConstrType = toConstrType . fmap snd
+  toConstrType (Just (_sh,a)) = toConstrType $ Just a
+  toConstrType Nothing        = toConstrType (Nothing :: Maybe a)
   toConstrArg = toConstrArg . snd
 instance ConstructorArg a => ConstructorArg (Maybe a) where
   toConstrType :: forall a . ConstructorArg a => Maybe (Maybe a) -> CC.Type CC.CodeSymbol
@@ -495,17 +495,17 @@ instance ConstructorArg a => ConstructorArg (Maybe a) where
         (fromString constrName)
 
   toConstrArg :: forall a . ConstructorArg a => Maybe a -> CC.Expression CC.CodeSymbol
-  toConstrArg = \case
-    Just x  -> constr "Just" (Just x) [toConstrArg x]
-    Nothing -> constr "Nothing" (Nothing :: Maybe a) []
-    where
-      constr :: String
-             -> Maybe a
-             -> [CC.Expression CC.CodeSymbol]
-             -> CC.Expression CC.CodeSymbol
-      constr constrName constrArg = CC.FunctionAp
-        (fromString constrName)
-        [CC.TypeArg $ toConstrType constrArg]
+  toConstrArg x = toConstrArgMaybeExp x $ toConstrArg <$> x
+
+toConstrArgMaybeExp
+  :: ConstructorArg a
+  => Maybe a
+  -> Maybe (CC.Expression CC.CodeSymbol)
+  -> CC.Expression CC.CodeSymbol
+toConstrArgMaybeExp forType = \case
+  Just x  -> CC.FunctionAp "Just" [CC.TypeArg $ toConstrType forType] [x]
+  -- constr "Just" (Just x) [x]
+  Nothing -> CC.FunctionAp "Nothing" [CC.TypeArg $ toConstrType forType] []
 
 instance ConstructorArg FileSet where
   toConstrType = \case
@@ -527,32 +527,81 @@ instance ConstructorArg FilePath where
   toConstrType _ = CC.constString
   toConstrArg = CC.LiteralStringExpression
 
-constrArgs'
-  :: (ConstructorArg out,ConstructorArg inp)
-  => [out]
-  -> [inp]
-  -> [CC.Expression CC.CodeSymbol]
-constrArgs' outs ins = (toConstrArg <$> outs) ++ (toConstrArg <$> ins)
-
 -- | Create the constructor args for an operator out of the file
 -- cluster.
 --
 -- Reverse triggering join clusters does not require all outputs to be materialized
-constrArgs :: MonadCodeError e s t n m => IOFilesD e s -> m [CC.Expression CC.CodeSymbol]
-constrArgs ioFiles = case (iofCluster ioFiles,iofDir ioFiles,outs,inps') of
-  (JoinClustW _,ReverseTrigger,[Just _,Just _],[Just _,Just _,Just _]) ->
-    return $ constrArgs' outs inps'
-  (JoinClustW _,ReverseTrigger,[Just _,Nothing],[Just _,Just _,Nothing]) ->
-    return $ constrArgs' outs inps'
-  (JoinClustW _,ReverseTrigger,[Nothing,Just _],[Nothing,Just _,Just _]) ->
-    return $ constrArgs' outs inps'
-  (JoinClustW _,ReverseTrigger,_,_) ->
-    throwAStr $ "Inps outs: " ++ ashow (inps',outs)
-  _ -> case  constrArgs' outs <$> sequenceA inps' of
-    Nothing -> throwAStr "oops"
-    Just x  -> return x
+constrArgs
+  :: forall e s t n m .
+  MonadCodeError e s t n m
+  => IOFilesD e s
+  -> m [CC.Expression CC.CodeSymbol]
+constrArgs ioFiles = do
+  t <- toIoTup ioFiles
+  case (iofCluster ioFiles,iofDir ioFiles,t) of
+    (JoinClustW _,ReverseTrigger,([Just l,Just r],[Just lo,Just o,Just ro])) ->
+      return [l,r,lo,o,ro] -- mkUnJoin2
+    (JoinClustW _,ReverseTrigger,([Just i,Nothing],[Just lo,Just o,Nothing])) ->
+      return [i,o,lo]
+    (JoinClustW _,ReverseTrigger,([Nothing,Just i],[Nothing,Just o,Just ro])) ->
+      return [i,o,ro]
+    (JoinClustW _,ReverseTrigger,oi) -> throwAStr $ "Inps outs: " ++ ashow oi
+    (_,_,(outs,inps')) ->
+      case ((toConstrArgMaybeExp (Nothing :: Maybe FileSet) <$> outs) ++)
+      <$> sequenceA inps' of
+        Nothing -> throwAStr "oops"
+        Just x  -> return x
+
+-- Tup2 outs inps' = toFiles ioFiles
+toIoTup
+  :: MonadCodeError e s t n m
+  => IOFilesD e s
+  -> m
+    ([Maybe (CC.Expression CC.CodeSymbol)]
+    ,[Maybe (CC.Expression CC.CodeSymbol)])
+toIoTup ioFiles = case iofCluster ioFiles of
+  JoinClustW JoinClust {..} -> mktup
+    [joinClusterLeftAntijoin
+    ,binClusterOut joinBinCluster
+    ,joinClusterRightAntijoin]
+    [binClusterLeftIn joinBinCluster,binClusterRightIn joinBinCluster]
+  BinClustW
+    BinClust {..} -> mktup [binClusterOut] [binClusterLeftIn,binClusterRightIn]
+  UnClustW UnClust {..} ->
+    mktup [unClusterPrimaryOut,unClusterSecondaryOut] [unClusterIn]
+  NClustW _c -> error "ncluster arguments requested"
+mktup
+  :: forall e s t n m ops .
+  MonadCodeError e s t n m
+  => [WMetaD
+       ops
+       Identity
+       (NodeRole
+          (NodeRef ())
+          (MaybeBuild (Maybe (QueryShape e s),FilePath))
+          (MaybeBuild (Maybe (QueryShape e s),FileSet)))]
+  -> [WMetaD
+       ops
+       Identity
+       (NodeRole
+          (NodeRef ())
+          (MaybeBuild (Maybe (QueryShape e s),FilePath))
+          (MaybeBuild (Maybe (QueryShape e s),FileSet)))]
+  -> m
+    ([Maybe (CC.Expression CC.CodeSymbol)]
+    ,[Maybe (CC.Expression CC.CodeSymbol)])
+mktup outs ins = (,) <$> traverse mkOut outs <*> traverse mkIn ins
   where
-    Tup2 outs inps' = toFiles ioFiles
+    mkIn,mkOut
+      :: (ConstructorArg o,ConstructorArg i)
+      => WMetaD a Identity (NodeRole interm (MaybeBuild i) (MaybeBuild o))
+      -> m (MaybeBuild (CC.Expression CC.CodeSymbol))
+    mkOut (WMetaD (_,Identity (Output a))) = return $ toConstrArg <$> a
+    mkOut _ = throwAStr "Expected output node but got something else"
+    mkIn (WMetaD (_,Identity (Input a))) = return $ toConstrArg <$> a
+    mkIn _ = throwAStr "Expected input node but got something else"
+
+
 
 
 -- | First come up witha an expression for building the constructor
