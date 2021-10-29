@@ -559,7 +559,7 @@ toIoTup
   -> m
     ([Maybe (CC.Expression CC.CodeSymbol)]
     ,[Maybe (CC.Expression CC.CodeSymbol)])
-toIoTup ioFiles = case iofCluster ioFiles of
+toIoTup ioFiles = catch $ case iofCluster ioFiles of
   JoinClustW JoinClust {..} -> mktup
     [joinClusterLeftAntijoin
     ,binClusterOut joinBinCluster
@@ -569,7 +569,14 @@ toIoTup ioFiles = case iofCluster ioFiles of
     BinClust {..} -> mktup [binClusterOut] [binClusterLeftIn,binClusterRightIn]
   UnClustW UnClust {..} ->
     mktup [unClusterPrimaryOut,unClusterSecondaryOut] [unClusterIn]
-  NClustW _c -> error "ncluster arguments requested"
+  NClustW _c -> error "ncluster arguments requested: "
+  where
+    catch m =
+      catchError m
+      $ const
+      $ throwAStr
+      $ "Error in ioToTup:" ++ ashow (ashowIOFiles $ iofCluster ioFiles)
+
 mktup
   :: forall e s t n m ops .
   MonadCodeError e s t n m
@@ -598,9 +605,9 @@ mktup outs ins = (,) <$> traverse mkOut outs <*> traverse mkIn ins
       -> m (MaybeBuild (CC.Expression CC.CodeSymbol))
     mkOut (WMetaD (_,Identity (Output a))) = return $ toConstrArg <$> a
     mkOut (WMetaD (_,Identity b)) =
-      throwAStr
-      $ "Expected output node but got something else: "
-      ++ ashow (mapIntermRole (const ()) $ bimap (const ()) (const ()) b)
+      throwAStr $ "Expected output node but got something else: " ++ ashow x
+      where
+        x = mapIntermRole (const ()) $ bimap (const ()) (const ()) b
     mkIn (WMetaD (_,Identity (Input a))) = return $ toConstrArg <$> a
     mkIn _ = throwAStr "Expected input node but got something else"
 

@@ -7,7 +7,7 @@ module Data.Codegen.Build.IoFiles.Types
   ,IOFilesGF
   ,IOFilesG
   ,IOFiles
-  ,IOFilesD(..),mapIntermRole) where
+  ,IOFilesD(..),mapIntermRole,ashowIOFiles) where
 
 import           Data.Bifoldable
 import           Data.Bifunctor
@@ -18,6 +18,7 @@ import           Data.Functor.Identity
 import           Data.NodeContainers
 import           Data.Query.SQL.FileSet
 import           Data.Utils.AShow
+import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Void
 import           GHC.Generics
@@ -70,3 +71,8 @@ type IOFilesGF f interm inp out =
   AnyCluster' Void Identity ()
   (NodeRole interm (f inp) (f out))
 type MaybeBuild = Maybe
+ashowIOFiles :: AShow2 e s => IOFiles e s -> SExp
+ashowIOFiles c =
+  ashow'
+    (ashow' <$> clusterInputs c
+    ,ashow' . bimap (fmap snd) (fmap snd) . runIdentity <$> clusterOutputs c)
