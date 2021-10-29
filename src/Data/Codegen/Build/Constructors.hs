@@ -597,7 +597,10 @@ mktup outs ins = (,) <$> traverse mkOut outs <*> traverse mkIn ins
       => WMetaD a Identity (NodeRole interm (MaybeBuild i) (MaybeBuild o))
       -> m (MaybeBuild (CC.Expression CC.CodeSymbol))
     mkOut (WMetaD (_,Identity (Output a))) = return $ toConstrArg <$> a
-    mkOut _ = throwAStr "Expected output node but got something else"
+    mkOut (WMetaD (_,Identity b)) =
+      throwAStr
+      $ "Expected output node but got something else: "
+      ++ ashow (mapIntermRole (const ()) $ bimap (const ()) (const ()) b)
     mkIn (WMetaD (_,Identity (Input a))) = return $ toConstrArg <$> a
     mkIn _ = throwAStr "Expected input node but got something else"
 

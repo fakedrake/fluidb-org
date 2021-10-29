@@ -7,7 +7,7 @@ module Data.Codegen.Build.IoFiles.Types
   ,IOFilesGF
   ,IOFilesG
   ,IOFiles
-  ,IOFilesD(..)) where
+  ,IOFilesD(..),mapIntermRole) where
 
 import           Data.Bifoldable
 import           Data.Bifunctor
@@ -36,6 +36,11 @@ instance Bifunctor (NodeRole x) where
     Input x        -> Input $ f x
     Output x       -> Output $ g x
     Intermediate a -> Intermediate a
+mapIntermRole :: (int -> int') -> NodeRole int i o -> NodeRole int' i o
+mapIntermRole f = \case
+  Input a        -> Input a
+  Output a       -> Output a
+  Intermediate a -> Intermediate $ f a
 
 instance Bitraversable (NodeRole x) where
   bitraverse f g =  \case
