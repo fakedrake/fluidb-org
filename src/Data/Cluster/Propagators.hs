@@ -398,10 +398,11 @@ uopOutputs
   -> Tup2 (G e s (QueryShape e s))
 uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
   QSel p -> tw (>>= disambEq p)
+  -- For proj and group associations dont mean much
   QGroup p es -> Tup2 (outGrpShape p es) (G0 Nothing)
   QProj prj -> Tup2
     (projToShape $ const prj)
-    (projToShape $ \p -> complementProj p prj)
+    (projToShape $ \inpShape -> [(e,E0 e) | e <- complementProj inpShape prj])
   QSort _ -> Tup2 (G1 $ pOut id id assocPrim) (G0 Nothing)
   QLimit _ -> tw id
   QDrop _ -> tw id

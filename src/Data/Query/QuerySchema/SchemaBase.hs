@@ -123,73 +123,37 @@ shapeSymTypeSym' shapes ps = case shapeSymQnfName ps of
   _ -> Right . columnPropsCppType
     <$> listToMaybe (catMaybes $ lookupQP ps <$> shapes)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 hardLookupQP :: Hashables2 e s =>
                ShapeSym e s -> QueryShape e s -> Maybe ColumnProps
 hardLookupQP ps' = lookup ps' . schemaQP
 lookupQP :: Hashables2 e s =>
            ShapeSym e s -> QueryShape e s -> Maybe ColumnProps
 lookupQP = hardLookupQP
-complementProj :: forall e s . Hashables2 e s =>
-                 QueryShape e s
-               -> [(ShapeSym e s, Expr (ShapeSym e s))]
-               -> [(ShapeSym e s, Expr (ShapeSym e s))]
-complementProj shape prj = invPrj `union`
-  [(e, E0 e) | e <- qsyms, e `notElem` map fst invPrj]
+
+-- | A symbol-to-symbol projection of all the non-invertible elements
+-- of the projection. The complement projection includes a unique
+-- subtuple shared with the projection.
+complementProj
+  :: forall e s .
+  Hashables2 e s
+  => QueryShape e s
+  -> [(ShapeSym e s,Expr (ShapeSym e s))]
+  -> [ShapeSym e s]
+complementProj shape prj = nonInvertibleSyms
   where
+    -- self mapping of symbols that are not invertible.
+    nonInvertibleSyms = filter (`notElem` map fst invPrj) qsyms
+    -- All the symbols of the input shape
     qsyms :: [ShapeSym e s]
     qsyms = shapeAllSyms shape
-    invPrj :: [(ShapeSym e s, Expr (ShapeSym e s))]
+    -- A mapping from symbols of the output shape to the symbols of
+    -- the input shape
+    invPrj :: [(ShapeSym e s,Expr (ShapeSym e s))]
     invPrj = mapMaybe (invExpr . snd) prj
 
-invExpr :: Expr (ShapeSym e s)
-        -> Maybe (ShapeSym e s, Expr (ShapeSym e s))
+
+-- | To return Just the input expression contains exactly one symbol.
+invExpr :: Expr (ShapeSym e s) -> Maybe (ShapeSym e s,Expr (ShapeSym e s))
 invExpr expr = runIdentity $ exprInverse (return . shapeSymIsSym) expr <&> \case
   EInv (x,toX) -> Just (x,toX x)
   _            -> Nothing

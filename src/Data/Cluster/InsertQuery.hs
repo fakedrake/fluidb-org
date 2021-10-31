@@ -227,6 +227,10 @@ insertQueryForest1
           (insPlanRef iprQ
           ,putIdentityQNFQ (fst <$> insPlanQuery iprQ) <$> nqnfI)
     (refO,assocO,opO) <- expandOp cachedMkRo nqnfI o
+    -- Get the complement. QSort and QGroup do not have complements.
+    --
+    -- XXX: the complement of the projection does not include the
+    -- unique keys.
     let coOpM :: Maybe (UQOp e) = coUQOp o $ HM.keys $ fst nqnfI
     (refCoO,assocCoO,opCoOM) <- case coOpM of
       Just

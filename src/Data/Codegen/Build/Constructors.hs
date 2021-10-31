@@ -575,7 +575,7 @@ toIoTup ioFiles = catch $ case iofCluster ioFiles of
       catchError m
       $ const
       $ throwAStr
-      $ "Error in ioToTup:" ++ ashow (ashowIOFiles $ iofCluster ioFiles)
+      $ "Error in toIoTup:" ++ ashow (ashowIOFiles $ iofCluster ioFiles)
 
 mktup
   :: forall e s t n m ops .

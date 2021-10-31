@@ -41,8 +41,10 @@ disambEq p uniqs0 = sequence uniqsPrim
 
 exposeUnique
   :: (MonadPlus m,Eq e) => (e -> m e) -> Query e (s,[e]) -> m (Query e s,[[e]])
-exposeUnique mkUniq = recQ (exposeUnique0 mkUniq)
+exposeUnique mkUniq =
+  recQ (exposeUnique0 mkUniq)
   . fmap (return . bimap Q0 return)
+
 exposeUnique0
   :: (Eq e,MonadPlus m)
   => (e -> m e)
@@ -51,6 +53,7 @@ exposeUnique0
 exposeUnique0 uniqSym = \case
   Left (bop,l,r) -> exposeUniqueB1 bop <$> l <*> r
   Right (uop,q)  -> exposeUniqueU1 uniqSym uop =<< q
+
 exposeUniqueB1
   :: Eq e
   => BQOp e
@@ -70,11 +73,13 @@ exposeUniqueB1 o (ql,esl) (qr,esr) = (Q2 o ql qr,) $ case o of
   QRightAntijoin _ -> esr
 
 -- Count exposed symbols.
-exposeUniqueU1 :: forall e s m . (MonadPlus m,Eq e) =>
-                 (e -> m e)
-               -> UQOp e
-               -> (Query e s,[[e]])
-               -> m (Query e s,[[e]])
+exposeUniqueU1
+  :: forall e s m .
+  (MonadPlus m,Eq e)
+  => (e -> m e)
+  -> UQOp e
+  -> (Query e s,[[e]])
+  -> m (Query e s,[[e]])
 exposeUniqueU1 uniqName o (q,allPrimss) = case o of
   QProj p ->
     putPrj (\p' -> Q1 (QProj (p ++ p')) q) E0 (mapMaybe extractProjRemap p) allPrimss

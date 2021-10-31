@@ -116,6 +116,8 @@ projSchema = anySchema ashow' return
 
 keysToProj :: ExprLike e a => [e] -> [(e, a)]
 keysToProj keys = [(k, asExpr $ E0 k) | k <- keys]
+
+-- |
 withPrimKeys
   :: forall m e s t n a .
   (HasCallStack

@@ -8,6 +8,7 @@
 #include "file.hh"
 #include "print_record.hh"
 
+\
 template<typename PrimFn,
          typename SecFn,
          typename PrimaryOutType,  // Maybe(std::string)

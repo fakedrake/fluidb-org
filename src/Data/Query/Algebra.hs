@@ -710,8 +710,12 @@ instance Applicative InvClass where
 -- E^(-1). The function provided must trigger for *exactly* one symbol
 -- on the expression (eg it won't work for @x+x@). Also only
 -- arithmentic operations are permitted.
-exprInverse :: forall e m . Applicative m =>
-              (e -> m Bool) -> Expr e -> m (InvClass (e, e -> Expr e))
+exprInverse
+  :: forall e m .
+  Applicative m
+  => (e -> m Bool)
+  -> Expr e
+  -> m (InvClass (e,e -> Expr e))
 exprInverse isSym = fmap3 (. E0) . go
   where
     go :: Expr e -> m (InvClass (e, Expr e -> Expr e))
