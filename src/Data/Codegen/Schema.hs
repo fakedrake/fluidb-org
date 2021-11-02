@@ -80,12 +80,13 @@ mkShapeFromTbl QueryCppConf {..} tableSize s = do
     $ fmap2 (\e -> (mkShapeSym (PrimaryCol e s 0) e,e `elem` ucols)) sch
 
 -- |Get the schema from something that is like a projection.
-anySchema :: forall c e s t n m a .
-            (CppTypeExprConstraints c e s t n m) =>
-            ((AShowV e, AShowV s) => a -> SExp)
-          -> (a -> Expr (Either CC.CppType (ShapeSym e s)))
-          -> [(ShapeSym e s, Expr a)]
-          -> m (CppSchema' (ShapeSym e s))
+anySchema
+  :: forall c e s t n m a .
+  (CppTypeExprConstraints c e s t n m)
+  => ((AShowV e,AShowV s) => a -> SExp)
+  -> (a -> Expr (Either CC.CppType (ShapeSym e s)))
+  -> [(ShapeSym e s,Expr a)]
+  -> m (CppSchema' (ShapeSym e s))
 anySchema ashowA toExpr proj = do
   QueryCppConf{..} <- getQueryCppConf
   shapes <- toList <$> getQueries

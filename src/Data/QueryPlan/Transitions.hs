@@ -29,7 +29,6 @@ import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.MTL
 import           Data.Utils.Ranges
-import           Text.Printf
 
 -- | Make a transition for triggering t. This does not check
 -- materialization of input/output.

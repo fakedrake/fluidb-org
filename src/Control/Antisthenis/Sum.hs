@@ -59,8 +59,7 @@ sprMap f = \case
 instance (AShow (MechVal p),AShow (ZErr (SumTag p)))
   => AShow (SumPartialRes p)
 
-instance (AShow (MechVal p)
-         ,AShow (ExtCap p)
+instance (AShow2 (MechVal p) (ExtCap p)
          ,Ord (MechVal p) -- for ZBnd
          ,Subtr (MechVal p)
          ,Semigroup (MechVal p)
@@ -69,9 +68,8 @@ instance (AShow (MechVal p)
          ,HasLens (ExtCap p) (Min (MechVal p))
          ,Zero (ExtCap p)
          ,SumExtParams p
-         ,AShow (ExtError p)
-         ,AShow (ExtEpoch p)
-         ,AShow (ExtCoEpoch p)) => ZipperParams (SumTag p) where
+         ,AShow2 (ExtError p) (ExtEpoch p)
+         ,AShowV (ExtCoEpoch p)) => ZipperParams (SumTag p) where
   type ZEpoch (SumTag p) = ExtEpoch p
   type ZCoEpoch (SumTag p) = ExtCoEpoch p
   type ZCap (SumTag p) = ExtCap p
@@ -137,8 +135,7 @@ sumEvolutionControl
   ,Zero (ZCap (SumTag p))
   ,Zero (ZBnd (SumTag p))
   ,Ord (MechVal p)
-  ,AShow (MechVal p)
-  ,AShow (ExtError p)
+  ,AShow2 (ExtError p) (MechVal p)
   ,SumExtParams p, AShow (ExtCap p))
   => GConf (SumTag p)
   -> Zipper (SumTag p) (ArrProc (SumTag p) m)

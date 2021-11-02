@@ -77,7 +77,7 @@ data JoinSet e s =
    ,jsUid   :: Hashables2 e s => Int
   }
 
-instance (AShow e,AShowV s) => AShow (JoinSet e s) where
+instance (AShow2 e s) => AShow (JoinSet e s) where
   ashow' JoinSet {..} =
     recSexp "JoinSet" [("jsProps",ashow' jsProps),("jsQs",ashow' jsQs)]
 
@@ -94,8 +94,8 @@ queryToJoinSet emb = go
     go :: Query e s -> JoinSet e s
     go = recur [] [] []
     recur ps prims todo = \case
-      S p q -> recur (ps ++ toList (propQnfAnd p)) prims todo q
-      J p q1 q2 -> recur (ps ++ toList (propQnfAnd p)) prims (q2 : todo) q1
+      S p q -> recur (ps ++ toList (propCnfAnd p)) prims todo q
+      J p q1 q2 -> recur (ps ++ toList (propCnfAnd p)) prims (q2 : todo) q1
       Q2 QProd q1 q2 -> recur ps prims (q2 : todo) q1
       Q2 o l r -> fin
         ps

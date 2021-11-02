@@ -390,7 +390,7 @@ shapeSymEqs
   :: Hashables2 e s
   => Prop (Rel (Expr (ShapeSym e s)))
   -> [(ShapeSym e s,ShapeSym e s)]
-shapeSymEqs p = mapMaybe asEq $ toList $ propQnfAnd p
+shapeSymEqs p = mapMaybe asEq $ toList $ propCnfAnd p
   where
     asEq :: Prop (Rel (Expr (ShapeSym e s)))
          -> Maybe (ShapeSym e s,ShapeSym e s)

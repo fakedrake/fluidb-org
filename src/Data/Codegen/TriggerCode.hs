@@ -10,7 +10,6 @@ module Data.Codegen.TriggerCode
   , delCode
   ) where
 
-import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Data.Cluster.Types
 import           Data.Codegen.Build.Constructors
@@ -19,7 +18,6 @@ import           Data.Codegen.Build.IoFiles.Types
 import           Data.Codegen.Build.Monads.Class
 import qualified Data.CppAst                      as CC
 import           Data.QueryPlan.Types
-import           Data.Utils.AShow
 import           Data.Utils.MTL
 
 

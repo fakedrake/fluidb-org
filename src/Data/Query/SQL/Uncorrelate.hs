@@ -196,7 +196,7 @@ uncorrelInterm = \case
       (HasCallStack
       ,Traversable op
       ,(forall x .
-        AShow x
+        AShowV x
         => AShow (op x)))
       => op (NestedQueryE s e)
       -> UnnestMonad e s (op e)

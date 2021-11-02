@@ -127,10 +127,6 @@ auto mkProjection(const PrimaryOutType& prim,
             (prim, sec, in);
 }
 
-template <typename Combine>
-auto mkZip(const std::string& prim_in, const std::string& sec_in,
-           const std::string& out) {
-  return Zip<Combine>(prim_in, sec_in, out);
-}
+
 
 #endif /* PROJECTION_H */

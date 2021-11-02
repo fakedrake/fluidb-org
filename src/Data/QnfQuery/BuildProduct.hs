@@ -281,7 +281,7 @@ qnfNameIncrementProd1 f = \case
   Q1 o q -> case o of
     QSel  _    -> error "Shouldn't have reached"
     QGroup _ _ -> error "Shouldn't have reached"
-    QProj _    -> error "Shouldn't have reached"
+    QProj _ _  -> error "Shouldn't have reached"
     QSort _    -> recur q
     QLimit _   -> recur q
     QDrop _    -> recur q

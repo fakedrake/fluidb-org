@@ -37,7 +37,7 @@ inQ isLit e q = if isLit e then Nothing else Just $ recur q
     recur :: Query e [(a,e)] -> Bool
     recur = \case
       Q0 s -> any2 (== e) s
-      Q1 (QProj p) _    -> elem e $ fst <$> p
+      Q1 (QProj _ p) _    -> elem e $ fst <$> p
       Q1 (QGroup p _) _ -> elem e $ fst <$> p
       Q1 _ l -> recur l
       Q2 o l r  -> case o of

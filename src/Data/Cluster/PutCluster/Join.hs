@@ -1,16 +1,16 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE RecordWildCards      #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TupleSections        #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns         #-}
 
 module Data.Cluster.PutCluster.Join
   (putJoinClusterC
-  , mkJoinClustConfig
-  , JoinClustConfig(..)
-  , QRef(..)
-  ) where
+  ,mkJoinClustConfig
+  ,JoinClustConfig(..)
+  ,QRef(..)) where
 
 import           Control.Monad.Except
 import           Control.Monad.State
@@ -33,9 +33,11 @@ import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
 import           Data.Utils.Tup
+import           GHC.Generics
 
-data QRef n e s = QRef {getQRef :: NodeRef n, getNQNF :: NQNFQuery e s}
-  deriving (Eq, Show)
+data QRef n e s = QRef { getQRef :: NodeRef n,getNQNF :: NQNFQuery e s }
+  deriving (Generic,Eq)
+instance AShow2 e s => AShow (QRef n e s)
 type ShapeSymAssoc e s = [(ShapeSym e s,ShapeSym e s)]
 data JoinClustConfig n e s = JoinClustConfig {
   assocL :: ShapeSymAssoc e s,
@@ -47,9 +49,8 @@ data JoinClustConfig n e s = JoinClustConfig {
   qrefRO :: QRef n e s,
   qrefLI :: QRef n e s,
   qrefRI :: QRef n e s
-  } deriving (Eq,Show)
-
-
+  } deriving (Generic,Eq)
+instance AShow2 e s => AShow (JoinClustConfig n e s)
 
 -- | The JoinClustConfigs returned take all combinations of the
 -- NQNFQueries to populate the jProp,assocs and nqnf aspect of qrefs

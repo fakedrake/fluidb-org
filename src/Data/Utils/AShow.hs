@@ -37,6 +37,7 @@ module Data.Utils.AShow
   ,areadCase'
   ,AShow2
   ,AShowV2
+  ,ARead2
   ,(<:)) where
 
 import           Data.Utils.AShow.ARead
@@ -44,7 +45,7 @@ import           Data.Utils.AShow.AShowStr
 import           Data.Utils.AShow.Common
 import           Data.Utils.AShow.Print
 
-type AShow2 e s = (AShow e, AShow s)
+type AShow2 e s = (AShow e, AShow s,AShowV e, AShowV s)
 type AShowV2 e s = (AShowV e, AShowV s)
 
 (<:) :: AShow a => String -> a -> String

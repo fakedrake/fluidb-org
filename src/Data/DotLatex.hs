@@ -438,13 +438,16 @@ instance Latexifiable e => Latexifiable (Aggr e) where
 instance Latexifiable e => Latexifiable (UQOp e) where
   toLatex = \case
     QSel p -> "\\sigma_{" <> toLatex p <> "}"
-    QProj p -> "\\pi_{" <> prj p <> "}" where
-      prj = comma
-            . fmap (\(x,y) -> spaces [toLatex x, "\\mapsto", toLatex y])
-    QGroup prj grp -> "a_{" <> comma (toLatex <$> grp') <> "} "
-                     <> toLatex (QProj prj') where
-      prj' = first toLatex <$> fmap3 toLatex prj
-      grp' = fmap2 toLatex grp
+    QProj _ p -> "\\pi_{" <> prj p <> "}"
+      where
+        prj = comma . fmap (\(x,y) -> spaces [toLatex x,"\\mapsto",toLatex y])
+    QGroup prj grp -> "a_{"
+      <> comma (toLatex <$> grp')
+      <> "} "
+      <> toLatex (QProj QProjNoInv prj')
+      where
+        prj' = first toLatex <$> fmap3 toLatex prj
+        grp' = fmap2 toLatex grp
     QSort srt -> "s_{" <> comma (toLatex <$> srt) <> "}"
     QLimit l -> "l_{" <> toLatex l <> "}"
     QDrop d -> "d_{" <> toLatex d <> "}"

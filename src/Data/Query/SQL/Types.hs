@@ -161,7 +161,7 @@ instance Bifunctor NestedQueryE where
     . bimap (bimap (bimap f g) f) g
     . runNestedQueryE
 
-instance (AShow s, AShow e) => AShow (NestedQueryE s e)
+instance AShow2 e s => AShow (NestedQueryE s e)
 
 instance Foldable (NestedQueryE s) where
   foldMap f (NestedQueryE (Left q))  = foldMap (foldMap f) $ FlipQuery q

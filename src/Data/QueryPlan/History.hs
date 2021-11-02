@@ -5,7 +5,6 @@ module Data.QueryPlan.History (pastCosts,HCost) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Transformers.Mealy
-import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
 import           Control.Monad.Identity
 import           Control.Monad.Reader

@@ -22,83 +22,79 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 module Data.Query.Algebra
-  ( WithOperator(..)
-  , Algebra(..)
-  , Query(..)
-  , Expr(..)
-  , Prop(..)
-  , FlipQuery(..)
-  , BQOp(..)
-  , UQOp(..)
-  , BEOp(..)
-  , UEOp(..)
-  , BPOp(..)
-  , UPOp(..)
-  , BROp(..)
-  , Rel(..)
-  , pattern And
-  , pattern Not
-  , pattern Or
-  , pattern S
-  , pattern J
-  , AggrFunction(..)
-  , ElemFunction(..)
-  , Aggr(..)
-  , propQnfAnd
-  , querySchemaNaive
-  , foldSchema
-  , unAggr
-  , unAggrSafe
-  , aggrToProj
-  , toAggr
-  , coUQOp
-  , traverseExpr
-  , traverseRel
-  , traverseProp
-  , traverseExprAggr
-  , traverseExpr'
-  , traverseRel'
-  , traverseProp'
-  , traverseExprAggr'
-  , zipA
-  , zipA'
-  , flatten
-  , flatten'
-  , qmapM
-  , qmapM'
-  , qmapA1
-  , qmapBFS
-  , qmap
-  , qmap'
-  , qmap1
-  , getOp
-  , one
-  , two
-  , three
-  , algebraFoldMap
-  , algebraTraverse
-  , algebraFMap
-  , algebraJoin
-  , algebraBind
-  , algebraReturn
-  , algebraAp
-  , prodAppend
-  , algebraPFMap
-  , algebraPFMap1
-  , algebraPFMapSym
-  , replaceProj
-  , moduloOne
-  , moduloOne2
-  , maxDepth
-  , exprLens
-  , AlgebraSymbol
-  , BinaryOperator(..)
-  , exprInverse
-  , InvClass(..)
-  , ExprLike(..)
-  , atom2
-  , atom3
-  ) where
+  (WithOperator(..)
+  ,Algebra(..)
+  ,Query(..)
+  ,Expr(..)
+  ,Prop(..)
+  ,FlipQuery(..)
+  ,BQOp(..)
+  ,UQOp(..)
+  ,BEOp(..)
+  ,UEOp(..)
+  ,BPOp(..)
+  ,UPOp(..)
+  ,BROp(..)
+  ,Rel(..)
+  ,QProjI(..)
+  ,toQProj
+  ,fromQProj
+  ,QProjNonEmpty(..)
+  ,pattern And
+  ,pattern Not
+  ,pattern Or
+  ,pattern S
+  ,pattern J
+  ,AggrFunction(..)
+  ,ElemFunction(..)
+  ,Aggr(..)
+  ,traverseProp
+  ,propCnfAnd
+  ,querySchemaNaive
+  ,foldSchema
+  ,unAggr
+  ,unAggrSafe
+  ,aggrToProj
+  ,toAggr
+  ,coUQOp
+  ,zipA
+  ,zipA'
+  ,flatten
+  ,flatten'
+  ,qmapM
+  ,qmapM'
+  ,qmapA1
+  ,qmapBFS
+  ,qmap
+  ,qmap'
+  ,qmap1
+  ,getOp
+  ,one
+  ,two
+  ,three
+  ,algebraFoldMap
+  ,algebraTraverse
+  ,algebraFMap
+  ,algebraJoin
+  ,algebraBind
+  ,algebraReturn
+  ,algebraAp
+  ,prodAppend
+  ,algebraPFMap
+  ,algebraPFMap1
+  ,algebraPFMapSym
+  ,replaceProj
+  ,moduloOne
+  ,moduloOne2
+  ,maxDepth
+  ,exprLens
+  ,AlgebraSymbol
+  ,BinaryOperator(..)
+  ,exprInverse
+  ,InvClass(..)
+  ,ExprLike(..)
+  ,atom2
+  ,atom3) where
 
 import           Data.CppAst
 import           Data.Functor.Classes
@@ -127,6 +123,7 @@ import           Data.Proxy
 import           GHC.Exts
 import           GHC.TypeLits
 
+
 -- Note that if a BQOp exposes columns on both sides except, QJoin and
 -- QProd, the QNFQuery break.
 data BQOp es =
@@ -148,27 +145,64 @@ instance AShow e => AShow (BQOp e)
 instance ARead e => ARead (BQOp e)
 
 instance Hashable es => Hashable (BQOp es)
+
+data QProjNonEmpty e =
+  QProjNonEmpty
+  { qpneOverlap :: [(e,e)],qpneCompl :: [e],qpneProj :: [(e,Expr e)] }
+  deriving (Generic,Eq,Show,Functor,Foldable,Traversable,Read)
+instance Hashable e => Hashable (QProjNonEmpty e)
+toQProj :: QProjNonEmpty e -> UQOp e
+toQProj QProjNonEmpty {..} =
+  QProj QProjInv { qpiOverlap = qpneOverlap,qpiCompl = qpneCompl } qpneProj
+fromQProj :: QProjI e -> [(e, Expr e)] -> QProjNonEmpty e
+fromQProj QProjNoInv _ = error "empty qproj no inv"
+fromQProj QProjInv {..} pr =
+  QProjNonEmpty { qpneOverlap = qpiOverlap,qpneCompl = qpiCompl,qpneProj = pr }
+
+data QProjI es
+  = QProjNoInv -- only valid immediately after parsing and to avoid
+               -- double inversions.
+  | QProjInv
+    { qpiOverlap :: [(es,es)] -- the left is the symbol in the primary
+                             -- projection the left is is the in the
+                             -- complement. For non-ShapeSym-like
+                             -- symbols thse should be the same. For
+                             -- ShapeSym, the complement shares the
+                             -- symbol names with the input table so
+                             -- this should be (input ShapeSym, output
+                             -- ShapeSym).
+     ,qpiCompl   :: [es]
+    }
+  deriving (Generic,Eq,Show,Functor,Foldable,Traversable,Read)
+instance AShowV e => AShow (QProjI e) where
+instance AReadV e => ARead (QProjI e)
+instance (Hashable es) => Hashable (QProjI es)
+
+
 data UQOp es =
   QSel (Prop (Rel (Expr es)))
   | QGroup [(es, Expr (Aggr (Expr es)))] [Expr es]
-  | QProj [(es, Expr es)]
+  | QProj (QProjI es) [(es, Expr es)]
   -- XXX: merge QSort and QLimit into top-k.
   | QSort [Expr es]
   | QLimit Int
   | QDrop Int
   deriving (Generic, Eq, Show, Functor, Foldable, Traversable, Read)
-instance AShow e => AShow (UQOp e)
-instance ARead e => ARead (UQOp e)
+instance AShowV e => AShow (UQOp e)
+instance AReadV e => ARead (UQOp e)
 
 coUQOp :: Eq e => UQOp e -> [e] -> Maybe (UQOp e)
 coUQOp = \case
   QDrop i -> const $ Just $ QLimit i
   QLimit i -> const $ Just $ QDrop i
   QSel p -> const $ Just $ QSel (P1 PNot p)
-  QProj p -> Just
-    . QProj
-    . fmap (\x -> (x,E0 x))
-    . filter (`notElem` mapMaybe (\case {(_,E0 e) -> Just e; _ -> Nothing}) p)
+  QProj QProjNoInv _pr -> const Nothing
+  QProj QProjInv {..} _pr ->
+    const $ Just $ QProj QProjNoInv $ fmap (\e -> (e,E0 e)) qpiCompl
+  -- QProj p -> Just
+  --   . QProj
+  --   . fmap (\x -> (x,E0 x))
+  --   . filter (`notElem` mapMaybe (\case {(_,E0 e) -> Just e; _ -> Nothing}) p)
   QSort _ -> const Nothing
   QGroup _ _ -> const Nothing
 
@@ -195,13 +229,13 @@ pattern J :: Prop (Rel (Expr e)) -> Query e s -> Query e s -> Query e s
 pattern J p q q' = Q2 (QJoin p) q q'
 pattern S :: Prop (Rel (Expr e)) -> Query e s -> Query e s
 pattern S p q = Q1 (QSel p) q
-instance (AShow e, AShow s) => AShow (Query e s) where
+instance (AShow2 e s) => AShow (Query e s) where
   ashow' = \case
     J p q q' -> sexp "J" [ashow' p, ashow' q, ashow' q']
     S p q    -> sexp "S" [ashow' p, ashow' q]
     q        -> genericAShow' q
 
-instance (ARead e, ARead (Prop (Rel (Expr e))), ARead s) => ARead (Query e s) where
+instance (AReadV e, ARead (Prop (Rel (Expr e))), ARead s) => ARead (Query e s) where
   aread' = \case
     Sub [Sym "J", p, l, r] -> J <$> aread' p <*> aread' l <*> aread' r
     Sub [Sym "S", p, q]    -> S <$> aread' p <*> aread' q
@@ -243,21 +277,22 @@ instance GArity n (Query es) => WithOperator n (Query es) where
 foldSchema :: (sch -> sch -> sch)
            -> (Either [(e,Expr e)] [(e, Expr (Aggr (Expr e)))] -> sch)
            -> Query e sch -> sch
-foldSchema app mkSch = recur where
-  recur = \case
-    Q2 o l r -> case o of
-      QProd            -> recur l `app` recur r
-      QJoin _          -> recur l `app` recur r
-      QProjQuery       -> recur l
-      QUnion           -> recur l
-      QDistinct        -> recur r
-      QLeftAntijoin _  -> recur l
-      QRightAntijoin _ -> recur r
-    Q1 o q -> case o of
-      QProj ps    -> mkSch $ Left ps
-      QGroup ps _ -> mkSch $ Right ps
-      _           -> recur q
-    Q0 s -> s
+foldSchema app mkSch = recur
+  where
+    recur = \case
+      Q2 o l r -> case o of
+        QProd            -> recur l `app` recur r
+        QJoin _          -> recur l `app` recur r
+        QProjQuery       -> recur l
+        QUnion           -> recur l
+        QDistinct        -> recur r
+        QLeftAntijoin _  -> recur l
+        QRightAntijoin _ -> recur r
+      Q1 o q -> case o of
+        QProj _inv ps -> mkSch $ Left ps
+        QGroup ps _   -> mkSch $ Right ps
+        _             -> recur q
+      Q0 s -> s
 
 newtype FlipQuery s e = FlipQuery {unFlipQuery :: Query e s} deriving Generic
 unFlipQFn :: (FlipQuery s1 e1 -> FlipQuery s e) -> Query e1 s1 -> Query e s
@@ -448,89 +483,6 @@ instance ARead a => ARead (Prop (Rel a))
 instance AShow a => AShow (Expr a)
 instance ARead a => ARead (Expr a)
 
--- FUNCTIONS
-traverseProp' :: Applicative m =>
-                ([Query e s] -> Prop (Rel (Expr e)) -> m (Prop (Rel (Expr e))))
-              -> Query e s
-              -> m (Query e s)
-traverseProp' f = go where
-  go = \case
-    Q2 o l r -> Q2 <$> go' o <*> go l <*> go r where
-      go' o' = case o' of
-        QJoin p          -> QJoin <$> f [l, r] p
-        QLeftAntijoin p  -> QLeftAntijoin <$> f [l,r] p
-        QRightAntijoin p -> QRightAntijoin <$> f [l,r] p
-        _                -> pure o'
-    Q1 o q -> Q1 <$> go' o <*> go q where
-      go' o' = case o' of
-        QSel p -> QSel <$> f [q] p
-        _      -> pure o'
-    Q0 s -> pure $ Q0 s
-
-traverseProp :: Applicative m =>
-               (Prop (Rel (Expr e)) -> m (Prop (Rel (Expr e))))
-             -> Query e s
-             -> m (Query e s)
-traverseProp = traverseProp' . const
-
-traverseRel' :: Applicative m =>
-               ([Query e s] -> Rel (Expr e) -> m (Rel (Expr e)))
-             -> Query e s
-             -> m (Query e s)
-traverseRel' fr = traverseProp' $ traverse . fr
-
-traverseRel :: Applicative m =>
-               (Rel (Expr e) -> m (Rel (Expr e)))
-             -> Query e s
-             -> m (Query e s)
-traverseRel = traverseRel' . const
-
-traverseExpr' :: Applicative m =>
-               ([Query e s] -> Expr e -> m (Expr e))
-             -> Query e s
-             -> m (Query e s)
-traverseExpr' fe = go where
-  f = traverse2 . fe
-  go = \case
-    Q2 o l r -> Q2 <$> go' o <*> go l <*> go r where
-      go' o' = case o' of
-        QJoin p          -> QJoin <$> f [l, r] p
-        QLeftAntijoin p  -> QLeftAntijoin <$> f [l, r] p
-        QRightAntijoin p -> QRightAntijoin <$> f [l, r] p
-        _                -> pure o'
-    Q1 o q -> Q1 <$> go' o <*> go q where
-      go' o' = case o' of
-        QProj p    -> QProj <$> traverse2 (fe [q]) p
-        QSort p    -> QSort <$> traverse (fe [q]) p
-        QGroup p g -> QGroup <$> traverse4 (fe [q]) p <*> traverse (fe [q]) g
-        QSel p     -> QSel <$> f [q] p
-        _          -> pure o'
-    Q0 s -> pure $ Q0 s
-traverseExpr :: Applicative m =>
-               (Expr e -> m (Expr e))
-             -> Query e s
-             -> m (Query e s)
-traverseExpr = traverseExpr' . const
-
-traverseExprAggr' :: Applicative m =>
-                   ([Query e s] -> Expr (Aggr (Expr e)) -> m (Expr (Aggr (Expr e))))
-                 -> Query e s
-                 -> m (Query e s)
-traverseExprAggr' fe = go where
-  go = \case
-    Q1 o q -> Q1 <$> go' o <*> go q where
-      go' o' = case o' of
-        QGroup p g -> QGroup <$> traverse2 (fe [q]) p <*> pure g
-        _          -> pure o'
-    q -> pure q
-
-traverseExprAggr :: Applicative m =>
-                   (Expr (Aggr (Expr e)) -> m (Expr (Aggr (Expr e))))
-                 -> Query e s
-                 -> m (Query e s)
-traverseExprAggr = traverseExprAggr' . const
-
-
 qmapA1 :: (Algebra a, Applicative m) => (a s -> m (a s)) -> a s -> m (a s)
 qmapA1 = qmapA1' $ pure . atom
 
@@ -588,7 +540,7 @@ zipA f q q' = zipWith f (collect q) (collect q') where
     mod' x' = modify (x':) >> return x'
 
 zipA' :: (Algebra a, Applicative m) => (a s -> a s' -> m [b]) -> a s -> a s' -> m [b]
-zipA' f q = fmap join . traverse id . zipA f q
+zipA' f q = fmap join . sequenceA . zipA f q
 
 getOp :: forall (n :: Nat) e s m . (WithOperator n e, MonadPlus m) =>
          Proxy n -> e s -> m (ArityToOperator n e)
@@ -851,7 +803,7 @@ subAlg f fe fa fr fp = \case
       QSel p -> QSel <$> fp p
       QGroup prj grp ->
         QGroup <$> traverse (f `bitraverse` fa) prj <*> traverse fe grp
-      QProj prj -> QProj <$> traverse (f `bitraverse` fe) prj
+      QProj inv prj -> QProj <$> traverse f inv <*> traverse (f `bitraverse` fe) prj
       QSort es -> QSort <$> traverse fe es
       QLimit i -> pure $ QLimit i
       QDrop i -> pure $ QDrop i
@@ -944,9 +896,9 @@ querySchemaNaive :: Query e s
 querySchemaNaive = \case
   Q0 s -> [Left s]
   Q1 o l -> case o of
-    QProj p    -> [Right (Left p,Q1 (QProj p) l)]
-    QGroup p e -> [Right (Right (p,e),Q1 (QGroup p e) l)]
-    _          -> querySchemaNaive l
+    QProj inv p -> [Right (Left p,Q1 (QProj inv p) l)]
+    QGroup p e  -> [Right (Right (p,e),Q1 (QGroup p e) l)]
+    _           -> querySchemaNaive l
   Q2 o l r -> case o of
     QProd            -> querySchemaNaive l ++ querySchemaNaive r
     QJoin _          -> querySchemaNaive l ++ querySchemaNaive r
@@ -1018,8 +970,8 @@ instance IsCode code => Codegen UEOp code where
 
 instance IsCode code => Codegen UPOp code where
   toCode PNot = "!"
-propQnfAnd :: forall x . Eq x => Prop x -> NEL.NonEmpty (Prop x)
-propQnfAnd = go where
+propCnfAnd :: forall x . Eq x => Prop x -> NEL.NonEmpty (Prop x)
+propCnfAnd = go where
   go x@(P0 _) = return x
   go x@(Not (P0 _)) = return x
   go (Not (Not x)) = go x
@@ -1042,3 +994,28 @@ propQnfAnd = go where
             (l:ls',r:rs') -> [Or (foldr And l ls') (foldr And r rs')]
           (inters,nonIntersR) = NEL.partition (`elem` ls) rs
   go _ = error "Unreachable, the price for using patterns."
+
+
+traverseProp' :: Applicative m =>
+                ([Query e s] -> Prop (Rel (Expr e)) -> m (Prop (Rel (Expr e))))
+              -> Query e s
+              -> m (Query e s)
+traverseProp' f = go where
+  go = \case
+    Q2 o l r -> Q2 <$> go' o <*> go l <*> go r where
+      go' o' = case o' of
+        QJoin p          -> QJoin <$> f [l, r] p
+        QLeftAntijoin p  -> QLeftAntijoin <$> f [l,r] p
+        QRightAntijoin p -> QRightAntijoin <$> f [l,r] p
+        _                -> pure o'
+    Q1 o q -> Q1 <$> go' o <*> go q where
+      go' o' = case o' of
+        QSel p -> QSel <$> f [q] p
+        _      -> pure o'
+    Q0 s -> pure $ Q0 s
+
+traverseProp :: Applicative m =>
+               (Prop (Rel (Expr e)) -> m (Prop (Rel (Expr e))))
+             -> Query e s
+             -> m (Query e s)
+traverseProp = traverseProp' . const

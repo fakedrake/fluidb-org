@@ -9,18 +9,16 @@ import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build
 import           Data.Codegen.Run
 import           Data.DotLatex
-import qualified Data.IntMap                as IM
+import qualified Data.IntMap               as IM
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Nodes
-import           Data.QueryPlan.Transitions
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Functors
-import           Data.Utils.MTL
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
 import           FluiDB.Schema.SSB.Values
@@ -37,14 +35,12 @@ type AnnotQuery =
 type SSBQuery = Query ExpTypeSym Table
 type SSBGlobalSolveM = GlobalSolveT ExpTypeSym Table T N IO
 
-
 annotateQuerySSB
   :: QueryCppConf ExpTypeSym Table -> SSBQuery -> SSBGlobalSolveM AnnotQuery
 annotateQuerySSB cppConf query = do
   symSizeAssoc <- gets globalTableSizeAssoc
   let luSize s = lookup s symSizeAssoc
   either throwError return $ annotateQuery cppConf luSize query
-
 
 finallyError :: MonadError e m => m a -> m () -> m a
 finallyError m hndl = do

@@ -153,14 +153,17 @@ anyProjExpression toSchema toExpression proj = do
   CC.FunctionAp (CC.SimpleFunctionSymbol recordRef) []
     <$> (mapM (toExpression . snd) proj :: m [CC.Expression (f CC.CodeSymbol)])
 
-aggrProjExpression :: forall c e s t n m .
-                     (Hashables2 e s, CC.ExpressionLike e,
-                      MonadCodeCheckpoint e s t n m,
-                      Foldable c, Functor c, Traversable c,
-                      MonadReadScope c (QueryShape e s) m) =>
-                     [(ShapeSym e s, Expr (Aggr (Expr (ShapeSym e s))))]
-                   -> m (CC.Expression
-                        (Either (CC.Declaration CC.CodeSymbol) CC.CodeSymbol))
+aggrProjExpression
+  :: forall c e s t n m .
+  (Hashables2 e s
+  ,CC.ExpressionLike e
+  ,MonadCodeCheckpoint e s t n m
+  ,Foldable c
+  ,Functor c
+  ,Traversable c
+  ,MonadReadScope c (QueryShape e s) m)
+  => [(ShapeSym e s,Expr (Aggr (Expr (ShapeSym e s))))]
+  -> m (CC.Expression (Either (CC.Declaration CC.CodeSymbol) CC.CodeSymbol))
 aggrProjExpression = anyProjExpression aggrSchema aggrExpression
 
 projExpression

@@ -172,12 +172,14 @@ data OutShape e s =
 flipOutShape :: OutShape e s -> OutShape e s
 flipOutShape oa = oa { oaIoAssoc = swap <$> oaIoAssoc oa }
 
+-- | Build a class that combines two input schemata in to the one
+-- provided as the argument.
 combinerClass
   :: forall e s t n m .
   (MonadSchemaScope Tup2 e s m,MonadCodeCheckpoint e s t n m)
   => OutShape e s
   -> m (CC.Class CC.CodeSymbol)
-combinerClass OutShape{..} = do
+combinerClass OutShape {..} = do
   Tup2 (q1,qs1) (q2,qs2) :: Tup2 (QueryShape e s,Symbol CodeSymbol)
     <- fmap3 CC.declarationNameRef getQueryDeclarations
   let symAssoc1 = mkPs qs1 . snd <$> querySchema q1
@@ -185,32 +187,39 @@ combinerClass OutShape{..} = do
   outCppSchema :: CppSchema <- cppSchema $ querySchema oaShape
   resType <- CC.classNameRef <$> tellRecordCls outCppSchema
   let outSyms = snd <$> querySchema oaShape
-  case orderAssoc (\o i -> (i,o) `elem` oaIoAssoc) outSyms $ symAssoc1 ++ symAssoc2 of
+  let symAssocCombM =
+        orderAssoc (\o i -> (i,o) `elem` oaIoAssoc) outSyms
+        $ symAssoc1 ++ symAssoc2
+  case symAssocCombM of
     Right symAssocComb -> tellClassM
       $ mkCallClass (CC.ClassType mempty [] resType)
       $ CC.FunctionAp (CC.SimpleFunctionSymbol resType) [] symAssocComb
-    Left x -> throwAStr
+    Left conflSym -> throwAStr
       $ printf
-        "the input plans :\n%s\n don't match the output plan:\n%s\nConflicting sym:%s"
-        (ashow $ fmap fst $ symAssoc1 ++ symAssoc2)
+        "the sym assocs :\n%s\n don't match the output plan:\n%s\nConflicting sym:%s"
+        (ashow $ symAssoc1 ++ symAssoc2)
         (ashow outSyms)
-        (ashow x)
+        (ashow conflSym)
   where
     mkPs :: Symbol CodeSymbol
          -> ShapeSym e s
          -> (ShapeSym e s,CC.Expression CC.CodeSymbol)
     mkPs recSym shapeSym = case CC.toExpression shapeSym of
-      CC.SymbolExpression cppSym
-        -> (shapeSym,CC.ObjectMember (CC.SymbolExpression recSym) cppSym)
+      CC.SymbolExpression cppSym ->
+        (shapeSym,CC.ObjectMember (CC.SymbolExpression recSym) cppSym)
       _ -> error "Unreachable.."
+
+-- | Find the first one that matches.
 lookupWith :: (a -> a -> Bool) ->  a -> [(a,b)] -> Maybe b
 lookupWith f a assoc = case filter (f a . fst) assoc of
   []      -> Nothing
   (_,x):_ -> Just x
+
+-- | Order the values of the assoc list according to an ordering of
+-- the keys. If one does not match it's an error, return left.
 orderAssoc :: (b -> b -> Bool) -> [b] -> [(b,a)] -> Either b [a]
 orderAssoc cmp order assoc =
-  (\x -> maybe (Left x) Right $ lookupWith cmp x assoc)
-  `traverse` order
+  (\x -> maybe (Left x) Right $ lookupWith cmp x assoc) `traverse` order
 
 propCallClass
   :: (MonadCodeCheckpoint e s t n m,MonadSchemaScope c e s m)
@@ -288,7 +297,8 @@ startNewCallClass exps = tellClassM $ do
 -- | Make a function class that builds the projection.
 --
 -- The expression could contain nulls in the case of the union but we
--- still need to know the type in order to operate.
+-- still need to know the type in order to operate. The argument
+-- schema is the input.
 projToFn :: forall c e s t n m .
          MonadClassBuilder c e s t n m
          => [(ShapeSym e s,Expr (Either CppType (ShapeSym e s)))]

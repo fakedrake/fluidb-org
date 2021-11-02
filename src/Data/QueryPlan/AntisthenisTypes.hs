@@ -71,13 +71,13 @@ type IsPlanParams tag n =
      (NodeRef n)
   ,ExtEpoch (MetaTag tag) ~ PlanEpoch n
   ,ExtCoEpoch (MetaTag tag) ~ PlanCoEpoch n
-  ,AShow (MechVal (MetaTag tag))
-  ,Ord (MechVal (MetaTag tag))
+  ,AShowV (MechVal (MetaTag tag))
   ,Semigroup (MechVal (MetaTag tag))
   ,Subtr (MechVal (MetaTag tag))
+  ,Ord (MechVal (MetaTag tag))
   ,Zero (MechVal (MetaTag tag))
   ,Zero (ExtCap (MetaTag tag))
-  ,AShow (ExtCap (MetaTag tag))
+  ,AShowV (ExtCap (MetaTag tag))
    -- For updating the cap
   ,HasLens (ExtCap (MetaTag tag)) (Min (MechVal (MetaTag tag)))
   ,ExtParams (MinTag (MetaTag tag)) (MetaTag tag)

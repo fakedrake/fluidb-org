@@ -26,7 +26,6 @@ module Data.Codegen.Build.Constructors
   , clusterCall
   , getQueriesFromClust
   , sortCall
-  , projCall
   , tmplClass
   , constrArgs
   , opStatements
@@ -34,12 +33,10 @@ module Data.Codegen.Build.Constructors
   , selCall
   , prodCall
   , unionCall
-  , joinCall
   , dropCall
   , limitCall
   , groupCall
   , constrBlock
-  , unJoinCall
   ) where
 
 import           Control.Monad.Except
@@ -89,18 +86,31 @@ projCall
   (MonadCodeCheckpoint e s t n m,MonadSchemaScope c e s m)
   => UnDir c
   -> OutShape e s
+  -> QProjI (ShapeSym e s)
   -> [(ShapeSym e s,Expr (ShapeSym e s))]
   -> m Constr
-projCall UnFwd _ pr = do
-  Identity shape <- getQueries
-  coPr <- withPrimKeys $ complementProj shape pr
+projCall UnFwd _ QProjNoInv pr =
+  throwAStr $ "No join inversion for projection: " ++ ashow pr
+projCall UnFwd _ QProjInv {..} pr = do
   primFn <- projToFn $ fmap3 Right pr
-  coFn <- projToFn $ fmap3 Right coPr
-  return ("mkProjection", tmplClass <$> [primFn, coFn])
-projCall UnRev outSh _pr = do
-  combFn <- combinerClass outSh
-  return ("mkZip",[tmplClass combFn])
+  -- Is it ok that we are not translating the symbols?
+  coFn <- projToFn [(e,E0 $ Right e) | e <- qpiCompl]
+  return ("mkProjection",tmplClass <$> [primFn,coFn])
+projCall UnRev outSh ipr _pr = do
+  Tup2 prim sec <- getQueries @Tup2 @e @s
+  joinQueryCall ForwardTrigger
+    $ EasyJClust
+    { ejcJoin = oaShape outSh
+     ,ejcIO = swap <$> oaIoAssoc outSh
+     ,ejcP = toEqProp $ qpiOverlap ipr
+     ,ejcLeft = prim
+     ,ejcRight = sec
+    }
 
+toEqProp :: [(e,e)] -> Prop (Rel (Expr e))
+toEqProp (x:xs) = foldl' (\p x' -> And (toEq x') p) (toEq x) xs where
+  toEq (e,e') = P0 (R2 REq (R0 (E0 e)) (R0 (E0 e')))
+toEqProp _ = error "Empty eq prop for projection"
 
 -- mkSort<ToKeyFn>
 sortCall
@@ -182,6 +192,7 @@ dropCall
 dropCall UnFwd _io i = first (const "mkDrop") <$> limitCall UnFwd undefined i
 dropCall UnRev io _i = unionCall io
 
+#if 0
 -- EquiJoin<LExtractFn, RExtractFn, Combine>
 -- mkJoin<Pred, Comb>
 --
@@ -198,12 +209,14 @@ joinCall
   -> m Constr
 -- idAssocAndShape is the output shape and id associations for
 -- all syms.
-joinCall BinRev _ _ = unJoinCall
-joinCall BinFwd outShape p = do
+joinCall BinRev _ _ = do
+  Identity jshape <- getQueries @Identity @e @s
+  return ("mkUnJoin",tmplClass <$> [extrFnL,extrFnR])
+joinCall BinFwd jShape p = do
   -- Note: A `Rantij` A == A `Lantij` A makes duplicate output columns
   -- so don't expect output symbols to be unique within the list.
-  combFn <- combinerClass outShape
-  pInSyms <- traverse3 (translateSym $ swap <$> oaIoAssoc outShape) p
+  combFn <- combinerClass jShape
+  pInSyms <- traverse3 (translateSym $ swap <$> oaIoAssoc jShape) p
   joinPred <- equiJoinPred pInSyms
   fmap3 tmplClass $ case joinPred of
     Just eqClss -> do
@@ -212,20 +225,7 @@ joinCall BinFwd outShape p = do
     Nothing -> do
       propCls <- propCallClass pInSyms
       return ("mkJoin",[propCls,combFn])
-
-extractClass
-  :: (MonadCodeCheckpoint e s t n m,MonadSchemaScope Identity e s m)
-  => QueryShape e s
-  -> m [CC.TmplInstArg CC.CodeSymbol]
-extractClass q =
-  snd <$> projCall UnFwd undefined (keysToProj $ snd <$> querySchema q)
-
--- unJoin<Extract>
-unJoinCall
-  :: forall e s t n m .
-  (MonadCodeCheckpoint e s t n m,MonadSchemaScope Identity e s m)
-  => m Constr
-unJoinCall = fmap ("mkUnJoin",) $ extractClass . runIdentity =<< getQueries
+#endif
 
 -- mkUnion<R>
 unionCall
@@ -289,6 +289,52 @@ getQueriesFromClust
   -> m [QNFQuery e s]
 getQueriesFromClust clust = getNodeQnfN $ snd $ primaryNRef clust
 
+
+-- | Auxiliary construct for easily passing information to the join
+-- constructor.
+data EasyJClust e s =
+  EasyJClust
+  { ejcJoin,ejcLeft,ejcRight :: QueryShape e s
+  -- antijoins can be handled implicitly because they have the same
+  -- shape as the inputs..
+  --
+ -- ,ejcLAnti,ejcRAnti :: QueryShape e s
+   ,ejcIO                    :: [(ShapeSym e s,ShapeSym e s)]
+   ,ejcP                     :: Prop (Rel (Expr (ShapeSym e s)))
+  }
+
+
+type PropJoinClust e s t n =
+  JoinClust'
+    (WMetaD (Defaulting (QueryShape e s)) NodeRef)
+    (WMetaD
+       [BQOp (ShapeSym e s)]
+       (WMetaD (Defaulting (QueryShape e s)) NodeRef))
+    t
+    n
+-- | Extract the components of a join regardless of the direction.
+mkEasyJoin
+  :: (MonadReader (ClusterConfig e s t n) m,MonadCodeCheckpoint e s t n m)
+  => [(ShapeSym e s,ShapeSym e s)]
+  -> PropJoinClust e s t n
+  -> m (EasyJClust e s)
+mkEasyJoin ejcIO JoinClust {..} = do
+  ejcJoin <- getShape $ binClusterOut joinBinCluster
+  ejcLeft <- getShape $ binClusterLeftIn joinBinCluster
+  ejcRight <- getShape $ binClusterRightIn joinBinCluster
+  let outSyms = shapeAllSyms ejcJoin
+  op <- selectOp (const "No valid join op") (checkBOp outSyms)
+    $ binClusterOut joinBinCluster
+  case op of
+    QJoin ejcP -> return EasyJClust { .. }
+    _          -> throwAStr $ "Expected join but got: " ++ ashow op
+
+getShape :: MonadAShowErr e s err m
+         => WMetaD a (WMetaD (Defaulting (QueryShape e s)) f) b
+         -> m (QueryShape e s)
+getShape (WMetaD (_,WMetaD (a,_))) =
+  maybe (throwAStr "empty defaulting") return $ getDef a
+
 -- | get the inputs, evalQueryEnv with them and copy the queryCall
 -- stuff. The fact that we have a
 clusterCall
@@ -306,24 +352,18 @@ clusterCall dir c = do
        -> [(ShapeSym e s,ShapeSym e s)]
        -> AnyCluster e s t n
        -> m Constr
-    go shapeClust assoc = \case
-      JoinClustW c -> case shapeClust of
-        JoinClustW pc -> go (BinClustW $ joinBinCluster pc) assoc
-          $ BinClustW
-          $ joinBinCluster c
-        _ ->
-          throwAStr $ "Expected join shapeclust but got: " ++ ashow shapeClust
+    go shapeClust assoc = const $ case shapeClust of
+      JoinClustW jc -> joinQueryCall dir =<< mkEasyJoin assoc jc
       BinClustW BinClust {..} -> do
         -- The default shapes have been synchronized and are ready to
         -- go.
-        outSyms <- case shapeClust of
-          BinClustW BinClust {..} -> getDef' binClusterOut
-          _ ->
-            throwAStr $ "Expected bin shapeclust but got: " ++ ashow shapeClust
-        op <- selectOp (ashow . (,assoc)) (checkBOp outSyms) binClusterOut
-        l <- fullShape binClusterLeftIn
-        r <- fullShape binClusterRightIn
-        outShape <- fullShape binClusterOut
+        l <- getShape binClusterLeftIn
+        r <- getShape binClusterRightIn
+        outShape <- getShape binClusterOut
+        op <- selectOp
+          (ashow . (,assoc))
+          (checkBOp $ shapeAllSyms outShape)
+          binClusterOut
         case dir of
           ReverseTrigger -> evalQueryEnv (Identity outShape)
             $ bopQueryCall
@@ -336,74 +376,110 @@ clusterCall dir c = do
               OutShape { oaIoAssoc = assoc,oaShape = outShape }
               op
       UnClustW UnClust {..} -> do
-        (inSyms,outSyms) <- case shapeClust of
-          UnClustW UnClust {..} ->
-            (,) <$> getDef' unClusterIn <*> getDef' unClusterPrimaryOut
-          _ ->
-            throwAStr $ "Expected un shapeclust but got: " ++ ashow shapeClust
+        inShape <- getShape unClusterIn
+        -- Remember we are making the primary one here
+        primOutShape <- getShape unClusterPrimaryOut
         op <- selectOp
           (ashow . (,assoc))
-          (checkUOp inSyms outSyms)
+          (checkUOp (shapeAllSyms inShape) (shapeAllSyms primOutShape))
           unClusterPrimaryOut
-        inShape <- fullShape unClusterIn
-        -- Remember we are making the primary one here
-        primOutShape <- fullShape unClusterPrimaryOut
         case dir of
           ReverseTrigger -> do
-            secOutShape <- fullShape unClusterSecondaryOut
+            secOutShape <- getShape unClusterSecondaryOut
             evalQueryEnv (Tup2 primOutShape secOutShape)
               $ uopQueryCall
-              UnRev
-              OutShape { oaIoAssoc = swap <$> assoc,oaShape = inShape }
-              op
+                UnRev
+                OutShape { oaIoAssoc = swap <$> assoc,oaShape = inShape }
+                op
           ForwardTrigger -> evalQueryEnv (Identity inShape)
             $ uopQueryCall
-            UnFwd
-            OutShape { oaIoAssoc = assoc,oaShape = primOutShape }
-            op
-      NClustW (NClust r) -> throwCodeErr $ ForwardCreateSymbol r
-      where
-        getDef' :: HasCallStack
-                => WMetaD x (WMetaD (Defaulting (QueryShape e s)) f) n
-                -> m [ShapeSym e s]
-        getDef' (WMetaD (_,WMetaD (d,_))) = case getDef d of
-          Nothing
-           -> throwAStr "Found empty defaulting in getValidClustPropagator"
-          Just x -> return $ shapeAllSyms x
-        selem sym syms = case shapeSymQnfName sym of
-          NonSymbolName _ -> True
-          _               -> sym `elem` syms
-        checkUOp inSyms outSyms = \case
-          QSel p -> all3 (`selem` outSyms) p
-          QProj pr -> all (`selem` outSyms) (fst <$> pr)
-            && all (`selem` inSyms) (toList3 pr)
-          QGroup pr es -> all (`selem` outSyms) (fst <$> pr)
-            && all (`selem` inSyms) (toList3 $ toList3 pr)
-            && all (`selem` inSyms) (toList2 es)
-          QSort es -> all2 (`selem` outSyms) es
-          QLimit _ -> True
-          QDrop _ -> True
-        checkBOp outSyms = \case
-          QJoin p          -> all3 (`selem` outSyms) p
-          QLeftAntijoin p  -> all3 (`selem` outSyms) p
-          QRightAntijoin p -> all3 (`selem` outSyms) p
-          QProd            -> True
-          QUnion           -> True
-          QProjQuery       -> True
-          QDistinct        -> True
-        selectOp :: ((AShowV e,AShowV s) => [f (ShapeSym e s)] -> String)
-                 -> (f (ShapeSym e s) -> Bool)
-                 -> WMetaD [f (ShapeSym e s)] NodeRef n
-                 -> m (f (ShapeSym e s))
-        selectOp msg checkOp (WMetaD (ops,_)) = case filter checkOp ops of
-          []   -> throwAStr $ "No matching operator on output: " ++ msg ops
-          op:_ -> return op
-        fullShape :: WMetaD a NodeRef n -> m (QueryShape e s)
-        fullShape (WMetaD (_,ref)) =
-          getNodeShape ref >>= maybe err return . getDefaultingFull
-          where
-            err =
-              throwError $ fromString $ "No QueryShape for node" ++ ashow ref
+              UnFwd
+              OutShape { oaIoAssoc = assoc,oaShape = primOutShape }
+              op
+      NClustW (NClust (WMetaD (_,ref))) ->
+        throwCodeErr $ ForwardCreateSymbol ref
+
+-- | Check that the symbol is in the list.
+selem :: Hashables2 e s => ShapeSym e s -> [ShapeSym e s] -> Bool
+selem sym syms = case shapeSymQnfName sym of
+  NonSymbolName _ -> True
+  _               -> sym `elem` syms
+
+-- | Check that the op can correspond to the pair of in symbols/our
+-- symbols. Used to find valid operations.
+checkUOp
+  :: Hashables2 e s
+  => [ShapeSym e s]
+  -> [ShapeSym e s]
+  -> UQOp (ShapeSym e s)
+  -> Bool
+checkUOp inSyms outSyms = \case
+  QSel p -> all3 (`selem` outSyms) p
+  QProj _ pr -> all (`selem` outSyms) (fst <$> pr)
+    && all (`selem` inSyms) (toList3 pr)
+  QGroup pr es -> all (`selem` outSyms) (fst <$> pr)
+    && all (`selem` inSyms) (toList3 $ toList3 pr)
+    && all (`selem` inSyms) (toList2 es)
+  QSort es -> all2 (`selem` outSyms) es
+  QLimit _ -> True
+  QDrop _ -> True
+
+-- | Check that the op can correspond to the pair of in symbols/our
+-- symbols. Used to find valid operations.
+checkBOp :: Hashables2 e s => [ShapeSym e s] -> BQOp (ShapeSym e s) -> Bool
+checkBOp outSyms = \case
+  QJoin p          -> all3 (`selem` outSyms) p
+  QLeftAntijoin p  -> all3 (`selem` outSyms) p
+  QRightAntijoin p -> all3 (`selem` outSyms) p
+  QProd            -> True
+  QUnion           -> True
+  QProjQuery       -> True
+  QDistinct        -> True
+
+-- | Find an op that matches the predicate.
+selectOp
+  :: MonadAShowErr e s err m
+  => ((AShowV e,AShowV s) => [f (ShapeSym e s)] -> String)
+  -> (f (ShapeSym e s) -> Bool)
+  -> WMetaD [f (ShapeSym e s)] g n
+  -> m (f (ShapeSym e s))
+selectOp msg checkOp (WMetaD (ops,_)) = case filter checkOp ops of
+  []   -> throwAStr $ "No matching operator on output: " ++ msg ops
+  op:_ -> return op
+
+
+-- | Emits the constructor for a join query. EasyJClust can output any
+-- _direct_ mapping (ie no expression, just a permutation) of the
+-- input columns to the output. This is used both for joining and for
+-- projections assuming that we do not need to invert the projection
+-- the projections.
+joinQueryCall
+  :: MonadCodeCheckpoint e s t n m => Direction -> EasyJClust e s -> m Constr
+joinQueryCall dir EasyJClust {..} = case dir of
+  ReverseTrigger -> do
+    lproj <- sequenceA
+      $ [(,E0 i) <$> translateSym ejcIO i | i <- shapeAllSyms ejcLeft]
+    rproj <- sequenceA
+      $ [(,E0 i) <$> translateSym ejcIO i | i <- shapeAllSyms ejcRight]
+    extractlFn
+      <- evalQueryEnv (Identity ejcJoin) $ projToFn $ fmap3 Right lproj
+    extractrFn
+      <- evalQueryEnv (Identity ejcJoin) $ projToFn $ fmap3 Right rproj
+    return ("unJoin",tmplClass <$> [extractlFn,extractrFn])
+  ForwardTrigger -> evalQueryEnv (Tup2 ejcLeft ejcRight) $ do
+    -- Note: A `Rantij` A == A `Lantij` A makes duplicate output columns
+    -- so don't expect output symbols to be unique within the list.
+    combFn <- combinerClass OutShape { oaIoAssoc = ejcIO,oaShape = ejcJoin }
+    pInSyms <- traverse3 (translateSym $ swap <$> ejcIO) ejcP
+    joinPred <- equiJoinPred pInSyms
+    fmap3 tmplClass $ case joinPred of
+      Just eqClss -> do
+        EquiJoinPred {..} <- mkEquiJoinPred eqClss
+        return ("mkEquiJoin",[equiJoinLExtract,equiJoinRExtract,combFn])
+      Nothing -> do
+        propCls <- propCallClass pInSyms
+        return ("mkJoin",[propCls,combFn])
+
 
 bopQueryCall
   :: forall e s t n c m .
@@ -413,17 +489,19 @@ bopQueryCall
   -> BQOp (ShapeSym e s)
   -> m Constr
 bopQueryCall dir outAssocAndShape = \case
-  QJoin p          -> joinCall dir outAssocAndShape p
-  QDistinct        -> throwAStr "QDistinct should have been optimized out."
-  QProjQuery       -> throwAStr "QProjQuery should have been optimized out."
-  QUnion           -> case dir of
+  QJoin _ -> throwAStr "QJoin should be handled as a separate cluster type."
+  QDistinct -> throwAStr "QDistinct should have been optimized out."
+  QProjQuery -> throwAStr "QProjQuery should have been optimized out."
+  QUnion -> case dir of
     BinRev -> error "union does not have a reverse."
     BinFwd -> unionCall outAssocAndShape
-  QProd            -> case dir of
+  QProd -> case dir of
     BinRev -> error "We do not deal with reverse products"
-    BinFwd -> prodCall  outAssocAndShape
-  QLeftAntijoin p  -> joinCall dir outAssocAndShape p
-  QRightAntijoin p -> joinCall dir outAssocAndShape p
+    BinFwd -> prodCall outAssocAndShape
+  QLeftAntijoin _p -> error
+    "should have been handled by joinQueryCall joinCall dir outAssocAndShape p"
+  QRightAntijoin _p -> error
+    "should have been handled by joinQueryCall joinCall dir outAssocAndShape p"
 
 uopQueryCall
   :: forall e s t n c m .
@@ -438,7 +516,7 @@ uopQueryCall dir outSh op = case op of
   QGroup pr g -> case dir of
     UnRev -> error "Can't reverse trigger the group call"
     UnFwd -> groupCall pr g
-  QProj pr -> projCall dir outSh pr
+  QProj inv pr -> projCall dir outSh inv pr
   QSort sr -> case dir of
     UnRev -> error "Cant reverse trigger sort"
     UnFwd -> sortCall outSh sr
@@ -610,9 +688,6 @@ mktup outs ins = (,) <$> traverse mkOut outs <*> traverse mkIn ins
         x = mapIntermRole (const ()) $ bimap (const ()) (const ()) b
     mkIn (WMetaD (_,Identity (Input a))) = return $ toConstrArg <$> a
     mkIn _ = throwAStr "Expected input node but got something else"
-
-
-
 
 -- | First come up witha an expression for building the constructor
 -- and the build the actual expressions.

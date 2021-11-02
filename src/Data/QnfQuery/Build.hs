@@ -29,6 +29,7 @@ module Data.QnfQuery.Build
 
 import           Control.Monad.Except
 import           Data.Bifunctor
+import           Data.Bitraversable
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy          as HM
 import qualified Data.HashSet               as HS
@@ -92,9 +93,8 @@ putQQNF q qnf = qnf{qnfOrigDEBUG'=q}
 putEmptyQNFQ :: QNFQueryDCF d c f e s
              -> QNFQueryDCF EmptyF c f e s
 putEmptyQNFQ qnf = qnf{qnfOrigDEBUG'=EmptyF}
-putIdentityQNFQ :: Query e s
-                -> QNFQueryDCF d c f e s
-                -> QNFQueryDCF Identity c f e s
+putIdentityQNFQ
+  :: Query e s -> QNFQueryDCF d c f e s -> QNFQueryDCF Identity c f e s
 putIdentityQNFQ q qnf = qnf{qnfOrigDEBUG'=Identity q}
 
 
@@ -134,12 +134,12 @@ toNQNFQueryU o nqnfIn@(nmIn,_) = do
       putO = mapOp (const o')
   (sanityCheckRes ("UOP: " ++ ashow o) id =<<) $ case o of
   -- case o of
-    QSel p     -> mapOp QSel <$> nqnfSelect p nqnfIn
-    QProj p    -> mapOp QProj <$> nqnfProject p nqnfIn
-    QGroup p e -> mapOp (uncurry QGroup) <$> nqnfAggregate p e nqnfIn
-    QSort _    -> lift $ rebaseOp $ putO $ nqnfAny1 (fst <$> o') nqnfIn
-    QLimit _   -> return $ putO $ nqnfAny1 (fst <$> o') nqnfIn
-    QDrop _    -> return $ putO $ nqnfAny1 (fst <$> o') nqnfIn
+    QSel p      -> mapOp QSel <$> nqnfSelect p nqnfIn
+    QProj inv p -> mapOp toQProj <$> nqnfProject (fromQProj inv p) nqnfIn
+    QGroup p e  -> mapOp (uncurry QGroup) <$> nqnfAggregate p e nqnfIn
+    QSort _     -> lift $ rebaseOp $ putO $ nqnfAny1 (fst <$> o') nqnfIn
+    QLimit _    -> return $ putO $ nqnfAny1 (fst <$> o') nqnfIn
+    QDrop _     -> return $ putO $ nqnfAny1 (fst <$> o') nqnfIn
 
 newtype MkQB e s = MkQB { mkQB :: forall a . a -> a -> Query (QNFName e s,e) a}
 
@@ -189,10 +189,13 @@ toNQNFQueryB o l r =
     QRightAntijoin p -> do
       p' <- nqnfResOrig <$> nqnfJoin p l r
       return $ mapOp' (const $ QRightAntijoin p') $ nqnfRightAntijoin p' l r
+    -- QProjQuery are the columns of the lhs and the rows of the
+    -- rhs. Used for join intermediates.
     QProjQuery -> lift $ do
       keyAssoc <- leftAsRightKeys
-      mapOp (\p -> Right $ MkQB $ \_ q -> Q1 (QProj p) (Q0 q))
-        <$> nqnfProject [(kl,E0 kr) | (kl,kr) <- keyAssoc] r
+      mapOp (\p -> Right $ MkQB $ \_ q ->
+             Q1 (QProj QProjNoInv $ qpneProj p) (Q0 q))
+        <$> nqnfProject (emptyCompl [(kl,E0 kr) | (kl,kr) <- keyAssoc]) r
     -- All columns in the left appear on the right so just keep the
     -- columns of th right
     QDistinct -> lift $ do
@@ -203,6 +206,8 @@ toNQNFQueryB o l r =
           (E0 . snd <$> keyAssoc)
           r
   where
+    emptyCompl
+      p = QProjNonEmpty { qpneCompl = [],qpneProj = p,qpneOverlap = [] }
     -- In QDistinct and QProjQuery if l has automatically exposed
     -- unique keys they will have necessarily different names to the
     -- corresponding r uniquekeys. Keep the r version of each key to
@@ -317,48 +322,76 @@ nqnfCombineCols colAssocC = (nm,qnf) where
   qnf :: QNFQueryI e s
   qnf = mkQnf $ Left $ toHashBag $ snd <$> colGAssoc
 
--- |Make a result record for a projection.
-nqnfProject :: forall e e' s .
-              (e' ~ (QNFName e s,e), Hashables2 e s) =>
-              [(e,Expr e)]
-            -> NQNFQueryI e s
-            -> QNFBuild e s (NQNFResultI [(e',Expr e')] e s)
+-- | Make a result record for a projection. Note that the complement
+-- is essentially the input with some columns omitted so we just use
+-- the input map to translate the complements to create the output
+-- operator.
+--
+-- Note that the QProjNonEmpty may have the complement actually be
+-- empty when calculating a QProjQuery which is strictly an
+-- intermediate node.
+nqnfProject
+  :: forall e e' s .
+  (e' ~ (QNFName e s,e),Hashables2 e s)
+  => QProjNonEmpty e
+  -> NQNFQueryI e s
+  -> QNFBuild e s (NQNFResultI (QProjNonEmpty e') e s)
 nqnfProject p l =
-  qnfCached qnfProject_cache (\cc x -> cc{qnfProject_cache=x}) (p,l)
+  qnfCached qnfProject_cache (\cc x -> cc { qnfProject_cache = x }) (p,l)
   $ nqnfProjectI p l
-nqnfProjectI :: forall e e' s .
-               (e' ~ (QNFName e s,e), Hashables2 e s) =>
-               [(e,Expr e)]
-             -> NQNFQueryI e s
-             -> Either (QNFError e s) (NQNFResultI [(e',Expr e')] e s)
-nqnfProjectI [] _ = return NQNFResult{
-  nqnfResInOutNames=[],
-  nqnfResOrig=[],
-  nqnfResNQNF=(mempty,
-               updateHash QNFQuery{
-                  qnfColumns=Left mempty,
-                  qnfProd=mempty,
-                  qnfSel=mempty,
-                  qnfOrigDEBUG'=EmptyF,
-                  qnfHash=undefined})}
-nqnfProjectI proj nqnfIn = do
-  colsOutAssoc0 :: [(e, (QNFColProj e s, Expr e'))] <-
-    nqnfProjCol nqnfIn `traverse2` proj
+nqnfProjectI
+  :: forall e e' s .
+  (e' ~ (QNFName e s,e),Hashables2 e s)
+  => QProjNonEmpty e
+  -> NQNFQueryI e s
+  -> Either (QNFError e s) (NQNFResultI (QProjNonEmpty e') e s)
+nqnfProjectI QProjNonEmpty{qpneProj=[]} _ =
+  return
+    NQNFResult
+    { nqnfResInOutNames = []
+     ,nqnfResOrig =
+        QProjNonEmpty { qpneOverlap = [],qpneCompl = [],qpneProj = [] }
+     ,nqnfResNQNF =
+        (mempty
+        ,updateHash
+           QNFQuery
+           { qnfColumns = Left mempty
+            ,qnfProd = mempty
+            ,qnfSel = mempty
+            ,qnfOrigDEBUG' = EmptyF
+            ,qnfHash = undefined
+           })
+    }
+nqnfProjectI QProjNonEmpty {..} nqnfIn@(nmIn,_) = do
+  colsOutAssoc0 :: [(e,(QNFColProj e s,Expr e'))]
+    <- nqnfProjCol nqnfIn `traverse2` qpneProj
   let colsOutAssoc = colsOutAssoc0
   let nqnf = nqnfCombineCols $ fmap2 fst colsOutAssoc
   return $ mkRes colsOutAssoc nqnf
   where
-    mkRes :: [(e, (QNFColProj e s,Expr e'))]
+    mkRes :: [(e,(QNFColProj e s,Expr e'))]
           -> NQNFQueryI e s
-          -> NQNFResultI [(e', Expr e')] e s
-    mkRes colsAssoc nqnfOut = NQNFResult {
-      nqnfResNQNF=nqnfOut,
-      nqnfResOrig=[((Column (qnfGeneralizeQueryF $ Left outCol) 0,e), expr)
-                  | (e,(outCol,expr)) <- colsAssoc],
-      -- There is no one-to-one correspondance of in/out names in
-      -- aggregations.
-      nqnfResInOutNames=[]
+          -> NQNFResultI (QProjNonEmpty e') e s
+    mkRes colsAssoc nqnfOut@(nmOut,_) =
+      NQNFResult
+      { nqnfResNQNF = nqnfOut
+       ,nqnfResOrig = QProjNonEmpty
+          { qpneOverlap = fromJustErr -- symbol lookup failed
+              $ traverse
+                (bitraverse (`HM.lookup` primAssoc) (`HM.lookup` secAssoc))
+                qpneOverlap
+           ,qpneCompl = fromJustErr $ traverse (`HM.lookup` secAssoc) qpneCompl
+           ,qpneProj = [((Column (qnfGeneralizeQueryF $ Left outCol) 0,e),expr)
+                       | (e,(outCol,expr)) <- colsAssoc]
+          }
+        -- There is no one-to-one correspondance of in/out names in
+        -- aggregations.
+       ,nqnfResInOutNames = []
       }
+      where
+        primAssoc = HM.mapWithKey (\e c -> (Column c 0,e))  nmOut
+        secAssoc = HM.mapWithKey (\e c -> (Column c 0,e)) nmIn
+
 
 nqnfAggregate
   :: forall e s e' .
@@ -737,7 +770,7 @@ nqnfSelectInternal pM (nm,qnf0) =
                  $ (\x -> HS.fromList x <> qnfSel qnf0)
                  . fmap2 normalizeRel
                  . toList
-                 . propQnfAnd
+                 . propCnfAnd
                  . fmap3 (dropSelProdN . fst)
                  <$> p'
              })

@@ -18,7 +18,6 @@ import           Data.Functor.Identity
 import           Data.NodeContainers
 import           Data.Query.SQL.FileSet
 import           Data.Utils.AShow
-import           Data.Utils.Functors
 import           Data.Utils.Hashable
 import           Data.Void
 import           GHC.Generics

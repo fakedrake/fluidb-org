@@ -40,25 +40,24 @@ import           Data.Bipartite
 import           Data.Bitraversable
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
-import           Data.Cluster.Types.Clusters
 import           Data.Cluster.Types.Monad
 import           Data.Cluster.Types.Zip
 import           Data.CppAst.CppType
 import           Data.Either
 import           Data.Functor.Identity
-import qualified Data.HashMap.Strict                   as HM
+import qualified Data.HashMap.Strict                  as HM
+import qualified Data.HashSet                         as HS
 import           Data.List
-import qualified Data.List.NonEmpty                    as NEL
+import qualified Data.List.NonEmpty                   as NEL
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Query.Algebra
-import           Data.Query.Optimizations.ExposeUnique
+import           Data.Query.Optimizations.RemapUnique
 import           Data.Query.QuerySchema
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -85,12 +84,13 @@ getReversibleB = \case
   QRightAntijoin _ -> Irreversible
 getReversibleU :: UQOp e -> IsReversible
 getReversibleU = \case
-  QSel _     -> Reversible
-  QGroup _ _ -> Irreversible
-  QProj _    -> Reversible
-  QSort _    -> Irreversible
-  QLimit _   -> Reversible
-  QDrop _    -> Reversible
+  QSel _             -> Reversible
+  QGroup _ _         -> Irreversible
+  QProj QProjNoInv _ -> Irreversible
+  QProj _ _          -> Reversible
+  QSort _            -> Irreversible
+  QLimit _           -> Reversible
+  QDrop _            -> Reversible
 
 joinClustPropagator
   :: forall e s t n .
@@ -260,12 +260,12 @@ liftG
   -> Defaulting (QueryShape e s)
   -> Either (AShowStr e s) (Defaulting (QueryShape e s))
 liftG old gf l0 r0 = (<> old) <$> case gf of
-  G0 Nothing  -> return old
-  G0 (Just x) -> error "This doesn't make sence. TODO change the type" -- return $ pure x
-  G1 f        -> traverse f l
-  GL f        -> sequenceA $ f <$> l <*> r
-  GR f        -> sequenceA $ f <$> l <*> r
-  G2 f        -> sequenceA $ f <$> l <*> r
+  G0 Nothing   -> return old
+  G0 (Just _x) -> error "This doesn't make sence. TODO change the type" -- return $ pure x
+  G1 f         -> traverse f l
+  GL f         -> sequenceA $ f <$> l <*> r
+  GR f         -> sequenceA $ f <$> l <*> r
+  G2 f         -> sequenceA $ f <$> l <*> r
   where
     -- We don't want full values to be leaked through the propagators
     l = defSyncAndDemote l0
@@ -332,7 +332,7 @@ uopInput
 uopInput (Tup2 assocPrim assocSec) op = case op of
   QSel _     -> pIn (.* 0.3)
   QGroup _ _ -> G0 Nothing
-  QProj _    -> G0 Nothing
+  QProj _ _  -> G0 Nothing
   QSort _    -> pIn id
   QLimit i   -> pIn (const i)
   QDrop i    -> pIn (`minus` i)
@@ -387,6 +387,8 @@ bopOutput assoc o = case o of
            ,qsCertainty = mkCert (qsCertainty primSize) (qsCertainty secSize)
           }
 
+
+
 -- | Output is Tup2 (Inp x Sec -> Prim) (Inp x Prim -> Sec)
 uopOutputs
   :: forall e s .
@@ -397,12 +399,12 @@ uopOutputs
   -> UQOp (ShapeSym e s)
   -> Tup2 (G e s (QueryShape e s))
 uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
-  QSel p -> tw (>>= disambEq p)
+  QSel p -> tw (>>= fmap HS.toList . disambEq p . HS.fromList)
   -- For proj and group associations dont mean much
   QGroup p es -> Tup2 (outGrpShape p es) (G0 Nothing)
-  QProj prj -> Tup2
+  QProj inv prj -> Tup2
     (projToShape $ const prj)
-    (projToShape $ \inpShape -> [(e,E0 e) | e <- complementProj inpShape prj])
+    (projToShape $ const [(e,E0 e) | e <- qpiCompl inv])
   QSort _ -> Tup2 (G1 $ pOut id id assocPrim) (G0 Nothing)
   QLimit _ -> tw id
   QDrop _ -> tw id

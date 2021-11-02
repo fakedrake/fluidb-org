@@ -243,7 +243,7 @@ planFrontier
 
 type CppCode = String
 runSingleQuery
-  :: (Hashables2 e s,AShow e,AShow s,ExpressionLike e,MonadFakeIO m)
+  :: (Hashables2 e s,AShow2 e s,ExpressionLike e,MonadFakeIO m)
   => Query (ShapeSym e s) (QueryShape e s,s)
   -> GlobalSolveT e s t n m ([Transition t n],CppCode)
 runSingleQuery query = sqlToSolution query popSol $ do

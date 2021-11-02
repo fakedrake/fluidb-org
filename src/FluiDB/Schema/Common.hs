@@ -5,9 +5,10 @@ import           Data.Bifunctor
 import           Data.Bitraversable
 import           Data.Codegen.Build
 import           Data.Codegen.Schema
+import qualified Data.HashSet                         as HS
 import           Data.QnfQuery.Build
 import           Data.Query.Algebra
-import           Data.Query.Optimizations.ExposeUnique
+import           Data.Query.Optimizations.RemapUnique
 import           Data.Query.QuerySchema
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
@@ -25,29 +26,30 @@ annotateQuery
   -> Query e s
   -> Either (GlobalError e s t n) (Query (ShapeSym e s) (QueryShape e s,s))
 annotateQuery cppConf luSize q = do
-  let uniqSym = \e -> do
-        i <- get
-        case asUnique cppConf i e of
-          Just e' -> modify (+ 1) >> return e'
-          Nothing -> throwAStr $ "Not a symbol: " ++ ashow e
-  qUniqExposed :: Query e s <- maybe
+  qUniqRemaped :: Query e s <- maybe
     (throwAStr "Couldn't find uniq:")
-    ((>>= maybe (throwAStr "Couldn't expose uniques") (return . fst))
+    ((>>= maybe (throwAStr "Couldn't remape uniques") (return . psQuery))
      . headListT
      . (`evalStateT` (0 :: Int))
-     . exposeUnique uniqSym)
-    $ traverse (\s -> (s,) <$> uniqueColumns cppConf s) q
+     . remapUnique)
+    $ traverse (mkPrelimShape cppConf) q
   let mkShape s = do
         size <- luSize s
         mkShapeFromTbl cppConf size s
   first toGlobalError
     $ (>>= maybe (throwAStr "Unknown symbol") return)
     $ fmap
-      (bitraverse
-         (pure . uncurry mkShapeSym)
-         (\s -> (,s) <$> mkShape s)
+      (bitraverse (pure . uncurry mkShapeSym) (\s -> (,s) <$> mkShape s)
        . snd
        . fromJustErr)
     $ (`evalStateT` def)
     $ headListT
-    $ toQNF (fmap2 snd . tableSchema cppConf) qUniqExposed
+    $ toQNF (fmap2 snd . tableSchema cppConf) qUniqRemaped
+
+
+mkPrelimShape :: Hashables1 e => QueryCppConf e s -> s -> Maybe (PrelimShape e s)
+mkPrelimShape cppConf s = do
+  uniq <- HS.fromList <$> uniqueColumns cppConf s
+  sch <- tableSchema cppConf s
+  return
+    $ PrelimShape { psQuery = Q0 s,psUniq = [uniq],psExtent = snd <$> sch }

@@ -59,8 +59,8 @@ data AllJoinsQuery e s
   = AllJoinsQuery (Maybe (Prop (Rel (Expr e)))) [Query e (AllJoinsQuery e s)]
   | AllJoinsQueryPure s
   deriving (Show,Eq,Generic)
-instance (AShow e, AShow s) => AShow (AllJoinsQuery e s)
-instance (ARead e, ARead s) => ARead (AllJoinsQuery e s)
+instance AShow2 e s => AShow (AllJoinsQuery e s)
+instance ARead2 e s => ARead (AllJoinsQuery e s)
 
 -- |Get all possible join patterns.
 possibleJoins :: MonadTighten e s m => Query e s -> m [Query e s]

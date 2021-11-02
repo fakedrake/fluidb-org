@@ -191,8 +191,9 @@ parseTableAsClause rmPref sM = do
   r <- sM
   parseMaybe (word "as" >> parseSym) >>= \case
     Nothing -> return $ const r
-    Just pref -> return
-      $ \es -> Q1 (QProj $ nub $ mapMaybe (\e -> (e,) . E0 <$> rmPref pref e) es) r
+    Just pref -> return $ \es -> Q1
+      (QProj QProjNoInv $ nub $ mapMaybe (\e -> (e,) . E0 <$> rmPref pref e) es)
+      r
 parseWhere :: (HasCallStack,MonadParse p) => p e -> p (Query e s -> Query e s)
 parseWhere eM = do
   word "where"
@@ -210,7 +211,7 @@ parseSelectProj
   -> p (Query e s -> Query e s)
 parseSelectProj eM = do
   word "select"
-  fmap (Q1 . QProj) $ sep1 (word ",") $ do
+  fmap (Q1 . QProj QProjNoInv) $ sep1 (word ",") $ do
     ex <- parseExpr (E0 <$> eM)
     parseMaybe (word "as" >> eM) >>= \case
       Just e -> return (e,ex)
@@ -290,7 +291,7 @@ parseNestedQueryE eM qM =
     -- exposed (the rest are helpers exposed by us)
     exposedSymbol = \case
         Q1 (QGroup ((l,_):_) _) _ -> return l
-        Q1 (QProj ((l,_):_)) _ -> return l
+        Q1 (QProj QProjNoInv ((l,_):_)) _ -> return l
         Q1 _ q -> exposedSymbol q
         q -> throwText $ "Expected a query with unique symbols, not "
             ++ show (bimap (const ()) (const ()) q)

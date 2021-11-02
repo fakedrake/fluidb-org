@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 module Data.Query.Optimizations.Echo
   (TQuery(..)
   ,EchoId
@@ -33,7 +34,7 @@ data TQuery e s =
          }
   deriving (Generic,Eq)
 
-instance (AShow s,AShow e) => AShow (TQuery e s)
+instance AShow2 e s => AShow (TQuery e s)
 instance Foldable (TQuery s) where
   foldr f ini TQuery{tqQuery=q0} = case q0 of
     Left q  -> foldr (flip $ foldr f) ini q

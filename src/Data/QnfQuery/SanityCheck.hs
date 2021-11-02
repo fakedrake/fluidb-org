@@ -112,7 +112,7 @@ sanityCheckProd0 = mapM_ go where
       QProd   -> err $ ashow o
       _       -> go l >> go r
     Q1 o q -> case o of
-      QProj _    -> err $ ashow o
+      QProj _ _  -> err $ ashow o
       QGroup _ _ -> err $ ashow o
       QSel _     -> err $ ashow o
       _          -> go q
@@ -133,7 +133,7 @@ instance IOOp op => IOOp (Compose Maybe op) where
 instance IOOp UQOp where
   ashowOp = ashow'
   opInOutSyms = \case
-    QProj p     -> (toList2 $ snd <$> p, fst <$> p)
+    QProj _ p   -> (toList2 $ snd <$> p, fst <$> p)
     QGroup p es -> (toList2 es ++ toList2 (toList3 . snd <$> p), fst <$> p)
     x           -> ([],toList x)
 
@@ -171,7 +171,7 @@ sanityCheckHash (nm,qnf) = do
 #if 0
 sanityCheckRes :: (AShowError e s err, MonadError err m, HasCallStack,
                   IOOp f, Hashables2 e s) =>
-                 ((AShow e,AShow s) => String)
+                 ((AShow2 e s) => String)
                -> (a -> f (QNFName e s, e))
                -> NQNFResultI a e s
                -> m (NQNFResultI a e s)
@@ -190,7 +190,7 @@ sanityCheckRes msg f res = do
 #else
 sanityCheckRes :: (AShowError e s err, MonadError err m, HasCallStack,
                   IOOp f, Hashables2 e s) =>
-                 ((AShow e,AShow s) => String)
+                 ((AShow2 e s) => String)
                -> (a -> f (QNFName e s, e))
                -> NQNFResultI a e s
                -> m (NQNFResultI a e s)

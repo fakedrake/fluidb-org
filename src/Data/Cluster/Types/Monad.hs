@@ -327,6 +327,8 @@ ifDefaultingEmpty p isEmpty isntEmpty = case p of
   _               -> isntEmpty
 
 instance AShow a => AShow (Defaulting a)
+
+-- | Like any cluster only you don't have to lookup the defaulting values.
 type PropCluster a f e s t n =
   AnyCluster' (ShapeSym e s) (WMetaD (Defaulting a) f) t n
 type ShapeCluster f e s t n = PropCluster (QueryShape e s) f e s t n

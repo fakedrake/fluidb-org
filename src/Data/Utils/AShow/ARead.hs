@@ -17,6 +17,7 @@ module Data.Utils.AShow.ARead
   , garead'
   , ARead(..)
   , AReadV
+  , ARead2
   , genericARead'
   , areadCase'
   ) where
@@ -344,3 +345,5 @@ areadCase' = \case
       (t,vM):xs -> do
         v <- aread' vM
         ((read t,v) :) <$> go xs
+
+type ARead2 a b = (AReadV a,AReadV b)

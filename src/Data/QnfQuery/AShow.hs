@@ -32,8 +32,8 @@ qnfToQuery
 qnfToQuery QNFQuery {..} = proj
   where
     proj = case qnfColumns of
-      Left (toList -> cols)
-        -> Q1 (QProj ((Nothing,) <$> fmap2 nameToSym cols)) sel
+      Left (toList -> cols) ->
+        Q1 (QProj QProjNoInv ((Nothing,) <$> fmap2 nameToSym cols)) sel
       Right (toList -> aggCols,toList -> comb) -> Q1
         (QGroup
            ((Nothing,) . E0 <$> fmap2 (E0 . nameToSym) aggCols)

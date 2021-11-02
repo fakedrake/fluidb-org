@@ -97,7 +97,7 @@ evaluationValue = \case
 -- | The code of each plan.
 getCppCode
   :: forall e s (t :: *) (n :: *) m .
-  (AShow e,AShow s,CC.ExpressionLike e,Monad m,Hashables2 e s)
+  (AShow2 e s,CC.ExpressionLike e,Monad m,Hashables2 e s)
   => CodeBuilderT e s t n m [CC.Statement CC.CodeSymbol]
 getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
   ep <- NEL.head . epochs <$> lift getGCState
@@ -139,7 +139,7 @@ andThen stmts finalM = do
 
 mkCodeBlock
   :: forall e s t n m .
-  (CC.ExpressionLike e,AShow e,AShow s,Monad m,Hashables2 e s)
+  (CC.ExpressionLike e,AShow2 e s,Monad m,Hashables2 e s)
   => Tup2 [NodeRef n]
   -> AnyCluster e s t n
   -> Direction
@@ -243,7 +243,7 @@ getCppProgram body = do
 -- | Physical plans
 getQuerySolutionCpp
   :: forall e s t n m .
-  (AShow e,AShow s,CC.ExpressionLike e,Monad m,Hashables2 e s)
+  (AShow2 e s,CC.ExpressionLike e,Monad m,Hashables2 e s)
   => CodeBuilderT e s t n m String
 getQuerySolutionCpp = do
   tellInclude $ CC.LibraryInclude "codegen.hh"

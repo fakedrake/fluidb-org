@@ -328,8 +328,8 @@ data QNFCache e s = QNFCache {
                      :-> L e s (NQNFResultI () e s)
   , qnfSelect_cache :: (Prop (Rel (Expr e)),NQNFQueryI e s)
                      :-> NQNFResultI (Prop (Rel (Expr (QNFName e s, e)))) e s
-  , qnfProject_cache :: ([(e,Expr e)],NQNFQueryI e s)
-                     :-> NQNFResultI [((QNFName e s,e),Expr (QNFName e s,e))] e s
+  , qnfProject_cache :: (QProjNonEmpty e,NQNFQueryI e s)
+                     :-> NQNFResultI (QProjNonEmpty (QNFName e s,e)) e s
   , qnfAggregate_cache :: ([(e,Expr (Aggr (Expr e)))],[Expr e],NQNFQueryI e s)
                        :-> NQNFResultI
                        ([((QNFName e s,e),Expr (Aggr (Expr (QNFName e s,e))))],

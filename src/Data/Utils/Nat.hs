@@ -26,7 +26,9 @@ newtype Min a = Min { unMin :: Maybe a }
 
 newtype Neg a = Neg a
   deriving (Show,Eq,Generic)
+pattern SumInf :: Sum a
 pattern SumInf = Sum Nothing
+pattern MinInf :: Min a
 pattern MinInf = Min Nothing
 
 instance AShow a => AShow (Sum a)

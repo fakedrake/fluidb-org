@@ -62,11 +62,12 @@ annotateTypes eqE colType litType = recur
       Q1 o l -> do
         l' <- recur l
         let ?q = [l'] in case o of
-          QProj p -> do
+          QProj i p -> do
             p' <- forM p $ \(e,expr) -> do
               eT <- traverse sT expr
               return ((e,expT eT),eT)
-            Q1 (QProj p') <$> recur l
+            i' <- forM i sT
+            Q1 (QProj i' p') <$> recur l
           QGroup p es -> do
             p' <- forM p $ \(e,agg) -> do
               aT <- traverse3 sT agg
@@ -123,20 +124,22 @@ annotateTables isInCol = \case
   Q2 o l r -> let l' = recur l
                   r' = recur r
                   syms = lefts $ [l',r'] >>= querySchemaNaive
-    in Q2 ((`f` syms) <$> o) l' r'
+    in Q2 ((`annotE` syms) <$> o) l' r'
   Q1 o l -> let l' = recur l
                 syms = lefts $ querySchemaNaive l' in case o of
     QGroup p es -> Q1
       (QGroup
-         [((e,Nothing),fmap3 (`f` syms) expr) | (e,expr) <- p]
-         (fmap2 (`f` syms) es))
+         [((e,Nothing),fmap3 (`annotE` syms) expr) | (e,expr) <- p]
+         (fmap2 (`annotE` syms) es))
       l'
-    QProj p -> Q1
-      (QProj [((e,Nothing),(`f` syms) <$> expr) | (e,expr) <- p])
+    QProj i p -> Q1
+      (QProj
+         ((,Nothing) <$> i)
+         [((e,Nothing),(`annotE` syms) <$> expr) | (e,expr) <- p])
       l'
-    _ -> Q1 ((`f` syms) <$> o) l'
+    _ -> Q1 ((`annotE` syms) <$> o) l'
   Q0 s -> Q0 s
   where
-    f :: e' -> [s] -> (e',Maybe s)
-    f e ss = (e,listToMaybe $ filter (isInCol e) ss)
+    annotE :: e' -> [s] -> (e',Maybe s)
+    annotE e ss = (e,find (isInCol e) ss)
     recur = annotateTables isInCol

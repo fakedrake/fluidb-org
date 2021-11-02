@@ -140,7 +140,7 @@ instance (Hashables2 (f n) (g t),AShow (g t),AShow (f n))
 
 instance (Hashables2 (f n) (g t),AShow (g t),AShow (f n))
   => AShow (NClust' g f t n)
-instance (Hashables3 e (f n) (f t),AShow e,AShow (f n),AShow (f t),AShow (f n))
+instance (Hashables3 e (f n) (f t),AShowV e,AShow (f n),AShow (f t),AShow (f n))
   => AShow (AnyCluster' e f t n)
 
 -- instance (ARead e, ARead (f n), ARead (f n)) => ARead (AnyCluster' e f t n)
@@ -301,27 +301,22 @@ traverseUnRoles fInput fOutput UnClust{..} = fmap updateCHash $ UnClust
   <*> fOutput unClusterSecondaryOut
   <*> pure unClusterT
   <*> pure undefined
-
-traverseBinRoles
-  :: Applicative f'
-  => (g n -> f' (g r))
-  -> (g n -> f' (g r))
-  -> BinClust' f g t n
-  -> f' (BinClust' f g t r)
+traverseBinRoles :: Applicative f' =>
+                   (g n -> f' (g r))
+                 -> (g n -> f' (g r))
+                 -> BinClust' f g t n -> f' (BinClust' f g t r)
 traverseBinRoles fInput fOutput BinClust{..} = fmap updateCHash $ BinClust
   <$> fInput binClusterLeftIn
   <*> fInput binClusterRightIn
   <*> fOutput binClusterOut
   <*> pure binClusterT
   <*> pure undefined
-
-traverseJoinRoles
-  :: Applicative f'
-  => (g n -> f' (g r))
-  -> (g n -> f' (g r))
-  -> (g n -> f' (g r))
-  -> JoinClust' f g t n
-  -> f' (JoinClust' f g t r)
+traverseJoinRoles :: Applicative f' =>
+                    (g n -> f' (g r))
+                  -> (g n -> f' (g r))
+                  -> (g n -> f' (g r))
+                  -> JoinClust' f g t n
+                  -> f' (JoinClust' f g t r)
 traverseJoinRoles fInput fInterm fOutput JoinClust{..} = fmap updateCHash $ JoinClust
   <$> traverseBinRoles fInput fOutput joinBinCluster
   <*> fOutput joinClusterLeftAntijoin
@@ -698,7 +693,7 @@ destructCluster
   :: AnyCluster' e NodeRef t n -> ([NodeRef n],[NodeRef n],[NodeRef n])
 destructCluster c = (clusterInputs c,clusterInterms c,clusterOutputs c)
 
-ashowCluster :: AnyCluster' e NodeRef t n -> SExp
+ashowCluster :: AnyCluster' (ShapeSym e s) NodeRef t n -> SExp
 ashowCluster c = sexp name [ashow' $ destructCluster c]
   where
     name = case c of
