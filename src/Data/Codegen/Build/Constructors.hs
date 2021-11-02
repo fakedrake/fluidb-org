@@ -649,11 +649,8 @@ toIoTup ioFiles = catch $ case iofCluster ioFiles of
     mktup [unClusterPrimaryOut,unClusterSecondaryOut] [unClusterIn]
   NClustW _c -> error "ncluster arguments requested: "
   where
-    catch m =
-      catchError m
-      $ const
-      $ throwAStr
-      $ "Error in toIoTup:" ++ ashow (ashowIOFiles $ iofCluster ioFiles)
+    catch m = catchError m $ \err -> throwAStr
+      $ "Error in toIoTup:" ++ ashow (ashowIOFiles $ iofCluster ioFiles,err)
 
 mktup
   :: forall e s t n m ops .

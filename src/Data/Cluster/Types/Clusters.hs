@@ -311,12 +311,13 @@ traverseBinRoles fInput fOutput BinClust{..} = fmap updateCHash $ BinClust
   <*> fOutput binClusterOut
   <*> pure binClusterT
   <*> pure undefined
-traverseJoinRoles :: Applicative f' =>
-                    (g n -> f' (g r))
-                  -> (g n -> f' (g r))
-                  -> (g n -> f' (g r))
-                  -> JoinClust' f g t n
-                  -> f' (JoinClust' f g t r)
+traverseJoinRoles
+  :: Applicative f'
+  => (g n -> f' (g r))
+  -> (g n -> f' (g r))
+  -> (g n -> f' (g r))
+  -> JoinClust' f g t n
+  -> f' (JoinClust' f g t r)
 traverseJoinRoles fInput fInterm fOutput JoinClust{..} = fmap updateCHash $ JoinClust
   <$> traverseBinRoles fInput fOutput joinBinCluster
   <*> fOutput joinClusterLeftAntijoin
