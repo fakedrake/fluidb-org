@@ -447,8 +447,6 @@ selectOp msg checkOp (WMetaD (ops,_)) = case filter checkOp ops of
   []   -> throwAStr $ "No matching operator on output: " ++ msg ops
   op:_ -> return op
 
-
-
 -- | Emits the constructor for a join query. EasyJClust can output any
 -- _direct_ mapping (ie no expression, just a permutation) of the
 -- input columns to the output. This is used both for joining and for
@@ -458,6 +456,7 @@ joinQueryCall
   :: MonadCodeCheckpoint e s t n m => Direction -> EasyJClust e s -> m Constr
 joinQueryCall dir EasyJClust {..} = case dir of
   ReverseTrigger -> evalQueryEnv (Identity ejcJoin) $ do
+    -- Remember: there are two outputs per input symbol in join.
     lproj <- sequenceA
       [(i,) . E0 <$> translateSym (reverse ejcIO) i | i <- shapeAllSyms ejcLeft]
     rproj <- sequenceA
@@ -637,14 +636,17 @@ toIoTup
     ,[Maybe (CC.Expression CC.CodeSymbol)])
 toIoTup ioFiles = catch $ case iofCluster ioFiles of
   JoinClustW JoinClust {..} -> mktup
+    (iofDir ioFiles)
     [joinClusterLeftAntijoin
     ,binClusterOut joinBinCluster
     ,joinClusterRightAntijoin]
     [binClusterLeftIn joinBinCluster,binClusterRightIn joinBinCluster]
-  BinClustW
-    BinClust {..} -> mktup [binClusterOut] [binClusterLeftIn,binClusterRightIn]
-  UnClustW UnClust {..} ->
-    mktup [unClusterPrimaryOut,unClusterSecondaryOut] [unClusterIn]
+  BinClustW BinClust {..} ->
+    mktup (iofDir ioFiles) [binClusterOut] [binClusterLeftIn,binClusterRightIn]
+  UnClustW UnClust {..} -> mktup
+    (iofDir ioFiles)
+    [unClusterPrimaryOut,unClusterSecondaryOut]
+    [unClusterIn]
   NClustW _c -> error "ncluster arguments requested: "
   where
     catch m = catchError m $ \err -> throwAStr
@@ -653,7 +655,8 @@ toIoTup ioFiles = catch $ case iofCluster ioFiles of
 mktup
   :: forall e s t n m ops .
   MonadCodeError e s t n m
-  => [WMetaD
+  => Direction
+  -> [WMetaD
        ops
        Identity
        (NodeRole
@@ -670,8 +673,11 @@ mktup
   -> m
     ([Maybe (CC.Expression CC.CodeSymbol)]
     ,[Maybe (CC.Expression CC.CodeSymbol)])
-mktup outs ins = (,) <$> traverse mkOut outs <*> traverse mkIn ins
+mktup dir fwdOuts fwdIns = (,) <$> traverse mkOut outs <*> traverse mkIn ins
   where
+    (outs,ins) = case dir of
+      ForwardTrigger -> (fwdOuts,fwdIns)
+      ReverseTrigger -> (fwdIns,fwdOuts)
     mkIn,mkOut
       :: (ConstructorArg o,ConstructorArg i)
       => WMetaD a Identity (NodeRole interm (MaybeBuild i) (MaybeBuild o))
