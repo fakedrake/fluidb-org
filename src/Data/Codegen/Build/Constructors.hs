@@ -612,8 +612,8 @@ constrArgs
   => IOFilesD e s
   -> m [CC.Expression CC.CodeSymbol]
 constrArgs ioFiles = do
-  t <- toIoTup ioFiles
-  case (iofCluster ioFiles,iofDir ioFiles,t) of
+  outAndIn <- toIoTup ioFiles
+  case (iofCluster ioFiles,iofDir ioFiles,outAndIn) of
     (JoinClustW _,ReverseTrigger,([Just l,Just r],[Just lo,Just o,Just ro])) ->
       return [l,r,lo,o,ro] -- mkUnJoin2
     (JoinClustW _,ReverseTrigger,([Just i,Nothing],[Just lo,Just o,Nothing])) ->
