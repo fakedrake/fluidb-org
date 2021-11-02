@@ -61,7 +61,6 @@ module Control.Antisthenis.Types
   ,incrZipperUId,zNamed,trZ) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
-import           Control.Antisthenis.ATL.Transformers.Moore
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.ZipperId

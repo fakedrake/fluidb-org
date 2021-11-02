@@ -23,15 +23,15 @@ import           Data.Utils.Tup
 import           Prelude                                   hiding (id, (.))
 
 newtype WriterArrow w c x y = WriterArrow { runWriterArrow :: c x (w,y) }
-instance (Arrow c,Monoid w) => ArrowWriter (WriterArrow w c) where
+instance (Arrow c,Monoid w,Profunctor c) => ArrowWriter (WriterArrow w c) where
   type AWriterW (WriterArrow w c) = w
   type AWriterArr (WriterArrow w c) = c
   arrListen' (WriterArrow c) = c
   arrCoListen' = WriterArrow
-instance (Monoid w,ArrowApply c) => ArrowApply (WriterArrow w c) where
+instance (Monoid w,ArrowApply c,Profunctor c) => ArrowApply (WriterArrow w c) where
   app = WriterArrow $ proc (WriterArrow ab,a) -> app -< (ab,a)
   {-# INLINE app #-}
-instance (ArrowBind Maybe c,ArrowChoice c,Monoid s)
+instance (ArrowBind Maybe c,ArrowChoice c,Monoid s,Profunctor c)
   => ArrowBind Maybe (WriterArrow s c) where
   arrBind (WriterArrow bc) (WriterArrow ab) = WriterArrow $ proc a -> do
     (sb,mb) <- ab -< a
@@ -40,7 +40,7 @@ instance (ArrowBind Maybe c,ArrowChoice c,Monoid s)
       Just b -> do
         (sc,c) <- bc -< b
         returnA -< (sc <> sb,c)
-  arrReturn = WriterArrow $ arrReturn >>> arr (mempty,)
+  arrReturn = WriterArrow $ rmap (mempty,)arrReturn
   {-# INLINE arrBind #-}
   {-# INLINE arrReturn #-}
 
@@ -52,20 +52,22 @@ instance ArrowTransformer (WriterArrow w) where
   {-# INLINE unlift' #-}
   {-# INLINE lift' #-}
 
-instance (Monoid w,Arrow c) => Category (WriterArrow w c) where
+instance (Monoid w,Arrow c,Profunctor c) => Category (WriterArrow w c) where
   WriterArrow bc . WriterArrow ab =
-    WriterArrow $ ab >>> second bc >>> arr (\(s,(s',x)) -> (s <> s',x))
-  id = arrLift id
+    WriterArrow $ rmap (\(s,(s',x)) -> (s <> s',x)) $ ab >>> second bc
+  id = WriterArrow $ rmap (mempty,) id
   {-# INLINE (.) #-}
   {-# INLINE id #-}
 
-instance (Monoid w,Arrow c) => Arrow (WriterArrow w c) where
+instance (Monoid w,Arrow c,Profunctor c) => Arrow (WriterArrow w c) where
   arr f = arrLift (arr f)
-  first (WriterArrow f) = WriterArrow $ first f >>> arr (\((w,c),d) -> (w, (c,d)))
+  first (WriterArrow f) =
+    WriterArrow $ rmap (\((w,c),d) -> (w,(c,d))) $ first f
   {-# INLINE arr #-}
   {-# INLINE first #-}
 
-instance (Monoid r,ArrowState c) => ArrowState (WriterArrow r c) where
+instance (Monoid r,ArrowState c,Profunctor c,Profunctor (AStateArr c))
+  => ArrowState (WriterArrow r c) where
   type AStateSt (WriterArrow r c) = AStateSt c
   type AStateArr (WriterArrow r c) =
     (WriterArrow r (AStateArr c))
@@ -74,7 +76,7 @@ instance (Monoid r,ArrowState c) => ArrowState (WriterArrow r c) where
   arrModify (WriterArrow c) =
     WriterArrow $ arrModify $ c >>> arr (\(s,(r,a)) -> (r,(s,a)))
 
-instance (Monoid w,ArrowChoice c) => ArrowChoice (WriterArrow w c) where
+instance (Monoid w,ArrowChoice c,Profunctor c) => ArrowChoice (WriterArrow w c) where
   WriterArrow l +++ WriterArrow r =
     WriterArrow
     $ l +++ r
@@ -83,7 +85,8 @@ instance (Monoid w,ArrowChoice c) => ArrowChoice (WriterArrow w c) where
                Right (w,x) -> (w,Right x))
   {-# INLINE (+++) #-}
 
-instance (Monoid w,ArrowMachine c) => ArrowMachine (WriterArrow w c) where
+instance (Monoid w,ArrowMachine c,Profunctor c,Profunctor (AMachineArr c))
+  => ArrowMachine (WriterArrow w c) where
   type AMachineArr (WriterArrow w c) =
     WriterArrow w (AMachineArr c)
   type AMachineNxtArr (WriterArrow w c) =
