@@ -448,6 +448,7 @@ selectOp msg checkOp (WMetaD (ops,_)) = case filter checkOp ops of
   op:_ -> return op
 
 
+
 -- | Emits the constructor for a join query. EasyJClust can output any
 -- _direct_ mapping (ie no expression, just a permutation) of the
 -- input columns to the output. This is used both for joining and for
@@ -456,15 +457,13 @@ selectOp msg checkOp (WMetaD (ops,_)) = case filter checkOp ops of
 joinQueryCall
   :: MonadCodeCheckpoint e s t n m => Direction -> EasyJClust e s -> m Constr
 joinQueryCall dir EasyJClust {..} = case dir of
-  ReverseTrigger -> do
+  ReverseTrigger -> evalQueryEnv (Identity ejcJoin) $ do
     lproj <- sequenceA
-      $ [(,E0 i) <$> translateSym ejcIO i | i <- shapeAllSyms ejcLeft]
+      [(i,) . E0 <$> translateSym (reverse ejcIO) i | i <- shapeAllSyms ejcLeft]
     rproj <- sequenceA
-      $ [(,E0 i) <$> translateSym ejcIO i | i <- shapeAllSyms ejcRight]
-    extractlFn
-      <- evalQueryEnv (Identity ejcJoin) $ projToFn $ fmap3 Right lproj
-    extractrFn
-      <- evalQueryEnv (Identity ejcJoin) $ projToFn $ fmap3 Right rproj
+      [(i,) . E0 <$> translateSym ejcIO i | i <- shapeAllSyms ejcRight]
+    extractlFn <- projToFn $ fmap3 Right lproj
+    extractrFn <- projToFn $ fmap3 Right rproj
     return ("unJoin",tmplClass <$> [extractlFn,extractrFn])
   ForwardTrigger -> evalQueryEnv (Tup2 ejcLeft ejcRight) $ do
     -- Note: A `Rantij` A == A `Lantij` A makes duplicate output columns
@@ -479,7 +478,6 @@ joinQueryCall dir EasyJClust {..} = case dir of
       Nothing -> do
         propCls <- propCallClass pInSyms
         return ("mkJoin",[propCls,combFn])
-
 
 bopQueryCall
   :: forall e s t n c m .

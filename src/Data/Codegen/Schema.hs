@@ -82,7 +82,7 @@ mkShapeFromTbl QueryCppConf {..} tableSize s = do
 -- |Get the schema from something that is like a projection.
 anySchema
   :: forall c e s t n m a .
-  (CppTypeExprConstraints c e s t n m)
+  (CppTypeExprConstraints c e s t n m,HasCallStack)
   => ((AShowV e,AShowV s) => a -> SExp)
   -> (a -> Expr (Either CC.CppType (ShapeSym e s)))
   -> [(ShapeSym e s,Expr a)]
