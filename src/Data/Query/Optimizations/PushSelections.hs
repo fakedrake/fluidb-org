@@ -27,8 +27,8 @@ couldPushIn SymEmbedding{..} prop query =
   where
     refersToPlan :: Query e' s -> e' -> Bool
     refersToPlan q e = (`any` querySchemaNaive q) $ \case
-      Left s -> e `embedInS` s
-      Right (Left p,_) -> elem' e $ fst <$> p
+      Left s                -> e `embedInS` s
+      Right (Left p,_)      -> elem' e $ fst <$> p
       Right (Right (p,_),_) -> elem' e $ fst <$> p
       where
         elem' :: e' -> [e'] -> Bool
@@ -52,7 +52,7 @@ pushSelections' eqE couldPushIn0 = freshPush
     unQnf :: [Prop (Rel (Expr e))] -> Prop (Rel (Expr e))
     unQnf = foldl1 And
     -- Push and keep around the leftovers
-    qnfAnd' p = fmap4 unWrapEq $ toList $ propQnfAnd $ fmap3 (WrapEq eqE) p
+    qnfAnd' p = fmap4 unWrapEq $ toList $ propCnfAnd $ fmap3 (WrapEq eqE) p
     push :: [Prop (Rel (Expr e))]
          -> Query e s
          -> (Query e s,[Prop (Rel (Expr e))])
@@ -90,7 +90,7 @@ pushSelections' eqE couldPushIn0 = freshPush
     makeJoin qnf =
       let isEqualityTerm = \case
             P0 (R2 REq _ _) -> True
-            _ -> False
+            _               -> False
       in case partition isEqualityTerm qnf of
            ([],[]) -> Q2 QProd
            ([],terms) -> J $ unQnf terms
