@@ -13,8 +13,8 @@ ghc-options:
   - -g
   - -Wsimplifiable-class-constraints
   - -funfolding-use-threshold=16
-  # - -O2
-  # - -optc-O3
+  - -O2
+  - -optc-O3
 
 when:
   - condition: os(darwin)
