@@ -88,7 +88,7 @@ library:
     # - haskell-stack-trace-plugin
     # [r|a raw string with newlines|]
 
-executables:
+benchmarks:
   benchmark: &exe
     main: Main.hs
     source-dirs: tools/Benchmark
@@ -97,6 +97,7 @@ executables:
       - base >= 4.7 && < 5
       - ghc >= 8.6.5
       - fluidb
+executables:
   readdump:
     main: Main.hs
     source-dirs: tools/ReadDump
