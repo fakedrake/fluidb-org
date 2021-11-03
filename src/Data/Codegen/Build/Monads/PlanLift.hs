@@ -103,8 +103,8 @@ updateSizes
     (Either (SizeInferenceError e s t n) (PlanningError t n))
     (GCConfig t n)
 updateSizes cConf =
-  wrapTrace "updateSizes"
-  $ updateConf (\gcConf s -> gcConf { nodeSizes = s })
+  updateConf (\gcConf s -> gcConf { nodeSizes = s })
+  $ wrapTrace "updateSizes"
   $ do
     unsizedNodes <- lift missingOrLowCertaintySizes
     oldSizes <- lift2 $ asks nodeSizes
