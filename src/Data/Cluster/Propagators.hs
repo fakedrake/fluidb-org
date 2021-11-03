@@ -583,11 +583,7 @@ putShapeCluster
 putShapeCluster = void . traverse (uncurry go . unMetaD) . putId
   where
     go :: Defaulting (QueryShape e s) -> NodeRef n -> m ()
-    go p ref = ifDefaultingEmpty p (return ()) $ modNodeShape ref $ \case
-      DefaultingFull _ s -> case p of
-        DefaultingFull _ s' -> if s == s' then p else error "different vals"
-        _                   -> p
-      _ -> p
+    go p ref = ifDefaultingEmpty p (return ()) $ modNodeShape ref (p <>)
     putId :: ShapeCluster NodeRef e s t n
           -> AnyCluster'
             (ShapeSym e s)

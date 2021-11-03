@@ -254,8 +254,8 @@ instance Applicative Defaulting where
   DefaultingFull _ vf <*> DefaultingDef v     = DefaultingDef (vf v)
   DefaultingDef f <*> DefaultingFull _ v      = DefaultingDef (f v)
 
--- | More recent values are Combine the default values and use the
--- rightmost. We always do newerDefaulting <>
+-- | More recent values are pushed from the left. Combine the default
+-- values and use the leftmost full. We always do newerDefaulting <>
 -- olderDefaulting. Remember that semigroups do not support
 -- associativity. The underlying semigroup is expected to "mean"
 -- better <> backup, ie keep as much of the left oparand as possible
