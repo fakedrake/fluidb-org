@@ -25,7 +25,7 @@ module Data.Cluster.Types.Monad
   ,ACPropagator
   ,ShapeCluster
   ,PropCluster
-  ,Defaulting
+  ,Defaulting(..)
   ,CPropagatorShape
   ,Tunnel(..)
   ,ACPropagatorAssoc(..)
