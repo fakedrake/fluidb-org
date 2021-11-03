@@ -180,8 +180,11 @@ filterInterms
   -> m [NodeRef n]
 filterInterms refs = (`filterM` refs) $ \ref
   -> dropReader (gets fst) (isIntermediateClust ref) >>= \case
-    True  -> modify (second $ refInsert ref ([],1)) >> return False
     False -> return True
+    True  -> do
+      traceM $ "Is intermediate: " ++ ashow ref
+      modify ( second $ refInsert ref ([],1))
+      return False
 
 onlyCC
   :: MonadState (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double))) m
