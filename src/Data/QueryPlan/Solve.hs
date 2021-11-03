@@ -60,10 +60,11 @@ import           Data.Utils.ListT
 import           Data.Utils.Tup
 
 import           Data.Proxy
+import           Data.QueryPlan.Cert
+import           Data.QueryPlan.Comp
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
-import           Data.Utils.AShow
 import           Data.Utils.AShow.Print
 import           Data.Utils.Default
 import           Data.Utils.Nat
@@ -131,13 +132,22 @@ haltPlan matRef mop = do
   modify $ \gcs -> gcs
     { frontier = nsDelete matRef (frontier gcs) <> metaOpIn mop }
   extraCost <- metaOpCost [matRef] mop
-  haltPlanCost $ fromIntegral $ costAsInt extraCost
+  void $  haltPlanCost Nothing $ fromIntegral $ costAsInt extraCost
+
+histCosts :: Monad m => PlanT t n m Cost
+histCosts = do
+  hcs :: [Maybe HCost] <- takeListT 5 $ pastCosts mempty
+  -- Curate the consts that are too likely to be non-comp
+  return $ mconcat $ mapMaybe (>>= toCost) hcs
+  where
+    toCost (Cert _ (Comp c v)) = if c > 0.6 then Nothing else Just v
 
 
-haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
-haltPlanCost concreteCost = do
+-- | Compute the frontier cost and the historical costs.
+haltPlanCost :: MonadHaltD m => Maybe Cost -> Double -> PlanT t n m Cost
+haltPlanCost histCostCached concreteCost = do
   frefs <- gets $ toNodeList . frontier
-  (costs,extraNodes) <- runWriterT $ forM frefs $ \ref -> do
+  (costs,_extraNodes) <- runWriterT $ forM frefs $ \ref -> do
     cost <- lift $ getCostPlan @CostTag Proxy mempty ForceResult ref
     case cost of
       Nothing -> return zero
@@ -145,11 +155,15 @@ haltPlanCost concreteCost = do
         maybe (return ()) tell $ pcPlan c
         return $ pcCost c
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  -- histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
-  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost)
-  -- trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
-  halt $ PlanSearchScore concreteCost (Just frontierCost)
+  hc <- maybe histCosts return histCostCached
+  trM $ printf "Halt%s: %s" (show frefs) $ show concreteCost
+  trM $ printf "Historical costs: %s" $ ashowLine $ ashow hc
+  halt
+    $ PlanSearchScore
+      concreteCost
+      (Just $ frontierCost + fromIntegral (costAsInt hc))
   trM "Resume!"
+  return hc
 
 setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
 setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
@@ -354,7 +368,8 @@ garbageCollectFor
   :: forall t n m . MonadLogic m => [NodeRef n] -> PlanT t n m ()
 garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
   lift preReport
-  go `eitherlReader` (lift newEpoch >> go)
+  hc <- lift $ haltPlanCost Nothing 0
+  go  hc `eitherlReader` (lift newEpoch >> go hc)
   lift $ trM $ "Finished GC to make " ++ show ns
   where
     preReport = do
@@ -379,11 +394,11 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
         setGC False
       where
         setGC b = modify $ \x -> x { garbageCollecting = b }
-    go :: ReaderT PageNum (PlanT t n m) ()
-    go = do
+    go :: Cost -> ReaderT PageNum (PlanT t n m) ()
+    go hc = do
       assertGcIsPossible
       killIntermediates `lsplitReader` lift top
-      whenM isOversized $ killPrimaries `eitherlReader` lift top
+      whenM isOversized $ killPrimaries hc `eitherlReader` lift top
       whenM isOversized $ lift $ bot $ "GC failed: " ++ show ns
 
 nodesFit :: Monad m => [NodeRef n] -> PlanT t n m Bool
@@ -437,9 +452,9 @@ isOversized = do
       return True
     else return False
 
-killPrimaries :: MonadLogic m => ReaderT PageNum (PlanT t n m) ()
-killPrimaries =
-  hoist (wrapTrM "killPrimaries") $ (safeDelInOrder =<<) $ lift $ do
+killPrimaries :: MonadLogic m => Cost -> ReaderT PageNum (PlanT t n m) ()
+killPrimaries hc =
+  hoist (wrapTrM "killPrimaries") $ (safeDelInOrder hc =<<) $ lift $ do
     nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
     nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
     nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
@@ -448,12 +463,10 @@ killPrimaries =
     return nsUnord
 
 safeDelInOrder
-  :: MonadLogic m => [NodeRef n] -> ReaderT PageNum (PlanT t n m) ()
-safeDelInOrder nsOrd = hoist (wrapTrM $ "safeDelInOrder " ++ show nsOrd)
-  $ foldr
-  delRef
-  (lift . guardl "still oversized " =<< isOversized)
-  nsOrd
+  :: MonadLogic m => Cost -> [NodeRef n] -> ReaderT PageNum (PlanT t n m) ()
+safeDelInOrder hc nsOrd =
+  hoist (wrapTrM $ "safeDelInOrder " ++ show nsOrd)
+  $ foldr delRef (lift . guardl "still oversized " =<< isOversized) nsOrd
   where
     delRef ref rest = do
       delOrConcreteMat ref
@@ -464,15 +477,16 @@ safeDelInOrder nsOrd = hoist (wrapTrM $ "safeDelInOrder " ++ show nsOrd)
       -- computation and does not allow for other paths to be
       -- searched.
       canStillDel <- lift $ isDeletable ref
-      lift $ if canStillDel
-        then do
+      lift
+        $ if canStillDel then do
           delCost <- transitionCost $ DelNode ref
-          haltPlanCost $ fromIntegral $ costAsInt delCost
+          void $ haltPlanCost (Just hc) $ fromIntegral $ costAsInt delCost
           ref `setNodeStateSafe` NoMat
         else ref `setNodeStateUnsafe` Concrete Mat Mat
       assertGcIsPossible
       afterSize <- lift getDataSize
-      lift $ guardl "We Deletion did more harm than good"
+      lift
+        $ guardl "We Deletion did more harm than good"
         $ beforeSize >= afterSize
 
 matNeighbors :: MonadLogic m => NodeRef n -> PlanT t n m ()

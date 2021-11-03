@@ -2,13 +2,15 @@
 module Data.QueryPlan.Comp (Comp(..),nonComp,toComp) where
 
 import           Control.Applicative
+import           Data.Copointed
 import           Data.Pointed
 import           Data.QueryPlan.Scalable
 import           Data.Utils.AShow
 import           Data.Utils.AShow.Print
 import           Data.Utils.Nat
 
--- | An integer binomial that assumes that we will be adding.
+-- | An integer binomial that assumes that we will be
+-- adding. cPropNonComp == 1 means don't trust the value at all.
 data Comp a = Comp { cProbNonComp :: Double,cValue :: a }
   deriving (Functor,Show,Eq)
 
@@ -40,6 +42,8 @@ instance Num a => Num (Comp a) where
   signum = fmap signum
   fromInteger = pure . fromInteger
 
+instance Copointed Comp where
+  copoint  (Comp _ a) = a
 instance Pointed Comp where
   point = pure
 instance Subtr a => Subtr (Comp a) where
