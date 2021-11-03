@@ -64,6 +64,7 @@ import           Data.Utils.EmptyF
 import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
+import           Data.Utils.ListT
 import           Data.Utils.MTL
 import           Data.Utils.Tup
 import           Data.Utils.Types
@@ -653,24 +654,20 @@ forceQueryShape
   ,Hashables2 e s)
   => NodeRef n
   -> m (Maybe (Defaulting (QueryShape e s)))
-forceQueryShape ref0 = runMaybeT $ (`evalStateT` mempty) $ go ref0
+forceQueryShape ref0 = (`evalStateT` mempty) $ go ref0
   where
     go :: NodeRef n
-       -> StateT (NodeSet n) (MaybeT m) (Defaulting (QueryShape e s))
+       -> StateT (NodeSet n) m (Maybe (Defaulting (QueryShape e s)))
     go ref = do
       trail <- get
-      guard $ not $ ref `nsMember` trail
       modify (nsInsert ref)
-      clusts <- lift2
+      clusts <- lift
         $ filter (elem ref . clusterOutputs) <$> lookupClustersN ref
-      oneOfM clusts
+      forM_ (take 3 clusts)
         $ \c -> case partition (elem ref) [clusterInputs c,clusterOutputs c] of
           ([_siblings],[deps]) -> do
-            guard $ not $ any (`nsMember` trail) deps
-            mapM_ go deps
-            void $ lift2 $ triggerClustPropagator c
-            lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
-          _ -> mzero
-      where
-        oneOfM [] _  = mzero
-        oneOfM cs fm = foldr1Unsafe (<|>) $ fm <$> cs
+            unless (any (`nsMember` trail) deps) $ do
+              mapM_ go deps
+              void $ lift $ triggerClustPropagator c
+          _ -> return ()
+      lift $ gets $ refLU ref . qnfNodeShapes
