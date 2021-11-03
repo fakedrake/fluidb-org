@@ -104,7 +104,7 @@ updateSizes
     (Either (SizeInferenceError e s t n) (PlanningError t n))
     (GCConfig t n)
 updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
-  unsizedNodes <- lift missingSizes
+  unsizedNodes <- lift missingOrLowCertaintySizes
   oldSizes <- lift2 $ asks nodeSizes
   traceM $ "Sizes: " ++ ashow (unsizedNodes,oldSizes)
   let runMonads m = runExceptT $ (`execStateT` (cConf,oldSizes)) m
@@ -144,13 +144,13 @@ updateIntermediates cConf gcConf =
       $ join [clusterInterms x | x <- join $ toList $ qnfToClustMap cConf]
   }
 
-
-missingSizes :: Monad m => PlanT t n m [NodeRef n]
-missingSizes = do
+-- | Find nodes that we are extremely unsure of.
+missingOrLowCertaintySizes :: Monad m => PlanT t n m [NodeRef n]
+missingOrLowCertaintySizes = do
   ns <- snd <$> allNodes
   sizes <- asks nodeSizes
-  return $ (`filter` ns) $ \n
-    -> maybe True ((< 0.5) . snd) $ refLU n sizes
+  return $ (`filter` ns) $ \n ->
+    maybe True ((< 0.3) . snd) $ refLU n sizes
 
 getQnfM
   :: (MonadError (SizeInferenceError e s t n) m

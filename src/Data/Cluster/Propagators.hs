@@ -58,6 +58,7 @@ import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -662,8 +663,14 @@ forceQueryShape ref0 = runMaybeT $ (`evalStateT` mempty) $ go ref0
           ([_siblings],[deps]) -> do
             guard $ not $ any (`nsMember` trail) deps
             mapM_ go deps
+            oldShape
+              <- lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
             void $ lift2 $ triggerClustPropagator c
-            lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
+            newShape
+              <- lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
+            traceM
+              $ "Shape update: " ++ (qpSize <$> oldShape,qpSize <$> newShape)
+            return newShape
           _ -> mzero
       where
         oneOfM [] _  = mzero
