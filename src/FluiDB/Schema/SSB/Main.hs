@@ -101,8 +101,8 @@ actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
   mats <- globalizePlanT $ do
     ns <- nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
     mapM (\n -> (n,) <$> totalNodePages n) ns
-  lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
-  liftIO $ putStrLn $ "Running query: " ++ show qi
+  lift2 $ traceM $ "mat nodes: " ++ ashow mats
+  liftIO $ traceM $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
