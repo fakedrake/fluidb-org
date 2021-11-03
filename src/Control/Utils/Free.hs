@@ -87,6 +87,7 @@ instance (Functor f, Monad m) => Functor (FreeT f m) where
   fmap f (FreeT m) = FreeT (fmap f' m) where
     f' (Pure a)  = Pure (f a)
     f' (Free as) = Free (fmap (fmap f) as)
+  {-# INLINE fmap #-}
 
 instance (Functor f, Monad m) => Applicative (FreeT f m) where
   pure a = FreeT (return (Pure a))
