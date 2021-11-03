@@ -102,14 +102,17 @@ updateSizes
   -> Either
     (Either (SizeInferenceError e s t n) (PlanningError t n))
     (GCConfig t n)
-updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
-  unsizedNodes <- lift missingOrLowCertaintySizes
-  oldSizes <- lift2 $ asks nodeSizes
-  traceM $ "Sizes: " ++ ashow (unsizedNodes,oldSizes)
-  let runMonads m = runExceptT $ (`execStateT` (cConf,oldSizes)) m
-  runMonads (filterInterms unsizedNodes >>= mapM putQuerySize) >>= \case
-    Left e         -> throwError e
-    Right (_,rmap) -> return rmap
+updateSizes cConf =
+  wrapTrace "updateSizes"
+  $ updateConf (\gcConf s -> gcConf { nodeSizes = s })
+  $ do
+    unsizedNodes <- lift missingOrLowCertaintySizes
+    oldSizes <- lift2 $ asks nodeSizes
+    traceM $ "Sizes: " ++ ashow (unsizedNodes,oldSizes)
+    let runMonads m = runExceptT $ (`execStateT` (cConf,oldSizes)) m
+    runMonads (filterInterms unsizedNodes >>= mapM putQuerySize) >>= \case
+      Left e         -> throwError e
+      Right (_,rmap) -> return rmap
 
 -- | In ([TableSize],Double) empty list means the node is an
 -- intermediate.
