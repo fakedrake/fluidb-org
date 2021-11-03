@@ -101,7 +101,11 @@ instance (Monoid w,ArrowMachine c,Profunctor c,Profunctor (AMachineArr c))
 instance Profunctor c => Profunctor (WriterArrow w c) where
   dimap f g (WriterArrow c) =
     WriterArrow $ dimap f (second g) c
+  lmap f (WriterArrow c) = WriterArrow $ lmap f c
+  rmap f (WriterArrow c) = WriterArrow $ rmap (second f) c
   {-# INLINE dimap #-}
+  {-# INLINE lmap #-}
+  {-# INLINE rmap #-}
 
 instance ArrowFunctor c => ArrowFunctor (WriterArrow w c) where
   type ArrFunctor (WriterArrow w c) =

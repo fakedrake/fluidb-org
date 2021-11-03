@@ -79,14 +79,14 @@ instance ArrowBind Maybe c => ArrowBind Maybe (MealyArrow c) where
   {-# INLINE arrBind #-}
   {-# INLINE arrReturn #-}
 
-instance Arrow c => Category (MealyArrow c) where
+instance (Profunctor c,Arrow c) => Category (MealyArrow c) where
   MealyArrow bc . MealyArrow ab =
-    MealyArrow $ ab >>> second bc >>> arr (\(ab',(bc',c)) -> (ab' >>> bc',c))
+    MealyArrow $ rmap (\(ab',(bc',c)) -> (ab' >>> bc',c)) $ ab >>> second bc
   id = MealyArrow $ arr (id,)
   {-# INLINE id #-}
   {-# INLINE (.) #-}
 
-instance Arrow c => Arrow (MealyArrow c) where
+instance (Profunctor c,Arrow c) => Arrow (MealyArrow c) where
   arr f = ret
     where
       ret = MealyArrow $ arr $ (ret,) . f
@@ -103,7 +103,7 @@ instance Arrow c => Arrow (MealyArrow c) where
   {-# INLINE second #-}
   {-# INLINE (&&&) #-}
 
-instance ArrowChoice c => ArrowChoice (MealyArrow c) where
+instance (Profunctor c,ArrowChoice c) => ArrowChoice (MealyArrow c) where
   MealyArrow f +++ MealyArrow g = MealyArrow $ proc a -> case a of
     Left l -> do
       (nxt,b) <- f -< l
@@ -133,7 +133,7 @@ instance ArrowChoice c => ArrowChoice (MealyArrow c) where
   {-# INLINE left #-}
   {-# INLINE right #-}
 
-instance ArrowChoice c => ArrowMachine (MealyArrow c) where
+instance (Profunctor c,ArrowChoice c) => ArrowMachine (MealyArrow c) where
   type AMachineArr (MealyArrow c) = c
   type AMachineNxtArr (MealyArrow c) = MealyArrow c
   telescope = runMealyArrow
@@ -141,7 +141,8 @@ instance ArrowChoice c => ArrowMachine (MealyArrow c) where
   {-# INLINE telescope #-}
   {-# INLINE untelescope #-}
 
-instance ArrowWriter c => ArrowWriter (MealyArrow c) where
+instance (Profunctor c,ArrowWriter c,Profunctor (AWriterArr c))
+  => ArrowWriter (MealyArrow c) where
   type AWriterArr (MealyArrow c) =
     MealyArrow (AWriterArr c)
   type AWriterW (MealyArrow c) = AWriterW c
@@ -150,13 +151,17 @@ instance ArrowWriter c => ArrowWriter (MealyArrow c) where
   arrCoListen' (MealyArrow c) =
     MealyArrow
     $ arrCoListen'
-    $ c >>> arr (\(nxt,(w,b)) -> (w,(arrCoListen' nxt,b)))
+    $ rmap (\(nxt,(w,b)) -> (w,(arrCoListen' nxt,b))) c
 
-instance ArrowReader c  => ArrowReader (MealyArrow c) where
-  type AReaderArr (MealyArrow c) = MealyArrow (AReaderArr c)
+instance (ArrowReader c,Profunctor c,Profunctor (AReaderArr c))
+  => ArrowReader (MealyArrow c) where
+  type AReaderArr (MealyArrow c) =
+    MealyArrow (AReaderArr c)
   type AReaderR (MealyArrow c) = AReaderR c
-  arrLocal' = MealyArrow . (>>> first (arr arrLocal')) . arrLocal' . runMealyArrow
-  arrCoLocal' = MealyArrow . (>>> first (arr arrCoLocal')) . arrCoLocal'  . runMealyArrow
+  arrLocal' =
+    MealyArrow . (>>> first (arr arrLocal')) . arrLocal' . runMealyArrow
+  arrCoLocal' =
+    MealyArrow . (>>> first (arr arrCoLocal')) . arrCoLocal' . runMealyArrow
   {-# INLINE arrLocal' #-}
   {-# INLINE arrCoLocal' #-}
 
@@ -182,6 +187,9 @@ instance Profunctor c => Profunctor (MealyArrow c) where
   dimap f g = go
     where
       go (MealyArrow c) = MealyArrow $ dimap f (bimap go g) c
+  {-# INLINE rmap #-}
+  {-# INLINE lmap #-}
+  {-# INLINE dimap #-}
 
 -- | Constructing monadic xmealy arrows
 newtype MealyF a b x = MealyF (a -> x,b)
