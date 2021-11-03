@@ -47,7 +47,7 @@ instance (ArrowBind Maybe c,ArrowChoice c,Monoid s,Profunctor c)
 instance ArrowTransformer (WriterArrow w) where
   type TDom (WriterArrow w) = Identity
   type TCod (WriterArrow w) = (,) w
-  lift' x = WriterArrow $ arr Identity >>> x
+  lift' x = WriterArrow $ lmap Identity x
   unlift' (WriterArrow x) = arr runIdentity >>> x
   {-# INLINE unlift' #-}
   {-# INLINE lift' #-}
@@ -63,8 +63,17 @@ instance (Monoid w,Arrow c,Profunctor c) => Arrow (WriterArrow w c) where
   arr f = arrLift (arr f)
   first (WriterArrow f) =
     WriterArrow $ rmap (\((w,c),d) -> (w,(c,d))) $ first f
+  second (WriterArrow f) =
+    WriterArrow $ rmap (\(d,(w,c)) -> (w,(d,c))) $ second f
+  WriterArrow f *** WriterArrow g =
+    WriterArrow $ rmap (\((w,c),(w',c')) -> (w <> w',(c,c'))) $ f *** g
+  WriterArrow f &&& WriterArrow g =
+    WriterArrow $ rmap (\((w,c),(w',c')) -> (w <> w',(c,c'))) $ f &&& g
   {-# INLINE arr #-}
   {-# INLINE first #-}
+  {-# INLINE second #-}
+  {-# INLINE (&&&) #-}
+  {-# INLINE (***) #-}
 
 instance (Monoid r,ArrowState c,Profunctor c,Profunctor (AStateArr c))
   => ArrowState (WriterArrow r c) where
@@ -110,7 +119,7 @@ instance Profunctor c => Profunctor (WriterArrow w c) where
 instance ArrowFunctor c => ArrowFunctor (WriterArrow w c) where
   type ArrFunctor (WriterArrow w c) =
     WriterT w (ArrFunctor c)
-  toKleisli (WriterArrow c) = WriterT . fmap swap . toKleisli c
-  fromKleisli c = WriterArrow $ fromKleisli $ fmap (fmap swap . runWriterT) c
+  toKleisli (WriterArrow c) a = WriterT $ swap <$> toKleisli c a
+  fromKleisli c = WriterArrow $ fromKleisli $ fmap swap . runWriterT <$> c
   {-# INLINE toKleisli #-}
   {-# INLINE fromKleisli #-}
