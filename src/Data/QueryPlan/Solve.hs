@@ -148,7 +148,7 @@ haltPlanCost concreteCost = do
   -- histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost)
   -- trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
-  halt $ PlanSearchScore frontierCost (Just frontierCost)
+  halt $ PlanSearchScore concreteCost (Just frontierCost)
   trM "Resume!"
 
 setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
