@@ -106,6 +106,7 @@ updateSizes
 updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
   unsizedNodes <- lift missingSizes
   oldSizes <- lift2 $ asks nodeSizes
+  traceM $ "Sizes: " ++ ashow (unsizedNodes,oldSizes)
   let runMonads m = runExceptT $ (`execStateT` (cConf,oldSizes)) m
   runMonads (filterInterms unsizedNodes >>= mapM putQuerySize) >>= \case
     Left e         -> throwError e
