@@ -128,7 +128,7 @@ putQuerySize ref =
       Just shapeD -> do
         shape
           <- maybe (throwAStr $ "Found empty shape for" <: (ref,shapeD)) return
-          $ getDefaultingDef shapeD
+          $ getDef shapeD
         modify $ second $ refInsert ref $ sizeToPair $ qpSize shape
   where
     sizeToPair QuerySize {..} = (qsTables,qsCertainty)
