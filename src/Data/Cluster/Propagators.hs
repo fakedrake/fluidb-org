@@ -669,7 +669,7 @@ forceQueryShape ref0 = runMaybeT $ (`evalStateT` mempty) $ go ref0
             newShape
               <- lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
             traceM
-              $ "Shape update: " ++ (qpSize <$> oldShape,qpSize <$> newShape)
+              $ "Shape update: " ++ ashow (qpSize <$> oldShape,qpSize <$> newShape)
             return newShape
           _ -> mzero
       where
