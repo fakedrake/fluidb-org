@@ -134,7 +134,7 @@ haltPlan matRef mop = do
   haltPlanCost $ fromIntegral $ costAsInt extraCost
 
 
-haltPlanCost :: MonadHaltD m => Maybe Double -> PlanT t n m ()
+haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
   (costs,extraNodes) <- runWriterT $ forM frefs $ \ref -> do
@@ -146,9 +146,9 @@ haltPlanCost concreteCost = do
         return $ pcCost c
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   -- histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
-  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,concreteCost)
+  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost)
   -- trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
-  halt $ PlanSearchScore concreteCost (Just frontierCost)
+  halt $ PlanSearchScore frontierCost (Just frontierCost)
   trM "Resume!"
 
 setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
