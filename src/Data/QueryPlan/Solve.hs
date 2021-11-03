@@ -146,7 +146,7 @@ haltPlanCost concreteCost = do
         return $ pcCost c
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   -- histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
-  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star)
+  trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,concreteCost)
   -- trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
   halt $ PlanSearchScore concreteCost (Just frontierCost)
   trM "Resume!"
