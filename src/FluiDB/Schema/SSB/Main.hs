@@ -100,7 +100,7 @@ actualMain :: Verbosity -> [Int] -> IO ()
 actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
   mats <- globalizePlanT $ do
     ns <- nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
-    mapM (\(st,n) -> (st,n,) <$> totalNodePages n) ns
+    mapM (\n -> (n,) <$> totalNodePages n) ns
   lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
   liftIO $ putStrLn $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
