@@ -145,7 +145,7 @@ haltPlanCost concreteCost = do
         maybe (return ()) tell $ pcPlan c
         return $ pcCost c
   let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  histCosts :: [Maybe HCost] <- takeListT 3 $ pastCosts mempty -- extraNodes
+  histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star)
   trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
   halt $ PlanSearchScore concreteCost (Just star)
