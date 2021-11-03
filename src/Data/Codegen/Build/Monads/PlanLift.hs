@@ -21,8 +21,7 @@
 
 module Data.Codegen.Build.Monads.PlanLift
   (planLiftCB
-  ,SizeInferenceError(..)
-  ,missingSizes) where
+  ,SizeInferenceError(..)) where
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
