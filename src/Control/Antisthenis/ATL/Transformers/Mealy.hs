@@ -58,18 +58,19 @@ newtype MealyArrow c a b =
 --     returnA -< (arr _snd >>> ab',b)
 --   {-# INLINE app #-}
 
-instance ArrowState c => ArrowState (MealyArrow c) where
+instance (Profunctor c,Profunctor (AStateArr c),ArrowState c)
+  => ArrowState (MealyArrow c) where
   type AStateSt (MealyArrow c) = AStateSt c
   type AStateArr (MealyArrow c) =
     MealyArrow (AStateArr c)
   arrCoModify (MealyArrow c) =
-    MealyArrow $ arrCoModify c >>> arr (\(s,(c',b)) -> (arrCoModify c',(s,b)))
+    MealyArrow $ rmap (\(s,(c',b)) -> (arrCoModify c',(s,b))) $ arrCoModify c
   arrModify (MealyArrow c) =
     MealyArrow $ arrModify $ c >>> arr (\(c',(s,b)) -> (s,(arrModify c',b)))
   {-# INLINE arrCoModify #-}
   {-# INLINE arrModify #-}
 
-instance ArrowBind Maybe c => ArrowBind Maybe (MealyArrow c) where
+instance (Profunctor c, ArrowBind Maybe c) => ArrowBind Maybe (MealyArrow c) where
   arrBind (MealyArrow yz) (MealyArrow xy) = MealyArrow $ proc x -> do
     (xy',my) <- xy -< x
     e <- arrBindM (yz >>> arr Just) -< my
