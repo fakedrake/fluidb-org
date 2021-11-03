@@ -549,14 +549,10 @@ modNodeShape
   -> Endo (Defaulting (QueryShape e s))
   -> m ()
 modNodeShape nref f = do
-  oldShape <- gets $ fromMaybe mempty . refLU nref . qnfNodeShapes
   modify $ \clustConf -> clustConf
     { qnfNodeShapes = refAlter (Just . f . fromMaybe mempty) nref
                       $ qnfNodeShapes clustConf
     }
-  newShape <- gets $ fromMaybe mempty . refLU nref . qnfNodeShapes
-  traceM
-    $ "Shape update: " ++ ashow (nref,qpSize <$> oldShape,qpSize <$> newShape)
 
 -- | Fill the noderefs with shapes.
 getShapeCluster :: forall e s t n m .
