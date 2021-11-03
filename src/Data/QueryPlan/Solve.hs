@@ -144,11 +144,11 @@ haltPlanCost concreteCost = do
       Just c -> do
         maybe (return ()) tell $ pcPlan c
         return $ pcCost c
-  let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
+  let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   -- histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star)
   -- trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
-  halt $ PlanSearchScore concreteCost (Just star)
+  halt $ PlanSearchScore concreteCost (Just frontierCost)
   trM "Resume!"
 
 setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
@@ -467,7 +467,7 @@ safeDelInOrder nsOrd = hoist (wrapTrM $ "safeDelInOrder " ++ show nsOrd)
       lift $ if canStillDel
         then do
           delCost <- transitionCost $ DelNode ref
-          <- haltPlanCost histCost $ fromIntegral $ costAsInt delCost
+          haltPlanCost $ fromIntegral $ costAsInt delCost
           ref `setNodeStateSafe` NoMat
         else ref `setNodeStateUnsafe` Concrete Mat Mat
       assertGcIsPossible
