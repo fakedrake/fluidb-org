@@ -94,9 +94,9 @@ mealyFoldInputs f i (MealyArrow m0) = MealyArrow $ proc a0 -> do
 mkMooreCat :: b -> MealyArrow c a b -> MooreCat c a b
 mkMooreCat = MooreMech
 
-loopMooreCat :: Arrow c => MooreCat c (a,d) (b,d) -> MooreCat c a b
+loopMooreCat :: (Profunctor c,Arrow c) => MooreCat c (a,d) (b,d) -> MooreCat c a b
 loopMooreCat = \case
-  MooreMech (b,d) f -> MooreMech b $ arr (,d) >>> f >>> arr fst
+  MooreMech (b,d) f -> MooreMech b $ dimap (,d) fst f
 
 instance Profunctor c => Profunctor (MooreCat c) where
   dimap f g (MooreMech b m) = MooreMech (g b) $ dimap f g m
