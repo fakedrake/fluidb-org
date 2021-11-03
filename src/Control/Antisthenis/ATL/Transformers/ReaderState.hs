@@ -26,21 +26,22 @@ import           Control.Arrow                             hiding ((>>>))
 import           Control.Category                          hiding ((>>>))
 import           Control.Monad.State
 import           Data.Functor.Identity
+import           Data.Profunctor
 import           Data.Utils.Tup
 import           Prelude                                   hiding (id, (.))
 
 newtype ReaderArrow r c x y = ReaderArrow { runReaderArrow :: c (r,x) y }
-instance ArrowApply c => ArrowApply (ReaderArrow r c) where
+instance (Profunctor c,ArrowApply c) => ArrowApply (ReaderArrow r c) where
   app = ReaderArrow $ arr (\(~r,(ReaderArrow ab,a)) -> (ab,(r,a))) >>> app
   {-# INLINE app #-}
-instance (Applicative f,ArrowBind f c) => ArrowBind f (ReaderArrow s c) where
+instance (Profunctor c,Applicative f,ArrowBind f c) => ArrowBind f (ReaderArrow s c) where
   arrBind (ReaderArrow yz) (ReaderArrow xy) = ReaderArrow $
     arrBind yz (arr fst &&& xy >>> arr sequenceA)
   arrReturn = ReaderArrow $ arrReturn >>> arr (fmap snd)
   {-# INLINE arrBind #-}
   {-# INLINE arrReturn #-}
 
-instance Arrow c => ArrowReader (ReaderArrow r c) where
+instance (Profunctor c,Arrow c) => ArrowReader (ReaderArrow r c) where
   type AReaderArr (ReaderArrow r c) = c
   type AReaderR (ReaderArrow r c) = r
   arrLocal' = runReaderArrow
@@ -56,14 +57,14 @@ instance ArrowTransformer (ReaderArrow r) where
   {-# INLINE lift' #-}
   {-# INLINE unlift' #-}
 
-instance Arrow c => Category (ReaderArrow r c) where
+instance (Profunctor c,Arrow c) => Category (ReaderArrow r c) where
   ReaderArrow bc . ReaderArrow ab =
     ReaderArrow $ arr (\(r,a) -> (r,(r,a))) >>> second ab >>> bc
   id = arrLift id
   {-# INLINE id #-}
   {-# INLINE (.) #-}
 
-instance Arrow c => Arrow (ReaderArrow r c) where
+instance (Profunctor c,Arrow c) => Arrow (ReaderArrow r c) where
   arr f = ReaderArrow $ arr $ \(_,a) -> f a
   first (ReaderArrow f) =
     ReaderArrow $ arr (\(r,(a,d)) -> ((r,a),d)) >>> first f
@@ -78,7 +79,8 @@ instance Arrow c => Arrow (ReaderArrow r c) where
   {-# INLINE (&&&) #-}
   {-# INLINE (***) #-}
 
-instance ArrowState c => ArrowState (ReaderArrow r c) where
+instance (Profunctor c,Profunctor (AStateArr c),ArrowState c)
+  => ArrowState (ReaderArrow r c) where
   type AStateArr (ReaderArrow r c) =
     ReaderArrow r (AStateArr c)
   type AStateSt (ReaderArrow r c) = AStateSt c
@@ -101,7 +103,8 @@ instance ArrowMachine c => ArrowMachine (StateArrow s c) where
   {-# INLINE telescope #-}
   {-# INLINE untelescope #-}
 
-instance ArrowMachine c => ArrowMachine (ReaderArrow s c) where
+instance (Profunctor c,Profunctor (AMachineArr c),ArrowMachine c)
+  => ArrowMachine (ReaderArrow s c) where
   type AMachineArr (ReaderArrow s c) =
     ReaderArrow s (AMachineArr c)
   type AMachineNxtArr (ReaderArrow s c) =
@@ -113,14 +116,15 @@ instance ArrowMachine c => ArrowMachine (ReaderArrow s c) where
   {-# INLINE telescope #-}
   {-# INLINE untelescope #-}
 
-instance ArrowWriter c => ArrowWriter (ReaderArrow r c) where
+instance (Profunctor c,Profunctor (AWriterArr c),ArrowWriter c)
+  => ArrowWriter (ReaderArrow r c) where
   type AWriterArr (ReaderArrow r c) =
     ReaderArrow r (AWriterArr c)
   type AWriterW (ReaderArrow r c) = AWriterW c
   arrCoListen' (ReaderArrow c) = ReaderArrow $ arrCoListen' c
   arrListen' (ReaderArrow c) = ReaderArrow $ arrListen' c
 
-instance ArrowChoice c => ArrowChoice (ReaderArrow r c) where
+instance (Profunctor c,ArrowChoice c) => ArrowChoice (ReaderArrow r c) where
   left (ReaderArrow x) =
     ReaderArrow
     $ arr (\(r,e) -> case e of
@@ -269,7 +273,11 @@ instance ArrowWriter c => ArrowWriter (StateArrow s c) where
     StateArrow $ arrCoListen' $ c >>> arr (\(s,(w,b)) -> (w,(s,b)))
 
 -- | Note: State will be used by `exit`.
-instance (ArrowApply c,ArrowCont c) => ArrowCont (StateArrow s c) where
+instance (Profunctor c
+         ,Profunctor (AContFullArr c)
+         ,Profunctor (AContPostArr c)
+         ,ArrowApply c
+         ,ArrowCont c) => ArrowCont (StateArrow s c) where
   type AContFullArr (StateArrow s c) =
     ReaderArrow s (AContFullArr c)
   type AContPostArr (StateArrow s c) =
@@ -287,7 +295,11 @@ instance (ArrowApply c,ArrowSel c) => ArrowSel (StateArrow s c) where
   liftSel c = StateArrow $ liftSel $ runStateArrow . c . ReaderArrow
   dropSel (StateArrow c) (ReaderArrow post) = StateArrow $ dropSel c post
 
-instance (ArrowApply c,ArrowCont c) => ArrowCont (ReaderArrow s c) where
+instance (Profunctor c
+         ,ArrowApply c
+         ,ArrowCont c
+         ,Profunctor (AContFullArr c)
+         ,Profunctor (AContPostArr c)) => ArrowCont (ReaderArrow s c) where
   type AContFullArr (ReaderArrow s c) =
     ReaderArrow s (AContFullArr c)
   type AContPostArr (ReaderArrow s c) =
