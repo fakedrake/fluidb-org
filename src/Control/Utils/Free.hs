@@ -108,7 +108,7 @@ instance (Functor f, Fail.MonadFail m) => Fail.MonadFail (FreeT f m) where
   fail e = FreeT (Fail.fail e)
 
 instance MonadTrans (FreeT f) where
-  lift = FreeT . fmap Pure
+  lift a = FreeT (fmap Pure a)
   {-# INLINE lift #-}
 
 instance (Functor f, MonadIO m) => MonadIO (FreeT f m) where

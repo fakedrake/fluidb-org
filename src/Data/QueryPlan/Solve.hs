@@ -133,10 +133,10 @@ haltPlan matRef mop = do
   extraCost <- metaOpCost [matRef] mop
   haltPlanCost $ fromIntegral $ costAsInt extraCost
 
-haltPlanCost :: MonadHaltD m => Double -> PlanT t n m ()
+
+haltPlanCost :: MonadHaltD m => Maybe Double -> PlanT t n m ()
 haltPlanCost concreteCost = do
   frefs <- gets $ toNodeList . frontier
-  -- star :: Double <- sum <$> mapM getAStar frefs
   (costs,extraNodes) <- runWriterT $ forM frefs $ \ref -> do
     cost <- lift $ getCostPlan @CostTag Proxy mempty ForceResult ref
     case cost of
@@ -145,9 +145,9 @@ haltPlanCost concreteCost = do
         maybe (return ()) tell $ pcPlan c
         return $ pcCost c
   let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
+  -- histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star)
-  trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
+  -- trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
   halt $ PlanSearchScore concreteCost (Just star)
   trM "Resume!"
 
@@ -467,7 +467,7 @@ safeDelInOrder nsOrd = hoist (wrapTrM $ "safeDelInOrder " ++ show nsOrd)
       lift $ if canStillDel
         then do
           delCost <- transitionCost $ DelNode ref
-          haltPlanCost $ fromIntegral $ costAsInt delCost
+          <- haltPlanCost histCost $ fromIntegral $ costAsInt delCost
           ref `setNodeStateSafe` NoMat
         else ref `setNodeStateUnsafe` Concrete Mat Mat
       assertGcIsPossible
