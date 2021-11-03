@@ -145,7 +145,7 @@ haltPlanCost concreteCost = do
         maybe (return ()) tell $ pcPlan c
         return $ pcCost c
   let star :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  histCosts :: [Maybe HCost] <- takeListT 5 $ pastCosts extraNodes
+  histCosts :: [Maybe HCost] <- takeListT 3 $ pastCosts mempty -- extraNodes
   trM $ printf "Halt%s: %s" (show frefs) $ show (concreteCost,star)
   trM $ printf "Historical costs: %s" $ ashowLine $ fmap2 ashow' histCosts
   halt $ PlanSearchScore concreteCost (Just star)
@@ -447,8 +447,8 @@ killPrimaries =
     -- XXX: We are having no priority in deleting these.
     return nsUnord
 
-safeDelInOrder :: MonadLogic m =>
-                 [NodeRef n] -> ReaderT PageNum (PlanT t n m) ()
+safeDelInOrder
+  :: MonadLogic m => [NodeRef n] -> ReaderT PageNum (PlanT t n m) ()
 safeDelInOrder nsOrd = hoist (wrapTrM $ "safeDelInOrder " ++ show nsOrd)
   $ foldr
   delRef
