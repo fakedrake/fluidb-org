@@ -547,10 +547,15 @@ modNodeShape
   => NodeRef n
   -> Endo (Defaulting (QueryShape e s))
   -> m ()
-modNodeShape nref f = modify $ \clustConf -> clustConf
-  { qnfNodeShapes = refAlter (Just . f . fromMaybe mempty) nref
-      $ qnfNodeShapes clustConf
-  }
+modNodeShape nref f = do
+  oldShape <- gets $ fromMaybe mempty . refLU nref . qnfNodeShapes
+  modify $ \clustConf -> clustConf
+    { qnfNodeShapes = refAlter (Just . f . fromMaybe mempty) nref
+                      $ qnfNodeShapes clustConf
+    }
+  newShape <- gets $ fromMaybe mempty . refLU nref . qnfNodeShapes
+  traceM
+    $ "Shape update: " ++ ashow (nref,qpSize <$> oldShape,qpSize <$> newShape)
 
 -- | Fill the noderefs with shapes.
 getShapeCluster :: forall e s t n m .
@@ -625,7 +630,7 @@ triggerClustPropagator
      ,Hashables2 e s)
   => AnyCluster e s t n
   -> m (ShapeCluster NodeRef e s t n)
-triggerClustPropagator clust = do
+triggerClustPropagator  clust = do
   (_,newShapeClust) <- dropReader get $ getValidClustPropagator clust
   putShapeCluster newShapeClust
   return newShapeClust
@@ -663,15 +668,8 @@ forceQueryShape ref0 = runMaybeT $ (`evalStateT` mempty) $ go ref0
           ([_siblings],[deps]) -> do
             guard $ not $ any (`nsMember` trail) deps
             mapM_ go deps
-            oldShape
-              <- lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
             void $ lift2 $ triggerClustPropagator c
-            newShape
-              <- lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
-            traceM
-              $ "Shape update: "
-              ++ ashow (ref,qpSize <$> oldShape,qpSize <$> newShape)
-            return newShape
+            lift2 $ gets $ fromMaybe mempty . refLU ref . qnfNodeShapes
           _ -> mzero
       where
         oneOfM [] _  = mzero
