@@ -5,7 +5,6 @@
 module Data.QueryPlan.Transitions
   (getTransitions
   ,transitionCost
-  ,traverseTransition
   ,trigger
   ,revTrigger
   ,putTrigger
@@ -78,18 +77,6 @@ putTrigger = putTransition <=< trigger
 trigger :: Monad m => NodeRef t -> PlanT t n m (Transition t n)
 trigger = mkTriggerUnsafe Trigger (fullRange,fullRange)
 
-traverseTransition :: Applicative m =>
-                 Side
-               -> ([NodeRef n] -> m [NodeRef n])
-               -> Transition t n -> m (Transition t n)
-traverseTransition side f = \case
-  RTrigger x y z -> case side of
-    Inp -> (\x' -> RTrigger x' y z) <$> f x
-    Out -> RTrigger x y <$> f z
-  Trigger x y z -> case side of
-    Inp -> (\x' -> Trigger x' y z) <$> f x
-    Out -> Trigger x y <$> f z
-  x -> pure x
 transitionCost
   :: (MonadError (PlanningError t n) m,MonadReader (GCConfig t n) m)
   => Transition t n

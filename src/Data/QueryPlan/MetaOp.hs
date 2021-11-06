@@ -164,8 +164,23 @@ followUnsafe mopf@MetaOpFollow{..} ref = do
 
 mkMetaOpPlan
   :: Monad m => MetaOpFollow t n -> NodeRef t -> PlanT t n m [Transition t n]
-mkMetaOpPlan MetaOpFollow{..} tref = fmap return $ triggerTRef tref
-  >>= traverseTransition Out (filterM isMaterialized)
+mkMetaOpPlan MetaOpFollow {..} tref = do
+  initialTransition <- triggerTRef tref
+  actualTrns <- filterTrnsOutputs  initialTransition
+  return [actualTrns]
+
+-- | Remove the outputs that are not materialized.
+filterTrnsOutputs :: Monad m => Transition t n -> PlanT t n m (Transition t n)
+filterTrnsOutputs = \case
+  RTrigger x y z -> RTrigger x y <$> onlyMats z
+  Trigger x y z  -> Trigger x y <$> onlyMats z
+  x              -> pure x
+  where
+    onlyMats outs = filterM isMaterialized outs >>= \case
+      _:_ -> return outs
+      []  -> do
+        states <- mapM getNodeState outs
+        throwPlan $ "No materialized nodes out of: " ++ ashow (zip outs states)
 
 -- | Problematic when intermediate is the argument. They are returned
 -- in increasing order of size.
