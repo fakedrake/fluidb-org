@@ -620,7 +620,11 @@ constrArgs ioFiles = do
       return [i,o,lo]
     (JoinClustW _,ReverseTrigger,([Nothing,Just i],[Nothing,Just o,Just ro])) ->
       return [i,o,ro]
-    (JoinClustW _,ReverseTrigger,oi) -> throwAStr $ "Inps outs: " ++ ashow oi
+    (JoinClustW _,ReverseTrigger,oi) ->
+      -- XXX: We need to check that the generated tables are actually
+      -- created due to triggering the node or if they just happened
+      -- to be materialized
+      throwAStr $ "outs ins: " ++ ashow oi
     (_,_,(outs,inps')) ->
       case ((toConstrArgMaybeExp (Nothing :: Maybe FileSet) <$> outs) ++)
       <$> sequenceA inps' of

@@ -107,12 +107,12 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
       lift $ mapM_ internalSyncShape $ clusterInputs clust
       void $ lift $ triggerCluster clust
       lift $ mapM_ promoteNodeShape $ clusterOutputs clust
-      mkCodeBlock ts clust ForwardTrigger triggerCode
+      mkCodeBlock ts clust ForwardTrigger $ triggerCode ts
     ReverseTransitionBundle ts clust -> do
       lift $ mapM_ internalSyncShape $ clusterOutputs clust
       void $ lift $ triggerCluster clust
       lift $ mapM_ promoteNodeShape $ clusterInputs clust
-      mkCodeBlock ts clust ReverseTrigger revTriggerCode
+      mkCodeBlock ts clust ReverseTrigger $ revTriggerCode ts
     DeleteTransitionBundle n -> do
       void $ lift $ demoteNodeShape n
       fileM <- dropReader (lift getClusterConfig) $ getNodeFile n
@@ -150,14 +150,16 @@ mkCodeBlock
         (CC.Statement CC.CodeSymbol))
   -> StateT Int (CodeBuilderT e s t n m) [CC.Statement CC.CodeSymbol]
 mkCodeBlock _io clust triggerDirection internalMkCode = do
-  let trigOps = fmap (bimap (nub . fmap2 shapeSymOrig) (nub . fmap2 shapeSymOrig))
-                $ fst $ primaryNRef clust
+  let trigOps =
+        fmap (bimap (nub . fmap2 shapeSymOrig) (nub . fmap2 shapeSymOrig))
+        $ fst
+        $ primaryNRef clust
   let comment = CC.Comment $ show triggerDirection ++ ": " ++ ashow trigOps
   let cout = ashowCout (show triggerDirection ++ ": ") trigOps
-  [comment, cout]
-    `andThen`
-    dropReader (lift $ (,) <$> getClusterConfig <*> getGCState)
-    (internalMkCode clust)
+  [comment,cout]
+    `andThen` dropReader
+      (lift $ (,) <$> getClusterConfig <*> getGCState)
+      (internalMkCode clust)
 
 -- Cycle through the epoch heads. The latest epoch and transition
 -- is at the head of the list.

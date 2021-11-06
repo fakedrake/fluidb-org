@@ -75,12 +75,13 @@ type CanPutIdLocal c op e =
     (Compose ((,) (Maybe (op e))) Identity)
 
 matMaybe :: MonadReader (ClusterConfig e s t n,GCState t n) m
-         => NodeRef n
+         => [NodeRef n] -> NodeRef n
          -> m (Maybe (NodeRef n))
-matMaybe ref = dropReader (asks snd) $ getNodeStateReader ref <&> \case
-  Concrete _ Mat -> Just ref
-  Initial Mat    -> Just ref
-  _              -> Nothing
+matMaybe mats ref = return $ if ref `elem` mats then Just ref else Nothing
+-- dropReader (asks snd) $ getNodeStateReader ref <&> \case
+-- Concrete _ Mat -> Just ref
+-- Initial Mat    -> Just ref
+-- _              -> Nothing
 
 -- | Turn the ends of a cluster into (Plan,File) pairs. This checks
 -- first if the at the edge is (to be) materialized and puts Nothing
@@ -91,15 +92,16 @@ clustToIoFiles
   ,MonadReader (ClusterConfig e s t n,GCState t n) m
   ,MonadCodeBuilder e s t n m
   ,MonadCodeError e s t n m)
-  => Direction
+  => Tup2 [NodeRef n]
+  -> Direction
   -> AnyCluster e s t n
   -> m (IOFiles e s)
-clustToIoFiles dir =
+clustToIoFiles (Tup2 inps outs) dir =
   plansAndFiles
   <=< traverseAnyRoles
-    (fmap inpSide . matMaybe)
+    (fmap inpSide . matMaybe inps)
     (return . Intermediate)
-    (fmap outSide . matMaybe)
+    (fmap outSide . matMaybe outs)
   . putVoidAny
   . first (const ())
   . (putIdentity :: AnyCluster e s t n

@@ -17,8 +17,10 @@ import           Data.Codegen.Build.IoFiles
 import           Data.Codegen.Build.IoFiles.Types
 import           Data.Codegen.Build.Monads.Class
 import qualified Data.CppAst                      as CC
+import           Data.NodeContainers
 import           Data.QueryPlan.Types
 import           Data.Utils.MTL
+import           Data.Utils.Tup
 
 
 delCode :: (Applicative m,ConstructorArg fileLike)
@@ -32,11 +34,12 @@ triggerCode
   :: forall e s t n m .
   (MonadReader (ClusterConfig e s t n,GCState t n) m
   ,MonadCodeCheckpoint e s t n m)
-  => AnyCluster e s t n
+  => Tup2 [NodeRef n]
+  -> AnyCluster e s t n
   -> m (CC.Statement CC.CodeSymbol)
-triggerCode clust = do
+triggerCode io clust = do
   constr <- dropReader (asks fst) $ clusterCall ForwardTrigger clust
-  ioFiles <- clustToIoFiles ForwardTrigger clust
+  ioFiles <- clustToIoFiles io ForwardTrigger clust
   let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ForwardTrigger }
   constrBlock constr ioFilesD
 
@@ -47,10 +50,11 @@ revTriggerCode
   :: forall e s t n m .
   (MonadReader (ClusterConfig e s t n,GCState t n) m
   ,MonadCodeCheckpoint e s t n m)
-  => AnyCluster e s t n
+  => Tup2 [NodeRef n]
+  -> AnyCluster e s t n
   -> m (CC.Statement CC.CodeSymbol)
-revTriggerCode clust = do
+revTriggerCode io clust = do
   constr <- dropReader (asks fst) $ clusterCall ReverseTrigger clust
-  ioFiles <- clustToIoFiles ReverseTrigger clust
+  ioFiles <- clustToIoFiles io ReverseTrigger clust
   let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ReverseTrigger }
   constrBlock constr ioFilesD
