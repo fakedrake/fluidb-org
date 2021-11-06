@@ -97,7 +97,7 @@ setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
   -- Populate the metaop cache
   -- warmupCache node
   setNodeStateSafe node Mat
-  curateTransitions
+  -- curateTransitions
   cost <- totalTransitionCost
   trM
     $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
