@@ -15,6 +15,7 @@ ghc-options:
   - -funfolding-use-threshold=16
   - -O2
   - -optc-O3
+  - -with-rtsopts=-M5G
 
 when:
   - condition: os(darwin)
