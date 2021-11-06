@@ -177,7 +177,7 @@ filterTrnsOutputs = \case
   x              -> pure x
   where
     onlyMats outs = filterM isMaterialized outs >>= \case
-      _:_ -> return outs
+      flt@(_:_) -> return flt
       []  -> do
         states <- mapM getNodeState outs
         throwPlan $ "No materialized nodes out of: " ++ ashow (zip outs states)
