@@ -18,7 +18,8 @@ module Data.Utils.Tup
   ,fourth4
   ,fstTwo4
   ,fstThree4
-  ,swap) where
+  ,swap
+  ,swapTup2) where
 
 import           Data.Utils.Hashable
 import           GHC.Generics
@@ -65,3 +66,5 @@ fstThree4 :: (a, b, c, d) -> (a, b, c)
 fstThree4 (a,b,c,_) = (a,b,c)
 swap :: (a,b) -> (b,a)
 swap (a,b) = (b,a)
+swapTup2 :: Tup2 a -> Tup2 a
+swapTup2 (Tup2 a b) = Tup2 b a
