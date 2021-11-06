@@ -53,8 +53,8 @@ revTriggerCode
   => Tup2 [NodeRef n]
   -> AnyCluster e s t n
   -> m (CC.Statement CC.CodeSymbol)
-revTriggerCode io clust = do
+revTriggerCode ioFwd clust = do
   constr <- dropReader (asks fst) $ clusterCall ReverseTrigger clust
-  ioFiles <- clustToIoFiles (swapTup2 io) ReverseTrigger clust
+  ioFiles <- clustToIoFiles (swapTup2 ioFwd) ReverseTrigger clust
   let ioFilesD = IOFilesD { iofCluster = ioFiles,iofDir = ReverseTrigger }
   constrBlock constr ioFilesD
