@@ -54,7 +54,6 @@ template <typename R>
 class Page {
  public:
     //enum { size = get_pagesize() };
-    enum { size = PAGE_SIZE };
     //enum { header_size = sizeof(size_t) + sizeof(void*) };
     enum { header_size = sizeof(size_t) };
     typedef R record_type;
@@ -63,7 +62,7 @@ class Page {
     ~Page() {}
 
  private:
-    static const size_t datasize = size - header_size;
+    static const size_t datasize = PAGE_SIZE - header_size;
 
  public:
     static const size_t allocation = datasize/sizeof(record_type);
@@ -77,7 +76,7 @@ class Page {
     } data;
 
  public:
-    /*const*/ size_t capacity() const { return allocation; }
+    static size_t capacity() { return allocation; }
     /*const*/ size_t length() const { return numrecs; }
 
     const record_type& get(size_t i) const {
@@ -189,4 +188,5 @@ Page<R>* allocatePages(size_t len) {
     require(ret, "Allocation failed.");
     return ret;
 }
+
 #endif //:~ __PAGE_HH__

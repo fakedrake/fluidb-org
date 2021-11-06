@@ -253,6 +253,6 @@ putJClustProp
 putJClustProp assocs@(l,o,r) prop clust =
   putShapePropagator (JoinClustW clust)
   $ ACPropagatorAssoc
-  { acpaPropagator = cPropToACProp $ joinClustPropagator assocs prop
+  { gacpaPropagator = cPropToACProp $ joinClustPropagator assocs prop
    ,acpaInOutAssoc = l ++ o ++ r
   }

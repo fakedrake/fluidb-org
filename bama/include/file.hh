@@ -5,7 +5,6 @@
 #include "require.hh"
 #include "book.hh"
 #include "page.hh"
-#include "util.hh"
 #include <sys/types.h>
 #include <iostream>
 #include <string>
@@ -18,15 +17,14 @@
 
 
 #define READ_FLAGS O_RDONLY
-#ifdef IODIRECT
 #ifdef __linux
 #define WRITE_FLAGS (O_DIRECT | O_RDWR | O_CREAT | O_TRUNC)
-#elif __APPLE__
-#define WRITE_FLAGS (O_RDWR | O_CREAT | O_TRUNC)
-#endif
 #else
 #define WRITE_FLAGS (O_RDWR | O_CREAT | O_TRUNC)
 #endif
+
+
+#define RW_FLAGS O_RDWR
 
 template <typename R>
 class File;
@@ -112,6 +110,13 @@ class File {
     ~File() { if (is_open) close(); }
 
 
+    void close() {
+        if (!is_open) return;
+        require(::close(descriptor) != -1, "Could not close file ( fd="
+                + std::to_string(descriptor) + ")");
+        is_open = false;
+    }
+
     void open(const std::string& fn, int flags=READ_FLAGS) {
         static_assert(PAGE_SIZE == sizeof(Page<R>));
         require(! is_open, "file already open: " + fn);
@@ -123,20 +128,13 @@ class File {
         is_open = (descriptor != -1);
     }
 
-    void close() {
-        if (!is_open) return;
-        require(::close(descriptor) != -1, "Could not close file ( fd="
-                + std::to_string(descriptor) + ")");
-        is_open = false;
-    }
-
     void readPage(page_num_t o, Page<R>* page) {
         require(page, "Allocation failed.");
         require(::lseek(descriptor, PAGE_SIZE*o, SEEK_SET) != -1,
                 "Could not seek in file for read. (read())");
         ssize_t bytes_read = ::read(descriptor, page, PAGE_SIZE);
         require_eq(bytes_read, PAGE_SIZE,
-                "Could not read entire page.");
+                   "Could not read entire page.");
         increment_reads(PAGE_SIZE / cacheline_size);
     }
 
@@ -321,7 +319,6 @@ class Reader {
         return file.numPages() * Page<R>::allocation;
     }
 }; //:~ class Reader
-
 
 template <typename R>
 class Writer {
@@ -524,8 +521,9 @@ class BulkReader : public BulkProcessor<R> {
     }
 };
 
-template<typename R>
-void eachRecord(const std::string& inpFile, std::function<void(const R&)> f) {
+// Fn = std::function<void(const R&)>
+template<typename R,typename Fn>
+void eachRecord(const std::string& inpFile, Fn f) {
     Reader<R> reader;
     size_t i = 0;
     reader.open(inpFile);

@@ -196,7 +196,7 @@ combinerClass OutShape {..} = do
       $ CC.FunctionAp (CC.SimpleFunctionSymbol resType) [] symAssocComb
     Left conflSym -> throwAStr
       $ printf
-        "the sym assocs :\n%s\n don't match the output plan:\n%s\nConflicting sym:%s"
+        "the output  :\n%s\n don't match the output plan:\n%s\nConflicting sym:%s"
         (ashow $ symAssoc1 ++ symAssoc2)
         (ashow outSyms)
         (ashow conflSym)

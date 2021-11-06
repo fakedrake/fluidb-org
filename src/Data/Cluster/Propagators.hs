@@ -659,6 +659,9 @@ forceQueryShape ref0 = (`evalStateT` mempty) $ go ref0
       modify (nsInsert ref)
       clusts <- lift
         $ filter (elem ref . clusterOutputs) <$> lookupClustersN ref
+
+      -- Note that the fact that we take3 means it is possible that it
+      -- is unstable.
       forM_ (take 3 clusts)
         $ \c -> case partition (elem ref) [clusterInputs c,clusterOutputs c] of
           ([_siblings],[deps]) -> do

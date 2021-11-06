@@ -46,8 +46,8 @@ class Join {
       : leftfile(l),
         rightfile(r),
         outfile(o),
-        left_triangle_filename(lt),
-        right_triangle_filename(rt) {
+        left_antijoin_filename(lt),
+        right_antijoin_filename(rt) {
     TYPE_EQ(typename Predicate::Domain0, Left);
     TYPE_EQ(typename Predicate::Domain1, Right);
     TYPE_EQ(typename Predicate::Codomain, bool);
@@ -58,27 +58,27 @@ class Join {
 
   ~Join() {}
   void print_output(size_t x) {
-    print_records<Left>(left_triangle_filename, x);
-    print_records<Right>(right_triangle_filename, x);
+    print_records<Left>(left_antijoin_filename, x);
+    print_records<Right>(right_antijoin_filename, x);
     print_records<Out>(outfile, x);
     report();
   }
 
   void run() {
-    Writer<Left> left_triangle_writer;
-    Writer<Right> right_triangle_writer;
+    Writer<Left> left_antijoin_writer;
+    Writer<Right> right_antijoin_writer;
     Writer<size_t> left_indexes_writer, right_indexes_writer;
     Writer<Out> output(outfile.value);
     bool left_touched;
     size_t left_index = 0;
 
-    // Open triangle files
-    WITH(left_triangle_filename,
-         left_triangle_writer.open(left_triangle_filename.value.first));
-    WITH(left_triangle_filename,
-         left_indexes_writer.open(left_triangle_filename.value.second));
-    WITH(right_triangle_filename,
-         right_indexes_writer.open(right_triangle_filename.value.second));
+    // Open antijoin files
+    WITH(left_antijoin_filename,
+         left_antijoin_writer.open(left_antijoin_filename.value.first));
+    WITH(left_antijoin_filename,
+         left_indexes_writer.open(left_antijoin_filename.value.second));
+    WITH(right_antijoin_filename,
+         right_indexes_writer.open(right_antijoin_filename.value.second));
 
     std::vector<bool> right_touched_map;
     eachRecord<Left>(leftfile, [&](const Left& left_record) {
@@ -92,7 +92,7 @@ class Join {
           if (left_touched) {
             // We are re-touching, this should be
             // removed if we are unjoining.
-            WITH(left_triangle_filename, left_indexes_writer.write(left_index));
+            WITH(left_antijoin_filename, left_indexes_writer.write(left_index));
           } else {
             left_touched = true;
           }
@@ -100,7 +100,7 @@ class Join {
           if (right_touched_map[right_index]) {
             // We are re-touching, this should be
             // removed if we are unjoining.
-            WITH(right_triangle_filename,
+            WITH(right_antijoin_filename,
                  right_indexes_writer.write(right_index));
           } else {
             right_touched_map[right_index] = true;
@@ -111,29 +111,29 @@ class Join {
       });
 
       if constexpr (!LeftTriagleType::isNothing) {
-        if (!left_touched) left_triangle_writer.write(left_record);
+        if (!left_touched) left_antijoin_writer.write(left_record);
       }
       left_index++;
     });
 
-    // Close triangle
+    // Close antijoin
     if constexpr (!LeftTriagleType::isNothing) {
-      left_triangle_writer.close();
+      left_antijoin_writer.close();
       left_indexes_writer.close();
     }
 
-    // Write the right triangle.
+    // Write the right antijoin.
     if constexpr (!RightTriagleType::isNothing) {
       right_indexes_writer.close();
       Reader<Right> right_reader;
       right_reader.open(rightfile);
-      right_triangle_writer.open(right_triangle_filename.value.first);
+      right_antijoin_writer.open(right_antijoin_filename.value.first);
       for (size_t i = 0; i < right_touched_map.size() && right_reader.hasNext();
            i++) {
         auto rec = right_reader.nextRecord();
-        if (!right_touched_map[i]) right_triangle_writer.write(rec);
+        if (!right_touched_map[i]) right_antijoin_writer.write(rec);
       }
-      right_triangle_writer.close();
+      right_antijoin_writer.close();
       right_reader.close();
     }
 
@@ -146,8 +146,8 @@ class Join {
   OutType outfile;
   Combine combiner;
   Predicate predicate;
-  LeftTriagleType left_triangle_filename;
-  RightTriagleType right_triangle_filename;
+  LeftTriagleType left_antijoin_filename;
+  RightTriagleType right_antijoin_filename;
 };
 
 template <typename Predicate, typename Combine,
@@ -189,11 +189,11 @@ class HashJoin {
     typedef typename RightExtract::Codomain Key;
     typedef typename Combine::Codomain Out;
 
-    Writer<Left> left_triangle_writer;
+    Writer<Left> left_antijoin_writer;
     Writer<Out> out_writer;
     const OutFilePathType outfile;
-    const LeftTriagleFilePathType left_triangle_file;
-    const RightTriagleFilePathType right_triangle_file;
+    const LeftTriagleFilePathType left_antijoin_file;
+    const RightTriagleFilePathType right_antijoin_file;
     const std::string leftfile;
     const std::string rightfile;
     Writer<size_t> dup_indexes_left, dup_indexes_right;
@@ -210,7 +210,7 @@ class HashJoin {
              const std::string& r,
              size_t np = 20)
             : outfile(o),
-              left_triangle_file(lt), right_triangle_file(rt),
+              left_antijoin_file(lt), right_antijoin_file(rt),
               leftfile(l), rightfile(r),
               number_of_partitions(np)
     {
@@ -224,8 +224,8 @@ class HashJoin {
     ~HashJoin() {}
 
     void print_output(size_t x) {
-        print_records<Left>(left_triangle_file, x);
-        print_records<Right>(right_triangle_file, x);
+        print_records<Left>(left_antijoin_file, x);
+        print_records<Right>(right_antijoin_file, x);
         print_records<Out>(outfile, x);
         report();
     }
@@ -236,15 +236,15 @@ class HashJoin {
         out_index = 0;
 
         WITH(outfile, out_writer.open(outfile.value));
-        WITH(left_triangle_file,
-             dup_indexes_left.open(left_triangle_file.value.second));
-        WITH(left_triangle_file,
-             left_triangle_writer.open(left_triangle_file.value.first));
+        WITH(left_antijoin_file,
+             dup_indexes_left.open(left_antijoin_file.value.second));
+        WITH(left_antijoin_file,
+             left_antijoin_writer.open(left_antijoin_file.value.first));
         while (processed_partitions < number_of_partitions) {
             if (make_pass(processed_partitions++)) {break;}
         }
-        WITH(left_triangle_file, left_triangle_writer.close());
-        WITH(left_triangle_file, dup_indexes_left.close());
+        WITH(left_antijoin_file, left_antijoin_writer.close());
+        WITH(left_antijoin_file, dup_indexes_left.close());
 
         // Deal with the leftovers
         auto final_left = generate_partition_output(
@@ -253,11 +253,11 @@ class HashJoin {
             rightfile, processed_partitions-1);
 
         if (number_of_partitions > 1) {
-            WITHOUT(right_triangle_file, fs::remove(final_right));
+            WITHOUT(right_antijoin_file, fs::remove(final_right));
             fs::remove(final_left);
         }
-        WITH(right_triangle_file,
-             fs::rename(final_right, right_triangle_file.value.first));
+        WITH(right_antijoin_file,
+             fs::rename(final_right, right_antijoin_file.value.first));
         WITH(outfile, out_writer.close());
     }
 
@@ -329,12 +329,12 @@ class HashJoin {
                     for (auto it = range.first; it != range.second; it++) {
                         WITH(outfile,
                              out_writer.write(
-                                 combine(it->second.first, right_record)));
 
+                                 combine(it->second.first, right_record)));
                         // If we've seen it before mark it as
                         // duplicate on the left.
                         if (it->second.second == false)
-                            WITH(left_triangle_file,
+                            WITH(left_antijoin_file,
                                  dup_indexes_left.write(out_index));
                         it->second.second = false;
                         out_index++;
@@ -348,8 +348,8 @@ class HashJoin {
         // Write out what we know won't be touched.
         for (auto p : map)
             if (p.second.second)
-                WITH(left_triangle_file,
-                     left_triangle_writer.write(p.second.first));
+                WITH(left_antijoin_file,
+                     left_antijoin_writer.write(p.second.first));
 
         left_writer.close();
         right_writer.close();
@@ -375,30 +375,30 @@ template <typename LeftExtract,
           typename RightExtract,
           typename Combine,
           typename OutFile,
-          typename LeftTriangle,
-          typename RightTriangle>
-Combine HashJoin<LeftExtract, RightExtract, Combine, OutFile, LeftTriangle, RightTriangle>::combine;
+          typename LeftAntijoin,
+          typename RightAntijoin>
+Combine HashJoin<LeftExtract, RightExtract, Combine, OutFile, LeftAntijoin, RightAntijoin>::combine;
 template <typename LeftExtract,
           typename RightExtract,
           typename Combine,
           typename OutFile,
-          typename LeftTriangle,
-          typename RightTriangle>
-LeftExtract HashJoin<LeftExtract, RightExtract, Combine, OutFile, LeftTriangle, RightTriangle>::left_extract;
+          typename LeftAntijoin,
+          typename RightAntijoin>
+LeftExtract HashJoin<LeftExtract, RightExtract, Combine, OutFile, LeftAntijoin, RightAntijoin>::left_extract;
 template <typename LeftExtract,
           typename RightExtract,
           typename Combine,
           typename OutFile,
-          typename LeftTriangle,
-          typename RightTriangle>
-RightExtract HashJoin<LeftExtract, RightExtract, Combine, OutFile, LeftTriangle, RightTriangle>::right_extract;
+          typename LeftAntijoin,
+          typename RightAntijoin>
+RightExtract HashJoin<LeftExtract, RightExtract, Combine, OutFile, LeftAntijoin, RightAntijoin>::right_extract;
 
 template <typename LeftExtract,
           typename RightExtract,
           typename Combine,
           typename OutFile,
-          typename LeftTriangle,
-          typename RightTriangle>
+          typename LeftAntijoin,
+          typename RightAntijoin>
 class MergeJoin {
  public:
     typedef typename LeftExtract::Domain0 Left;
@@ -409,12 +409,12 @@ class MergeJoin {
  public:
     MergeJoin(
         const OutFile& o,
-        const LeftTriangle& lt,
-        const RightTriangle& rt,
+        const LeftAntijoin& lt,
+        const RightAntijoin& rt,
         const std::string& l,
         const std::string& r)
             : leftfile(l), rightfile(r), outfile(o),
-              left_triangle_file(lt), right_triangle_file(rt)
+              left_antijoin_file(lt), right_antijoin_file(rt)
     {
         TYPE_EQ(typename Combine::Domain0, Left);
         TYPE_EQ(typename Combine::Domain1, Right);
@@ -425,8 +425,8 @@ class MergeJoin {
     ~MergeJoin() {}
 
     void print_output(size_t x) {
-        print_records<Left>(left_triangle_file, x);
-        print_records<Right>(right_triangle_file, x);
+        print_records<Left>(left_antijoin_file, x);
+        print_records<Right>(right_antijoin_file, x);
         print_records<Out>(outfile, x);
         report();
     }
@@ -435,15 +435,15 @@ class MergeJoin {
         Reader<Left> left(leftfile);
         Reader<Right> right(rightfile);
         Writer<Out> output;
-        Writer<Left> left_triangle;
-        Writer<Right> right_triangle;
+        Writer<Left> left_antijoin;
+        Writer<Right> right_antijoin;
         Left left_record;
         Right right_record;
         bool outstanding_left = false, outstanding_right = false;
 
         WITH(outfile, output.open(outfile.value));
-        WITH(left_triangle_file, left_triangle.open(left_triangle_file.value.first));
-        WITH(right_triangle_file, right_triangle.open(right_triangle_file.value.first));
+        WITH(left_antijoin_file, left_antijoin.open(left_antijoin_file.value.first));
+        WITH(right_antijoin_file, right_antijoin.open(right_antijoin_file.value.first));
 
         if (left.hasNext() && right.hasNext()) {
             left_record = left.nextRecord();
@@ -454,14 +454,14 @@ class MergeJoin {
         while (left.hasNext() && right.hasNext()) {
             while (left_extract(left_record) < right_extract(right_record)
                    && left.hasNext()) {
-                WITH(left_triangle_file, left_triangle.write(left_record));
+                WITH(left_antijoin_file, left_antijoin.write(left_record));
                 left_record = left.nextRecord();
                 outstanding_left = true;
             }
 
             while (right_extract(right_record) < left_extract(left_record)
                    && right.hasNext()) {
-                WITH(right_triangle_file, right_triangle.write(right_record));
+                WITH(right_antijoin_file, right_antijoin.write(right_record));
                 right_record = right.nextRecord();
                 outstanding_right = true;
             }
@@ -484,12 +484,12 @@ class MergeJoin {
             }
 
             if (outstanding_right)
-                WITH(right_triangle_file, right_triangle.write(right_record));
+                WITH(right_antijoin_file, right_antijoin.write(right_record));
             if (outstanding_left)
-                WITH(left_triangle_file, left_triangle.write(left_record));
+                WITH(left_antijoin_file, left_antijoin.write(left_record));
 
-            WITH(right_triangle_file, flush_rest(right, right_triangle));
-            WITH(left_triangle_file, flush_rest(left, left_triangle));
+            WITH(right_antijoin_file, flush_rest(right, right_antijoin));
+            WITH(left_antijoin_file, flush_rest(left, left_antijoin));
         }
     }
 
@@ -502,8 +502,8 @@ class MergeJoin {
     std::string leftfile;
     std::string rightfile;
     const OutFile outfile;
-    const LeftTriangle left_triangle_file;
-    const RightTriangle right_triangle_file;
+    const LeftAntijoin left_antijoin_file;
+    const RightAntijoin right_antijoin_file;
     static LeftExtract left_extract;
     static RightExtract right_extract;
     static Combine combine;
@@ -513,23 +513,23 @@ template <typename LeftExtract,
           typename RightExtract,
           typename Combine,
           typename OutFile,
-          typename LeftTriangle,
-          typename RightTriangle>
-Combine MergeJoin<LeftExtract, RightExtract, Combine, OutFile, LeftTriangle, RightTriangle>::combine;
+          typename LeftAntijoin,
+          typename RightAntijoin>
+Combine MergeJoin<LeftExtract, RightExtract, Combine, OutFile, LeftAntijoin, RightAntijoin>::combine;
 template <typename LeftExtract,
           typename RightExtract,
           typename Combine,
           typename OutFile,
-          typename LeftTriangle,
-          typename RightTriangle>
-LeftExtract MergeJoin<LeftExtract, RightExtract, Combine, OutFile, LeftTriangle, RightTriangle>::left_extract;
+          typename LeftAntijoin,
+          typename RightAntijoin>
+LeftExtract MergeJoin<LeftExtract, RightExtract, Combine, OutFile, LeftAntijoin, RightAntijoin>::left_extract;
 template <typename LeftExtract,
           typename RightExtract,
           typename Combine,
           typename OutFile,
-          typename LeftTriangle,
-          typename RightTriangle>
-RightExtract MergeJoin<LeftExtract, RightExtract, Combine, OutFile, LeftTriangle, RightTriangle>::right_extract;
+          typename LeftAntijoin,
+          typename RightAntijoin>
+RightExtract MergeJoin<LeftExtract, RightExtract, Combine, OutFile, LeftAntijoin, RightAntijoin>::right_extract;
 
 template <typename LeftExtract,
           typename RightExtract,

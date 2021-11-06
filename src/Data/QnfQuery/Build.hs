@@ -362,17 +362,21 @@ nqnfProjectI QProjNonEmpty{qpneProj=[]} _ =
             ,qnfHash = undefined
            })
     }
-nqnfProjectI QProjNonEmpty {..} nqnfIn@(nmIn,_) = do
-  colsOutAssoc0 :: [(e,(QNFColProj e s,Expr e'))]
+nqnfProjectI QProjNonEmpty {..} nqnfIn = do
+  colsOutAssoc :: [(e,(QNFColProj e s,Expr e'))]
     <- nqnfProjCol nqnfIn `traverse2` qpneProj
-  let colsOutAssoc = colsOutAssoc0
+  colsOutCoAssoc :: [(e,(QNFColProj e s,Expr e'))]
+    <- nqnfProjCol nqnfIn `traverse2` [(e,E0 e) | e <- qpneCompl]
   let nqnf = nqnfCombineCols $ fmap2 fst colsOutAssoc
-  return $ mkRes colsOutAssoc nqnf
+  -- Make the complement namemap
+  let (nmCo,_) = nqnfCombineCols $ fmap2 fst colsOutCoAssoc
+  return $ mkRes colsOutAssoc nmCo nqnf
   where
     mkRes :: [(e,(QNFColProj e s,Expr e'))]
+          -> HM.HashMap e (QNFCol e s)
           -> NQNFQueryI e s
           -> NQNFResultI (QProjNonEmpty e') e s
-    mkRes colsAssoc nqnfOut@(nmOut,_) =
+    mkRes colsAssoc nmCoOut nqnfOut@(nmOut,_) =
       NQNFResult
       { nqnfResNQNF = nqnfOut
        ,nqnfResOrig = QProjNonEmpty
@@ -389,8 +393,11 @@ nqnfProjectI QProjNonEmpty {..} nqnfIn@(nmIn,_) = do
        ,nqnfResInOutNames = []
       }
       where
-        primAssoc = HM.mapWithKey (\e c -> (Column c 0,e))  nmOut
-        secAssoc = HM.mapWithKey (\e c -> (Column c 0,e)) nmIn
+        primAssoc = HM.mapWithKey (\e c -> (Column c 0,e)) nmOut
+        -- The complement should be the exact same table but with a
+        -- different configuration of columns. However nmOut does not
+        -- contain the symbols required.
+        secAssoc = HM.mapWithKey (\e c -> (Column c 0,e)) nmCoOut
 
 
 nqnfAggregate
