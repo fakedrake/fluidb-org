@@ -15,7 +15,7 @@
 static size_t active_iters = 0;
 
 template <typename R>
-class RecordStream {
+class RecordMap {
   struct RefCntPage {
     RefCntPage(Page<R>* pg) : m_pg(pg), m_refs(0) { incr(); }
     RefCntPage(const RefCntPage&) = delete;
@@ -39,9 +39,9 @@ class RecordStream {
   struct RecrodLoc;
 
 public:
-  RecordStream(RecordStream&&) = delete;
-  RecordStream(const RecordStream&) = delete;
-  RecordStream(const std::string fn) : m_file(fn, RW_FLAGS) {
+  RecordMap(RecordMap&&) = delete;
+  RecordMap(const RecordMap&) = delete;
+  RecordMap(const std::string fn) : m_file(fn, RW_FLAGS) {
     size_t pg = m_file.numPages();
     if (pg == 0) {
       m_record_num = 0;
@@ -52,7 +52,7 @@ public:
     m_record_num = loc.record_index();
     drop_page(pg - 1);
   }
-  ~RecordStream() {}
+  ~RecordMap() { m_file.close(); }
 
   size_t page_num() { return m_record_num / Page<R>::capacity(); }
 
@@ -113,13 +113,13 @@ private:
 };
 
 template <typename R>
-class RecordStream<R>::Iterator
+class RecordMap<R>::Iterator
   : public std::iterator<std::random_access_iterator_tag, R> {
 public:
   using difference_type = size_t;
 
   Iterator() : m_index(0), m_recs(nullptr), m_holding_page(-1) {}
-  Iterator(size_t index, RecordStream* recs)
+  Iterator(size_t index, RecordMap* recs)
       : m_index(index), m_recs(recs), m_holding_page(-1) {}
   Iterator(Iterator&& rhs)
       : m_index(rhs.m_index),
@@ -246,14 +246,14 @@ public:
   }
 
 private:
-  RecordStream<R>* m_recs;
+  RecordMap<R>* m_recs;
   int m_holding_page;
   size_t m_index;
 };
 
 // The location of a file.
 template<typename R>
-struct RecordStream<R>::RecordLoc {
+struct RecordMap<R>::RecordLoc {
   size_t m_page_id, m_record_id;
   RecordLoc(size_t page_id, size_t record_id)
     : m_page_id(page_id), m_record_id(record_id) {}
@@ -269,8 +269,16 @@ struct RecordStream<R>::RecordLoc {
   }
 };
 
-template <typename R>
+template<typename Extract>
+struct CompareOn {
+  typedef typename Extract::Domain0 R;
+  bool operator()(const R& l, const R& r) { return extr(l) < extr(r); }
+  Extract extr;
+};
+
+template <typename Extract>
 void sortFile(const std::string& file) {
-  RecordStream<size_t> fs(file);
-  std::sort(fs.begin(), fs.end());
+  CompareOn<Extract> cmp;
+  RecordMap<typename Extract::Domain0> fs(file);
+  std::sort(fs.begin(), fs.end(), cmp);
 }

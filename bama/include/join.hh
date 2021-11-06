@@ -6,14 +6,17 @@
 #include <map>
 #include <vector>
 
+#include <fmt/format.h>
+
 #include "file.hh"
 #include "common.hh"
+#include "record_map.hh"
 #include "print_record.hh"
 
 // Predicates
 template <bool val>
 class PredicateConst {
- public:
+public:
   bool operator()(...) { return val; }
 };
 
@@ -23,7 +26,7 @@ class EquiJoinPredicate {
   LeftExtract leftExtract;
   RightExtract rightExtract;
 
- public:
+public:
   bool operator()(const Left& lr, const Right& rr) {
     return leftExtract(lr) == rightExtract(rr);
   }
@@ -40,14 +43,14 @@ class Join {
   typedef typename Predicate::Domain1 Right;
   typedef typename Combine::Codomain Out;
 
- public:
+public:
   Join(const OutType& o, const LeftTriagleType& lt, const RightTriagleType& rt,
        const std::string& l, const std::string& r)
-      : leftfile(l),
-        rightfile(r),
-        outfile(o),
-        left_antijoin_filename(lt),
-        right_antijoin_filename(rt) {
+    : leftfile(l),
+      rightfile(r),
+      outfile(o),
+      left_antijoin_filename(lt),
+      right_antijoin_filename(rt) {
     TYPE_EQ(typename Predicate::Domain0, Left);
     TYPE_EQ(typename Predicate::Domain1, Right);
     TYPE_EQ(typename Predicate::Codomain, bool);
@@ -140,7 +143,7 @@ class Join {
     output.close();
   }
 
- private:
+private:
   std::string leftfile;
   std::string rightfile;
   OutType outfile;
@@ -158,22 +161,22 @@ auto mkJoin(const OutType& o, const LeftTriagleType& lt,
             const RightTriagleType& rt, const std::string& l,
             const std::string& r) {
   return Join<Predicate, Combine, OutType, LeftTriagleType, RightTriagleType>(
-      o, lt, rt, l, r);
+                                                                              o, lt, rt, l, r);
 }
 
 template <typename Combine, typename OutType>
 auto mkProduct(const OutType& o,
                const std::string& l,
                const std::string& r) {
-    return Join<
-        Always<true, typename Combine::Domain0, typename Combine::Domain1>,
-        Combine,
-        OutType,
-        Nothing<std::string>,
-        Nothing<std::string> >(o,
-                               Nothing<std::string>(),
-                               Nothing<std::string>(),
-                               l, r);
+  return Join<
+    Always<true, typename Combine::Domain0, typename Combine::Domain1>,
+    Combine,
+    OutType,
+    Nothing<std::string>,
+    Nothing<std::string> >(o,
+                           Nothing<std::string>(),
+                           Nothing<std::string>(),
+                           l, r);
 }
 
 template <typename LeftExtract,
@@ -183,192 +186,192 @@ template <typename LeftExtract,
           typename LeftTriagleFilePathType,  // Maybe(std::string)
           typename RightTriagleFilePathType> // Maybe(std::string)
 class HashJoin {
- private:
-    typedef typename LeftExtract::Domain0 Left;
-    typedef typename RightExtract::Domain0 Right;
-    typedef typename RightExtract::Codomain Key;
-    typedef typename Combine::Codomain Out;
+private:
+  typedef typename LeftExtract::Domain0 Left;
+  typedef typename RightExtract::Domain0 Right;
+  typedef typename RightExtract::Codomain Key;
+  typedef typename Combine::Codomain Out;
 
-    Writer<Left> left_antijoin_writer;
-    Writer<Out> out_writer;
-    const OutFilePathType outfile;
-    const LeftTriagleFilePathType left_antijoin_file;
-    const RightTriagleFilePathType right_antijoin_file;
-    const std::string leftfile;
-    const std::string rightfile;
-    Writer<size_t> dup_indexes_left, dup_indexes_right;
-    static LeftExtract left_extract;
-    static RightExtract right_extract;
-    static Combine combine;
-    size_t number_of_partitions;
-    size_t out_index;
- public:
-    HashJoin(const OutFilePathType& o,
-             const LeftTriagleFilePathType& lt,
-             const RightTriagleFilePathType& rt,
-             const std::string& l,
-             const std::string& r,
-             size_t np = 20)
-            : outfile(o),
-              left_antijoin_file(lt), right_antijoin_file(rt),
-              leftfile(l), rightfile(r),
-              number_of_partitions(np)
-    {
-        TYPE_EQ(typename Combine::Domain0, Left);
-        TYPE_EQ(typename Combine::Domain1, Right);
-        TYPE_EQ(typename Combine::Codomain, Out);
-        TYPE_EQ(typename LeftExtract::Codomain, Key);
+  Writer<Left> left_antijoin_writer;
+  Writer<Out> out_writer;
+  const OutFilePathType outfile;
+  const LeftTriagleFilePathType left_antijoin_file;
+  const RightTriagleFilePathType right_antijoin_file;
+  const std::string leftfile;
+  const std::string rightfile;
+  Writer<size_t> dup_indexes_left, dup_indexes_right;
+  static LeftExtract left_extract;
+  static RightExtract right_extract;
+  static Combine combine;
+  size_t number_of_partitions;
+  size_t out_index;
+public:
+  HashJoin(const OutFilePathType& o,
+           const LeftTriagleFilePathType& lt,
+           const RightTriagleFilePathType& rt,
+           const std::string& l,
+           const std::string& r,
+           size_t np = 20)
+    : outfile(o),
+      left_antijoin_file(lt), right_antijoin_file(rt),
+      leftfile(l), rightfile(r),
+      number_of_partitions(np)
+  {
+    TYPE_EQ(typename Combine::Domain0, Left);
+    TYPE_EQ(typename Combine::Domain1, Right);
+    TYPE_EQ(typename Combine::Codomain, Out);
+    TYPE_EQ(typename LeftExtract::Codomain, Key);
 
+  }
+
+  ~HashJoin() {}
+
+  void print_output(size_t x) {
+    print_records<Left>(left_antijoin_file, x);
+    print_records<Right>(right_antijoin_file, x);
+    print_records<Out>(outfile, x);
+    report();
+  }
+
+  void run() {
+    size_t processed_partitions = 0;
+
+    out_index = 0;
+
+    WITH(outfile, out_writer.open(outfile.value));
+    WITH(left_antijoin_file,
+         dup_indexes_left.open(left_antijoin_file.value.second));
+    WITH(left_antijoin_file,
+         left_antijoin_writer.open(left_antijoin_file.value.first));
+    while (processed_partitions < number_of_partitions) {
+      if (make_pass(processed_partitions++)) {break;}
     }
+    WITH(left_antijoin_file, left_antijoin_writer.close());
+    WITH(left_antijoin_file, dup_indexes_left.close());
 
-    ~HashJoin() {}
+    // Deal with the leftovers
+    auto final_left = generate_partition_output(
+                                                leftfile, processed_partitions-1);
+    auto final_right = generate_partition_output(
+                                                 rightfile, processed_partitions-1);
 
-    void print_output(size_t x) {
-        print_records<Left>(left_antijoin_file, x);
-        print_records<Right>(right_antijoin_file, x);
-        print_records<Out>(outfile, x);
-        report();
+    if (number_of_partitions > 1) {
+      WITHOUT(right_antijoin_file, fs::remove(final_right));
+      fs::remove(final_left);
     }
+    WITH(right_antijoin_file,
+         fs::rename(final_right, right_antijoin_file.value.first));
+    WITH(outfile, out_writer.close());
+  }
 
-    void run() {
-        size_t processed_partitions = 0;
+private:
+  inline std::string generate_partition_input(const std::string& f,
+                                              size_t p) const {
+    if (p == 0) return f;
+    return generate_partition_output(f, p-1);
+  }
 
-        out_index = 0;
+  inline std::string generate_partition_output(const std::string &f,
+                                               size_t p) const {
+    char ret[sizeof(size_t) * 8 / 5 + f.size() + 1];
+    sprintf(ret, "%s.%zu", f.c_str(), p);
+    return ret;
+  }
 
-        WITH(outfile, out_writer.open(outfile.value));
+  size_t partition_of(const Key& key) const {
+    return hash_of(key) % number_of_partitions;
+  }
+
+  inline std::pair<Key, std::pair<Left, bool> > hash_entry(const Left& record) const {
+    return std::pair<Key, std::pair<Left, bool> >(
+                                                  left_extract(record),
+                                                  std::pair<Left, bool>(record, true));
+  }
+
+  // Returns true if finished.
+  bool make_pass(size_t partition) {
+    const std::string left_input = generate_partition_input(
+                                                            leftfile, partition);
+    const std::string right_input = generate_partition_input(
+                                                             rightfile, partition);
+    const std::string left_output = generate_partition_output(
+                                                              leftfile, partition);
+    const std::string right_output = generate_partition_output(rightfile, partition);
+    bool finished = true;
+
+    Writer<Left> left_writer;
+    Writer<Right> right_writer;
+    using map_type = std::multimap<Key, std::pair<Left, bool> >;
+    map_type map;
+    std::pair<typename map_type::iterator,
+              typename map_type::iterator> range;
+
+    left_writer.open(left_output);
+    right_writer.open(right_output);
+
+    // Read all records of left and if they belong in the current
+    // partition put them in the map. If not throw them in the
+    // partition file.
+    eachRecord<Left>(
+                     left_input,
+                     [&](const Left& left_record) {
+                       if (partition_of(left_extract(left_record)) == partition) {
+                         map.insert(hash_entry(left_record));
+                       } else {
+                         left_writer.write(left_record);
+                       }
+                     });
+
+    // Combine each record on the right with it's corresponding
+    // ones on the current partition. Each left one used.
+    eachRecord<Right>(
+                      right_input,
+                      [&](const Right& right_record) {
+                        if (partition_of(right_extract(right_record)) == partition) {
+                          range = map.equal_range(right_extract(right_record));
+                          for (auto it = range.first; it != range.second; it++) {
+                            WITH(outfile,
+                                 out_writer.write(
+
+                                                  combine(it->second.first, right_record)));
+                            // If we've seen it before mark it as
+                            // duplicate on the left.
+                            if (it->second.second == false)
+                              WITH(left_antijoin_file,
+                                   dup_indexes_left.write(out_index));
+                            it->second.second = false;
+                            out_index++;
+                          }
+                        } else {
+                          right_writer.write(right_record);
+                          finished = false;
+                        }
+                      });
+
+    // Write out what we know won't be touched.
+    for (auto p : map)
+      if (p.second.second)
         WITH(left_antijoin_file,
-             dup_indexes_left.open(left_antijoin_file.value.second));
-        WITH(left_antijoin_file,
-             left_antijoin_writer.open(left_antijoin_file.value.first));
-        while (processed_partitions < number_of_partitions) {
-            if (make_pass(processed_partitions++)) {break;}
-        }
-        WITH(left_antijoin_file, left_antijoin_writer.close());
-        WITH(left_antijoin_file, dup_indexes_left.close());
+             left_antijoin_writer.write(p.second.first));
 
-        // Deal with the leftovers
-        auto final_left = generate_partition_output(
-            leftfile, processed_partitions-1);
-        auto final_right = generate_partition_output(
-            rightfile, processed_partitions-1);
+    left_writer.close();
+    right_writer.close();
 
-        if (number_of_partitions > 1) {
-            WITHOUT(right_antijoin_file, fs::remove(final_right));
-            fs::remove(final_left);
-        }
-        WITH(right_antijoin_file,
-             fs::rename(final_right, right_antijoin_file.value.first));
-        WITH(outfile, out_writer.close());
+    if (partition != 0) {
+      fs::remove(left_input);
+      fs::remove(right_input);
     }
-
- private:
-    inline std::string generate_partition_input(const std::string& f,
-                                                size_t p) const {
-        if (p == 0) return f;
-        return generate_partition_output(f, p-1);
-    }
-
-    inline std::string generate_partition_output(const std::string &f,
-                                                 size_t p) const {
-        char ret[sizeof(size_t) * 8 / 5 + f.size() + 1];
-        sprintf(ret, "%s.%zu", f.c_str(), p);
-        return ret;
-    }
-
-    size_t partition_of(const Key& key) const {
-        return hash_of(key) % number_of_partitions;
-    }
-
-    inline std::pair<Key, std::pair<Left, bool> > hash_entry(const Left& record) const {
-        return std::pair<Key, std::pair<Left, bool> >(
-            left_extract(record),
-            std::pair<Left, bool>(record, true));
-    }
-
-    // Returns true if finished.
-    bool make_pass(size_t partition) {
-        const std::string left_input = generate_partition_input(
-            leftfile, partition);
-        const std::string right_input = generate_partition_input(
-            rightfile, partition);
-        const std::string left_output = generate_partition_output(
-            leftfile, partition);
-        const std::string right_output = generate_partition_output(rightfile, partition);
-        bool finished = true;
-
-        Writer<Left> left_writer;
-        Writer<Right> right_writer;
-        using map_type = std::multimap<Key, std::pair<Left, bool> >;
-        map_type map;
-        std::pair<typename map_type::iterator,
-                  typename map_type::iterator> range;
-
-        left_writer.open(left_output);
-        right_writer.open(right_output);
-
-        // Read all records of left and if they belong in the current
-        // partition put them in the map. If not throw them in the
-        // partition file.
-        eachRecord<Left>(
-            left_input,
-            [&](const Left& left_record) {
-                if (partition_of(left_extract(left_record)) == partition) {
-                    map.insert(hash_entry(left_record));
-                } else {
-                    left_writer.write(left_record);
-                }
-            });
-
-        // Combine each record on the right with it's corresponding
-        // ones on the current partition. Each left one used.
-        eachRecord<Right>(
-            right_input,
-            [&](const Right& right_record) {
-                if (partition_of(right_extract(right_record)) == partition) {
-                    range = map.equal_range(right_extract(right_record));
-                    for (auto it = range.first; it != range.second; it++) {
-                        WITH(outfile,
-                             out_writer.write(
-
-                                 combine(it->second.first, right_record)));
-                        // If we've seen it before mark it as
-                        // duplicate on the left.
-                        if (it->second.second == false)
-                            WITH(left_antijoin_file,
-                                 dup_indexes_left.write(out_index));
-                        it->second.second = false;
-                        out_index++;
-                    }
-                } else {
-                    right_writer.write(right_record);
-                    finished = false;
-                }
-            });
-
-        // Write out what we know won't be touched.
-        for (auto p : map)
-            if (p.second.second)
-                WITH(left_antijoin_file,
-                     left_antijoin_writer.write(p.second.first));
-
-        left_writer.close();
-        right_writer.close();
-
-        if (partition != 0) {
-            fs::remove(left_input);
-            fs::remove(right_input);
-        }
-        return finished;
-    }
+    return finished;
+  }
 
 
-    size_t hash_of(const Key& value) const {
-        char* k = (char*) &value;
-        size_t hash = 5381;
-        for (size_t i = 0; i < sizeof(Key); i++)
-            hash = ((hash << 5) + hash) + k[i];
-        return hash;
-    }
+  size_t hash_of(const Key& value) const {
+    char* k = (char*) &value;
+    size_t hash = 5381;
+    for (size_t i = 0; i < sizeof(Key); i++)
+      hash = ((hash << 5) + hash) + k[i];
+    return hash;
+  }
 };
 
 template <typename LeftExtract,
@@ -400,113 +403,125 @@ template <typename LeftExtract,
           typename LeftAntijoin,
           typename RightAntijoin>
 class MergeJoin {
- public:
-    typedef typename LeftExtract::Domain0 Left;
-    typedef typename RightExtract::Domain0 Right;
-    typedef typename RightExtract::Codomain Key;
-    typedef typename Combine::Codomain Out;
+public:
+  typedef typename LeftExtract::Domain0 Left;
+  typedef typename RightExtract::Domain0 Right;
+  typedef typename RightExtract::Codomain Key;
+  typedef typename Combine::Codomain Out;
 
- public:
-    MergeJoin(
-        const OutFile& o,
-        const LeftAntijoin& lt,
-        const RightAntijoin& rt,
-        const std::string& l,
-        const std::string& r)
-            : leftfile(l), rightfile(r), outfile(o),
-              left_antijoin_file(lt), right_antijoin_file(rt)
-    {
-        TYPE_EQ(typename Combine::Domain0, Left);
-        TYPE_EQ(typename Combine::Domain1, Right);
-        TYPE_EQ(typename Combine::Codomain, Out);
-        TYPE_EQ(typename LeftExtract::Codomain, Key);
+public:
+  MergeJoin(
+            const OutFile& o,
+            const LeftAntijoin& lt,
+            const RightAntijoin& rt,
+            const std::string& l,
+            const std::string& r)
+    : leftfile(l), rightfile(r), outfile(o),
+      left_antijoin_file(lt), right_antijoin_file(rt)
+  {
+    TYPE_EQ(typename Combine::Domain0, Left);
+    TYPE_EQ(typename Combine::Domain1, Right);
+    TYPE_EQ(typename Combine::Codomain, Out);
+    TYPE_EQ(typename LeftExtract::Codomain, Key);
+  }
+
+  ~MergeJoin() {}
+
+  void print_output(size_t x) {
+    print_records<Left>(left_antijoin_file, x);
+    print_records<Right>(right_antijoin_file, x);
+    print_records<Out>(outfile, x);
+    report();
+  }
+
+  void run() {
+    sortFile<LeftExtract>(leftfile);
+    sortFile<RightExtract>(rightfile);
+
+    Reader<Left> left(leftfile);
+    Reader<Right> right(rightfile);
+    Writer<Out> output;
+    Writer<Left> left_antijoin;
+    Writer<Right> right_antijoin;
+    Left left_record;
+    Right right_record;
+    bool outstanding_left = false, outstanding_right = false;
+
+    WITH(outfile, output.open(outfile.value));
+    WITH(left_antijoin_file,
+         left_antijoin.open(left_antijoin_file.value.first));
+    WITH(right_antijoin_file,
+         right_antijoin.open(right_antijoin_file.value.first));
+
+    if (left.hasNext() && right.hasNext()) {
+      left_record = left.nextRecord();
+      right_record = right.nextRecord();
+      outstanding_left = outstanding_right = true;
     }
 
-    ~MergeJoin() {}
+    while (left.hasNext() && right.hasNext()) {
+      // Skip all the left records that are smaller
+      while (left_extract(left_record) < right_extract(right_record) &&
+             left.hasNext()) {
+        fmt::print("Dropping: {} (right: {})\n", left_record.show(),
+                   right_record.show());
+        WITH(left_antijoin_file, left_antijoin.write(left_record));
+        left_record = left.nextRecord();
+        outstanding_left = true;
+      }
 
-    void print_output(size_t x) {
-        print_records<Left>(left_antijoin_file, x);
-        print_records<Right>(right_antijoin_file, x);
-        print_records<Out>(outfile, x);
-        report();
-    }
+      // Skip all the right records that are smaller
+      while (right_extract(right_record) < left_extract(left_record) &&
+             right.hasNext()) {
+        fmt::print("Dropping: {} (left: )\n", right_record.show(),
+                   left_record.show());
+        WITH(right_antijoin_file, right_antijoin.write(right_record));
+        right_record = right.nextRecord();
+        outstanding_right = true;
+      }
 
-    void run() {
-        Reader<Left> left(leftfile);
-        Reader<Right> right(rightfile);
-        Writer<Out> output;
-        Writer<Left> left_antijoin;
-        Writer<Right> right_antijoin;
-        Left left_record;
-        Right right_record;
-        bool outstanding_left = false, outstanding_right = false;
-
-        WITH(outfile, output.open(outfile.value));
-        WITH(left_antijoin_file, left_antijoin.open(left_antijoin_file.value.first));
-        WITH(right_antijoin_file, right_antijoin.open(right_antijoin_file.value.first));
-
-        if (left.hasNext() && right.hasNext()) {
-            left_record = left.nextRecord();
+      // Here we are in two equal blocks that we need to product
+      // together.
+      right.mark();
+      while (left_extract(left_record) == right_extract(right_record)) {
+        right.rollback();
+        while (left_extract(left_record) == right_extract(right_record)) {
+          fmt::print("Matched: {}, {}\n", left_record.show(),
+                     right_record.show());
+          WITH(outfile, output.write(combine(left_record, right_record)));
+          if (right.hasNext()) {
             right_record = right.nextRecord();
-            outstanding_left = outstanding_right = true;
+            outstanding_right = true;
+          } else {
+            outstanding_right = false;
+          }
         }
+      }
 
-        while (left.hasNext() && right.hasNext()) {
-            while (left_extract(left_record) < right_extract(right_record)
-                   && left.hasNext()) {
-                WITH(left_antijoin_file, left_antijoin.write(left_record));
-                left_record = left.nextRecord();
-                outstanding_left = true;
-            }
+      if (outstanding_right)
+        WITH(right_antijoin_file, right_antijoin.write(right_record));
+      if (outstanding_left)
+        WITH(left_antijoin_file, left_antijoin.write(left_record));
 
-            while (right_extract(right_record) < left_extract(left_record)
-                   && right.hasNext()) {
-                WITH(right_antijoin_file, right_antijoin.write(right_record));
-                right_record = right.nextRecord();
-                outstanding_right = true;
-            }
-
-            // XXX: Here we are in two equal blocks that we need to
-            // product together.
-            while (left_extract(left_record) == right_extract(right_record)) {
-                right.mark();
-                while (left_extract(left_record) == right_extract(right_record)) {
-                    right.rollback();
-                    while (left_extract(left_record) == right_extract(right_record)) {
-                        WITH(outfile,
-                             output.write(combine(left_record, right_record)));
-                        if (right.hasNext()) {
-                            right_record = right.nextRecord();
-                            outstanding_right = true;
-                        } else {outstanding_right = false;}
-                    }
-                }
-            }
-
-            if (outstanding_right)
-                WITH(right_antijoin_file, right_antijoin.write(right_record));
-            if (outstanding_left)
-                WITH(left_antijoin_file, left_antijoin.write(left_record));
-
-            WITH(right_antijoin_file, flush_rest(right, right_antijoin));
-            WITH(left_antijoin_file, flush_rest(left, left_antijoin));
-        }
+      WITH(right_antijoin_file, flush_rest(right, right_antijoin));
+      WITH(left_antijoin_file, flush_rest(left, left_antijoin));
     }
+  }
 
-    template<typename T>
-    inline void flush_rest(Reader<T>& r, Writer<T>& w) {
-        while (r.hasNext()) w.write(r.nextRecord());
-    }
+  template<typename T>
+  inline void flush_rest(Reader<T>& r, Writer<T>& w) {
+    while (r.hasNext()) w.write(r.nextRecord());
+  }
 
- private:
-    std::string leftfile;
-    std::string rightfile;
-    const OutFile outfile;
-    const LeftAntijoin left_antijoin_file;
-    const RightAntijoin right_antijoin_file;
-    static LeftExtract left_extract;
-    static RightExtract right_extract;
-    static Combine combine;
+private:
+  std::string leftfile;
+  std::string rightfile;
+  const OutFile outfile;
+  const LeftAntijoin left_antijoin_file;
+  const RightAntijoin right_antijoin_file;
+  static LeftExtract left_extract;
+  static RightExtract right_extract;
+  static Combine combine;
 };
 
 template <typename LeftExtract,
@@ -537,17 +552,17 @@ template <typename LeftExtract,
           typename OutFilePathType,
           typename LeftTriagleFilePathType,
           typename RightTriagleFilePathType>
-auto mkEquiJoin0(const OutFilePathType& o,
+auto mkEquiJoin(const OutFilePathType& o,
                 const LeftTriagleFilePathType& lt,
                 const RightTriagleFilePathType& rt,
                 const std::string& l,
                 const std::string& r) {
-    return HashJoin<LeftExtract,
-                    RightExtract,
-                    Combine,
-                    OutFilePathType,
-                    LeftTriagleFilePathType,
-                    RightTriagleFilePathType>(o, lt, rt, l, r);
+  return MergeJoin<LeftExtract,
+                   RightExtract,
+                   Combine,
+                   OutFilePathType,
+                   LeftTriagleFilePathType,
+                   RightTriagleFilePathType>(o, lt, rt, l, r);
 }
 
 #endif /* JOIN_H */

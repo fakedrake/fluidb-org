@@ -265,7 +265,7 @@ Extract Partition<Extract>::extract;
 template <typename LeftExtract, typename RightExtract, typename Combine,
           typename OutFilePathType, typename LeftTriagleFilePathType,
           typename RightTriagleFilePathType>
-auto mkEquiJoin(const OutFilePathType& o, const LeftTriagleFilePathType& lt,
+auto mkEquiJoin1(const OutFilePathType& o, const LeftTriagleFilePathType& lt,
                 const RightTriagleFilePathType& rt, const std::string& l,
                 const std::string& r) {
   return GraceJoin<LeftExtract, RightExtract, Combine, OutFilePathType,

@@ -363,8 +363,11 @@ class Writer {
         // add the record
         page->add(r);
     }
-
-    void close() { flush(); file.close(); }
+    std::string get_filename() const { return filename; }
+    void close() {
+      flush();
+      file.close();
+    }
     void flush() { if (page) file.writePage(num_pages-1, *page); }
     bool isOpen() const { return file.isOpen(); }
     page_num_t numPages() const { return file.numPages(); }
