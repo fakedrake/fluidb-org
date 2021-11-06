@@ -146,7 +146,7 @@ class MergeJoin {
   right_finished:
     if (pending_left)
       WITH(left_antijoin_file, left_antijoin.write(left_record));
-    WITH(right_antijoin_file, flush_rest(right, right_antijoin));
+    WITH(left_antijoin_file, flush_rest(left, left_antijoin));
     goto finished;
 
   finished:

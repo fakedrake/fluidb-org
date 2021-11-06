@@ -212,4 +212,6 @@ template<size_t n>
 using fluidb_string=std::array<char,n>;
 #endif
 
+typedef const std::pair<std::string, std::string> filepair;
+
 #endif /* COMMON_H */

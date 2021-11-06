@@ -51,74 +51,70 @@
 */
 
 template <typename R>
-class Page {
+class alignas(PAGE_SIZE) Page {
  public:
-    //enum { size = get_pagesize() };
-    //enum { header_size = sizeof(size_t) + sizeof(void*) };
-    enum { header_size = sizeof(size_t) };
-    typedef R record_type;
+  // enum { size = get_pagesize() };
+  // enum { header_size = sizeof(size_t) + sizeof(void*) };
+  enum { header_size = sizeof(size_t) };
+  typedef R record_type;
 
-    Page(): numrecs(0) {}
-    ~Page() {}
+  Page() : numrecs(0) {}
+  ~Page() {}
 
  private:
-    static const size_t datasize = PAGE_SIZE - header_size;
+  static const size_t datasize = PAGE_SIZE - header_size;
 
  public:
-    static const size_t allocation = datasize/sizeof(record_type);
+  static const size_t allocation = datasize / sizeof(record_type);
 
  private:
-    size_t numrecs;
-    union __Data {
-        R records[allocation];
-        char padding[datasize - (datasize % sizeof(void*))];
-        __Data() { ::memset( this, 0, sizeof( __Data ) ); }
-    } data;
+  size_t numrecs;
+  union __Data {
+    R records[allocation];
+    char padding[datasize - (datasize % sizeof(void*))];
+    __Data() { ::memset(this, 0, sizeof(__Data)); }
+  } data;
 
  public:
-    static size_t capacity() { return allocation; }
-    /*const*/ size_t length() const { return numrecs; }
+  static size_t capacity() { return allocation; }
+  /*const*/ size_t length() const { return numrecs; }
 
-    const record_type& get(size_t i) const {
-        require_lt(i, numrecs, "Record out of bounds");
-        return data.records[i];
-    }
-    record_type& get(size_t i) {
-        require_lt(i, numrecs, "Record out of bounds");
-        return data.records[i];
-    }
-    void set(size_t i, const record_type& r) { data.records[i] = r; }
-    size_t add(const record_type& r) {
-        require_le(numrecs, allocation, "out of space");
-        data.records[numrecs++] = r;
-        return numrecs;
-    }
-    void clear() { numrecs = 0; }
+  const record_type& get(size_t i) const {
+    require_lt(i, numrecs, "Record out of bounds");
+    return data.records[i];
+  }
+  record_type& get(size_t i) {
+    require_lt(i, numrecs, "Record out of bounds");
+    return data.records[i];
+  }
+  void set(size_t i, const record_type& r) { data.records[i] = r; }
+  size_t add(const record_type& r) {
+    require_le(numrecs, allocation, "out of space");
+    data.records[numrecs++] = r;
+    return numrecs;
+  }
+  void clear() { numrecs = 0; }
 
-    //void setNumberOfRecords(size_t n) { numrecs = n; }
-    void setAll(const record_type* recs, rec_num_t nr) {
-        require_le(nr, allocation, "data does not fit");
-        ::memmove(&data.records[0], recs, nr*sizeof(record_type));
-        numrecs = nr;
-    }
+  // void setNumberOfRecords(size_t n) { numrecs = n; }
+  void setAll(const record_type* recs, rec_num_t nr) {
+    require_le(nr, allocation, "data does not fit");
+    ::memmove(&data.records[0], recs, nr * sizeof(record_type));
+    numrecs = nr;
+  }
 
-    rec_num_t getAll(record_type* recs, rec_num_t nr) {
-        nr = std::min(nr, length());
-        ::memmove(recs, &data.records[0], nr*sizeof(record_type));
-        return nr;
-    }
+  rec_num_t getAll(record_type* recs, rec_num_t nr) {
+    nr = std::min(nr, length());
+    ::memmove(recs, &data.records[0], nr * sizeof(record_type));
+    return nr;
+  }
 
-    const R* begin() const {
-        return &(data.records[0]);
+  const R* begin() const { return &(data.records[0]); }
+  const R* end() const { return &(data.records[length()]); }
+  /*
+    void addAll(const record_type* recs, size_t nr) {
+    require(nr < allocationdata.records
     }
-    const R* end() const {
-        return &(data.records[length()]);
-    }
-    /*
-      void addAll(const record_type* recs, size_t nr) {
-      require(nr < allocationdata.records
-      }
-    */
+  */
 };
 
 template<typename R>

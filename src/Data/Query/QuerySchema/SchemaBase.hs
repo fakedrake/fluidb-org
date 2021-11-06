@@ -259,7 +259,7 @@ shapeProject exprColumnProps prj shape = do
 
 -- | Given an assoc and a list all the possible
 -- λ> substitutions [('a','A')] ['a','b']
--- ('a' :| "b") :| ['A' :| "b"
+-- ('a' :| "b") :| [('A' :| "b")]
 -- λ> substitutions [('x','X')] ['a','b']
 -- ('a' :| "b") :| []
 substitutions :: forall a . Eq a =>
@@ -323,8 +323,8 @@ joinShapes eqs qpL qpR =
       let luOnL = all (`elem` fmap fst normEqs) usetL
       let luOnR = all (`elem` fmap snd normEqs) usetR
       return $ case (luOnL,luOnR) of
-        (True,False) -> (LeftForeignKey,) $ substitutions normEqs usetL
-        (False,True) -> (RightForeignKey,)
+        (True,False) -> (RightForeignKey,) $ substitutions normEqs usetL
+        (False,True) -> (LeftForeignKey,)
           $ substitutions (swap <$> normEqs) usetR
         (_,_) -> (NoLookup,)
           $ NEL.nub
@@ -336,8 +336,8 @@ joinShapes eqs qpL qpR =
           if
             | linl && not linr && rinr && not rinl -> Just (l,r)
             | not linl && linr && not rinr && rinl -> Just (r,l)
-            | (linl && linr) || (rinl && rinr)
-              -> error "Exposed symbols should be disjoint in products"
+            | (linl && linr) || (rinl && rinr) ->
+              error "Exposed symbols should be disjoint in products"
             | otherwise -> Nothing
           where
             linl = l `inAndNonConst` qpSchema qpL

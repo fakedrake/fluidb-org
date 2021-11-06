@@ -337,7 +337,7 @@ class Writer {
     }
     ~Writer() {
         if (file.isOpen()) close();
-        if (page) delete page;
+        if (page) aligned_delete((unsigned char*)page);
     }
 
     void open(const std::string& fn) {
