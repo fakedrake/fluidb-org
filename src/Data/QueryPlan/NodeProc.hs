@@ -165,16 +165,15 @@ satisfyComputability = go mempty
         assumedNonComputables -> do
           actuallyComputables
             <- filterM (isComputableM conf) assumedNonComputables
-          "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
-          let conf' = foldl' (flip markComputable) conf actuallyComputables
-          runNodeProc (go trail ref nxt0) conf'
+          -- "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
+          if null actuallyComputables then return r else do
+            let conf' = foldl' (flip markComputable) conf actuallyComputables
+            runNodeProc (go trail ref nxt0) conf'
       where
         isComputableM conf ref' = do
-          traceM $ "Checking computable" <: ref'
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
-          traceM $ "Checked" <: ref'
           return $ case ret of
             BndErr _ -> False
             _        -> True
