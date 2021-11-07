@@ -35,7 +35,6 @@ import           Control.Antisthenis.Types
 import           Control.Monad.Cont
 import           Control.Monad.Except
 import           Control.Monad.Extra
-import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer        hiding (Sum)
@@ -147,7 +146,7 @@ histCosts = do
 
 -- | Compute the frontier cost and the historical costs.
 haltPlanCost
-  :: (HaltKey m ~ PlanSearchScore,MonadHalt m)
+  :: (HaltKey m ~ PlanSearchScore,MonadHalt m,HasCallStack)
   => Maybe Cost
   -> Double
   -> PlanT t n m Cost
@@ -363,27 +362,14 @@ newEpoch = wrapTrM "newEpoch" $ do
                }
         trM $ "New epoch. Demoted refs: " ++ show updatedRefs
 
-eitherlReader
-  :: BotMonad m
-  => ReaderT a (PlanT t n m) x
-  -> ReaderT a (PlanT t n m) x
-  -> ReaderT a (PlanT t n m) x
-eitherlReader = splitProvenance (EitherLeft,EitherRight) id eitherl'
-lsplitReader
-  :: MonadPlus m
-  => ReaderT a (PlanT t n m) x
-  -> ReaderT a (PlanT t n m) x
-  -> ReaderT a (PlanT t n m) x
-lsplitReader = splitProvenance (SplitLeft,SplitRight) id
-  $ \(ReaderT l) (ReaderT r) -> ReaderT $ \s -> mplusPlanT (l s) (r s)
-
 garbageCollectFor
   :: forall t n m . (MonadLogic m) => [NodeRef n] -> PlanT t n m ()
-garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
-  lift preReport
-  hc <- lift $ haltPlanCost Nothing 0
-  go  hc `eitherlReader` (lift newEpoch >> go hc)
-  lift $ trM $ "Finished GC to make " ++ show ns
+garbageCollectFor
+  ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ \requiredPages -> do
+  preReport
+  hc <- haltPlanCost Nothing 0
+  go requiredPages hc `eitherl` (newEpoch >> go requiredPages hc)
+  trM $ "Finished GC to make " ++ show ns
   where
     preReport = do
       nsize <- sum <$> traverse totalNodePages ns
@@ -402,17 +388,18 @@ garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
       if isGC then bot "nested GCs" else do
         setGC True
         -- Check that gc is possiblex
-        neededPages <- sum <$> traverse totalNodePages ns
-        runReaderT (whenM isOversized m) neededPages
+        requiredPages <- sum <$> traverse totalNodePages ns
+        whenM (isOversized requiredPages) $ m requiredPages
         setGC False
       where
         setGC b = modify $ \x -> x { garbageCollecting = b }
-    go :: Cost -> ReaderT PageNum (PlanT t n m) ()
-    go hc = do
-      assertGcIsPossible
-      killIntermediates `lsplitReader` lift top
-      whenM isOversized $ killPrimaries hc `eitherlReader` lift top
-      whenM isOversized $ lift $ bot $ "GC failed: " ++ show ns
+    go :: PageNum  -> Cost -> PlanT t n m ()
+    go requiredPages hc = do
+      assertGcIsPossible requiredPages
+      killIntermediates `eitherl` top
+      let whenOversized = whenM $ isOversized requiredPages
+      whenOversized $ killPrimaries requiredPages hc `eitherl` top
+      whenOversized $ bot $ "GC failed: " ++ show ns
 
 nodesFit :: Monad m => [NodeRef n] -> PlanT t n m Bool
 nodesFit ns = do
@@ -427,80 +414,84 @@ nodesFit ns = do
 
 -- |A very quick test to filter out blatantly impossible gc
 -- attempts. Checks if concrete nodes are respected
-assertGcIsPossible :: MonadPlus m => ReaderT PageNum (PlanT t n m) ()
-assertGcIsPossible = do
-  neededPages :: PageNum <- ask
-  budg <- budget <$> lift ask
-  let sizeOfSt sts = lift $ fmap sum . traverse totalNodePages
-        =<< nodesInState sts
+assertGcIsPossible :: MonadPlus m => PageNum -> PlanT t n m ()
+assertGcIsPossible requiredPages = do
+  budg <- asks budget
+  let sizeOfSt sts = fmap sum . traverse totalNodePages =<< nodesInState sts
   concr <- sizeOfSt [Concrete Mat Mat,Concrete NoMat Mat]
   ini <- sizeOfSt [Initial Mat]
-  when (maybe False (neededPages + concr >) budg) $ lift
+  when (maybe False (requiredPages + concr >) budg)
     $ bot
-    $ printf "assertGcIsPossible : needed=%d, concrete=%d, budget=%s, ini=%d"
-    neededPages concr (show budg) ini
+    $ printf
+      "assertGcIsPossible : needed=%d, concrete=%d, budget=%s, ini=%d"
+      requiredPages
+      concr
+      (show budg)
+      ini
 
-killIntermediates :: forall t n m . MonadLogic m =>
-                    ReaderT PageNum (PlanT t n m) ()
+killIntermediates :: forall t n m . MonadLogic m => PlanT t n m ()
 killIntermediates = do
-  matInterm <- filterM (lift . fmap not . isProtected)
-    =<< filterM (lift . isMaterialized)
+  matInterm <- filterM (fmap not . isProtected)
+    =<< filterM isMaterialized
     =<< toNodeList . intermediates <$> lift ask
-  forM_ matInterm $ \x -> lift $ do
+  forM_ matInterm $ \x -> do
     delDepMatCache x
     x `setNodeStateUnsafe` Concrete Mat NoMat
     putDelNode x
 
 isOversized
-  :: forall t n m . MonadLogic m => ReaderT PageNum (PlanT t n m) Bool
-isOversized = do
-  nsize <- ask
-  totalSize <- lift getDataSize
-  budget <- budget <$> lift ask
-  if maybe False (\b -> nsize + totalSize > b) budget
-    then do
-      lift $ trM
-        $ printf "oversized: %d / %s (needed: %d)"
-        totalSize (maybe "<unbounded>" show budget) nsize
-      return True
-    else return False
+  :: forall t n m . MonadLogic m => PageNum -> PlanT t n m Bool
+isOversized requiredPages = do
+  totalSize <- getDataSize
+  budget <- asks budget
+  if maybe False (\b -> requiredPages + totalSize > b) budget then do
+    trM
+      $ printf
+        "oversized: %d / %s (needed: %d)"
+        totalSize
+        (maybe "<unbounded>" show budget)
+        requiredPages
+    return True else return False
 
-killPrimaries :: MonadLogic m => Cost -> ReaderT PageNum (PlanT t n m) ()
-killPrimaries hc =
-  hoist (wrapTrM "killPrimaries") $ (safeDelInOrder hc =<<) $ lift $ do
-    nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
-    nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
-    nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
-    guardl "No killable primaries" $ not $ null nsUnord
-    -- XXX: We are having no priority in deleting these.
-    return nsUnord
+killPrimaries :: MonadLogic m => PageNum -> Cost -> PlanT t n m ()
+killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
+  nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
+  nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
+  nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
+  guardl "No killable primaries" $ not $ null nsUnord
+  -- XXX: We are having no priority in deleting these.
+  safeDelInOrder requiredPages hc nsUnord
 
 safeDelInOrder
-  :: MonadLogic m => Cost -> [NodeRef n] -> ReaderT PageNum (PlanT t n m) ()
-safeDelInOrder hc nsOrd =
-  hoist (wrapTrM $ "safeDelInOrder " ++ show nsOrd)
-  $ foldr delRef (lift . guardl "still oversized " =<< isOversized) nsOrd
+  :: MonadLogic m => PageNum -> Cost -> [NodeRef n] -> PlanT t n m ()
+safeDelInOrder requiredPages hc nsOrd =
+  wrapTrM ("safeDelInOrder " ++ show nsOrd) $ delRefs [] nsOrd
   where
-    delRef ref rest = do
-      delOrConcreteMat ref
-      whenM isOversized rest
+    delRefs _prev [] = guardl "still oversized " =<< isOversized requiredPages
+    delRefs prev (ref:rest) = do
+      reportMatNodes prev $ delOrConcreteMat ref
+      whenM (isOversized requiredPages) $ delRefs (ref:prev) rest
     delOrConcreteMat ref = do
-      beforeSize <- lift getDataSize
+      beforeSize <- getDataSize
       -- We could semantically use eitherl but eitherl cuts the
       -- computation and does not allow for other paths to be
       -- searched.
-      canStillDel <- lift $ isDeletable ref
-      lift
-        $ if canStillDel then do
-          delCost <- transitionCost $ DelNode ref
-          void $ haltPlanCost (Just hc) $ fromIntegral $ costAsInt delCost
-          ref `setNodeStateSafe` NoMat
+      canStillDel <- isDeletable ref
+      if canStillDel then do
+        delCost <- transitionCost $ DelNode ref
+        void $ haltPlanCost (Just hc) $ fromIntegral $ costAsInt delCost
+        ref `setNodeStateSafe` NoMat
         else ref `setNodeStateUnsafe` Concrete Mat Mat
-      assertGcIsPossible
-      afterSize <- lift getDataSize
-      lift
-        $ guardl "We Deletion did more harm than good"
-        $ beforeSize >= afterSize
+      assertGcIsPossible requiredPages
+      afterSize <- getDataSize
+      guardl "We Deletion did more harm than good" $ beforeSize >= afterSize
+
+reportMatNodes :: Monad m => [NodeRef n] -> PlanT t n m a -> PlanT t n m a
+reportMatNodes deleted m = catchError m $ \e -> do
+  mat <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
+  throwPlan
+    $ unlines
+      [ashow "Just deleted:",ashow deleted,"Mat nodes:",ashow mat,ashow e]
 
 matNeighbors :: MonadLogic m => NodeRef n -> PlanT t n m ()
 matNeighbors node = wrapTrM ("matNeighbors " ++ show node) $ do

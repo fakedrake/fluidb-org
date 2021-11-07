@@ -257,6 +257,7 @@ censorPredicate ref c =
 getCostPlan
   :: forall tag t n m .
   (PlanMech (PlanT t n Identity) (CostParams tag n) n
+  ,HasCallStack
   ,IsPlanParams (CostParams tag n) n
   ,AShow (MechVal (PlanParams tag n))
   ,Monad m)
@@ -282,6 +283,7 @@ getCostPlan Proxy extraMat cap ref = do
 getCost
   :: forall tag n m .
   (PlanMech m (CostParams tag n) n
+  ,HasCallStack
   ,IsPlanParams (CostParams tag n) n
   ,AShow (MechVal (PlanParams tag n)))
   => Proxy tag
