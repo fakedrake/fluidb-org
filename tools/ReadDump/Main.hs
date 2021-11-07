@@ -243,7 +243,9 @@ readFileCached :: FilePath -> StateT [(FilePath, [StringType])] IO [StringType]
 readFileCached file = gets (lookup file) >>= \case
   Just ret -> return ret
   Nothing -> do
+    lift $ putStrLn $ "Reading file: " ++ file
     ret <- lift $ C8.lines <$> B.readFile file
+    lift $ putStrLn "Done! "
     modify ((file,ret) :)
     return ret
 
@@ -382,9 +384,7 @@ safeLast e []     = e
 main :: IO ()
 main = (`evalStateT` []) $ do
   -- Brnaches
-  lift $ putStrLn "reading dump..."
   dumpFile <- lift $ fromMaybe "/tmp/benchmark.out" . listToMaybe <$> getArgs
-  lift $ putStrLn "Dump read!"
   let rootDir = printf "%s.bench_branches" dumpFile
   let branchDirf = printf "%s/branches%03d" rootDir
   lift $ createDirectoryIfMissing True rootDir
