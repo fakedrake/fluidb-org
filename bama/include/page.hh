@@ -51,7 +51,7 @@
 */
 
 template <typename R>
-class alignas(PAGE_SIZE) Page {
+class /*alignas(PAGE_SIZE)*/ Page {
  public:
   // enum { size = get_pagesize() };
   // enum { header_size = sizeof(size_t) + sizeof(void*) };

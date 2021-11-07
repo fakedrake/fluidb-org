@@ -221,7 +221,7 @@ cycleProc ref =
 -- not hold then the function of assuming non-computability when
 -- coming up with said result was to avoid a fixpoint.
 --
--- We need a good theoretical foundation on how fixpoints are handled
+-- We need a better theoretical foundation on how fixpoints are handled
 -- for the particular operators we use.
 censorPredicate
   :: (Monad m,IsPlanParams (CostParams tag n) n)
@@ -244,6 +244,8 @@ censorPredicate ref c =
       conf { confEpoch = (confEpoch conf)
                { peCoPred = nsDelete ref $ peCoPred $ confEpoch conf }
            }
+    -- Ephemeral errors are removed as soon as possible, they are
+    -- emitted at the PlanMech level but we handle them here.
     go (coepoch,(nxt,ret)) = case ret of
       BndErr ErrCycleEphemeral {} ->
         (unmarkNonComputable ref coepoch

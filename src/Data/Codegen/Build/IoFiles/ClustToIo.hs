@@ -41,14 +41,11 @@ import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.QuerySchema
 import           Data.Query.SQL.FileSet
-import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
-import           Data.Tuple
 import           Data.Utils.AShow
 import           Data.Utils.Compose
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
-import           Data.Utils.MTL
 import           Data.Utils.Tup
 import           Data.Void
 import           Prelude                               hiding (exp)
