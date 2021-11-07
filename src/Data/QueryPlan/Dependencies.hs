@@ -186,14 +186,14 @@ type DCache t n = RefMap n (Maybe (Frontiers (MetaOp t n) t n,[Trail t n]))
 -- XXX: When unencountered just continue
 --
 -- XXX: The intermediate results need to be consistent on their own.
-withMemoized :: forall e t n m . (IsString e,MonadError e m) =>
-               (NodeRef n -> Bool)
-             -> NodeRef n
-             -> Trail t n
-             -> ListT (StateT (DCache t n) m)
-             (NodeSet n,StarScore (MetaOp t n) t n)
-             -> ListT (StateT (DCache t n) m)
-             (NodeSet n,StarScore (MetaOp t n) t n)
+withMemoized
+  :: forall e t n m .
+  (IsString e,MonadError e m)
+  => (NodeRef n -> Bool)
+  -> NodeRef n
+  -> Trail t n
+  -> ListT (StateT (DCache t n) m) (NodeSet n,StarScore (MetaOp t n) t n)
+  -> ListT (StateT (DCache t n) m) (NodeSet n,StarScore (MetaOp t n) t n)
 withMemoized isFin ref trail  m = if isFin ref
   then return (nsSingleton ref,mempty)
   else notFinal
