@@ -393,13 +393,16 @@ garbageCollectFor
         setGC False
       where
         setGC b = modify $ \x -> x { garbageCollecting = b }
-    go :: PageNum  -> Cost -> PlanT t n m ()
+    go :: PageNum -> Cost -> PlanT t n m ()
     go requiredPages hc = do
       assertGcIsPossible requiredPages
-      killIntermediates `eitherl` top
-      let whenOversized = whenM $ isOversized requiredPages
-      whenOversized $ killPrimaries requiredPages hc
-      whenOversized $ bot $ "GC failed: " ++ show ns
+      savedPagesInterm <- killIntermediates
+      let whenOversized pgs m = if pgs > 0 then m else return 0
+      savedPagesPrim <- whenOversized (requiredPages - savedPages)
+        $ killPrimaries requiredPages hc
+      whenOversized (requiredPages - savedPagesInterm - savedPagesPrim)
+        $ bot
+        $ "GC failed: " ++ show ns
 
 nodesFit :: Monad m => [NodeRef n] -> PlanT t n m Bool
 nodesFit ns = do
@@ -429,15 +432,17 @@ assertGcIsPossible requiredPages = do
       (show budg)
       ini
 
-killIntermediates :: forall t n m . MonadLogic m => PlanT t n m ()
+killIntermediates :: forall t n m . MonadLogic m => PlanT t n m PageNum
 killIntermediates = do
   intermediates <- asks $ toNodeList . intermediates
   matInterm <- filterM isMaterialized intermediates
   nonProtectedMatInterm <- filterM (fmap not . isProtected) matInterm
-  forM_ nonProtectedMatInterm $ \x -> do
+  pgs <- forM nonProtectedMatInterm $ \x -> do
     delDepMatCache x
     x `setNodeStateUnsafe` Concrete Mat NoMat
     putDelNode x
+    totalNodePages x
+  return $ sum pgs
 
 isOversized
   :: forall t n m . MonadLogic m => PageNum -> PlanT t n m Bool
@@ -453,7 +458,7 @@ isOversized requiredPages = do
         requiredPages
     return True else return False
 
-killPrimaries :: MonadLogic m => PageNum -> Cost -> PlanT t n m ()
+killPrimaries :: MonadLogic m => PageNum -> Cost -> PlanT t n m PageNum
 killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
   nsUnordMaybeIsolated <- nodesInState [Initial Mat]
   nsUnord <- filterM isDeletable nsUnordMaybeIsolated
@@ -464,30 +469,37 @@ killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
   safeDelInOrder requiredPages hc nsOrd
 
 safeDelInOrder
-  :: MonadLogic m => PageNum -> Cost -> [NodeRef n] -> PlanT t n m ()
+  :: forall t n m .
+  MonadLogic m
+  => PageNum
+  -> Cost
+  -> [NodeRef n]
+  -> PlanT t n m PageNum
 safeDelInOrder requiredPages hc nsOrd =
-  wrapTrM ("safeDelInOrder " ++ show nsOrd) $ delRefs [] nsOrd
+  wrapTrM ("safeDelInOrder " ++ show nsOrd) $ delRefs 0 [] nsOrd
   where
-    delRefs _prev [] = guardl "still oversized " =<< isOversized requiredPages
-    delRefs prev (ref:rest) = do
-      reportMatNodes prev $ delOrConcreteMat (length rest) ref
-      whenM (isOversized requiredPages) $ delRefs (ref:prev) rest
-    delOrConcreteMat remaining ref = do
-      beforeSize <- getDataSize
-      -- We could semantically use eitherl but eitherl cuts the
-      -- computation and does not allow for other paths to be
-      -- searched.
+    delRefs :: PageNum -> [NodeRef n] -> [NodeRef n] -> PlanT t n m PageNum
+    delRefs freed _prev [] = return freed
+    delRefs freed prev (ref:rest) = do
+      extraFree <- delOrConcreteMat ref
+      if freed + extraFree > requiredPages then return $ freed + extraFree
+        else delRefs (freed + extraFree) (ref : prev) rest
+    delOrConcreteMat ref = do
       canStillDel <- isDeletable ref
-      if canStillDel then do
-        delCost <- transitionCost $ DelNode ref
-        when False $
-          void $ haltPlanCost (Just hc) $ fromIntegral $ costAsInt delCost
-        ref `setNodeStateSafe` NoMat
-        else ref `setNodeStateUnsafe` Concrete Mat Mat
-      assertGcIsPossible requiredPages
-      afterSize <- getDataSize
-      guardl "We Deletion did more harm than good" $ beforeSize >= afterSize
-
+      if canStillDel then toDel ref else toConcr ref
+    toDel :: NodeRef n -> PlanT t n m PageNum
+    toDel ref = do
+      -- delCost <- transitionCost $ DelNode ref
+      -- void
+      --   $ haltPlanCost (Just hc)
+      --   $ fromIntegral
+      --   $ costAsInt delCost
+      ref `setNodeStateSafe` NoMat
+      totalNodePages ref
+    toConcr :: NodeRef n -> PlanT t n m PageNum
+    toConcr ref = do
+      ref `setNodeStateUnsafe` Concrete Mat Mat
+      return 0
 reportMatNodes :: Monad m => [NodeRef n] -> PlanT t n m a -> PlanT t n m a
 reportMatNodes deleted m = catchError m $ \e -> do
   mat <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
