@@ -381,9 +381,10 @@ safeLast e []     = e
 
 main :: IO ()
 main = (`evalStateT` []) $ do
-  lift $ putStrLn "ReadDump starting..."
   -- Brnaches
+  lift $ putStrLn "reading dump..."
   dumpFile <- lift $ fromMaybe "/tmp/benchmark.out" . listToMaybe <$> getArgs
+  lift $ putStrLn "Dump read!"
   let rootDir = printf "%s.bench_branches" dumpFile
   let branchDirf = printf "%s/branches%03d" rootDir
   lift $ createDirectoryIfMissing True rootDir
