@@ -18,11 +18,17 @@ module Data.Utils.Nat
 import           Data.Coerce
 import           Data.Pointed
 import           Data.Utils.AShow
+import           Data.Utils.MinElem
 import           GHC.Generics
 
-newtype Sum a = Sum { unSum :: Maybe a } deriving (Show,Eq,Generic)
-newtype Min a = Min { unMin :: Maybe a }
+newtype Sum a = Sum { getSum :: Maybe a } deriving (Show,Eq,Generic)
+newtype Min a = Min { getMin :: Maybe a }
   deriving (Show,Eq,Generic)
+
+instance (Ord a,Zero a) => MinElem (Sum a) where
+  minElem = Sum $ Just zero
+instance (Ord a,Zero a) => MinElem (Min a) where
+  minElem = Min $ Just zero
 
 newtype Neg a = Neg a
   deriving (Show,Eq,Generic)
@@ -34,6 +40,12 @@ pattern MinInf = Min Nothing
 instance AShow a => AShow (Sum a)
 instance AShow a => AShow (Min a)
 instance AShow a => AShow (Neg a)
+
+instance Ord a => Ord (Sum a) where
+  compare SumInf SumInf                 = EQ
+  compare SumInf _                      = GT
+  compare _ SumInf                      = LT
+  compare (Sum (Just a)) (Sum (Just b)) = compare a b
 
 instance Ord a => Ord (Min a) where
   compare MinInf MinInf                 = EQ

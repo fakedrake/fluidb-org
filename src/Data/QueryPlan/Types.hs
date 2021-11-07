@@ -32,12 +32,10 @@ module Data.QueryPlan.Types
   ,PlanT
   ,IsMatable
   ,PlanSearchScore(..)
-  ,MonadHaltD
   ,MetaOp(..)
   ,pushHistory
   ,showMetaOp
   ,throwPlan
-  ,halt
   ,GCState(..)
   ,GCConfig(..)
   ,GCEpoch(..)
@@ -93,6 +91,7 @@ import           Data.Utils.Functors
 import           Data.Utils.HContT
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
+import           Data.Utils.MinElem
 import           GHC.Generics                    (Generic)
 import           GHC.Stack
 import           Prelude                         hiding (filter, lookup)
@@ -319,32 +318,36 @@ data PlanSanityError t n
   deriving (Eq, Show, Generic)
 instance AShow (PlanSanityError t n)
 data PlanSearchScore = PlanSearchScore {
-  planSeachScore      :: Double, -- The cost of the current
-  planSearchScoreStar :: Maybe Double
+  psFrontierCost :: Double, -- The cost of the current
+  psOtherCost    :: Maybe Double
   } deriving (Generic,Show,Eq)
+instance MinElem PlanSearchScore where
+  minElem =
+    PlanSearchScore { psOtherCost = Nothing,psFrontierCost = 0 }
 instance Ord PlanSearchScore where
-  compare l r = toI l `compareM` toI r where
-    compareM Nothing Nothing   = EQ
-    compareM Nothing _         = GT
-    compareM _ Nothing         = LT
-    compareM (Just x) (Just y) = compare x y
-    toI PlanSearchScore{..} = (planSeachScore +) <$> planSearchScoreStar
+  compare l r = toI l `compareM` toI r
+    where
+      compareM Nothing Nothing   = EQ
+      compareM Nothing _         = GT
+      compareM _ Nothing         = LT
+      compareM (Just x) (Just y) = compare x y
+      toI PlanSearchScore {..} = (psFrontierCost +) <$> psOtherCost
   {-# INLINE compare #-}
 instance Monoid PlanSearchScore where
   {-# INLINE mempty #-}
   mempty = PlanSearchScore  {
-    planSeachScore=0,
-    planSearchScoreStar=Nothing
+    psFrontierCost=0,
+    psOtherCost=Nothing
     }
 instance Group PlanSearchScore where
-  invert l = l{planSeachScore = -(planSeachScore l)}
+  invert l = l{psFrontierCost = -(psFrontierCost l)}
 instance Semigroup PlanSearchScore where
   {-# INLINE (<>) #-}
   l <> r = PlanSearchScore{
-    planSeachScore=planSeachScore l + planSeachScore r,
-    planSearchScoreStar=planSearchScoreStar r <|> planSearchScoreStar l
+    psFrontierCost=psFrontierCost l + psFrontierCost r,
+    psOtherCost=psOtherCost r <|> psOtherCost l
     }
-type MonadLogic m = (MonadPlus m, BotMonad m, MonadHaltD m)
+type MonadLogic m = (MonadPlus m, BotMonad m, MonadHalt m)
 type MonadHaltD m = (HValue m ~ PlanSearchScore, MonadHalt m)
 type PlanT t n m =
   StateT (GCState t n) (ReaderT (GCConfig t n) (ExceptT (PlanningError t n) m))

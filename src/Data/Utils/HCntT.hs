@@ -5,19 +5,24 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeFamilies              #-}
-module Data.Utils.HCntT (HCntT,(<//>),dissolve) where
+{-# LANGUAGE UndecidableInstances      #-}
+module Data.Utils.HCntT (HCntT,(<//>),dissolve,once,MonadHalt(..)) where
 
 import           Control.Applicative
 import           Control.Monad.Cont
+import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Control.Monad.Writer
+import qualified Data.Heap            as H
 import qualified Data.IntMap.Strict   as IM
 import qualified Data.List.NonEmpty   as NEL
-import           Data.Monoid
 import           Data.Proxy
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.ListT
+import           Data.Utils.MinElem
+import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
 
@@ -25,7 +30,7 @@ import           GHC.Generics
 -- | A stable heap: items with the same key are returned in the order
 -- they were inserted. The HeapKey mempty is less than all other
 -- heapkeys.
-class (forall v . Monoid (h v),Functor h,Monoid (HeapKey h),Ord (HeapKey h))
+class (forall v . Monoid (h v),Functor h,Ord (HeapKey h))
   => IsHeap h where
   type HeapKey h :: *
 
@@ -33,6 +38,32 @@ class (forall v . Monoid (h v),Functor h,Monoid (HeapKey h),Ord (HeapKey h))
   singletonHeap :: HeapKey h -> v -> h v
   maxKeyHeap :: h v -> Maybe (HeapKey h)
 
+data CHeap k a = CHeap { chHeap :: H.Heap (H.Entry k a),chMax :: Maybe k }
+
+instance Ord k => Semigroup (CHeap k a) where
+  ch <> ch' =
+    CHeap
+    { chHeap = chHeap ch <> chHeap ch',chMax = case (chMax ch,chMax ch) of
+      (Nothing,Nothing) -> Nothing
+      (Just a,Nothing)  -> Just a
+      (Nothing,Just a)  -> Just a
+      (Just a,Just a')  -> Just $ max a a' }
+instance Ord k =>  Monoid (CHeap k a) where
+  mempty = CHeap { chHeap = mempty,chMax = Nothing }
+
+instance Ord k => Functor (CHeap k) where
+  fmap f ch =
+    CHeap { chHeap = H.mapMonotonic (fmap f) $ chHeap ch,chMax = chMax ch }
+
+instance Ord k => IsHeap (CHeap k) where
+  type HeapKey (CHeap k) = k
+  popHeap CHeap {..} = do
+    (H.Entry k v,h) <- H.viewMin chHeap
+    let m = if null h then Nothing else chMax
+    return ((k,v),CHeap { chMax = m,chHeap = h })
+  singletonHeap k v =
+    CHeap { chMax = Just k,chHeap = H.singleton $ H.Entry k v }
+  maxKeyHeap = chMax
 
 -- | The heap priority. This is mostly to make the typechecker happy
 -- when the ambiguity stemming from the type family HeapKey confuses
@@ -47,15 +78,23 @@ instance Semigroup (IntMMap a) where
 instance Monoid (IntMMap a) where
   mempty = IntMMap mempty
 
+newtype NonNeg a = NonNeg { getNonNeg :: a }
+  deriving (Show,Eq,Ord)
+instance (Ord a,Zero a) =>  Zero (NonNeg a) where
+  zero = NonNeg zero
+
+instance (Ord a,Zero a) => MinElem (NonNeg a) where
+  minElem = zero
+
 instance IsHeap IntMMap where
-  type HeapKey IntMMap = Sum IM.Key
+  type HeapKey IntMMap = NonNeg IM.Key
   popHeap (IntMMap m) = do
-    ((k, h NEL.:| xs),rest) <- IM.minViewWithKey m
-    return ((Sum k,h), IntMMap $ case NEL.nonEmpty xs of
+    ((k, h NEL.:| xs0),rest) <- IM.minViewWithKey m
+    return ((NonNeg k,h), IntMMap $ case NEL.nonEmpty xs0 of
       Nothing -> rest
       Just xs -> IM.insert k xs rest)
-  singletonHeap k v = IntMMap $ IM.singleton (getSum k) (pure v)
-  maxKeyHeap (IntMMap im) = Sum . fst . fst <$> IM.maxViewWithKey im
+  singletonHeap k v = IntMMap $ IM.singleton (getNonNeg k) (pure v)
+  maxKeyHeap (IntMMap im) = NonNeg . fst . fst <$> IM.maxViewWithKey im
 
 -- | A list is a heap where they key is a unit.
 instance IsHeap [] where
@@ -92,7 +131,8 @@ emptyHRes = HRes (Tup2 mempty mempty,[])
 
 type HCntT h r m = ContT (HRes h m r) (BrnchM h r m)
 
-dissolve :: (IsHeap h,Monad m) => HCntT h r m r -> ListT m r
+dissolve
+  :: (MinElem (HeapKey h),IsHeap h,Monad m) => HCntT h r m r -> ListT m r
 dissolve = dissolveI (\x -> pure $ HRes (Tup2 mempty mempty,[x]))
 
 -- | By the /disolution/ we mean the process of turning an HCntT value
@@ -112,13 +152,13 @@ dissolve = dissolveI (\x -> pure $ HRes (Tup2 mempty mempty,[x]))
 -- when all the results have been yielded.
 dissolveI
   :: forall h m r x .
-  (IsHeap h,Monad m)
+  (IsHeap h,Monad m,MinElem (HeapKey h))
   => (x -> m (HRes h m r))
   -> HCntT h r m x
   -> ListT m r
 dissolveI fin c = ListT $ do
   (HRes (Tup2 hl hr,rs),st) <- runStateT
-    (runReaderT (runContT c $ lift2 . fin) (HPrio mempty))
+    (runReaderT (runContT c $ lift2 . fin) (HPrio minElem))
     def
   go st (hl <> hr,rs)
   where
@@ -139,7 +179,8 @@ dissolveI fin c = ListT $ do
             -- on both sides.
             go st' (hl <> h' <> hr,rs)
 
-instance (IsHeap h,Monad m) => Alternative (HCntT h r m) where
+instance (IsHeap h,MinElem (HeapKey h),Monad m)
+  => Alternative (HCntT h r m) where
   -- | Split simply introduces two high priority elements in the
   -- heap. Because the heap is stable, the last one in is the last one
   -- out, this is fundamentally a BFS search. This is not ideal for
@@ -149,23 +190,35 @@ instance (IsHeap h,Monad m) => Alternative (HCntT h r m) where
   ContT m <|> ContT m' = ContT $ \f -> return
     $ HRes (Tup2 (h (m f) <> h (m' f)) mempty,[])
     where
-      h = singletonHeap mempty
+      h = singletonHeap minElem
   empty = ContT $ const $ return emptyHRes
 
-instance (IsHeap h,Monad m) => MonadPlus (HCntT h r m) where
+instance (IsHeap h,MinElem (HeapKey h),Monad m) => MonadPlus (HCntT h r m) where
   mplus = (<|>)
   mzero = empty
 
-class Monad m => MonadHalt  m where
+class Monad m => MonadHalt m where
   type HaltKey m :: *
   halt :: HaltKey m -> m ()
+
+instance MonadHalt m => MonadHalt (StateT s m) where
+  type HaltKey (StateT s m) =  HaltKey m
+  halt = lift . halt
+instance MonadHalt m => MonadHalt (ReaderT r m) where
+  type HaltKey (ReaderT r m) =  HaltKey m
+  halt = lift . halt
+instance (Monoid w,MonadHalt m) => MonadHalt (WriterT w m) where
+  type HaltKey (WriterT w m) = HaltKey m
+  halt = lift . halt
+instance MonadHalt m => MonadHalt (ExceptT e m) where
+  type HaltKey (ExceptT e m) = HaltKey m
+  halt = lift . halt
 
 instance (Monad m,IsHeap h) => MonadHalt (HCntT h r m) where
   type HaltKey (HCntT h r m) = HeapKey h
   halt v = ContT $ \nxt -> do
-    v' <- asks $ (v <>) . getHPrio
-    return
-      $ HRes (Tup2 (singletonHeap v' $ nxt ()) mempty,[])
+    v' <- asks $ min v . getHPrio
+    return $ HRes (Tup2 (singletonHeap v' $ nxt ()) mempty,[])
 
 
 
@@ -409,13 +462,13 @@ nested
   -> HRes h m r
   -> HCntT h r m a
   -> HCntT h r m a
-nested success fail c = ContT $ \fin -> go mempty $ runContT c fin
+nested success failCase c = ContT $ \fin -> go mempty $ runContT c fin
   where
     go :: h (Brnch h r m) -> Brnch h r m -> Brnch h r m
     go h b = b <&> \case
       HRes (h',r':rs') -> success h' r' rs'
       HRes (Tup2 hl hr,[]) -> case popHeap $ hl <> h <> hr of
-        Nothing          -> fail
+        Nothing          -> failCase
         Just ((k,b'),h') -> HRes (Tup2 (singletonHeap k $ go h' b') mempty,[])
 
 
@@ -425,7 +478,7 @@ once = nested (\_h r _rs -> HRes (Tup2 mempty mempty,[r])) emptyHRes
 #if 1
 -- | Try to open a file. If it doesn't exist just fail. If it exists
 -- read the contents
-openFile :: IsHeap v => String -> HCntT v r IO String
+openFile :: (MinElem (HeapKey h),IsHeap h) => String -> HCntT h r IO String
 openFile fname = do
   lift3 $ putStrLn $ "Opening: " ++ fname
   case fname of
@@ -438,7 +491,7 @@ openFile fname = do
 closeFile :: String -> HCntT v r IO ()
 closeFile fname = lift3 $ putStrLn $ "Closing file: " ++ fname
 
-chooseFile :: IsHeap v => [String] -> HCntT v r IO String
+chooseFile :: (MinElem (HeapKey h),IsHeap h) => [String] -> HCntT h r IO String
 chooseFile []     = empty
 chooseFile (f:fs) = openFile f <//> (closeFile f >> chooseFile fs)
 
@@ -452,7 +505,7 @@ test = runListT $ dissolve @IntMMap $ do
 stream :: Monad m => HCntT IntMMap r m Int
 stream = go 0 where
   go i = do
-    halt $ Sum i
+    halt $ NonNeg i
     return i <|> go (i+1)
 
 -- > test2

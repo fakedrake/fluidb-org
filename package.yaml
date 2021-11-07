@@ -56,6 +56,7 @@ library:
     - ghc >= 8.6.5
     - temporary
     - unix
+    - heaps
     - extra >= 1.6.14
     - bifunctors
     - bytestring >= 0.10.8.1

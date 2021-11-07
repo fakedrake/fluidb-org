@@ -100,7 +100,7 @@ mapCap :: (ZCap w -> ZCap w) -> Conf w -> Conf w
 mapCap f conf = conf { confCap = f <$> confCap conf }
 unscaleCap :: HistCap Cost -> HistCap Cost
 unscaleCap hc =
-  hc { hcValCap = Min $ fmap unscaleCost $ unMin $ hcValCap hc
+  hc { hcValCap = Min $ fmap unscaleCost $ getMin $ hcValCap hc
       ,hcMatsEncountered = 1 + hcMatsEncountered hc
      }
   where

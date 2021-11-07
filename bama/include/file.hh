@@ -17,13 +17,7 @@
 
 
 #define READ_FLAGS O_RDONLY
-#ifdef __linux
 #define WRITE_FLAGS (O_WRONLY | O_CREAT | O_TRUNC)
-#else
-#define WRITE_FLAGS (O_WRONLY | O_CREAT | O_TRUNC)
-#endif
-
-
 #define RW_FLAGS O_RDWR
 
 template <typename R>

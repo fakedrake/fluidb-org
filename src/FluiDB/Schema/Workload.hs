@@ -64,6 +64,7 @@ import           Data.Utils.Compose
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
+import           Data.Utils.HCntT
 import           Data.Utils.HContT
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
@@ -82,7 +83,8 @@ type ICodeBuilder e s t n a =
     s
     t
     n
-    (HContT PlanSearchScore (GlobalUnMonad e s t n a) [])
+    (HCntT PlanSearchScore (GlobalUnMonad e s t n a) [])
+    -- (HContT PlanSearchScore (GlobalUnMonad e s t n a) [])
     a
 
 lengthF :: (Foldable f,Functor t,Foldable t) => Free (Compose t f) x -> Int

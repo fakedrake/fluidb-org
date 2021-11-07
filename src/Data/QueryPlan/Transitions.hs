@@ -26,6 +26,7 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.Debug
 import           Data.Utils.Default
+import           Data.Utils.HCntT
 import           Data.Utils.MTL
 import           Data.Utils.Ranges
 
@@ -51,14 +52,14 @@ mkTriggerUnsafe mkTrig (inf,outf) tref = do
   outs <- getLinksFrom Out outf
   return $ mkTrig inps tref outs
 
-putDelNode :: MonadHaltD m => NodeRef n -> PlanT t n m ()
+putDelNode :: MonadHalt m => NodeRef n -> PlanT t n m ()
 putDelNode ref = do
   interm <- isIntermediate ref
   putTransition' (if interm then "(interm)" else "(not interm)") $ DelNode ref
 
-putTransition :: MonadHaltD m => Transition t n -> PlanT t n m ()
+putTransition :: MonadHalt m => Transition t n -> PlanT t n m ()
 putTransition = putTransition' ""
-putTransition' :: MonadHaltD m =>
+putTransition' :: MonadHalt m =>
                 String -> Transition t n -> PlanT t n m ()
 putTransition' msg tr = do
   trM $ printf "Applying transition%s: %s" msg (show tr)
@@ -66,13 +67,13 @@ putTransition' msg tr = do
   let epoch = NEL.head $ epochs gcs
   let epoch' = epoch { transitions = tr : transitions epoch }
   put gcs { epochs = epoch' NEL.:| NEL.tail (epochs gcs) }
-putRevTrigger :: MonadHaltD m => NodeRef t -> PlanT t n m ()
+putRevTrigger :: MonadHalt m => NodeRef t -> PlanT t n m ()
 putRevTrigger = putTransition <=< revTrigger
 revTrigger :: Monad m => NodeRef t -> PlanT t n m (Transition t n)
 revTrigger =
   mkTriggerUnsafe (\ns t ns' -> RTrigger ns' t ns) ([Reversible],[Reversible])
 
-putTrigger :: MonadHaltD m => NodeRef t -> PlanT t n m ()
+putTrigger :: MonadHalt m => NodeRef t -> PlanT t n m ()
 putTrigger = putTransition <=< trigger
 trigger :: Monad m => NodeRef t -> PlanT t n m (Transition t n)
 trigger = mkTriggerUnsafe Trigger (fullRange,fullRange)
@@ -103,7 +104,7 @@ totalTransitionCost = dropReader get getTransitions
 
 
 -- | Go through the epochs and remove the nodes on the outputs of the
--- transitions that are not materialized.
+-- transitions that are not materialized. This is for the nodes that were delete
 curateTransitions :: Monad m => PlanT t n m ()
 curateTransitions = modify $ \gsc -> gsc { epochs = go <$> epochs gsc }
   where

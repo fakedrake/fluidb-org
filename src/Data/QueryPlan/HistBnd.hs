@@ -25,7 +25,7 @@ instance HasLens (HistCap a) (Min a) where
 instance HasLens (HistCap a) (Min (Cert (Comp a))) where
   defLens =
     Lens
-    { getL = Min . fmap (point . point) . unMin . hcValCap,modL = modHistCap }
+    { getL = Min . fmap (point . point) . getMin . hcValCap,modL = modHistCap }
 
 modHistCap
   :: (Min (Cert (Comp a)) -> Min (Cert (Comp a))) -> HistCap a -> HistCap a
@@ -33,11 +33,11 @@ modHistCap f hc =
   hc
   { hcValCap = Min
       $ fmap (cValue . cData)
-      $ unMin
+      $ getMin
       $ f
       $ Min
       $ fmap (point . point)
-      $ unMin
+      $ getMin
       $ hcValCap hc
   }
 

@@ -55,7 +55,7 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Transitions
 import           Data.Utils.Debug
 import           Data.Utils.Functors
-import           Data.Utils.HContT
+-- import           Data.Utils.HContT
 import           Data.Utils.ListT
 import           Data.Utils.Tup
 
@@ -67,6 +67,7 @@ import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
 import           Data.Utils.AShow.Print
 import           Data.Utils.Default
+import           Data.Utils.HCntT
 import           Data.Utils.Nat
 
 
@@ -126,7 +127,7 @@ makeMaterializable ref =
               Concrete _ Mat -> True
               _              -> False) . getNodeState
 
-haltPlan :: MonadHaltD m => NodeRef n -> MetaOp t n -> PlanT t n m ()
+haltPlan :: MonadHalt m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
   -- From the frontier replace matRef with it's dependencies.
   modify $ \gcs -> gcs
@@ -144,7 +145,7 @@ histCosts = do
 
 
 -- | Compute the frontier cost and the historical costs.
-haltPlanCost :: MonadHaltD m => Maybe Cost -> Double -> PlanT t n m Cost
+haltPlanCost :: MonadHalt m => Maybe Cost -> Double -> PlanT t n m Cost
 haltPlanCost histCostCached concreteCost = do
   frefs <- gets $ toNodeList . frontier
   (costs,_extraNodes) <- runWriterT $ forM frefs $ \ref -> do
@@ -542,13 +543,15 @@ withNodeState nodeState refs m = do
 
 -- | Get exactly one solution. Schedule this as if it were a single thread.
 cutPlanT
-  :: (v ~ HValue m,MonadLogic m)
-  => PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
+  :: gMonadLogic m
+  -- => PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
+  => PlanT t n (HCntT h (Either (PlanningError t n) (a,GCState t n)) []) a
   -> PlanT t n m a
 cutPlanT plan = do
   st <- get
   conf <- ask
   hoistPlanT
-    (cutContT
+    -- (cutContT
+    (once
        (runExceptT $ (`runReaderT` conf) $ (`runStateT` st) $ lift3 mzero))
     plan
