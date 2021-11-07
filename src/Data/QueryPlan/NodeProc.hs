@@ -174,7 +174,7 @@ satisfyComputability = go mempty
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
-          traceM $ "Checked" <: ref
+          traceM $ "Checked" <: ref'
           return $ case ret of
             BndErr _ -> False
             _        -> True
