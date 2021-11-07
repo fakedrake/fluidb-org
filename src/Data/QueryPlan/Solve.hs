@@ -396,9 +396,9 @@ garbageCollectFor
     go :: PageNum  -> Cost -> PlanT t n m ()
     go requiredPages hc = do
       assertGcIsPossible requiredPages
-      killIntermediates `eitherl` top
+      killIntermediates
       let whenOversized = whenM $ isOversized requiredPages
-      whenOversized $ killPrimaries requiredPages hc `eitherl` top
+      whenOversized $ killPrimaries requiredPages hc
       whenOversized $ bot $ "GC failed: " ++ show ns
 
 nodesFit :: Monad m => [NodeRef n] -> PlanT t n m Bool
@@ -455,12 +455,11 @@ isOversized requiredPages = do
 
 killPrimaries :: MonadLogic m => PageNum -> Cost -> PlanT t n m ()
 killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
-  nsUnordMaybeIsolatedInterm <- nodesInState [Initial Mat]
-  nsUnordMaybeInterm <- filterM isDeletable nsUnordMaybeIsolatedInterm
-  nsUnord <- filterM (fmap not . isIntermediate) nsUnordMaybeInterm
-  guardl "No killable primaries" $ not $ null nsUnord
-  -- XXX: We are having no priority in deleting these.
-  safeDelInOrder requiredPages hc nsUnord
+  nsUnordMaybeIsolated <- nodesInState [Initial Mat]
+  nsUnord <- filterM isDeletable nsUnordMaybeIsolated
+  nsSized <- forM nsUnord $ \ref -> (,ref) <$> totalNodePages ref
+  let nsOrd = snd <$> sortOn fst nsSized
+  safeDelInOrder requiredPages hc nsOrd
 
 safeDelInOrder
   :: MonadLogic m => PageNum -> Cost -> [NodeRef n] -> PlanT t n m ()
