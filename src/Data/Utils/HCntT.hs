@@ -137,7 +137,27 @@ type Brnch h r m = BrnchM h r m (HRes h m r)
 emptyHRes :: (forall v . Monoid (h v)) => HRes h m r
 emptyHRes = HRes (Tup2 mempty mempty,[])
 
-type HCntT h r m = ContT (HRes h m r) (BrnchM h r m)
+newtype HCntT h r m a =
+  HCntT { unHCntT :: (a -> BrnchM h r m (HRes h m r))
+                  -> BrnchM h r m (HRes h m r)
+        }
+
+instance Functor (HCntT h r m) where
+  fmap f m = HCntT $ \c -> unHCntT m (c . f)
+  {-# INLINE fmap #-}
+instance Functor m => Applicative (HCntT v r m) where
+  pure x  = HCntT ($ x)
+  {-# INLINE pure #-}
+  f <*> v = HCntT $ \c -> unHCntT f $ \g -> unHCntT v (c . g)
+  {-# INLINE (<*>) #-}
+  m *> k = m >>= const k
+  {-# INLINE (*>) #-}
+instance Functor m => Monad (HCntT v r m) where
+  m >>= k  = HCntT $ \ c -> unHCntT m (\ x -> unHCntT (k x) c)
+  {-# INLINE (>>=) #-}
+instance MonadTrans (HCntT v r) where
+  lift m = HCntT (lift (lift m) >>=)
+  {-# INLINE lift #-}
 
 dissolve
   :: (MinElem (HeapKey h),IsHeap h,Monad m) => HCntT h r m r -> ListT m r
@@ -166,7 +186,7 @@ dissolveI
   -> ListT m r
 dissolveI fin c = ListT $ do
   (HRes (Tup2 hl hr,rs),st) <- runStateT
-    (runReaderT (runContT c $ lift2 . fin) (HPrio minElem))
+    (runReaderT (unHCntT c $ lift2 . fin) (HPrio minElem))
     def
   go st (hl <> hr,rs)
   where
@@ -195,11 +215,11 @@ instance (IsHeap h,MinElem (HeapKey h),Monad m)
   -- problems that produce wide search trees. This behavior hinges on
   -- dissolve pushing concatenating new trees on the right hand side
   -- of the accumulated heap.
-  ContT m <|> ContT m' = ContT $ \f -> return
+  HCntT m <|> HCntT m' = HCntT $ \f -> return
     $ HRes (Tup2 (h (m f) <> h (m' f)) mempty,[])
     where
       h = singletonHeap minElem
-  empty = ContT $ const $ return emptyHRes
+  empty = HCntT $ const $ return emptyHRes
 
 instance (IsHeap h,MinElem (HeapKey h),Monad m) => MonadPlus (HCntT h r m) where
   mplus = (<|>)
@@ -230,7 +250,7 @@ instance MonadHalt m => MonadHalt (ExceptT e m) where
 instance (Monad m,IsHeap h) => MonadHalt (HCntT h r m) where
   type HaltKey (HCntT h r m) = HeapKey h
   once = nested (\_h r _rs -> HRes (Tup2 mempty mempty,[r])) emptyHRes
-  halt v = ContT $ \nxt -> do
+  halt v = HCntT $ \nxt -> do
     v' <- asks $ min v . getHPrio
     return $ HRes (Tup2 (singletonHeap v' $ nxt ()) mempty,[])
 
@@ -313,13 +333,13 @@ instance (Monad m,IsHeap h) => MonadHalt (HCntT h r m) where
 -- If appropriate register an either and insert a corresponding marker
 -- at the end of the heap.
 (<//>) :: (Monad m,IsHeap h) => HCntT h r m a -> HCntT h r m a -> HCntT h r m a
-ContT c <//> e = ContT $ \nxt -> do
+HCntT c <//> e = HCntT $ \nxt -> do
   c nxt >>= \case
     r@(HRes (_,_:_)) -> return r
     (HRes (h,[])) -> case maxKeyHeap2 h of
-      Nothing -> runContT e nxt
+      Nothing -> unHCntT e nxt
       Just bnd -> do
-        (eithId,mrk) <- mkMarker bnd $ runContT e nxt
+        (eithId,mrk) <- mkMarker bnd $ unHCntT e nxt
         return $ beforeFallback eithId h bnd mrk
 
 type EitherId = Int
@@ -476,7 +496,7 @@ nested
   -> HRes h m r
   -> HCntT h r m a
   -> HCntT h r m a
-nested success failCase c = ContT $ \fin -> go mempty $ runContT c fin
+nested success failCase c = HCntT $ \fin -> go mempty $ unHCntT c fin
   where
     go :: h (Brnch h r m) -> Brnch h r m -> Brnch h r m
     go h b = b <&> \case
@@ -490,16 +510,16 @@ nested success failCase c = ContT $ \fin -> go mempty $ runContT c fin
 -- read the contents
 openFile :: (MinElem (HeapKey h),IsHeap h) => String -> HCntT h r IO String
 openFile fname = do
-  lift3 $ putStrLn $ "Opening: " ++ fname
+  lift $ putStrLn $ "Opening: " ++ fname
   case fname of
     "f1" -> return  "import f2"
     "f2" -> return "import f1"
     _    -> do
-      lift3 $ putStrLn "No such file"
+      lift $ putStrLn "No such file"
       empty
 
 closeFile :: String -> HCntT v r IO ()
-closeFile fname = lift3 $ putStrLn $ "Closing file: " ++ fname
+closeFile fname = lift $ putStrLn $ "Closing file: " ++ fname
 
 chooseFile :: (MinElem (HeapKey h),IsHeap h) => [String] -> HCntT h r IO String
 chooseFile []     = empty
