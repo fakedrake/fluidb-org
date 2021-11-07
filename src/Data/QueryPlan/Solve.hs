@@ -92,7 +92,11 @@ warmupCache node = do
       mapM_ findMetaOps =<< asks (refKeys . nodeSizes)
 #endif
 
-setNodeMaterialized :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
+setNodeMaterialized
+  :: forall t n m .
+  (HaltKey m ~ PlanSearchScore,MonadLogic m)
+  => NodeRef n
+  -> PlanT t n m ()
 setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
   -- sizes <- asks nodeSizes
   -- Populate the metaop cache
@@ -105,7 +109,10 @@ setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
 
 -- | Concretify materializability
 makeMaterializable
-  :: forall t n m . (HasCallStack,MonadLogic m) => NodeRef n -> PlanT t n m ()
+  :: forall t n m .
+  (HasCallStack,HaltKey m ~ PlanSearchScore,MonadLogic m)
+  => NodeRef n
+  -> PlanT t n m ()
 makeMaterializable ref =
   wrapTrM ("makeMaterializable " ++ show ref) $ checkCache $ withNoMat ref $ do
     (deps,_star) <- foldrListT1
@@ -127,7 +134,7 @@ makeMaterializable ref =
               Concrete _ Mat -> True
               _              -> False) . getNodeState
 
-haltPlan :: MonadHalt m => NodeRef n -> MetaOp t n -> PlanT t n m ()
+haltPlan :: (HaltKey m ~ PlanSearchScore,MonadHalt m) => NodeRef n -> MetaOp t n -> PlanT t n m ()
 haltPlan matRef mop = do
   -- From the frontier replace matRef with it's dependencies.
   modify $ \gcs -> gcs
@@ -145,7 +152,11 @@ histCosts = do
 
 
 -- | Compute the frontier cost and the historical costs.
-haltPlanCost :: MonadHalt m => Maybe Cost -> Double -> PlanT t n m Cost
+haltPlanCost
+  :: (HaltKey m ~ PlanSearchScore,MonadHalt m)
+  => Maybe Cost
+  -> Double
+  -> PlanT t n m Cost
 haltPlanCost histCostCached concreteCost = do
   frefs <- gets $ toNodeList . frontier
   (costs,_extraNodes) <- runWriterT $ forM frefs $ \ref -> do
@@ -166,12 +177,16 @@ haltPlanCost histCostCached concreteCost = do
   trM "Resume!"
   return hc
 
-setNodeStateSafe :: MonadLogic m => NodeRef n -> IsMat -> PlanT t n m ()
+setNodeStateSafe
+  :: (HaltKey m ~ PlanSearchScore,MonadLogic m)
+  => NodeRef n
+  -> IsMat
+  -> PlanT t n m ()
 setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
 {-# INLINE setNodeStateSafe' #-}
 
 setNodeStateSafe'
-  :: MonadLogic m
+  :: (HaltKey m ~ PlanSearchScore, MonadLogic m)
   => PlanT t n m (MetaOp t n)
   -> NodeRef n
   -> IsMat
@@ -234,7 +249,10 @@ setNodeStateSafe' getFwdOp node goalState =
 
 -- | Set a list of nodes to Mat state in an order that is likely to
 -- require the least budget.
-setNodesMatSafe :: MonadLogic m => [NodeRef n] -> PlanT t n m ()
+setNodesMatSafe
+  :: (HaltKey m ~ PlanSearchScore,MonadLogic m)
+  => [NodeRef n]
+  -> PlanT t n m ()
 setNodesMatSafe deps = do
   hbM <- getHardBudget
   (matDeps,unMatDeps) <- partitionM isMaterialized deps
@@ -543,7 +561,7 @@ withNodeState nodeState refs m = do
 
 -- | Get exactly one solution. Schedule this as if it were a single thread.
 cutPlanT
-  :: gMonadLogic m
+  :: MonadLogic m
   -- => PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
   => PlanT t n (HCntT h (Either (PlanningError t n) (a,GCState t n)) []) a
   -> PlanT t n m a
