@@ -381,10 +381,15 @@ safeLast _ [x]    = x
 safeLast e (_:xs) = safeLast e xs
 safeLast e []     = e
 
+getArgDumpFile :: [String] -> String
+getArgDumpFile []             = "/tmp/benchmark.out"
+getArgDumpFile ("--dump":f:_) = f
+getArgDumpFile (_:xs)         = getArgDumpFile xs
+
 main :: IO ()
 main = (`evalStateT` []) $ do
   -- Brnaches
-  dumpFile <- lift $ fromMaybe "/tmp/benchmark.out" . listToMaybe <$> getArgs
+  dumpFile <- lift $ getArgDumpFile <$> getArgs
   let rootDir = printf "%s.bench_branches" dumpFile
   let branchDirf = printf "%s/branches%03d" rootDir
   lift $ createDirectoryIfMissing True rootDir
