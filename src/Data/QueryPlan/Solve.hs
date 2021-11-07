@@ -487,6 +487,7 @@ safeDelInOrder requiredPages hc nsOrd =
       if canStillDel then toDel ref else toConcr ref
     toDel :: NodeRef n -> PlanT t n m PageNum
     toDel ref = do
+      delDepMatCache ref
       ref `setNodeStateUnsafe` Concrete Mat NoMat
       totalNodePages ref
     toConcr :: NodeRef n -> PlanT t n m PageNum
@@ -544,14 +545,12 @@ isDeletable ref = getNodeState ref >>= \case
   _              -> withNoMat ref $ isMaterializable ref
 
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a
-withNoMat = withNodeState (Concrete Mat NoMat) . return
-withNodeState :: Monad m => NodeState -> [NodeRef n] -> PlanT t n m a -> PlanT t n m a
-withNodeState nodeState refs m = do
-  sts <- traverse getNodeState refs
-  let setSt = setNodeStateUnsafe' False
-  zipWithM_ setSt refs $ repeat nodeState
+withNoMat ref m = do
+  st <- get
+  delDepMatCache ref
+  ref `setNodeStateUnsafe` Concrete Mat NoMat
   ret <- m
-  zipWithM_ setSt refs sts
+  put st
   return ret
 
 -- -- | Get exactly one solution. Schedule this as if it were a single thread.
