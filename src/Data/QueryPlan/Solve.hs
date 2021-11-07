@@ -355,7 +355,7 @@ garbageCollectFor
 garbageCollectFor
   ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ \requiredPages -> do
   preReport
-  hc <- haltPlanCost Nothing 0
+  hc <-  return mempty -- haltPlanCost Nothing 0
   go requiredPages hc `eitherl` (newEpoch >> go requiredPages hc)
   trM $ "Finished GC to make " ++ show ns
   where
@@ -386,9 +386,12 @@ garbageCollectFor
       assertGcIsPossible requiredPages
       savedPagesInterm :: PageNum <- killIntermediates
       let whenOversized pgs m = if pgs >= 0 then m else return (0 :: PageNum)
-      savedPagesPrim :: PageNum <- whenOversized
-        (requiredPages - savedPagesInterm)
+      savedPagesPrim
+        :: PageNum <- whenOversized (requiredPages - savedPagesInterm)
         $ killPrimaries (requiredPages - savedPagesInterm) hc
+      trM
+        $ "New goal for pages: "
+        ++ show (requiredPages - savedPagesInterm - savedPagesPrim)
       void
         $ whenOversized (requiredPages - savedPagesInterm - savedPagesPrim)
         $ bot
