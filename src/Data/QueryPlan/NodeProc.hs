@@ -170,7 +170,7 @@ satisfyComputability = go mempty
           runNodeProc (go trail ref nxt0) conf'
       where
         isComputableM conf ref' = do
-          traceM $ "Checking computable" <: ref
+          traceM $ "Checking computable" <: ref'
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
