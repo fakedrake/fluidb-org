@@ -72,9 +72,7 @@ hoistEvalStateListT st runSt l = fst <$> hoistRunStateListT runSt st l
 --   Just _ -> return True
 --   _ -> isJust <$> headListT (getDependencies ref)
 isMaterializable :: forall t n m . Monad m => NodeRef n -> PlanT t n m Bool
-isMaterializable ref = luMatCache ref >>= \case
-  Just _ -> return True
-  _      -> isJust <$> headListT (getDependencies ref)
+isMaterializable ref = isJust <$> headListT (getDependencies ref)
 
 getAStar :: Monad m => NodeRef n -> PlanT t n m Double
 getAStar ref = fmap starToDouble  $ luMatCache ref >>= \case
