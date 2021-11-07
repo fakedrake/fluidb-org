@@ -119,6 +119,8 @@ newtype NonNeg a = NonNeg { getNonNeg :: a }
   deriving (Show,Eq,Ord)
 instance (Ord a,Zero a) =>  Zero (NonNeg a) where
   zero = NonNeg zero
+instance Num a => Semigroup (NonNeg a) where
+  NonNeg a <> NonNeg a' = NonNeg $ a + a'
 
 instance (Ord a,Zero a) => MinElem (NonNeg a) where
   minElem = zero
@@ -276,11 +278,13 @@ instance MonadHalt m => MonadHalt (ExceptT e m) where
   halt = lift . halt
   once = hoist once
 
-instance (Monad m,IsHeap h) => MonadHalt (HCntT h r m) where
+-- | We need the semigroup because the keys are incremented on top of
+-- the previous ones in the branch.
+instance (Monad m,IsHeap h,Semigroup (HeapKey h)) => MonadHalt (HCntT h r m) where
   type HaltKey (HCntT h r m) = HeapKey h
   once = nested (\_h r _rs -> HRes (Tup2 mempty mempty,[r])) emptyHRes
   halt v = HCntT $ \nxt -> do
-    v' <- asks $ min v . getHPrio
+    v' <- asks $ (<> v) . getHPrio
     return $ HRes (Tup2 (singletonHeap v' $ nxt ()) mempty,[])
 
 
@@ -561,16 +565,16 @@ test = runListT $ dissolve @IntMMap $ do
   txt <- chooseFile ["nonexistent","f2"]
   return ("hello:" ++ txt) <|> return ("bye:" ++ txt)
 
-stream :: Monad m => HCntT IntMMap r m Int
+stream :: (HeapKey h ~ NonNeg Int,IsHeap h,Monad m) => HCntT h r m Int
 stream = go 0 where
   go i = do
     halt $ NonNeg i
     return i <|> go (i+1)
 
--- > test2
+-- > test2t3t
 -- [(5,5,0),(5,6,1),(6,4,0),(6,5,1),(6,6,2)]
 test2 :: IO [(Int,Int,Int)]
-test2 = takeListT 5 $ dissolve @IntMMap  $ do
+test2 = takeListT 5 $ dissolve @(IntMMap)  $ do
   (a,b,c) <- (,,) <$> stream <*> stream <*> stream
   guard $ a + b - c == 10
   return (a,b,c)
@@ -622,4 +626,5 @@ queensN i = do
 -- > take 1 $ queensN 8
 -- [[(7,4),(6,1),(5,3),(4,6),(3,7),(2,5),(1,2),(0,0)]]
 -- (0.41 secs, 253,386,736 bytes)
+
 #endif

@@ -355,7 +355,7 @@ garbageCollectFor
 garbageCollectFor
   ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ \requiredPages -> do
   preReport
-  hc <-  return mempty -- haltPlanCost Nothing 0
+  hc <- haltPlanCost Nothing 0
   go requiredPages hc `eitherl` (newEpoch >> go requiredPages hc)
   trM $ "Finished GC to make " ++ show ns
   where
