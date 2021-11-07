@@ -17,19 +17,7 @@
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Data.QueryPlan.Solve
-  (setNodeMaterialized
-  ,setNodeStateSafe
-  ,setNodeStateUnsafe
-  ,planSanityCheck
-  ,newEpoch
-  ,withProtected
-  ,isMaterializable
-  ,makeMaterializable
-  ,isMaterialized
-  ,matNeighbors
-  ,getDependencies
-  ,killPrimaries
-  ,isDeletable) where
+  (setNodeMaterialized) where
 
 import           Control.Antisthenis.Types
 import           Control.Monad.Cont
@@ -237,7 +225,7 @@ setNodeStateSafe' getFwdOp node goalState =
           node `setNodeStateUnsafe` Concrete Mat NoMat
           delDepMatCache node
           isMaterializable node
-            >>= guardl ("not materializable, can't delete" ++ ashow node)
+            >>= guardl ("not materializable, can't delete " ++ ashow node)
           putDelNode node
 
 -- | Set a list of nodes to Mat state in an order that is likely to
