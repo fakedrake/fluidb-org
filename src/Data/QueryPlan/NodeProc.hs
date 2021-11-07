@@ -40,6 +40,7 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Nat
 
