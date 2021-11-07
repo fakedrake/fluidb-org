@@ -476,10 +476,11 @@ safeDelInOrder requiredPages hc nsOrd =
         else delRefs (freed + extraFree) (ref : prev) rest
     delOrConcreteMat ref = do
       canStillDel <- isDeletable ref
+      trM $ "Considering deletion: " ++ show (ref,canStillDel)
       if canStillDel then toDel ref else toConcr ref
     toDel :: NodeRef n -> PlanT t n m PageNum
     toDel ref = do
-      ref `setNodeStateSafe` NoMat
+      ref `setNodeStateUnsafe` Concrete Mat NoMat
       totalNodePages ref
     toConcr :: NodeRef n -> PlanT t n m PageNum
     toConcr ref = do
