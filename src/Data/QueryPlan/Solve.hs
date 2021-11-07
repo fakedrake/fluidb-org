@@ -397,10 +397,10 @@ garbageCollectFor
     go requiredPages hc = do
       assertGcIsPossible requiredPages
       savedPagesInterm :: PageNum <- killIntermediates
-      let whenOversized pgs m = if pgs > 0 then m else return (0 :: PageNum)
+      let whenOversized pgs m = if pgs >= 0 then m else return (0 :: PageNum)
       savedPagesPrim :: PageNum <- whenOversized
         (requiredPages - savedPagesInterm)
-        $ killPrimaries requiredPages hc
+        $ killPrimaries (requiredPages - savedPagesInterm) hc
       void
         $ whenOversized (requiredPages - savedPagesInterm - savedPagesPrim)
         $ bot
@@ -491,17 +491,13 @@ safeDelInOrder requiredPages hc nsOrd =
       if canStillDel then toDel ref else toConcr ref
     toDel :: NodeRef n -> PlanT t n m PageNum
     toDel ref = do
-      -- delCost <- transitionCost $ DelNode ref
-      -- void
-      --   $ haltPlanCost (Just hc)
-      --   $ fromIntegral
-      --   $ costAsInt delCost
       ref `setNodeStateSafe` NoMat
       totalNodePages ref
     toConcr :: NodeRef n -> PlanT t n m PageNum
     toConcr ref = do
       ref `setNodeStateUnsafe` Concrete Mat Mat
       return 0
+
 reportMatNodes :: Monad m => [NodeRef n] -> PlanT t n m a -> PlanT t n m a
 reportMatNodes deleted m = catchError m $ \e -> do
   mat <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
