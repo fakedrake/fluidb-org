@@ -478,7 +478,7 @@ safeDelInOrder requiredPages hc nsOrd =
       canStillDel <- isDeletable ref
       if canStillDel then do
         delCost <- transitionCost $ DelNode ref
-        when (remaining `mod` 3 == 0) $
+        when False $
           void $ haltPlanCost (Just hc) $ fromIntegral $ costAsInt delCost
         ref `setNodeStateSafe` NoMat
         else ref `setNodeStateUnsafe` Concrete Mat Mat
