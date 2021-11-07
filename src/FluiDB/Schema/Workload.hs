@@ -83,7 +83,7 @@ type ICodeBuilder e s t n m a =
     s
     t
     n
-    (HCntT (CHeap PlanSearchScore) (GlobalUnMonad e s t n a) m)
+    (HCntT (LHeap PlanSearchScore) (GlobalUnMonad e s t n a) m)
     -- (HContT PlanSearchScore (GlobalUnMonad e s t n a) [])
     a
 

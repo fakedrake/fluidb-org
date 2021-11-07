@@ -12,6 +12,7 @@ module Data.Utils.HCntT
   ,(<//>)
   ,dissolve
   ,CHeap
+  ,LHeap
   ,IsHeap(..)
   ,MonadHalt(..)) where
 
