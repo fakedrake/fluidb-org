@@ -214,10 +214,11 @@ s2r (ExceptT (StateT f)) = ExceptT $ ReaderT $ \s -> do
 r2s :: Monad m => ExceptT e (ReaderT s m) a -> ExceptT e (StateT s m) a
 r2s = hoist $ \(ReaderT f) -> StateT $ \s -> (,s) <$> f s
 type GlobalUnMonad e s t n a = (Either (GlobalError e s t n) a, GlobalConf e s t n)
-hoistGlobalSolveT :: Monad m =>
-                    (m (GlobalUnMonad e s t n a) -> g (GlobalUnMonad e s t n a))
-                  -> GlobalSolveT e s t n m a
-                  -> GlobalSolveT e s t n g a
+hoistGlobalSolveT
+  :: Monad m
+  => (m (GlobalUnMonad e s t n a) -> g (GlobalUnMonad e s t n a))
+  -> GlobalSolveT e s t n m a
+  -> GlobalSolveT e s t n g a
 hoistGlobalSolveT f stM =
   ExceptT $ StateT $ \conf -> f ((runStateT $ runExceptT stM) conf)
 

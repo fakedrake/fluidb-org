@@ -65,7 +65,7 @@ import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.HCntT
-import           Data.Utils.HContT
+-- import           Data.Utils.HContT
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
 import           Data.Utils.MTL
@@ -77,13 +77,13 @@ import           FluiDB.Types
 import           FluiDB.Utils
 
 
-type ICodeBuilder e s t n a =
+type ICodeBuilder e s t n m a =
   CodeBuilderT
     e
     s
     t
     n
-    (HCntT PlanSearchScore (GlobalUnMonad e s t n a) [])
+    (HCntT (CHeap PlanSearchScore) (GlobalUnMonad e s t n a) m)
     -- (HContT PlanSearchScore (GlobalUnMonad e s t n a) [])
     a
 
@@ -99,10 +99,9 @@ sqlToSolution
   :: forall a e s t n m .
   (Hashables2 e s,MonadFakeIO m,AShow e,AShow s)
   => Query (ShapeSym e s) (QueryShape e s,s)
-  -> (forall x . [x] -> m x) -- a lazy list to a monad we like.
-  -> ICodeBuilder e s t n a
+  -> ICodeBuilder e s t n m a
   -> GlobalSolveT e s t n m a
-sqlToSolution query serializeSols getSolution = do
+sqlToSolution query getSolution = do
   GlobalConf{globalExpTypeSymIso=symIso,globalQueryCppConf=cppConf} <- get
   -- traceM "Orig query:\n"
   -- traceM $ ashow $ first shapeSymOrig query
@@ -123,7 +122,7 @@ sqlToSolution query serializeSols getSolution = do
       unless (bef == aft) $ throwAStr $ "UNEQUAL QNFa: "  ++ ashow (bef,aft)
 #endif
   -- /SANITY CHECK
-  hoistGlobalSolveT (serializeSols . dissolve @[])
+  hoistGlobalSolveT (fmap fromJustErr . headListT . dissolve)
     $ insertAndRun qs getSolution
 
 
@@ -171,7 +170,7 @@ insertAndRun
   ,AShow s
   ,MonadPlus m
   ,BotMonad m
-  ,HValue m ~ PlanSearchScore)
+  ,HaltKey m ~ PlanSearchScore)
   => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryShape e s)
   -> CodeBuilderT e s t n m a
   -> GlobalSolveT e s t n m a
@@ -211,7 +210,7 @@ insertQueries queries = do
 -- avoid losing the entire configuration, it will invariably be useful
 -- for error reporting.
 matNode
-  :: (HValue m ~ PlanSearchScore
+  :: (HaltKey m ~ PlanSearchScore
      ,Monad m
      ,Hashables2 e s
      ,MonadHalt m
@@ -248,15 +247,10 @@ runSingleQuery
   :: (Hashables2 e s,AShow2 e s,ExpressionLike e,MonadFakeIO m)
   => Query (ShapeSym e s) (QueryShape e s,s)
   -> GlobalSolveT e s t n m ([Transition t n],CppCode)
-runSingleQuery query = sqlToSolution query popSol $ do
+runSingleQuery query = sqlToSolution query $ do
   ts <- dropReader getGCState getTransitions
   traceM $ "Transitions: " ++ ashow ts
   (ts,) <$> getQuerySolutionCpp
-  where
-    popSol :: Monad m => [x] -> m x
-    popSol []    = error "No solution for query"
-    popSol (x:_) = return x
-
 
 -- | Iterate over the queryes
 forEachQuery
@@ -314,7 +308,6 @@ runWorkloadEvals
   -> [q]
   -> m [[Evaluation e s t n [QNFQuery e s]]]
 runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query ->
-  sqlToSolution query (return . headErr)
-  $ dropReader (lift2 askStates) getEvaluations
+  sqlToSolution query $ dropReader (lift2 askStates) getEvaluations
   where
     askStates = gets (,,,) <*> lift2 get <*> lift3 get <*> lift3 ask

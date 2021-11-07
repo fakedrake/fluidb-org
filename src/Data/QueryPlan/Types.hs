@@ -88,7 +88,8 @@ import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
-import           Data.Utils.HContT
+import           Data.Utils.HCntT
+-- import           Data.Utils.HContT
 import           Data.Utils.Hashable
 import           Data.Utils.ListT
 import           Data.Utils.MinElem
@@ -258,9 +259,12 @@ class Monad m => BotMonad m  where
   eitherl' :: m a -> m a -> m a
 
 -- XXX: Watch out: We need the scemantics that come from ContT
-instance (Partitionable m, Ord v,Group v,BotMonad m) =>
-         BotMonad (HContT v r m) where
-  eitherl' = eitherlHCont
+-- instance (Partitionable m, Ord v,Group v,BotMonad m) =>
+--          BotMonad (HContT v r m) where
+--   eitherl' = eitherlHCont
+instance (IsHeap h,Monad m) => BotMonad (HCntT h r m) where
+  eitherl' = (<//>)
+
 instance BotMonad [] where
   eitherl' [] a = a
   eitherl' a _  = a
@@ -347,8 +351,9 @@ instance Semigroup PlanSearchScore where
     psFrontierCost=psFrontierCost l + psFrontierCost r,
     psOtherCost=psOtherCost r <|> psOtherCost l
     }
-type MonadLogic m = (MonadPlus m, BotMonad m, MonadHalt m)
-type MonadHaltD m = (HValue m ~ PlanSearchScore, MonadHalt m)
+type MonadLogic m =
+  (HaltKey m ~ PlanSearchScore,MonadPlus m,BotMonad m,MonadHalt m)
+-- type MonadHaltD m = (HValue m ~ PlanSearchScore, MonadHalt m)
 type PlanT t n m =
   StateT (GCState t n) (ReaderT (GCConfig t n) (ExceptT (PlanningError t n) m))
 

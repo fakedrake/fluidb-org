@@ -6,11 +6,18 @@
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE UndecidableInstances      #-}
-module Data.Utils.HCntT (HCntT,(<//>),dissolve,once,MonadHalt(..)) where
+module Data.Utils.HCntT
+  (HCntT
+  ,(<//>)
+  ,dissolve
+  ,CHeap
+  ,IsHeap(..)
+  ,MonadHalt(..)) where
 
 import           Control.Applicative
 import           Control.Monad.Cont
 import           Control.Monad.Except
+import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer
@@ -200,22 +207,28 @@ instance (IsHeap h,MinElem (HeapKey h),Monad m) => MonadPlus (HCntT h r m) where
 class Monad m => MonadHalt m where
   type HaltKey m :: *
   halt :: HaltKey m -> m ()
+  once :: m a -> m a
 
 instance MonadHalt m => MonadHalt (StateT s m) where
   type HaltKey (StateT s m) =  HaltKey m
   halt = lift . halt
+  once = hoist once
 instance MonadHalt m => MonadHalt (ReaderT r m) where
   type HaltKey (ReaderT r m) =  HaltKey m
   halt = lift . halt
+  once = hoist once
 instance (Monoid w,MonadHalt m) => MonadHalt (WriterT w m) where
   type HaltKey (WriterT w m) = HaltKey m
   halt = lift . halt
+  once = hoist once
 instance MonadHalt m => MonadHalt (ExceptT e m) where
   type HaltKey (ExceptT e m) = HaltKey m
   halt = lift . halt
+  once = hoist once
 
 instance (Monad m,IsHeap h) => MonadHalt (HCntT h r m) where
   type HaltKey (HCntT h r m) = HeapKey h
+  once = nested (\_h r _rs -> HRes (Tup2 mempty mempty,[r])) emptyHRes
   halt v = ContT $ \nxt -> do
     v' <- asks $ min v . getHPrio
     return $ HRes (Tup2 (singletonHeap v' $ nxt ()) mempty,[])
@@ -470,10 +483,6 @@ nested success failCase c = ContT $ \fin -> go mempty $ runContT c fin
       HRes (Tup2 hl hr,[]) -> case popHeap $ hl <> h <> hr of
         Nothing          -> failCase
         Just ((k,b'),h') -> HRes (Tup2 (singletonHeap k $ go h' b') mempty,[])
-
-
-once :: forall h m r a . (Monad m,IsHeap h) => HCntT h r m a -> HCntT h r m a
-once = nested (\_h r _rs -> HRes (Tup2 mempty mempty,[r])) emptyHRes
 
 #if 1
 -- | Try to open a file. If it doesn't exist just fail. If it exists

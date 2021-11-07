@@ -93,10 +93,7 @@ warmupCache node = do
 #endif
 
 setNodeMaterialized
-  :: forall t n m .
-  (HaltKey m ~ PlanSearchScore,MonadLogic m)
-  => NodeRef n
-  -> PlanT t n m ()
+  :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
 setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
   -- sizes <- asks nodeSizes
   -- Populate the metaop cache
@@ -109,10 +106,7 @@ setNodeMaterialized node = wrapTraceT ("setNodeMaterialized " ++ show node) $ do
 
 -- | Concretify materializability
 makeMaterializable
-  :: forall t n m .
-  (HasCallStack,HaltKey m ~ PlanSearchScore,MonadLogic m)
-  => NodeRef n
-  -> PlanT t n m ()
+  :: forall t n m . (HasCallStack,MonadLogic m) => NodeRef n -> PlanT t n m ()
 makeMaterializable ref =
   wrapTrM ("makeMaterializable " ++ show ref) $ checkCache $ withNoMat ref $ do
     (deps,_star) <- foldrListT1
@@ -186,7 +180,7 @@ setNodeStateSafe n = setNodeStateSafe' (findPrioritizedMetaOp lsplit n) n
 {-# INLINE setNodeStateSafe' #-}
 
 setNodeStateSafe'
-  :: (HaltKey m ~ PlanSearchScore, MonadLogic m)
+  :: MonadLogic m
   => PlanT t n m (MetaOp t n)
   -> NodeRef n
   -> IsMat
@@ -226,7 +220,7 @@ setNodeStateSafe' getFwdOp node goalState =
               trM $ "Materializing dependencies: " ++ show depset
               setNodesMatSafe depset
               trM $ "Intermediates: " ++ show interm
-              cutPlanT $ garbageCollectFor $ node : interm
+              once $ garbageCollectFor $ node : interm
               -- Automatically set the states of intermediates
               forM_ interm $ \ni -> do
                 prevState' <- getNodeState ni
@@ -384,7 +378,7 @@ lsplitReader = splitProvenance (SplitLeft,SplitRight) id
   $ \(ReaderT l) (ReaderT r) -> ReaderT $ \s -> mplusPlanT (l s) (r s)
 
 garbageCollectFor
-  :: forall t n m . MonadLogic m => [NodeRef n] -> PlanT t n m ()
+  :: forall t n m . (MonadLogic m) => [NodeRef n] -> PlanT t n m ()
 garbageCollectFor ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ do
   lift preReport
   hc <- lift $ haltPlanCost Nothing 0
@@ -559,17 +553,18 @@ withNodeState nodeState refs m = do
   zipWithM_ setSt refs sts
   return ret
 
--- | Get exactly one solution. Schedule this as if it were a single thread.
-cutPlanT
-  :: MonadLogic m
-  -- => PlanT t n (HContT v (Either (PlanningError t n) (a,GCState t n)) []) a
-  => PlanT t n (HCntT h (Either (PlanningError t n) (a,GCState t n)) []) a
-  -> PlanT t n m a
-cutPlanT plan = do
-  st <- get
-  conf <- ask
-  hoistPlanT
-    -- (cutContT
-    (once
-       (runExceptT $ (`runReaderT` conf) $ (`runStateT` st) $ lift3 mzero))
-    plan
+-- -- | Get exactly one solution. Schedule this as if it were a single thread.
+-- cutPlanT
+--   :: MonadLogic m
+--   => Proxy h
+--   -- -> PlanT t n (HCntT h (Either (PlanningError t n) (a,GCState t n)) []) a
+--   -> PlanT t n m a
+--   -> PlanT t n m a
+-- cutPlanT plan = do
+--   st <- get
+--   conf <- ask
+--   hoistPlanT
+--     -- (cutContT
+--     (once
+--        (runExceptT $ (`runReaderT` conf) $ (`runStateT` st) $ lift3 mzero))
+--     plan
