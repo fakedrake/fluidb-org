@@ -458,6 +458,8 @@ killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
   nsUnordMaybeIsolated <- nodesInState [Initial Mat]
   nsUnord <- filterM isDeletable nsUnordMaybeIsolated
   nsSized <- forM nsUnord $ \ref -> (,ref) <$> totalNodePages ref
+  guardl "Not enough deletable nodes"
+    $ sum (fst <$> nsSized) > requiredPages
   let nsOrd = snd <$> sortOn fst nsSized
   safeDelInOrder requiredPages hc nsOrd
 
