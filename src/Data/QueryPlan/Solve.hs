@@ -396,7 +396,7 @@ garbageCollectFor
     go :: PageNum  -> Cost -> PlanT t n m ()
     go requiredPages hc = do
       assertGcIsPossible requiredPages
-      killIntermediates
+      killIntermediates `eitherl` top
       let whenOversized = whenM $ isOversized requiredPages
       whenOversized $ killPrimaries requiredPages hc
       whenOversized $ bot $ "GC failed: " ++ show ns
@@ -431,10 +431,10 @@ assertGcIsPossible requiredPages = do
 
 killIntermediates :: forall t n m . MonadLogic m => PlanT t n m ()
 killIntermediates = do
-  matInterm <- filterM (fmap not . isProtected)
-    =<< filterM isMaterialized
-    =<< toNodeList . intermediates <$> lift ask
-  forM_ matInterm $ \x -> do
+  intermediates <- asks $ toNodeList . intermediates
+  matInterm <- filterM isMaterialized intermediates
+  nonProtectedMatInterm <- filterM (fmap not . isProtected) matInterm
+  forM_ nonProtectedMatInterm $ \x -> do
     delDepMatCache x
     x `setNodeStateUnsafe` Concrete Mat NoMat
     putDelNode x
@@ -507,8 +507,10 @@ matNeighbors node = wrapTrM ("matNeighbors " ++ show node) $ do
   node `setNodeStateUnsafe` Concrete Mat NoMat
   putDelNode node
 
-planSanityCheck :: forall t n m . MonadLogic m =>
-                  PlanT t n m (Either (PlanSanityError t n) ())
+planSanityCheck
+  :: forall t n m .
+  MonadLogic m
+  => PlanT t n m (Either (PlanSanityError t n) ())
 planSanityCheck = runExceptT $ do
   conf <- ask
   let (_,nRefs) = nodeRefs `evalState` def { gbPropNet = propNet conf }
