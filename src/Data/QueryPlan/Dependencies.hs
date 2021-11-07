@@ -67,16 +67,20 @@ hoistEvalStateListT :: (Monad m', Monad m) =>
 hoistEvalStateListT st runSt l = fst <$> hoistRunStateListT runSt st l
 {-# INLINE hoistEvalStateListT #-}
 
+-- isMaterializable :: forall t n m . Monad m => NodeRef n -> PlanT t n m Bool
+-- isMaterializable ref = luMatCache ref >>= \case
+--   Just _ -> return True
+--   _ -> isJust <$> headListT (getDependencies ref)
 isMaterializable :: forall t n m . Monad m => NodeRef n -> PlanT t n m Bool
 isMaterializable ref = luMatCache ref >>= \case
   Just _ -> return True
-  _ -> isJust <$> headListT (getDependencies ref)
+  _      -> isJust <$> headListT (getDependencies ref)
 
 getAStar :: Monad m => NodeRef n -> PlanT t n m Double
 getAStar ref = fmap starToDouble  $ luMatCache ref >>= \case
   Just (frontierStar -> (_,star)) -> return star
   Nothing -> headListT (getDependencies ref) >>= \case
-    Nothing -> throwPlan $ "Can't find star value: " ++ ashow ref
+    Nothing       -> throwPlan $ "Can't find star value: " ++ ashow ref
     Just (_,star) -> return star
 
 data VoidProxy a deriving Functor
@@ -94,9 +98,9 @@ getDependencies
 getDependencies ref0 = do
   stm <- nodeStates . NEL.head . epochs <$> get
   let isMat' ref = case refLU ref stm of
-        Just (Initial Mat) -> True
+        Just (Initial Mat)    -> True
         Just (Concrete _ Mat) -> True
-        _ -> False
+        _                     -> False
   cache <- matCacheVals . isMaterializableCache . gcCache <$> get
   hoistEvalStateListT cache storeStateT $ getDependencies' isMat' ref0
   where
@@ -197,9 +201,9 @@ withMemoized isFin ref trail  m = if isFin ref
   else notFinal
   where
     notFinal = refLU ref <$> get >>= \case
-      Just Nothing -> mzero
+      Just Nothing              -> mzero
       Just (Just (frnt,trails)) -> isCached frnt trails
-      Nothing -> notCached
+      Nothing                   -> notCached
     -- We force the set of dependencies because we can't handle cache
     -- a partially evaluated depset. The problem is with resuming.
     -- XXX: we don't mind having fewer deps in the case of

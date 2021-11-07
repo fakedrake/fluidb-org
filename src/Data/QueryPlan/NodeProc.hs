@@ -287,6 +287,7 @@ getCost
   (PlanMech m (CostParams tag n) n
   ,HasCallStack
   ,IsPlanParams (CostParams tag n) n
+  ,MonadFail m
   ,AShow (MechVal (PlanParams tag n)))
   => Proxy tag
   -> Cap (ExtCap (PlanParams tag n))
@@ -303,7 +304,7 @@ getCost _ cap states ref = wrapTr $ do
     BndRes (Sum Nothing) -> return $ Just zero
     BndBnd _bnd -> return Nothing
     BndErr e ->
-      error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
+      fail $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
   where
     -- wrapTr = wrapTrace ("getCost" <: ref)
     wrapTr = id
