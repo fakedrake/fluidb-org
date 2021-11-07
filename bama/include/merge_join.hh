@@ -84,15 +84,15 @@ class MergeJoin {
     bool pending_left = true;
     bool pending_right = true;
 
-#define UPD_RIGHT                                          \
-  do {                                                     \
-    assert(!pending_right);                                \
-    if (right.hasNext()) {                                 \
-      right_record = right.nextRecord();                   \
-      pending_right = true;                                \
-    } else {                                               \
-      goto right_finished;                                 \
-    }                                                      \
+#define UPD_RIGHT                        \
+  do {                                   \
+    assert(!pending_right);              \
+    if (right.hasNext()) {               \
+      right_record = right.nextRecord(); \
+      pending_right = true;              \
+    } else {                             \
+      goto right_finished;               \
+    }                                    \
   } while (0)
 
 #define UPD_LEFT                       \
