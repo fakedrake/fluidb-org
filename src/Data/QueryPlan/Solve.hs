@@ -396,11 +396,13 @@ garbageCollectFor
     go :: PageNum -> Cost -> PlanT t n m ()
     go requiredPages hc = do
       assertGcIsPossible requiredPages
-      savedPagesInterm <- killIntermediates
-      let whenOversized pgs m = if pgs > 0 then m else return 0
-      savedPagesPrim <- whenOversized (requiredPages - savedPages)
+      savedPagesInterm :: PageNum <- killIntermediates
+      let whenOversized pgs m = if pgs > 0 then m else return (0 :: PageNum)
+      savedPagesPrim :: PageNum <- whenOversized
+        (requiredPages - savedPagesInterm)
         $ killPrimaries requiredPages hc
-      whenOversized (requiredPages - savedPagesInterm - savedPagesPrim)
+      void
+        $ whenOversized (requiredPages - savedPagesInterm - savedPagesPrim)
         $ bot
         $ "GC failed: " ++ show ns
 
