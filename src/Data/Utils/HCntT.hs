@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE UndecidableInstances      #-}
-{-# OPTIONS_GHC -O2 #-}
+{-# OPTIONS_GHC -O2 -fno-prof-count-entries -fno-prof-auto #-}
 module Data.Utils.HCntT
   (HCntT
   ,(<//>)

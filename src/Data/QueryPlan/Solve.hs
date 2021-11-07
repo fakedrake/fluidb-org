@@ -115,13 +115,17 @@ makeMaterializable ref =
               Concrete _ Mat -> True
               _              -> False) . getNodeState
 
-haltPlan :: (HaltKey m ~ PlanSearchScore,MonadHalt m) => NodeRef n -> MetaOp t n -> PlanT t n m ()
+haltPlan
+  :: (HaltKey m ~ PlanSearchScore,MonadHalt m)
+  => NodeRef n
+  -> MetaOp t n
+  -> PlanT t n m ()
 haltPlan matRef mop = do
   -- From the frontier replace matRef with it's dependencies.
   modify $ \gcs -> gcs
     { frontier = nsDelete matRef (frontier gcs) <> metaOpIn mop }
   extraCost <- metaOpCost [matRef] mop
-  void $  haltPlanCost Nothing $ fromIntegral $ costAsInt extraCost
+  void $ haltPlanCost Nothing $ fromIntegral $ costAsInt extraCost
 
 histCosts :: Monad m => PlanT t n m Cost
 histCosts = do
@@ -138,7 +142,7 @@ haltPlanCost
   => Maybe Cost
   -> Double
   -> PlanT t n m Cost
-haltPlanCost histCostCached concreteCost = do
+haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
   frefs <- gets $ toNodeList . frontier
   (costs,_extraNodes) <- runWriterT $ forM frefs $ \ref -> do
     cost <- lift $ getCostPlan @CostTag Proxy mempty ForceResult ref
