@@ -2,7 +2,7 @@
 #! nix-shell -i bash
 set -e
 
-stack build -j 4 --ghc-options -DVERBOSE_SOLVING fluidb:bench:benchmark
+stack build -j 4 fluidb:bench:benchmark
 # stack build -j 4 fluidb:bench:benchmark
 # stack --work-dir .benchmark-stack-dir/ --profile -j 4 run  -- +RTS -p
 # profiterole benchmark.prof
