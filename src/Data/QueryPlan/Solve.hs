@@ -468,9 +468,9 @@ safeDelInOrder requiredPages hc nsOrd =
   where
     delRefs _prev [] = guardl "still oversized " =<< isOversized requiredPages
     delRefs prev (ref:rest) = do
-      reportMatNodes prev $ delOrConcreteMat ref
+      reportMatNodes prev $ delOrConcreteMat (length rest) ref
       whenM (isOversized requiredPages) $ delRefs (ref:prev) rest
-    delOrConcreteMat ref = do
+    delOrConcreteMat remaining ref = do
       beforeSize <- getDataSize
       -- We could semantically use eitherl but eitherl cuts the
       -- computation and does not allow for other paths to be
@@ -478,7 +478,8 @@ safeDelInOrder requiredPages hc nsOrd =
       canStillDel <- isDeletable ref
       if canStillDel then do
         delCost <- transitionCost $ DelNode ref
-        void $ haltPlanCost (Just hc) $ fromIntegral $ costAsInt delCost
+        when (remaining `mod` 3 == 0) $
+          void $ haltPlanCost (Just hc) $ fromIntegral $ costAsInt delCost
         ref `setNodeStateSafe` NoMat
         else ref `setNodeStateUnsafe` Concrete Mat Mat
       assertGcIsPossible requiredPages

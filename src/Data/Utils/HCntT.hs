@@ -47,6 +47,34 @@ class (forall v . Monoid (h v),Functor h,Ord (HeapKey h))
   maxKeyHeap :: h v -> Maybe (HeapKey h)
 
 data CHeap k a = CHeap { chHeap :: H.Heap (H.Entry k a),chMax :: Maybe k }
+data LHeap k a = LHeap { lhHeap :: [(k,a)],lhMax :: Maybe k } deriving Functor
+
+instance Ord k =>  Semigroup (LHeap k a) where
+  h <> h' =
+    LHeap { lhHeap = lhHeap h <> lhHeap h',lhMax = case (lhMax h,lhMax h) of
+      (Nothing,Nothing) -> Nothing
+      (Just a,Nothing)  -> Just a
+      (Nothing,Just a)  -> Just a
+      (Just a,Just a')  -> Just $ max a a' }
+instance Ord k =>  Monoid (LHeap k a) where
+  mempty = LHeap { lhHeap = mempty,lhMax = Nothing }
+
+instance Ord k => IsHeap (LHeap k) where
+  type HeapKey (LHeap k) = k
+  popHeap LHeap {..} = do
+    ((k,v),h) <- viewMinList Nothing [] lhHeap
+    let m = if null h then Nothing else lhMax
+    return ((k,v),LHeap { lhMax = m,lhHeap = h })
+    where
+      viewMinList v prev [] = (,prev) <$> v
+      viewMinList Nothing prev (x:xs) =
+        viewMinList (Just x) prev xs
+      viewMinList p@(Just p'@(m,_)) prev (p0@(m0,_):xs) =
+        if m0 < m then viewMinList (Just p0) (p' : prev) xs
+        else viewMinList p (p0 : prev) xs
+  singletonHeap k v = LHeap { lhMax = Just k,lhHeap = [(k,v)] }
+  maxKeyHeap = lhMax
+
 
 instance Ord k => Semigroup (CHeap k a) where
   ch <> ch' =

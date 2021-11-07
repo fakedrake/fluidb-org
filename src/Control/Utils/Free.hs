@@ -7,7 +7,6 @@
 {-# LANGUAGE Safe                  #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# OPTIONS_GHC -O2 -fno-prof-count-entries -fno-prof-auto #-}
 
 module Control.Utils.Free (FreeF(..),FreeT(..),Free,runFree,hoistFreeT,iterA) where
 
