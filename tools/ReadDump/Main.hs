@@ -389,7 +389,9 @@ main = (`evalStateT` []) $ do
   let branchDirf = printf "%s/branches%03d" rootDir
   lift $ createDirectoryIfMissing True rootDir
   when True $ do
+    lift $ putStrLn "converting branches..."
     plans <- readBranches dumpFile
+    lift $ putStrLn "Branches converted!"
     lift $ putStrLn $ printf "Will write %d plans" (length plans)
     lift $ forM_ (enumerate plans) $ \(i,(nodeSolved,branches)) -> do
       putStrLn
