@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE UndecidableInstances      #-}
-{-# OPTIONS_GHC -O2 -fno-prof-count-entries -fno-prof-auto #-}
+{-# OPTIONS_GHC -O2 #-}
 module Data.Utils.HCntT
   (HCntT
   ,(<//>)
@@ -573,11 +573,13 @@ stream = go 0 where
 
 -- > test2t3t
 -- [(5,5,0),(5,6,1),(6,4,0),(6,5,1),(6,6,2)]
-test2 :: IO [(Int,Int,Int)]
-test2 = takeListT 5 $ dissolve @(IntMMap)  $ do
+test2 :: IO [(Int,Int,Int,Bool)]
+test2 = takeListT 5 $ dissolve @(CHeap (NonNeg Int)) $ once $ do
   (a,b,c) <- (,,) <$> stream <*> stream <*> stream
+  x <- return False <//> return True
   guard $ a + b - c == 10
-  return (a,b,c)
+  guard x
+  return (a,b,c,x)
 
 -- The well known 8 queens problem: How would one position 8 queens on
 -- a chess board. This implementation is purposefully naive get many
