@@ -173,7 +173,8 @@ satisfyComputability = go mempty
               $ runNodeProc (go trail ref nxt0) conf'
       where
         -- XXX: when ref' is in the trail getOrMakeMech produces an
-        -- arrow that never stops
+        -- arrow that never stops. We want to stop trails but more
+        -- generally we want to co-censor the copredicates
         isComputableM conf ref' = wrapTrace ("isComputableM" <: ref') $ do
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
@@ -200,7 +201,7 @@ getOrMakeMech
   ref = squashMealy $ \conf -> wrapTrace ("getOrMakeMech" <: ref) $ do
   mechM :: Maybe (ArrProc (CostParams tag n) m)
     <- lift $ mcGetMech @m Proxy ref
-  "ref-lu" <<: (ref,void mechM)
+  "ref-lu" <<: (ref,void mechM,peCoPred $ confEpoch conf)
   lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
   return (conf,fromMaybe (mkNewMech ref) mechM)
 
