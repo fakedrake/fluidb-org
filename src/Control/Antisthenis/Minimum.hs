@@ -239,8 +239,7 @@ instance (AShow (MechVal p)
   -- Also handles the combination of epoch and coepoch that dictates
   -- whether we must reset.
   zLocalizeConf coepoch conf z =
-    trace ("zLocalizeConf" <: zId z)
-    $ extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
+    extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ case (zSecondaryBound z,confCap conf) of
       (NeverSec,_) -> conf
       (NoSec,_) -> conf { confCap = CapVal zero }
