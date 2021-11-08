@@ -129,7 +129,7 @@ haltPlan matRef mop = do
 
 histCosts :: Monad m => PlanT t n m Cost
 histCosts = do
-  hcs :: [Maybe HCost] <- takeListT 5 $ pastCosts mempty
+  hcs :: [Maybe HCost] <- takeListT 0 $ pastCosts mempty
   -- Curate the consts that are too likely to be non-comp
   return $ mconcat $ mapMaybe (>>= toCost) hcs
   where
@@ -197,7 +197,6 @@ setNodeStateSafe' getFwdOp node goalState =
         Mat       -- just materialize
           -> do
             node `setNodeStateUnsafe` Concrete NoMat NoMat
-            -- xxx: setNodeMatHistoricalCosts node
             forwardMop <- getFwdOp
             let interm = toNodeList $ metaOpInterm forwardMop
             let depset = toNodeList $ metaOpIn forwardMop
