@@ -21,6 +21,7 @@ import           Data.Coerce
 import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Nat
 import           Data.Utils.Tup
@@ -152,8 +153,8 @@ sumEvolutionControl conf z = fmap traceRes $ case zFullResSum z of
       then Just $ BndBnd $ coerce bnd else Nothing
     ForceResult -> Nothing
   where
-    traceRes = id
--- traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
+    -- traceRes = id
+    traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
 
 -- | The full result includes both zRes and zCursor.
 zFullResSum
