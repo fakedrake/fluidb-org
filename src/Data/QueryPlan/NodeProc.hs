@@ -172,13 +172,14 @@ satisfyComputability = go mempty
             wrapTrace ("finalizingGo" <: ref)
               $ runNodeProc (go trail ref nxt0) conf'
       where
-        isComputableM conf ref' = wrapTrace ("isComputable" <: ref') $ do
-          (_coproc,(_nxt,ret)) <- runNodeProc
-            (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
-            $ setComputables trail conf
-          return $ case ret of
-            BndErr _ -> False
-            _        -> True
+        isComputableM conf ref' =
+          if ref' `nsMember` trail then return False else do
+            (_coproc,(_nxt,ret)) <- runNodeProc
+              (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
+              $ setComputables trail conf
+            return $ case ret of
+              BndErr _ -> False
+              _        -> True
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
 markNonComputable
