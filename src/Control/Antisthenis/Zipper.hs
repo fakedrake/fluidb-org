@@ -310,14 +310,14 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
         MooreMech iniZ iniMealy = mkZCatIni zid procs
     zNext :: ZState w m -> Conf w -> MBF (ArrProc w m) Void
     zNext zs@ZState {..} gconf = do
-      -- let tr :: AShow a => String -> a -> MBF (ArrProc w m) ()
-      --     tr msg arg =
-      --       trZ
-      --         (if zsResetLoop then "reset:" ++ msg else msg)
-      --         zsZipper
-      --         ["none"]
-      --         arg
-      let tr _ _ = return ()
+      let tr :: AShow a => String -> a -> MBF (ArrProc w m) ()
+          tr msg arg =
+            trZ
+              (if zsResetLoop then "reset:" ++ msg else msg)
+              zsZipper
+              ["none"]
+              arg
+      -- let tr _ _ = return ()
       tr "zLocalizeConf" (confCap gconf,confEpoch gconf,zsCoEpoch)
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
