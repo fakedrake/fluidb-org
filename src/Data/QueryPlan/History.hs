@@ -41,7 +41,9 @@ pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 5 qs
-  lift $ getCostPlan @HistTag Proxy extraMat (CapVal maxCap) q
+  wrapTrace ("histCost" <: q)
+    $ lift
+    $ getCostPlan @HistTag Proxy extraMat (CapVal maxCap) q
 
 maxCap :: HistCap Cost
 maxCap =
@@ -83,7 +85,6 @@ incrementCert (Min (Just (Cert c (Comp d i)))) =
 incrementCert a = a
 matComputability :: Double -> Double
 matComputability d = 1 - 0.8 * (1 - d)
-
 
 -- | we may be overshooting here and there but it's ok
 double :: Int -> Int
