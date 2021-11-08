@@ -175,15 +175,19 @@ sumEvolutionStrategy = recur Nothing
   where
     recur rst (FreeT m) = m >>= \case
       Pure a -> return (rst,Right a)
-      Free cmds0 -> go cmds0 where
-        go cmds = case cmdItCoit cmds of
-          CmdItInit _it ini -> recur' ini
-          CmdIt it -> recur' $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
-          CmdInit ini -> recur' ini
-          CmdFinished (ExZipper z) -> return (rst,Left (getConst $ zCursor z,zToRes z))
-          where
-            recur' = recur $ Just $ cmdReset cmds
-            zToRes z = case zRes z of
-              SumPart bnd  -> BndRes $ coerce bnd
-              SumPartInit  -> BndRes zero
-              SumPartErr e -> BndErr e
+      Free cmds0 -> go cmds0
+        where
+          go cmds = case cmdItCoit cmds of
+            CmdItInit it _ini ->
+              recur' $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
+            CmdIt it ->
+              recur' $ it $ (\((a,b),c) -> (a,b,c)) . simpleAssocPopNEL
+            CmdInit ini -> recur' ini
+            CmdFinished (ExZipper z) ->
+              return (rst,Left (getConst $ zCursor z,zToRes z))
+            where
+              recur' = recur $ Just $ cmdReset cmds
+              zToRes z = case zRes z of
+                SumPart bnd  -> BndRes $ coerce bnd
+                SumPartInit  -> BndRes zero
+                SumPartErr e -> BndErr e
