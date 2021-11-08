@@ -193,7 +193,7 @@ getOrMakeMech
   => NodeRef n
   -> ArrProc (CostParams tag n) m
 getOrMakeMech ref = squashMealy $ \conf -> do
-  -- "ref-lu" <<: ref
+  "ref-lu" <<: ref
   mechM <- lift $ mcGetMech @m Proxy ref
   lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
   return (conf,fromMaybe (mkNewMech ref) mechM)
