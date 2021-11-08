@@ -321,7 +321,6 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
       tr "zLocalizeConf" (confCap gconf,confEpoch gconf,zsCoEpoch)
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
-          traceM "zLocalizeConf:reset"
           tr "zLocalizeConf:reset" (zsCoEpoch,confEpoch gconf)
           let zs' = zsIni { zsItCmd = zsReset }
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
