@@ -40,7 +40,6 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Nat
 
@@ -94,7 +93,7 @@ mkNewMech ref =
   asSelfUpdating
   $ ifMaterialized ref (mcIsMatProc @m Proxy ref costProcess) costProcess
   where
-    costProcess = squashMealy $ \conf -> wrapTrace ("costProcess" <: ref) $ do
+    costProcess = squashMealy $ \conf -> do
       -- mops <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
       neigh <- lift $ mcGetNeighbors @m @(CostParams tag n) Proxy ref
       -- ("metaops(" ++ ashow ref ++ ")") <<: mops
@@ -114,7 +113,9 @@ mkNewMech ref =
       -- to the epoch/coepoch.  We are also NOT resetting. These
       -- repeating nodes are NOT in the same cycle (otherwise they
       -- would not be returning).
-      "result" <<: (ref,confCap c,r)
+      --
+      -- It is a histcost! The cap increases and the bounds also increase
+      -- "result" <<: (ref,confCap c,r)
       lift $ mcPutMech Proxy ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 
@@ -169,26 +170,24 @@ satisfyComputability = go mempty
   where
     mkNodeProc = MealyArrow . WriterArrow . fromKleisli
     runNodeProc = toKleisli . runWriterArrow . runMealyArrow
-    go trail ref c = mkNodeProc $ \conf -> wrapTrace "go" $ do
+    go trail ref c = mkNodeProc $ \conf -> do
       -- first run normally.
-      r@(coepoch,(nxt0,_val)) <- wrapTrace ("runNodeProc" <: ref)
-        $ runNodeProc c conf
+      r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
       -- Solve each predicate.
       case toNodeList $ pNonComputables $ pcePred coepoch of
         [] -> return r
         assumedNonComputables -> do
           actuallyComputables
             <- filterM (isComputableM conf) assumedNonComputables
-          "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
+          -- "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
           if null actuallyComputables then return r else do
             let conf' = foldl' (flip markComputable) conf actuallyComputables
-            wrapTrace ("finalizingGo" <: ref)
-              $ runNodeProc (go trail ref nxt0) conf'
+            runNodeProc (go trail ref nxt0) conf'
       where
         -- XXX: when ref' is in the trail getOrMakeMech produces an
         -- arrow that never stops. We want to stop trails but more
         -- generally we want to co-censor the copredicates
-        isComputableM conf ref' = wrapTrace ("isComputableM" <: ref') $ do
+        isComputableM conf ref' = do
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
@@ -323,5 +322,5 @@ getCost _ cap states ref = wrapTr $ do
     BndErr e ->
       error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
   where
-    wrapTr = wrapTrace ("getCost" <: ref)
--- wrapTr = id
+    --wrapTr = wrapTrace ("getCost" <: ref)
+    wrapTr = id
