@@ -54,6 +54,7 @@ import           Prelude                    hiding (filter, lookup)
 
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.Types
+import           Data.Utils.AShow.Print     (ashowLine)
 import           Data.Utils.Default
 import           Data.Utils.Unsafe
 
@@ -241,15 +242,19 @@ findOnOut = findOnSide (fullRange,fullRange) . getNodeLinksN' Inp fullRange
 findTriggerableMetaOps
   :: forall n t m . MonadLogic m => NodeRef n -> PlanT t n m [MetaOp t n]
 findTriggerableMetaOps n = do
+  mops <- findMetaOps n
   hbM <- getHardBudget
-  filterM (canTrigger hbM) =<< findMetaOps n
+  filterM (canTrigger hbM) mops >>= \case
+    [] -> bot $ "None of the metaops are triggerable: " ++ ashowLine (n,mops)
+    rs -> return rs
   where
     canTrigger hbM mop =
-      (&&)
-      <$> triggerFits hbM mop
+      (&&) <$> triggerFits hbM mop
       <*> fmap not (anyM isConcNoMatM $ toNodeList $ metaOpIn mop)
-    isConcNoMatM = fmap (\case {Concrete _ NoMat -> True;_ -> False})
-      . getNodeState
+    isConcNoMatM =
+      fmap (\case
+              Concrete _ NoMat -> True
+              _                -> False) . getNodeState
 {-# INLINABLE findTriggerableMetaOps #-}
 
 getHardBudget :: Monad m => PlanT t n m (Maybe Int)
@@ -264,9 +269,9 @@ findPrioritizedMetaOp :: forall n t m . MonadLogic m =>
                         (forall a . PlanT t n m a -> PlanT t n m a -> PlanT t n m a)
                       -> NodeRef n
                       -> PlanT t n m (MetaOp t n)
-findPrioritizedMetaOp splitFn ref = findTriggerableMetaOps ref >>= \case
-  [] -> bot $ printf "no findTriggerableMetaOps %n" ref
-  xs -> foldr1Unsafe splitFn $ return <$> xs
+findPrioritizedMetaOp splitFn ref = do
+  mops <- findTriggerableMetaOps ref
+  foldr1Unsafe splitFn $ return <$> mops
 
 metaOpNeededPages :: (HasCallStack,Monad m) => MetaOp t n -> PlanT t n m Int
 metaOpNeededPages MetaOp {..} = do

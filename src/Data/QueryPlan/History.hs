@@ -40,7 +40,7 @@ pastCosts :: Monad m => NodeSet n -> ListT (PlanT t n m) (Maybe HCost)
 pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
-  q <- mkListT $ return $ take 5 qs
+  q <- mkListT $ return $ take 3 qs
   lift $ getCostPlan @HistTag Proxy extraMat (CapVal maxCap) q
 
 maxCap :: HistCap Cost
