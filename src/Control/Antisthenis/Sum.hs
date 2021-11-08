@@ -141,7 +141,7 @@ sumEvolutionControl
   => GConf (SumTag p)
   -> Zipper (SumTag p) (ArrProc (SumTag p) m)
   -> Maybe (BndR (SumTag p))
-sumEvolutionControl conf z = fmap traceRes $ case zFullResSum z of
+sumEvolutionControl conf z = traceRes $ case zFullResSum z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     -- If the local bound is negative then
