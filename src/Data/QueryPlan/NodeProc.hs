@@ -102,7 +102,7 @@ mkNewMech ref =
             [DSetR
               { dsetConst =
                   Sum $ Just $ mcMkCost @m @(CostParams tag n) Proxy ref cost
-               ,dsetNeigh = [getOrMakeMech n | n <- inp]
+               ,dsetNeigh = [getOrMakeMech "costProcess" n | n <- inp]
               } | (inp,cost) <- neigh]
       return (conf,makeCostProc ref mechs)
     asSelfUpdating :: ArrProc (CostParams tag n) m
@@ -113,7 +113,7 @@ mkNewMech ref =
         (nxt,r) <- toKleisli f c
         -- "result" <<: (ref,r)
         lift $ mcPutMech Proxy ref $ asSelfUpdating nxt
-        return (getOrMakeMech ref,r)
+        return (getOrMakeMech "asSelfUpdating" ref,r)
 
 markComputable
   :: IsPlanParams (CostParams tag n) n
@@ -168,7 +168,8 @@ satisfyComputability = go mempty
     runNodeProc = toKleisli . runWriterArrow . runMealyArrow
     go trail ref c = mkNodeProc $ \conf -> wrapTrace "go" $ do
       -- first run normally.
-      r@(coepoch,(nxt0,_val)) <- wrapTrace ("runNodeProc" <: ref) $ runNodeProc c conf
+      r@(coepoch,(nxt0,_val)) <- wrapTrace ("runNodeProc" <: ref)
+        $ runNodeProc c conf
       -- Solve each predicate.
       case toNodeList $ pNonComputables $ pcePred coepoch of
         [] -> return r
@@ -186,7 +187,7 @@ satisfyComputability = go mempty
         -- generally we want to co-censor the copredicates
         isComputableM conf ref' = wrapTrace ("isComputableM" <: ref') $ do
           (_coproc,(_nxt,ret)) <- runNodeProc
-            (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
+            (go (nsInsert ref trail) ref' $ getOrMakeMech "isComputableM" ref')
             $ setComputables trail conf
           return $ case ret of
             BndErr _ -> False
@@ -204,16 +205,17 @@ unmarkNonComputable ref pe =
 getOrMakeMech
   :: forall tag m n .
   (PlanMech m (CostParams tag n) n,IsPlanParams (CostParams tag n) n)
-  => NodeRef n
+  => String
+  -> NodeRef n
   -> ArrProc (CostParams tag n) m
-getOrMakeMech
-  ref = squashMealy $ \conf -> wrapTrace ("getOrMakeMech" <: ref) $ do
-  mechM :: Maybe (ArrProc (CostParams tag n) m)
-    <- lift $ mcGetMech @m Proxy ref
-  "ref-lu" <<: (ref,void mechM,show $ peCoPred $ confEpoch conf)
-  let conf' = unmarkComputable ref conf
-  lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
-  return (conf',fromMaybe (mkNewMech ref) mechM)
+getOrMakeMech src ref =
+  squashMealy $ \conf -> wrapTrace ("getOrMakeMech" <: ref) $ do
+    mechM :: Maybe (ArrProc (CostParams tag n) m)
+      <- lift $ mcGetMech @m Proxy ref
+    "ref-lu" <<: (ref,src,void mechM,show $ peCoPred $ confEpoch conf)
+    let conf' = unmarkComputable ref conf
+    lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
+    return (conf',fromMaybe (mkNewMech ref) mechM)
 
 -- | Return an error (uncomputable) and insert a predicate that
 -- whatever results we come up with are predicated on ref being
