@@ -145,13 +145,13 @@ sumEvolutionControl conf z = fmap traceRes $ case zFullResSum z of
   SumPartErr e -> Just $ BndErr e
   SumPartInit -> case confCap conf of
     -- If the local bound is negative then
-    CapVal cap -> if isNegative cap then Just $ BndBnd zero else Nothing
-    _          -> Nothing
+    CapVal cap -> if isNegative cap then Just $ BndBnd zero else trace "sum1" Nothing
+    _          -> trace "sum2" Nothing
   SumPart bnd -> case confCap conf of
     CapVal cap ->
       if exceedsCap @(SumTag p) Proxy cap (coerce bnd :: ZBnd (SumTag p))
-      then Just $ BndBnd $ coerce bnd else Nothing
-    ForceResult -> Nothing
+      then Just $ BndBnd $ coerce bnd else trace "sum3" Nothing
+    ForceResult -> trace "sum4" Nothing
   where
     -- traceRes = id
     traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r

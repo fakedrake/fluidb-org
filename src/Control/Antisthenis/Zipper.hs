@@ -327,19 +327,25 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
           (zNext zs' gconf :: MBF (ArrProc w m) Void)
         DontReset lconf -> do
           tr "zLocalizeConf:res" $ confCap lconf
+          -- Try to find a value...
           case evolutionControl zprocEvolution gconf zsZipper of
             Just res -> do
+              -- Yield the value to the parent
               tr "result" (res,zsCoEpoch)
               yieldMB (zsCoEpoch,res) >>= zNext zs { zsResetLoop = False }
             Nothing -> do
+              -- Continue with the current computation
               cmdM <- fromArrow zsItCmd lconf
               (rstM,upd) <- lift $ runCmdSequence cmdM
               let zs' = zs { zsReset = fromMaybe zsReset rstM }
+              -- Did the computation finish?
               case upd of
                 Left (coepoch,res) -> do
+                  -- Yes! Yield the  result to the parent
                   tr "resultFin" (res,coepoch)
                   yieldMB (coepoch,res) >>= zNext zs' { zsResetLoop = False }
                 Right ((nxt,z),coepoch) -> do
+                  -- No... there is more stuff to do
                   tr "cont-from:" (zipperShape z,coepoch)
                   let zs'' =
                         zs' { zsItCmd = nxt
