@@ -159,7 +159,7 @@ satisfyComputability = go mempty
     runNodeProc = toKleisli . runWriterArrow . runMealyArrow
     go trail ref c = mkNodeProc $ \conf -> wrapTrace "go" $ do
       -- first run normally.
-      r@(coepoch,(nxt0,_val)) <- wrapTrace ("runNodeProc " <: ref) $  runNodeProc c conf
+      r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
       -- Solve each predicate.
       case toNodeList $ pNonComputables $ pcePred coepoch of
         [] -> return r
@@ -169,9 +169,10 @@ satisfyComputability = go mempty
           "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
           if null actuallyComputables then return r else do
             let conf' = foldl' (flip markComputable) conf actuallyComputables
-            runNodeProc (go trail ref nxt0) conf'
+            wrapTrace ("finalizingGo" <: ref)
+              $ runNodeProc (go trail ref nxt0) conf'
       where
-        isComputableM conf ref' = wrapTrace "isComputable" $ do
+        isComputableM conf ref' = wrapTrace ("isComputable" <: ref') $ do
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
