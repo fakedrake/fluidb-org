@@ -172,7 +172,8 @@ satisfyComputability = go mempty
             wrapTrace ("finalizingGo" <: ref)
               $ runNodeProc (go trail ref nxt0) conf'
       where
-        -- XXX: when ref' is in the
+        -- XXX: when ref' is in the trail getOrMakeMech produces an
+        -- arrow that never stops
         isComputableM conf ref' = wrapTrace ("isComputableM" <: ref') $ do
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
@@ -197,8 +198,9 @@ getOrMakeMech
   -> ArrProc (CostParams tag n) m
 getOrMakeMech
   ref = squashMealy $ \conf -> wrapTrace ("getOrMakeMech" <: ref) $ do
-  -- "ref-lu" <<: ref
-  mechM <- lift $ mcGetMech @m Proxy ref
+  mechM :: Maybe (ArrProc (CostParams tag n) m)
+    <- lift $ mcGetMech @m Proxy ref
+  "ref-lu" <<: (ref,void mechM)
   lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
   return (conf,fromMaybe (mkNewMech ref) mechM)
 
