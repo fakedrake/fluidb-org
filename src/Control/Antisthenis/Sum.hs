@@ -159,12 +159,19 @@ sumEvolutionControl conf z = traceRes $ case zFullResSum z of
     traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
 
 -- | The full result includes both zRes and zCursor.
+--
+-- XXX:  The cursor may contain the only value useful
 zFullResSum
-  :: (AShow2 (ExtError p) (MechVal p),Semigroup (MechVal p))
+  :: forall  p p0 . (AShow2 (ExtError p) (MechVal p),Semigroup (MechVal p))
   => Zipper (SumTag p) p0
   -> SumPartialRes p
-zFullResSum z = sprMap (maybe id ((<>) . coerce) cursorM) $ zRes z
+zFullResSum z = case (cursorM,zRes z) of
+  (Nothing,zr)               -> zr
+  (Just _,zr@(SumPartErr _)) -> zr
+  (Just c,SumPart bnd)       -> SumPart $ coerce c <> bnd
+  (Just c,SumPartInit)       -> SumPart $ coerce c
   where
+    cursorM :: Maybe (Min (MechVal p))
     cursorM = fst3 $ runIdentity $ zCursor z
 
 sumEvolutionStrategy
