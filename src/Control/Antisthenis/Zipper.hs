@@ -315,8 +315,8 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
             trZ
               (if zsResetLoop then "reset:" ++ msg else msg)
               zsZipper
-              ["none"] -- print nothing
-              -- []    -- print all
+              -- ["none"] -- print nothing
+              []    -- print all
               arg
       -- let tr _ _ = return ()
       tr "zLocalizeConf" (confCap gconf,confEpoch gconf,zsCoEpoch)
