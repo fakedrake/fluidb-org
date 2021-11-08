@@ -170,7 +170,7 @@ satisfyComputability = go mempty
             let conf' = foldl' (flip markComputable) conf actuallyComputables
             runNodeProc (go trail ref nxt0) conf'
       where
-        isComputableM conf ref' = do
+        isComputableM conf ref' = wrapTrace "isComputable" $ do
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (trail <> nsSingleton ref) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
@@ -192,7 +192,8 @@ getOrMakeMech
   (PlanMech m (CostParams tag n) n,IsPlanParams (CostParams tag n) n)
   => NodeRef n
   -> ArrProc (CostParams tag n) m
-getOrMakeMech ref = squashMealy $ \conf -> wrapTrace "getOrMakeMech" $ do
+getOrMakeMech
+  ref = squashMealy $ \conf -> wrapTrace ("getOrMakeMech" <: ref) $ do
   -- "ref-lu" <<: ref
   mechM <- lift $ mcGetMech @m Proxy ref
   lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
