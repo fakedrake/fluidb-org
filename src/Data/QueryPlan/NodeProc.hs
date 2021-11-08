@@ -107,13 +107,12 @@ mkNewMech ref =
       return (conf,makeCostProc ref mechs)
     asSelfUpdating :: ArrProc (CostParams tag n) m
                    -> ArrProc (CostParams tag n) m
-    asSelfUpdating (MealyArrow f) =
-      censorPredicate ref $ MealyArrow $ fromKleisli $ \c ->
-      wrapTrace ("asSelfUpdating" <: ref)$ do
-        (nxt,r) <- toKleisli f c
-        -- "result" <<: (ref,r)
-        lift $ mcPutMech Proxy ref $ asSelfUpdating nxt
-        return (getOrMakeMech "asSelfUpdating" ref,r)
+    asSelfUpdating
+      (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
+      (nxt,r) <- toKleisli f c
+      "result" <<: (ref,r)
+      lift $ mcPutMech Proxy ref $ asSelfUpdating nxt
+      return (getOrMakeMech "asSelfUpdating" ref,r)
 
 markComputable
   :: IsPlanParams (CostParams tag n) n
