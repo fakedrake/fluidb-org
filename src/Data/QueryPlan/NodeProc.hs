@@ -217,9 +217,9 @@ cycleProc ref =
   $ WriterArrow
   $ Kleisli
   $ const
+  $ wrapTrace ("cycle" <: ref)
   $ return
-    (markNonComputable ref
-    ,(getOrMakeMech ref,mcCompStackVal @m Proxy ref))
+    (markNonComputable ref,(getOrMakeMech ref,mcCompStackVal @m Proxy ref))
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
