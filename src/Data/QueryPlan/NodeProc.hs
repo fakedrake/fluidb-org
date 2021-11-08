@@ -156,7 +156,7 @@ satisfyComputability = go mempty
   where
     mkNodeProc = MealyArrow . WriterArrow . fromKleisli
     runNodeProc = toKleisli . runWriterArrow . runMealyArrow
-    go trail ref c = mkNodeProc $ \conf -> do
+    go trail ref c = mkNodeProc $ \conf -> wrapTrace "go" $ do
       -- first run normally.
       r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
       -- Solve each predicate.
