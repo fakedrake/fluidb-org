@@ -165,7 +165,7 @@ satisfyComputability = go mempty
         assumedNonComputables -> do
           actuallyComputables
             <- filterM (isComputableM conf) assumedNonComputables
-          -- "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
+          "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
           if null actuallyComputables then return r else do
             let conf' = foldl' (flip markComputable) conf actuallyComputables
             runNodeProc (go trail ref nxt0) conf'
