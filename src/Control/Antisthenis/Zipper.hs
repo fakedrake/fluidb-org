@@ -334,6 +334,7 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
               tr "result" (res,zsCoEpoch)
               yieldMB (zsCoEpoch,res) >>= zNext zs { zsResetLoop = False }
             Nothing -> do
+              tr "no result" (zId zsZipper)
               -- Continue with the current computation
               cmdM <- fromArrow zsItCmd lconf
               (rstM,upd) <- lift $ runCmdSequence cmdM
