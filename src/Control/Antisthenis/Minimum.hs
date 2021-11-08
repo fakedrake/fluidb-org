@@ -250,8 +250,7 @@ instance (AShow (MechVal p)
     where
       chooseCapBnd :: ZCap (MinTag p) -> ZBnd (MinTag p) -> ZCap (MinTag p)
       chooseCapBnd cap res =
-        if exceedsCap @(MinTag p) Proxy cap res then cap else let r = rgetL res
-          in trace ("Update cap: " ++ ashow (zipperShape z,r)) r
+        if exceedsCap @(MinTag p) Proxy cap res then cap else rgetL res
       chooseCapRes :: ZCap (MinTag p) -> ZRes (MinTag p) -> ZCap (MinTag p)
       chooseCapRes cap res =
         if exceedsCap @(MinTag p) Proxy cap res then cap else rgetL res

@@ -41,9 +41,7 @@ pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 5 qs
-  wrapTrace ("histCost" <: q)
-    $ lift
-    $ getCostPlan @HistTag Proxy extraMat (CapVal maxCap) q
+  lift $ getCostPlan @HistTag Proxy extraMat (CapVal maxCap) q
 
 maxCap :: HistCap Cost
 maxCap =
