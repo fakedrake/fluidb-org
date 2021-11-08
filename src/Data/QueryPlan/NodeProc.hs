@@ -124,6 +124,15 @@ markComputable ref conf =
   conf { confEpoch = (confEpoch conf)
            { peCoPred = nsInsert ref $ peCoPred $ confEpoch conf }
        }
+unmarkComputable
+  :: IsPlanParams (CostParams tag n) n
+  => NodeRef n
+  -> Conf (CostParams tag n)
+  -> Conf (CostParams tag n)
+unmarkComputable ref conf =
+  conf { confEpoch = (confEpoch conf)
+           { peCoPred = nsDelete ref $ peCoPred $ confEpoch conf }
+       }
 
 setComputables
   :: IsPlanParams (CostParams tag n) n
@@ -202,8 +211,9 @@ getOrMakeMech
   mechM :: Maybe (ArrProc (CostParams tag n) m)
     <- lift $ mcGetMech @m Proxy ref
   "ref-lu" <<: (ref,void mechM,show $ peCoPred $ confEpoch conf)
+  let conf' = unmarkComputable ref conf
   lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
-  return (conf,fromMaybe (mkNewMech ref) mechM)
+  return (conf',fromMaybe (mkNewMech ref) mechM)
 
 -- | Return an error (uncomputable) and insert a predicate that
 -- whatever results we come up with are predicated on ref being
