@@ -232,7 +232,7 @@ cycleProc ref =
   $ const
   $ wrapTrace ("cycle" <: ref)
   $ return
-    (markNonComputable ref,(getOrMakeMech ref,mcCompStackVal @m Proxy ref))
+    (markNonComputable ref,(getOrMakeMech "cycleProc" ref,mcCompStackVal @m Proxy ref))
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
@@ -314,7 +314,7 @@ getCost
   -> m (Maybe (MechVal (PlanParams tag n)))
 getCost _ cap states ref = wrapTr $ do
   (res,_coepoch) <- runWriterT
-    $ runMech (satisfyComputability @m @tag ref $ getOrMakeMech ref)
+    $ runMech (satisfyComputability @m @tag ref $ getOrMakeMech "getCost" ref)
     $ Conf
     { confCap = cap,confEpoch = def { peParams = states },confTrPref = () }
   case res of
@@ -325,4 +325,4 @@ getCost _ cap states ref = wrapTr $ do
       error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
   where
     wrapTr = wrapTrace ("getCost" <: ref)
-    -- wrapTr = id
+-- wrapTr = id
