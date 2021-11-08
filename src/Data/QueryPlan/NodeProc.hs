@@ -110,6 +110,8 @@ mkNewMech ref =
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       ((nxt,r),co) <- listen $ toKleisli f c
+      -- XXX: the copred and pred do not match so the loop is not due
+      -- to the epoch/coepoch.
       "result" <<: (ref,peCoPred $ confEpoch c,r,pcePred co)
       lift $ mcPutMech Proxy ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
