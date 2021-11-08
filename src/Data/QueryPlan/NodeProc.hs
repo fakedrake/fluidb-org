@@ -305,5 +305,5 @@ getCost _ cap states ref = wrapTr $ do
     BndErr e ->
       error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
   where
-    -- wrapTr = wrapTrace ("getCost" <: ref)
-    wrapTr = id
+    wrapTr = wrapTrace ("getCost" <: ref)
+    -- wrapTr = id
