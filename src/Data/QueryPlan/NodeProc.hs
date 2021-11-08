@@ -102,17 +102,17 @@ mkNewMech ref =
             [DSetR
               { dsetConst =
                   Sum $ Just $ mcMkCost @m @(CostParams tag n) Proxy ref cost
-               ,dsetNeigh = [getOrMakeMech "costProcess" n | n <- inp]
+               ,dsetNeigh = [getOrMakeMech n | n <- inp]
               } | (inp,cost) <- neigh]
       return (conf,makeCostProc ref mechs)
     asSelfUpdating :: ArrProc (CostParams tag n) m
                    -> ArrProc (CostParams tag n) m
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
-      (nxt,r) <- toKleisli f c
-      "result" <<: (ref,r)
+      ((nxt,r),co) <- listen $ toKleisli f c
+      "result" <<: (ref,peCoPred $ confEpoch c,r,pcePred co)
       lift $ mcPutMech Proxy ref $ asSelfUpdating nxt
-      return (getOrMakeMech "asSelfUpdating" ref,r)
+      return (getOrMakeMech ref,r)
 
 markComputable
   :: IsPlanParams (CostParams tag n) n
@@ -204,17 +204,14 @@ unmarkNonComputable ref pe =
 getOrMakeMech
   :: forall tag m n .
   (PlanMech m (CostParams tag n) n,IsPlanParams (CostParams tag n) n)
-  => String
-  -> NodeRef n
+  => NodeRef n
   -> ArrProc (CostParams tag n) m
-getOrMakeMech src ref =
-  squashMealy $ \conf -> wrapTrace ("getOrMakeMech" <: ref) $ do
-    mechM :: Maybe (ArrProc (CostParams tag n) m)
-      <- lift $ mcGetMech @m Proxy ref
-    "ref-lu" <<: (ref,src,void mechM,show $ peCoPred $ confEpoch conf)
-    let conf' = unmarkComputable ref conf
-    lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
-    return (conf',fromMaybe (mkNewMech ref) mechM)
+getOrMakeMech ref = squashMealy $ \conf -> do
+  mechM :: Maybe (ArrProc (CostParams tag n) m)
+    <- lift $ mcGetMech @m Proxy ref
+  let conf' = unmarkComputable ref conf
+  lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
+  return (conf',fromMaybe (mkNewMech ref) mechM)
 
 -- | Return an error (uncomputable) and insert a predicate that
 -- whatever results we come up with are predicated on ref being
@@ -231,7 +228,7 @@ cycleProc ref =
   $ const
   $ wrapTrace ("cycle" <: ref)
   $ return
-    (markNonComputable ref,(getOrMakeMech "cycleProc" ref,mcCompStackVal @m Proxy ref))
+    (markNonComputable ref,(getOrMakeMech ref,mcCompStackVal @m Proxy ref))
 
 -- | Make sure the predicate of a node being non-computable does not
 -- propagate outside of the process. This is useful for wrapping
@@ -313,7 +310,7 @@ getCost
   -> m (Maybe (MechVal (PlanParams tag n)))
 getCost _ cap states ref = wrapTr $ do
   (res,_coepoch) <- runWriterT
-    $ runMech (satisfyComputability @m @tag ref $ getOrMakeMech "getCost" ref)
+    $ runMech (satisfyComputability @m @tag ref $ getOrMakeMech ref)
     $ Conf
     { confCap = cap,confEpoch = def { peParams = states },confTrPref = () }
   case res of
