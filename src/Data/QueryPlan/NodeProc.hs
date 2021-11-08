@@ -186,7 +186,7 @@ satisfyComputability = go mempty
         -- generally we want to co-censor the copredicates
         isComputableM conf ref' = wrapTrace ("isComputableM" <: ref') $ do
           (_coproc,(_nxt,ret)) <- runNodeProc
-            (go (nsInsert ref trail) ref' $ getOrMakeMech "isComputableM" ref')
+            (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
           return $ case ret of
             BndErr _ -> False
