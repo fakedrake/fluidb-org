@@ -201,7 +201,7 @@ getOrMakeMech
   ref = squashMealy $ \conf -> wrapTrace ("getOrMakeMech" <: ref) $ do
   mechM :: Maybe (ArrProc (CostParams tag n) m)
     <- lift $ mcGetMech @m Proxy ref
-  "ref-lu" <<: (ref,void mechM,peCoPred $ confEpoch conf)
+  "ref-lu" <<: (ref,void mechM,show $ peCoPred $ confEpoch conf)
   lift $ mcPutMech @m Proxy ref $ cycleProc @tag ref
   return (conf,fromMaybe (mkNewMech ref) mechM)
 
