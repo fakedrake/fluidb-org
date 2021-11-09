@@ -1,6 +1,4 @@
-#ifndef COMMON_H
-#define COMMON_H
-
+#pragma once
 #include <type_traits>
 #include <cstring>
 #include <cstdio>
@@ -213,5 +211,3 @@ using fluidb_string=std::array<char,n>;
 #endif
 
 typedef const std::pair<std::string, std::string> filepair;
-
-#endif /* COMMON_H */
