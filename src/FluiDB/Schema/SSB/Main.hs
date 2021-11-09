@@ -9,6 +9,7 @@ import           Data.Cluster.Types.Monad
 import           Data.Codegen.Build
 import           Data.Codegen.Run
 import           Data.DotLatex
+import           Data.IORef
 import qualified Data.IntMap               as IM
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
@@ -16,6 +17,7 @@ import           Data.Query.Algebra
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
+import           Data.Time
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Functors
@@ -26,9 +28,9 @@ import           FluiDB.Schema.Workload
 import           FluiDB.Types
 import           FluiDB.Utils
 import           System.Directory
-import           System.Directory.Extra    (createDirectoryIfMissing)
 import           System.FilePath
 import           System.IO
+import           System.IO.Unsafe
 import           System.Process
 import           System.Timeout
 
@@ -71,16 +73,32 @@ runQuery verbosity index  query = do
   storeCpp index cppCode
   return transitions
 
+type Seconds = Double
+startTime :: IORef Seconds
+{-# NOINLINE startTime #-}
+startTime = unsafePerformIO $ getSecsI >>= newIORef
+
+getSecsI :: IO Seconds
+getSecsI = fromRational . toRational . utctDayTime <$> getCurrentTime
+
+getSecs :: IO Seconds
+getSecs = do
+  t0 <- readIORef startTime
+  t <- getSecsI
+  return $ t - t0
+
 storeCpp :: Index -> CppCode -> SSBGlobalSolveM ()
 storeCpp i cpp = do
-  tmp <- getTemporaryDirectory
-  budgetM <- gets $  budget. getGlobalConf
-  let workloadDir = printf "workload-%s" $ maybe "unlimited" show budgetM
-  let dir = tmp </> "fluidb-data" </> workloadDir
-  createDirectoryIfMissing True dir
-  let path = dir </> printf "query%d.cpp" i
-  writeFile path  cpp
-  putStrLn $ "Wrote C++ code for query %d in: %s" i path
+  budgetM <- gets $  budget . globalGCConfig
+  lift2 $ do
+    tmp <- getTemporaryDirectory
+    let workloadDir = printf "workload-%s" $ maybe "unlimited" show budgetM
+    let dir = tmp </> "fluidb-data" </> workloadDir
+    createDirectoryIfMissing True dir
+    let path = dir </> printf "query%d.cpp" i
+    writeFile path  cpp
+    secs <- getSecs
+    putStrLn $ printf "[%f sec]Wrote C++ code for query %d in: %s" secs i path
 
 softFail :: AShow a => a -> IO ()
 softFail a = putStrLn $ ashow a
@@ -181,7 +199,7 @@ ssbMain :: IO ()
 ssbMain = do
   -- let oneGig = ResourceLimit 1000000000
   -- setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
-  let secs = 60
+  let secs = 2 * 60
   traceTM "Starting!"
   timeout (secs * 1000000) (actualMain Verbose [1..12]) >>= \case
     Nothing -> putStrLn $ printf  "TIMEOUT after %ds" secs
