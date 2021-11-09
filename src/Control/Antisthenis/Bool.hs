@@ -260,12 +260,8 @@ instance (AShow (ExtCoEpoch p),BoolExtParams op p,BoolOp op)
     Maybe (Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p)))
   type ZItAssoc (BoolTag op p) =
     CountingAssoc [] Maybe (BoolBound op)
-  zprocEvolution =
-    ZProcEvolution
-    { evolutionControl = boolEvolutionControl
-     ,evolutionStrategy = boolEvolutionStrategy
-     ,evolutionEmptyErr = error "No arguments provided"
-    }
+  zEvolutionControl = boolEvolutionControl
+  zEvolutionStrategy = boolEvolutionStrategy
   putRes newBnd (partialRes,newZipper) =
     (\() -> maybe newBnd' (Just . combBoolBndR newBnd) partialRes)
     <$> newZipper
@@ -325,7 +321,7 @@ boolEvolutionStrategy = recur Nothing
 -- poperator. This decides when to stop working.
 boolEvolutionControl
   :: forall op m p .
-  (Ord (BoolBound op),Monad m,BoolOp op)
+  (Ord (BoolBound op),BoolOp op)
   => GConf (BoolTag op p)
   -> Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
   -> Maybe (BndR (BoolTag op p))

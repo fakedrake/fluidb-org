@@ -197,7 +197,18 @@ class (KeyAC (ZItAssoc w) ~ ZBnd w
 
   type ZPartialRes w :: *
 
-  zprocEvolution :: Monad m => ZProcEvolution w m (BndR w)
+  -- Evolution control decides when to return values and when to
+  -- continue.
+  zEvolutionControl :: GConf w -> Zipper w (ArrProc w m) -> Maybe (BndR w)
+
+  -- zprocEvolution :: Monad m => ZProcEvolution w m (BndR w)
+  -- Evolution strategy decides which branches to take when
+  -- evolving. Get the final.
+  zEvolutionStrategy
+    :: forall x m .
+    Monad m
+    => FreeT (Cmds w) m x
+    -> m (Maybe (RstCmd w m x),Either (ZCoEpoch w,BndR w) x)
 
   -- | Insert the result of an init. This result does not replace a
   -- previous one. It is completely new

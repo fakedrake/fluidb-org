@@ -199,12 +199,8 @@ instance (AShow (MechVal p)
   type ZPartialRes (MinTag p) = ()
   type ZItAssoc (MinTag p) =
     MinAssocList [] (MinTag p)
-  zprocEvolution =
-    ZProcEvolution
-    { evolutionControl = minEvolutionControl
-     ,evolutionStrategy = minEvolutionStrategy
-     ,evolutionEmptyErr = noArgumentsError
-    }
+  zEvolutionControl = minEvolutionControl
+  zEvolutionStrategy = minEvolutionStrategy
   -- We only need to do anything if the result is concrete. A
   -- non-error concrete result in combined with the result so far. In
   -- the case where the result is an error the error is

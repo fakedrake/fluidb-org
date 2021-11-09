@@ -283,7 +283,7 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
            (ZCoEpoch w,BndR w)
            ((ZCat w m,Zipper w (ArrProc w m)),ZCoEpoch w))
     runCmdSequence cmds = do
-      (rstCmdM,r) <- evolutionStrategy zprocEvolution cmds
+      (rstCmdM,r) <- zEvolutionStrategy cmds
       rstM <- forM rstCmdM $ \(DoReset (FreeT rst)) -> rst <&> \case
         Free _m -> error "Reset is expected to have a Pure layer"
         Pure ((resetCat,_resetZ),_coepochEmpty) -> resetCat
@@ -328,7 +328,7 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
         DontReset lconf -> do
           tr "zLocalizeConf:res" $ confCap lconf
           -- Try to find a value...
-          case evolutionControl zprocEvolution gconf zsZipper of
+          case zEvolutionControl gconf zsZipper of
             Just res -> do
               -- Yield the value to the parent
               tr "result" (res,zsCoEpoch)

@@ -77,12 +77,8 @@ instance (AShow2 (MechVal p) (ExtCap p)
   type ZPartialRes (SumTag p) = SumPartialRes p
   type ZItAssoc (SumTag p) =
     SimpleAssoc [] (ZBnd (SumTag p))
-  zprocEvolution =
-    ZProcEvolution
-    { evolutionControl = sumEvolutionControl
-     ,evolutionStrategy = sumEvolutionStrategy
-     ,evolutionEmptyErr = error "No arguments provided to the sum."
-    }
+  zEvolutionControl = sumEvolutionControl
+  zEvolutionStrategy = sumEvolutionStrategy
   putRes newBnd (partialRes,newZipper) =
     (\() -> add partialRes newBnd) <$> newZipper
     where
