@@ -24,6 +24,7 @@
 
 module FluiDB.Schema.Workload
   (runWorkloadCpp
+  ,CppCode
   ,runWorkloadEvals
   ,runSingleQuery) where
 
@@ -294,7 +295,7 @@ runWorkloadCpp modGQnf qios = forEachQuery modGQnf qios $ \i query -> do
         ,inFn
         ,"-o"
         ,"-"]
-  -- ioCmd "c++" command
+  (stdout,stderr) <- ioCmd ioOps "c++" command
   ioLogMsg ioOps $ "NOT: " ++ unwords ("c++" : command)
   return (costTrigs,planFrontier trigs)
 

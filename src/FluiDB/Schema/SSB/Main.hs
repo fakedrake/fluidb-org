@@ -25,6 +25,8 @@ import           FluiDB.Schema.SSB.Values
 import           FluiDB.Schema.Workload
 import           FluiDB.Types
 import           FluiDB.Utils
+import           System.Directory
+import           System.Directory.Extra    (createDirectoryIfMissing)
 import           System.FilePath
 import           System.IO
 import           System.Process
@@ -52,11 +54,12 @@ shouldRender :: Verbosity -> Bool
 shouldRender Verbose = True
 shouldRender Quiet   = False
 
-runQuery :: Verbosity -> SSBQuery -> SSBGlobalSolveM [Transition T N]
-runQuery verbosity  query = do
+type Index = Int
+runQuery :: Verbosity -> Index -> SSBQuery -> SSBGlobalSolveM [Transition T N]
+runQuery verbosity index  query = do
   cppConf <- gets globalQueryCppConf
   aquery <- annotateQuerySSB cppConf query
-  (transitions,_cppCode)
+  (transitions,cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
       (intermPath, queryPath,pngPath,grPath) <- renderGraph query
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
@@ -65,7 +68,19 @@ runQuery verbosity  query = do
       liftIO $ putStrLn $ "The reperoire of intermediates: " ++ intermPath
   -- liftIO $ runCpp cppCode
   liftIO $ putStrLn $ ashow transitions
+  storeCpp index cppCode
   return transitions
+
+storeCpp :: Index -> CppCode -> SSBGlobalSolveM ()
+storeCpp i cpp = do
+  tmp <- getTemporaryDirectory
+  budgetM <- gets $  budget. getGlobalConf
+  let workloadDir = printf "workload-%s" $ maybe "unlimited" show budgetM
+  let dir = tmp </> "fluidb-data" </> workloadDir
+  createDirectoryIfMissing True dir
+  let path = dir </> printf "query%d.cpp" i
+  writeFile path  cpp
+  putStrLn $ "Wrote C++ code for query %d in: %s" i path
 
 softFail :: AShow a => a -> IO ()
 softFail a = putStrLn $ ashow a
@@ -80,7 +95,7 @@ singleQuery :: IO ()
 singleQuery =
   void
   $ ssbRunGlobalSolve
-  $ runQuery Verbose
+  $ runQuery 0 Verbose
   $ ssbParse
   $ unwords
     ["select c_city, s_city, d_year, sum(lo_revenue) as revenue"
@@ -106,7 +121,7 @@ actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
-      _transitions <- runQuery verbosity query
+      _transitions <- runQuery verbosity qi query
       pgs <- globalizePlanT getDataSize
       lift2 $ putStrLn $ "Pages used: " ++ show pgs
 
