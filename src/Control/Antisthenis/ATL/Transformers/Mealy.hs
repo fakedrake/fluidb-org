@@ -253,6 +253,7 @@ squashMealy m = MealyArrow $ fromKleisli $ \a -> do
   (a',MealyArrow m') <- m a
   toKleisli m' a'
 
+#if 0
 test :: [Int]
 test = runIdentity $ mealyScan (mkMealy go) [1..10] where
   go :: Int -> MB Int Int Identity Void
@@ -261,3 +262,4 @@ test = runIdentity $ mealyScan (mkMealy go) [1..10] where
     yieldMealy (arr  (\x -> x + 1) :: MealyArrow (Kleisli Identity) Int Int) i'
     yieldMB 50
     finishMB 1000
+#endif

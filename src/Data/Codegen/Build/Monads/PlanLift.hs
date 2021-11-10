@@ -48,7 +48,6 @@ import           Data.Cluster.Propagators
 import qualified Data.List.NonEmpty                    as NEL
 import           Data.Query.QuerySchema.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 
 -- | Lifts the plan monad to graph builder copying in the plan
 -- computation any relevant information from the graph builder.

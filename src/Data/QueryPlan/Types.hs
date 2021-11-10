@@ -60,7 +60,6 @@ module Data.QueryPlan.Types
   ,mplusPlanT) where
 
 
-import           Control.Antisthenis.Bool
 import           Control.Antisthenis.Sum
 import           Control.Antisthenis.Types
 import           Control.Applicative
@@ -91,6 +90,7 @@ import           Data.Utils.Functors
 import           Data.Utils.HCntT
 -- import           Data.Utils.HContT
 import           Data.Utils.Hashable
+import           Data.Utils.Heaps
 import           Data.Utils.ListT
 import           Data.Utils.MinElem
 import           GHC.Generics                    (Generic)
@@ -153,7 +153,7 @@ type IsMatable = Bool
 type NodeProc t n w = ArrProc w (PlanT t n Identity)
 type CostProc t n = NodeProc t n (CostParams CostTag n)
 type HistProc t n = NodeProc t n (CostParams HistTag n)
-type MatProc t n = NodeProc t n (BoolTag Or (PlanParams CostTag n))
+type MatProc t n = NodeProc t n (MatParams n)
 data GCState t n =
   GCState
   { frontier          :: NodeSet n

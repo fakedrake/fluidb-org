@@ -41,7 +41,13 @@ pastCosts extraMat = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 3 qs
-  lift $ getCostPlan @HistTag Proxy extraMat (CapVal maxCap) q
+  res <- lift $ getPlanBndR @HistTag Proxy extraMat (CapVal maxCap) q
+  case res of
+    BndRes (Sum (Just r)) -> return $ Just r
+    BndRes (Sum Nothing) -> return $ Just zero
+    BndBnd _bnd -> return Nothing
+    BndErr e ->
+      error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
 
 maxCap :: HistCap Cost
 maxCap =

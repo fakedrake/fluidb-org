@@ -20,6 +20,7 @@ module Control.Antisthenis.AssocContainer
   (AssocContainer(..)
   ,simpleAssocPop
   ,simpleAssocPopNEL
+  ,NonEmptyF(..)
   ,SimpleAssoc(..)) where
 
 import           Control.Monad.Identity
@@ -27,6 +28,7 @@ import           Data.Bifunctor
 import           Data.List.NonEmpty     as NEL
 import           Data.Utils.AShow
 import           Data.Utils.Functors
+import           Data.Utils.Heaps
 import           GHC.Generics
 
 class (Functor f,Foldable f) => AssocContainer f where
@@ -44,6 +46,18 @@ class (Functor f,Foldable f) => AssocContainer f where
   acNonEmpty :: f a -> Maybe (NonEmptyAC f a)
   acUnlift :: NonEmptyAC f a -> f a
 
+newtype NonEmptyF f a = NonEmptyF { runNonEmptyF :: f a }
+  deriving (Functor,Foldable)
+instance Ord k => AssocContainer (CHeap k) where
+  type KeyAC (CHeap k) = k
+  type NonEmptyAC (CHeap k) =
+    NonEmptyF (CHeap k)
+  acInsert k v c = NonEmptyF $ chInsert k v c
+  acEmpty = mempty
+  acNonEmpty c = case chMax c of
+    Nothing -> Nothing
+    Just _  -> Just $ NonEmptyF c
+  acUnlift (NonEmptyF c) = c
 
 -- | An AssocContainer that has a nonempty version that has zero key
 -- at the head if there is one.

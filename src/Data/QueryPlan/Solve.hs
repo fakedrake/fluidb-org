@@ -17,7 +17,7 @@
 {-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Data.QueryPlan.Solve
-  (setNodeMaterialized) where
+  (setNodeMaterialized,planSanityCheck,matNeighbors,reportMatNodes) where
 
 import           Control.Antisthenis.Types
 import           Control.Monad.Cont
@@ -145,7 +145,13 @@ haltPlanCost
 haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
   frefs <- gets $ toNodeList . frontier
   (costs,_extraNodes) <- runWriterT $ forM frefs $ \ref -> do
-    cost <- lift $ getCostPlan @CostTag Proxy mempty ForceResult ref
+    cost <- lift $ getPlanBndR @CostTag Proxy mempty ForceResult ref
+    -- case res of
+    --   BndRes (Sum (Just r)) -> return $ Just r
+    --   BndRes (Sum Nothing) -> return $ Just zero
+    --   BndBnd _bnd -> return Nothing
+    --   BndErr e ->
+    --     error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
     case cost of
       Nothing -> return zero
       Just c -> do
@@ -471,7 +477,7 @@ safeDelInOrder
   -> Cost
   -> [NodeRef n]
   -> PlanT t n m PageNum
-safeDelInOrder requiredPages hc nsOrd =
+safeDelInOrder requiredPages _hc nsOrd =
   wrapTrM ("safeDelInOrder " ++ show nsOrd) $ delRefs 0 [] nsOrd
   where
     delRefs :: PageNum -> [NodeRef n] -> [NodeRef n] -> PlanT t n m PageNum

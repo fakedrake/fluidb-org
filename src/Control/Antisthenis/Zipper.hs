@@ -43,7 +43,6 @@ import           Data.Foldable
 import           Data.Maybe
 import           Data.Utils.AShow
 import           Data.Utils.Const
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.Unsafe
@@ -355,6 +354,8 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
                              ,zsResetLoop = False
                             }
                   zNext zs'' gconf
+{-# INLINABLE mkProcId#-}
+-- we want to be able to specialize this
 
 runMech :: ArrowFunctor c => MealyArrow c a b -> a -> ArrFunctor c b
 runMech (MealyArrow c) ini = snd <$> toKleisli c ini

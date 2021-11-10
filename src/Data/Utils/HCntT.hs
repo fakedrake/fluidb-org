@@ -7,14 +7,7 @@
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE UndecidableInstances      #-}
 {-# OPTIONS_GHC -O2 -fno-prof-count-entries -fno-prof-auto #-}
-module Data.Utils.HCntT
-  (HCntT
-  ,(<//>)
-  ,dissolve
-  ,CHeap
-  ,LHeap
-  ,IsHeap(..)
-  ,MonadHalt(..)) where
+module Data.Utils.HCntT (HCntT,(<//>),dissolve,MonadHalt(..)) where
 
 import           Control.Applicative
 import           Control.Monad.Cont
@@ -29,120 +22,13 @@ import qualified Data.List.NonEmpty   as NEL
 import           Data.Proxy
 import           Data.Utils.Default
 import           Data.Utils.Functors
+import           Data.Utils.Heaps
 import           Data.Utils.ListT
 import           Data.Utils.MinElem
 import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
 
-
--- | A stable heap: items with the same key are returned in the order
--- they were inserted. The HeapKey mempty is less than all other
--- heapkeys.
-class (forall v . Monoid (h v),Functor h,Ord (HeapKey h))
-  => IsHeap h where
-  type HeapKey h :: *
-
-  popHeap :: h v -> Maybe ((HeapKey h,v),h v)
-  singletonHeap :: HeapKey h -> v -> h v
-  maxKeyHeap :: h v -> Maybe (HeapKey h)
-
-data CHeap k a = CHeap { chHeap :: H.Heap (H.Entry k a),chMax :: Maybe k }
-data LHeap k a = LHeap { lhHeap :: [(k,a)],lhMax :: Maybe k } deriving Functor
-
-instance Ord k =>  Semigroup (LHeap k a) where
-  h <> h' =
-    LHeap { lhHeap = lhHeap h <> lhHeap h',lhMax = case (lhMax h,lhMax h) of
-      (Nothing,Nothing) -> Nothing
-      (Just a,Nothing)  -> Just a
-      (Nothing,Just a)  -> Just a
-      (Just a,Just a')  -> Just $ max a a' }
-instance Ord k =>  Monoid (LHeap k a) where
-  mempty = LHeap { lhHeap = mempty,lhMax = Nothing }
-
-instance Ord k => IsHeap (LHeap k) where
-  type HeapKey (LHeap k) = k
-  popHeap LHeap {..} = do
-    ((k,v),h) <- viewMinList Nothing [] lhHeap
-    let m = if null h then Nothing else lhMax
-    return ((k,v),LHeap { lhMax = m,lhHeap = h })
-    where
-      viewMinList v prev [] = (,prev) <$> v
-      viewMinList Nothing prev (x:xs) =
-        viewMinList (Just x) prev xs
-      viewMinList p@(Just p'@(m,_)) prev (p0@(m0,_):xs) =
-        if m0 < m then viewMinList (Just p0) (p' : prev) xs
-        else viewMinList p (p0 : prev) xs
-  singletonHeap k v = LHeap { lhMax = Just k,lhHeap = [(k,v)] }
-  maxKeyHeap = lhMax
-
-
-instance Ord k => Semigroup (CHeap k a) where
-  ch <> ch' =
-    CHeap
-    { chHeap = chHeap ch <> chHeap ch',chMax = case (chMax ch,chMax ch) of
-      (Nothing,Nothing) -> Nothing
-      (Just a,Nothing)  -> Just a
-      (Nothing,Just a)  -> Just a
-      (Just a,Just a')  -> Just $ max a a' }
-instance Ord k =>  Monoid (CHeap k a) where
-  mempty = CHeap { chHeap = mempty,chMax = Nothing }
-
-instance Ord k => Functor (CHeap k) where
-  fmap f ch =
-    CHeap { chHeap = H.mapMonotonic (fmap f) $ chHeap ch,chMax = chMax ch }
-
-instance Ord k => IsHeap (CHeap k) where
-  type HeapKey (CHeap k) = k
-  popHeap CHeap {..} = do
-    (H.Entry k v,h) <- H.viewMin chHeap
-    let m = if null h then Nothing else chMax
-    return ((k,v),CHeap { chMax = m,chHeap = h })
-  singletonHeap k v =
-    CHeap { chMax = Just k,chHeap = H.singleton $ H.Entry k v }
-  maxKeyHeap = chMax
-
--- | The heap priority. This is mostly to make the typechecker happy
--- when the ambiguity stemming from the type family HeapKey confuses
--- GHC.
-newtype HPrio h = HPrio { getHPrio :: HeapKey h }
-
-newtype IntMMap a = IntMMap { unIntMMap :: IM.IntMap (NEL.NonEmpty a) }
-  deriving (Show,Functor,Foldable)
-
-instance Semigroup (IntMMap a) where
-  IntMMap a <> IntMMap b = IntMMap $ IM.unionWith (<>) a b
-instance Monoid (IntMMap a) where
-  mempty = IntMMap mempty
-
-newtype NonNeg a = NonNeg { getNonNeg :: a }
-  deriving (Show,Eq,Ord)
-instance (Ord a,Zero a) =>  Zero (NonNeg a) where
-  zero = NonNeg zero
-instance Num a => Semigroup (NonNeg a) where
-  NonNeg a <> NonNeg a' = NonNeg $ a + a'
-
-instance (Ord a,Zero a) => MinElem (NonNeg a) where
-  minElem = zero
-
-instance IsHeap IntMMap where
-  type HeapKey IntMMap = NonNeg IM.Key
-  popHeap (IntMMap m) = do
-    ((k, h NEL.:| xs0),rest) <- IM.minViewWithKey m
-    return ((NonNeg k,h), IntMMap $ case NEL.nonEmpty xs0 of
-      Nothing -> rest
-      Just xs -> IM.insert k xs rest)
-  singletonHeap k v = IntMMap $ IM.singleton (getNonNeg k) (pure v)
-  maxKeyHeap (IntMMap im) = NonNeg . fst . fst <$> IM.maxViewWithKey im
-
--- | A list is a heap where they key is a unit.
-instance IsHeap [] where
-  type HeapKey [] = ()
-  popHeap []     = Nothing
-  popHeap (v:vs) = Just (((),v),vs)
-  singletonHeap () = pure
-  maxKeyHeap [] = Nothing
-  maxKeyHeap _  = Just ()
 
 -- | An intermediate layer of the continuation. Returning empty
 -- results should be passing. It contains a heap of intermediate
@@ -156,8 +42,6 @@ instance IsHeap [] where
 -- should be ordered. While it is more commonsensical to use BFS,
 -- especially since most problems have fairly wide branching.
 newtype HRes h m r = HRes (Tup2 (h (Brnch h r m)),[r])
-
-
 
 -- | A computation branch is simply a computation that evalautes to
 -- HRes. The computation must be able to interact with CompState as
@@ -561,7 +445,7 @@ chooseFile (f:fs) = openFile f <//> (closeFile f >> chooseFile fs)
 -- | Try opeining a file, if the file isnt there move on the next one.
 -- Once we leave the next.
 test :: IO [String]
-test = runListT $ dissolve @IntMMap $ do
+test = runListT $ dissolve @IHeap $ do
   txt <- chooseFile ["nonexistent","f2"]
   return ("hello:" ++ txt) <|> return ("bye:" ++ txt)
 

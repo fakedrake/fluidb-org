@@ -68,6 +68,7 @@ import           Data.Utils.Functors
 import           Data.Utils.HCntT
 -- import           Data.Utils.HContT
 import           Data.Utils.Hashable
+import           Data.Utils.Heaps
 import           Data.Utils.ListT
 import           Data.Utils.MTL
 import           Data.Utils.Unsafe
@@ -295,7 +296,7 @@ runWorkloadCpp modGQnf qios = forEachQuery modGQnf qios $ \i query -> do
         ,inFn
         ,"-o"
         ,"-"]
-  (stdout,stderr) <- ioCmd ioOps "c++" command
+  (_stdout,_stderr) <- ioCmd ioOps "c++" command
   ioLogMsg ioOps $ "NOT: " ++ unwords ("c++" : command)
   return (costTrigs,planFrontier trigs)
 

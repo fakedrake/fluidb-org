@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Data.QueryPlan.AntisthenisTypes
@@ -10,8 +11,11 @@ module Data.QueryPlan.AntisthenisTypes
   ,PlanEpoch(..)
   ,PlanCoEpoch(..)
   ,IsPlanParams
+  ,IsPlanCostParams
+  ,MatParams
   ,CostParams) where
 
+import           Control.Antisthenis.Bool
 import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Sum
@@ -30,11 +34,26 @@ import           GHC.Generics
 -- | Tags to disambiguate the properties of historical and cost processes.
 data HistTag
 data CostTag
+data MatTag
+type MatParams n = BoolTag Or (PlanParams MatTag n)
 type CostParams tag n = SumTag (PlanParams tag n)
 data PlanParams tag n
 type family MetaTag t :: *
-type instance MetaTag (SumTag t) = t
-type instance MetaTag (MinTag t) = t
+type instance MetaTag (SumTag p) = p
+type instance MetaTag (MinTag p) = p
+type instance MetaTag (BoolTag op p) = p
+
+instance ExtParams (MatParams n) (PlanParams MatTag n) where
+  type MechVal (PlanParams MatTag n) = BoolV Or
+  type ExtError (PlanParams MatTag n) =
+    IndexErr (NodeRef n)
+  type ExtEpoch (PlanParams MatTag n) = PlanEpoch n
+  type ExtCoEpoch (PlanParams MatTag n) = PlanCoEpoch n
+  type ExtCap (PlanParams MatTag n) =
+    ZCap (MatParams n)
+  extExceedsCap Proxy cap bnd =
+    exceedsCap @(MatParams n) Proxy cap bnd
+  extCombEpochs _ = planCombEpochs
 
 instance ZBnd w ~ ExtCap (PlanParams CostTag n)
   => ExtParams w (PlanParams CostTag n) where
@@ -47,6 +66,7 @@ instance ZBnd w ~ ExtCap (PlanParams CostTag n)
     Min (MechVal (PlanParams CostTag n))
   extExceedsCap Proxy cap bnd = cap < bnd
   extCombEpochs _ = planCombEpochs
+
 maxMatTrail :: Int
 maxMatTrail = 4
 instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
@@ -66,22 +86,29 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   extCombEpochs _ = planCombEpochs
 
 --  | All the constraints required to run both min and sum
+type IsPlanCostParams tag n =
+  (IsPlanParams tag n
+   -- For updating the cap
+  ,HasLens (ExtCap (MetaTag tag)) (Min (MechVal (MetaTag tag)))
+  ,ExtParams (MinTag (MetaTag tag)) (MetaTag tag)
+  ,ExtParams (SumTag (MetaTag tag)) (MetaTag tag))
 type IsPlanParams tag n =
   (ExtError (MetaTag tag) ~ IndexErr
      (NodeRef n)
   ,ExtEpoch (MetaTag tag) ~ PlanEpoch n
   ,ExtCoEpoch (MetaTag tag) ~ PlanCoEpoch n
+
+  ,ZEpoch tag ~ PlanEpoch n
+  ,ZCoEpoch tag ~ PlanCoEpoch n
+  ,ZErr tag ~ IndexErr (NodeRef n)
+
   ,AShowV (MechVal (MetaTag tag))
   ,Semigroup (MechVal (MetaTag tag))
   ,Subtr (MechVal (MetaTag tag))
   ,Ord (MechVal (MetaTag tag))
   ,Zero (MechVal (MetaTag tag))
   ,Zero (ExtCap (MetaTag tag))
-  ,AShowV (ExtCap (MetaTag tag))
-   -- For updating the cap
-  ,HasLens (ExtCap (MetaTag tag)) (Min (MechVal (MetaTag tag)))
-  ,ExtParams (MinTag (MetaTag tag)) (MetaTag tag)
-  ,ExtParams (SumTag (MetaTag tag)) (MetaTag tag))
+  ,AShowV (ExtCap (MetaTag tag)))
 
 -- | When the coepoch is older than the epoch we must reset and get
 -- a fresh value for the process. Otherwise the progress made so far

@@ -31,7 +31,6 @@ module Control.Antisthenis.Types
   ,zipperShape
   ,mapCursor
   ,RstCmd
-  ,Err
   ,NoArgError(..)
   ,ExtParams(..)
   ,Zipper'(..)
@@ -98,7 +97,6 @@ data IndexErr i
   deriving Generic
 instance (AShow i,AShow (OptSet i))
   => AShow (IndexErr i)
-type Err = IndexErr Int
 
 -- | Provide a meaningful reset command.
 newtype ResetCmd a = DoReset a deriving Functor
@@ -381,8 +379,7 @@ ashowRes ashow'' = ashow . \case
 
 mapCursor :: (forall a . f a -> g a) -> Zipper' w f p r -> Zipper' w g p r
 mapCursor f Zipper {..} =
-  Zipper
-  { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
+  Zipper { zBgState = zBgState,zCursor = f zCursor,zRes = zRes,zId = zId }
 
 trZ :: (Monad m,AShow a)
     => String

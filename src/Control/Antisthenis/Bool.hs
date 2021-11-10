@@ -10,10 +10,12 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE RoleAnnotations       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.Bool
   (interpretBExp
+  ,BoolV
   ,BoolOp(..)
   ,GBool(..)
   ,And
@@ -32,20 +34,19 @@ import           Control.Antisthenis.Types
 import           Control.Antisthenis.VarMap
 import           Control.Antisthenis.Zipper
 import           Control.Antisthenis.ZipperId
-import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Utils.Free
 import           Data.Coerce
-import           Data.Foldable
 import qualified Data.IntMap                                as IM
 import qualified Data.IntSet                                as IS
-import qualified Data.List.NonEmpty                         as NEL
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
 import           Data.Utils.Default
+import           Data.Utils.Heaps
+import           Data.Utils.Unsafe
 import           GHC.Generics
 
 -- The bound here is a pair of values which are monotonically
@@ -110,6 +111,7 @@ instance Semigroup a => Semigroup (GBool op a) where
 instance Monoid a => Monoid (GBool op a) where
   mempty = GBool mempty mempty
 
+-- | Bounds are
 instance Ord (BoolBound op) where
   compare (GBool a b) (GBool a' b') =
     compare (min a b) (min a' b')
@@ -133,7 +135,7 @@ zBound :: BoolOp op
        => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
        -> Maybe (BoolBound op)
 zBound z = do
-  absorb <- assocMinCost $ bgsIts bgs
+  absorb <- fmap toGAbsorbing $ chMinKey $ bgsIts bgs
   return
     $ toGBool
     $ GAbsorbing
@@ -176,6 +178,17 @@ instance BoolOp And where
     GAbsorbing {..} = GBool { gbTrue = gaNonAbsorbing,gbFalse = gaAbsorbing }
   {-# INLINE toGBool #-}
 
+
+-- assocMinCost
+--   :: BoolOp op
+--   => CountingAssoc Maybe (BoolBound op) v
+--   -> Maybe (GAbsorbing Cost)
+-- assocMinCost assoc = case toGAbsorbing . fst <$> l of
+--   []   -> Nothing
+--   x:xs -> Just $ foldl' (<>) x xs
+--   where
+--     SimpleAssoc l = assocData assoc
+
 -- | Combine a local result with a partial resut. Bounded result would
 -- never.
 combBoolBndR
@@ -194,64 +207,19 @@ combBoolBndR newRes oldRes = case (newRes,oldRes) of
   (BndErr e,Left _) -> Left e
   (BndBnd _,x) -> x
 
-data CountingAssoc f g a b =
-  CountingAssoc
-  { assocMinKey :: g a
-   ,assocSize   :: !Int
-   ,assocData   :: SimpleAssoc f a b
-  }
-  deriving (Functor,Foldable,Generic)
-
-instance (AShow (f (a,b)),AShow (g a))
-  => AShow (CountingAssoc f g a b)
-
-assocMinCost
-  :: BoolOp op
-  => CountingAssoc [] Maybe (BoolBound op) v
-  -> Maybe (GAbsorbing Cost)
-assocMinCost assoc =
-  let SimpleAssoc l = assocData assoc in case toGAbsorbing . fst <$> l of
-    []   -> Nothing
-    x:xs -> Just $ foldl' (<>) x xs
-
-instance Ord a => AssocContainer (CountingAssoc [] Maybe a) where
-  type KeyAC (CountingAssoc [] Maybe a) = a
-  type NonEmptyAC (CountingAssoc [] Maybe a) =
-    CountingAssoc NEL.NonEmpty Identity a
-  acInsert k v cass =
-    CountingAssoc
-    { assocMinKey = Identity $ maybe k (min k) $ assocMinKey cass
-     ,assocSize = assocSize cass + 1
-     ,assocData = acInsert k v $ assocData cass
-    }
-  acEmpty =
-    CountingAssoc { assocMinKey = Nothing,assocSize = 0,assocData = acEmpty }
-  acNonEmpty cass = do
-    minKey <- assocMinKey cass
-    dat <- acNonEmpty $ assocData cass
-    return
-      CountingAssoc
-      { assocMinKey = Identity minKey
-       ,assocSize = assocSize cass
-       ,assocData = dat
-      }
-  acUnlift cass =
-    CountingAssoc
-    { assocMinKey = Just $ runIdentity $ assocMinKey cass
-     ,assocSize = assocSize cass
-     ,assocData = acUnlift $ assocData cass
-    }
-
-type BoolExtParams op p = ExtParams (BoolTag op p) p
 data BoolTag op p
-instance BndRParams (BoolTag op p) where
-  type ZErr (BoolTag op p) = Err
+instance ExtParams (BoolTag op p) p => BndRParams (BoolTag op p) where
+  type ZErr (BoolTag op p) = ExtError p
   type ZBnd (BoolTag op p) = BoolBound op
   type ZRes (BoolTag op p) = BoolV op
-  bndLt = undefined
-  exceedsCap = undefined
+  -- | Select the best case of the optimistic of two. We declare a
+  -- lower (better) bound to be the most optimistic of the two. But
+  -- when comparing with the cap the logic is different
+  bndLt Proxy b1 b2 = b1 < b2
+  exceedsCap Proxy cap bnd =
+    gbTrue cap < gbTrue bnd || gbFalse cap < gbFalse cap
 
-instance (AShow (ExtCoEpoch p),BoolExtParams op p,BoolOp op)
+instance (AShow (ExtCoEpoch p),ExtParams (BoolTag op p) p,BoolOp op)
   => ZipperParams (BoolTag op p) where
   type ZEpoch (BoolTag op p) = ExtEpoch p
   type ZCoEpoch (BoolTag op p) = ExtCoEpoch p
@@ -259,7 +227,7 @@ instance (AShow (ExtCoEpoch p),BoolExtParams op p,BoolOp op)
   type ZPartialRes (BoolTag op p) =
     Maybe (Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p)))
   type ZItAssoc (BoolTag op p) =
-    CountingAssoc [] Maybe (BoolBound op)
+    CHeap (ZBnd (BoolTag op p))
   zEvolutionControl = boolEvolutionControl
   zEvolutionStrategy = boolEvolutionStrategy
   putRes newBnd (partialRes,newZipper) =
@@ -278,7 +246,7 @@ instance (AShow (ExtCoEpoch p),BoolExtParams op p,BoolOp op)
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
     $ conf { confCap = maybe (confCap conf) CapVal $ do
-      bnd <- assocMinKey $ bgsIts $ zBgState z
+      bnd <- chMinKey $ bgsIts $ zBgState z
       gcap <- case confCap conf of
         CapVal cap -> Just cap
         _          -> Nothing
@@ -291,7 +259,7 @@ instance (AShow (ExtCoEpoch p),BoolExtParams op p,BoolOp op)
 --   -> FreeT
 --     (ItInit
 --        (ExZipper (BoolTag op p))
---        (CountingAssoc [] Maybe (ZBnd (BoolTag op p))))
+--        (CountingAssoc Maybe (ZBnd (BoolTag op p))))
 --     m
 --     (x,BndR (BoolTag op p))
 --   -> m (x,BndR (BoolTag op p))
@@ -309,7 +277,8 @@ boolEvolutionStrategy = recur Nothing
       Free cmd -> case cmdItCoit cmd of
         CmdItInit _it ini -> recur (Just $ cmdReset cmd) ini
         CmdIt it -> recur (Just $ cmdReset cmd)
-          $ it (error "Unimpl: function to select the cheapest")
+          $ it
+          $ (\((k,v),h) -> (k,v,h)) . fromJustErr . popHeap . runNonEmptyF
         CmdInit ini -> recur (Just $ cmdReset cmd) ini
         CmdFinished (ExZipper z) -> return
           (rst
@@ -321,7 +290,7 @@ boolEvolutionStrategy = recur Nothing
 -- poperator. This decides when to stop working.
 boolEvolutionControl
   :: forall op m p .
-  (Ord (BoolBound op),BoolOp op)
+  (Ord (BoolBound op),BoolOp op,ExtParams (BoolTag op p) p)
   => GConf (BoolTag op p)
   -> Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
   -> Maybe (BndR (BoolTag op p))
@@ -331,7 +300,8 @@ boolEvolutionControl conf z = case confCap conf of
     Right x -> if zFinished z then Just $ BndRes x else Nothing
   CapVal cap -> do
     localBnd <- zBound z
-    if cap < localBnd then return $ BndBnd localBnd else Nothing
+    if bndLt @(BoolTag op p) Proxy cap localBnd
+      then return $ BndBnd localBnd else Nothing
 
 -- | The problem is that there is no w type in Conf w, just ZCap w so
 -- we need to translate Conf w into a functor of ZCap w. This can be
@@ -347,6 +317,7 @@ notBool = rmap $ \case
     flipB GBool {..} = GBool { gbTrue = gbFalse,gbFalse = gbTrue }
 
 data AnyOp
+
 -- | Test
 data BExp
   = BExp :/\: BExp
@@ -364,8 +335,9 @@ interpretBExp
   ,Eq (ZCoEpoch (BoolTag AnyOp p))
   ,AShow (ExtCoEpoch p)
   ,AShow (ExtEpoch p)
-  ,BoolExtParams Or p
-  ,BoolExtParams And p)
+  ,ExtError p ~ IndexErr IS.Key
+  ,ExtParams (BoolTag Or p) p
+  ,ExtParams (BoolTag And p) p)
   => BExp
   -> ArrProc (BoolTag AnyOp p) m
 interpretBExp = recur
@@ -393,9 +365,6 @@ interpretBExp = recur
     convOr = convBool
     convAnd :: ArrProc (BoolTag And p) m -> ArrProc (BoolTag op p) m
     convAnd = convBool
-
-
-
 
 -- TOWRITE:
 -- AND and OR are both absorbing/identity groups

@@ -34,6 +34,7 @@ import           Control.Utils.Free
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy     as HM
 import qualified Data.HashSet          as HS
+import qualified Data.Heap             as H
 import qualified Data.IntMap           as IM
 import qualified Data.IntSet           as IS
 import qualified Data.List.NonEmpty    as NEL
@@ -172,6 +173,10 @@ instance (AShowList (VecType a) a, AShow a) => AShow (HS.HashSet a) where
   ashow' = sexp "HS.fromList" . return . ashow' . HS.toList
 instance (AShowList (VecType a) a, AShow a) => AShow (DS.Set a) where
   ashow' = sexp "DS.fromList" . return . ashow' . DS.toList
+instance AShowV a => AShow (H.Heap a) where
+  ashow' = sexp "H.fromList" . return . ashow' . toList
+instance (AShow a,AShow b) => AShow (H.Entry a b) where
+  ashow' (H.Entry a b) = sexp "H.Entry" [ashow' a,ashow' b]
 instance AShow a => AShow (Sum a)
 instance AShow b => AShow (CoConst a b)
 instance AShow a => AShow (Tup2 a)
