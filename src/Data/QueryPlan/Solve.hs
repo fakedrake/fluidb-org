@@ -36,6 +36,7 @@ import           Data.QueryPlan.MetaOpCache
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Transitions
+import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.ListT
 import           Data.Utils.Tup
