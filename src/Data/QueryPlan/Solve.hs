@@ -101,10 +101,15 @@ haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
     cost <- getPlanBndR @(CostParams CostTag n) Proxy ForceResult ref
     case cost of
       BndRes (Sum (Just r)) -> return $ pcCost r
-      BndRes (Sum Nothing) -> throwPlan $ "Infinite cost: " ++ ashow  ref
+      BndRes (Sum Nothing) -> throwPlan $ "Infinite cost: " ++ ashow ref
       BndBnd _bnd -> throwPlan "Got bound instead of cost"
-      BndErr e -> throwPlan
-        $ "getPlanBndR(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
+      BndErr e -> do
+        matSt <- getNodeState ref
+        throwPlan
+          $ "getPlanBndR("
+          ++ ashow (ref,matSt)
+          ++ "):antisthenis error: "
+          ++ ashow e
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   hc <- maybe histCosts return histCostCached
   trM $ printf "Halt%s: %s" (show frefs) $ show concreteCost
@@ -449,9 +454,12 @@ safeDelInOrder requiredPages _hc nsOrd =
       return 0
 
 isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
-isDeletable ref = getNodeState ref >>= \case
-  Concrete _ Mat -> return False
-  _              -> withNoMat ref $ Mat.isMaterializable ref
+isDeletable ref = do
+  isd <- getNodeState ref >>= \case
+    Concrete _ Mat -> return False
+    _              -> withNoMat ref $ Mat.isMaterializable ref
+  trM $ "isDeletable" <: (ref,isd)
+  return isd
 
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a
 withNoMat ref m = do

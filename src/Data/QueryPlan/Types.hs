@@ -250,9 +250,11 @@ data PlanningError t n = LookupFail String (NodeRef n) [NodeRef n]
   deriving (Eq, Show,Generic)
 instance AShow (PlanningError t n)
 instance IsString (PlanningError t n) where fromString = PlanningErrorMsg
-throwPlan :: (MonadError (PlanningError t n) m,HasCallStack) => String -> m a
-throwPlan msg = throwError $ fromString
-  $ prettyCallStack callStack ++ "\n--\n" ++ msg
+throwPlan :: (Monad m,HasCallStack) => String -> PlanT t n m a
+throwPlan msg = do
+  trM $ "FATAL: " ++ msg
+  throwError $ fromString
+    $ prettyCallStack callStack ++ "\n--\n" ++ msg
 class Monad m => BotMonad m  where
   -- | If the branch with the left succeeds don't proceed. If it fails
   -- proceed.
