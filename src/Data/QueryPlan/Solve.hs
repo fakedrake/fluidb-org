@@ -44,7 +44,8 @@ import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.Cert
 import           Data.QueryPlan.Comp
-import           Data.QueryPlan.Matable
+-- import           Data.QueryPlan.Matable
+import           Data.QueryPlan.Dependencies
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
