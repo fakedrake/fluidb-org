@@ -40,6 +40,7 @@ import           Data.QueryPlan.MetaOpCache
 import           Data.QueryPlan.Types
 import           Data.String
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.ListT
 
@@ -72,7 +73,9 @@ hoistEvalStateListT st runSt l = fst <$> hoistRunStateListT runSt st l
 --   Just _ -> return True
 --   _ -> isJust <$> headListT (getDependencies ref)
 isMaterializable :: forall t n m . Monad m => NodeRef n -> PlanT t n m Bool
-isMaterializable ref = isJust <$> headListT (getDependencies ref)
+isMaterializable ref =
+  wrapTrace ("isMaterializable" <: ref)
+  $ isJust <$> headListT (getDependencies ref)
 
 getAStar :: Monad m => NodeRef n -> PlanT t n m Double
 getAStar ref = fmap starToDouble  $ luMatCache ref >>= \case
