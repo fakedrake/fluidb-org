@@ -135,9 +135,14 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> do
     neigh
       <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
-    return $ if null neigh
-      then arrConst GBool { gbTrue = Exists False , gbFalse = Exists True }
-      else return
-           (conf,makeMatProc ref $ [getOrMakeMech <$> inps | (inps,_cost) <- neigh])
-  where
-    arrConst = arr . const
+    -- TODO: if the node is materialized const true, otherwise const
+    -- false. The coepochs are updated by the caller, particularly by
+    -- ifMaterialized. Since we got here here it means we are not
+    -- materialized.
+    return
+      $ (conf,)
+      $ if null neigh then arrConst
+        $ BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
+      else makeMatProc ref $ [getOrMakeMech <$> inps | (inps,_cost) <- neigh]
+    where
+      arrConst = arr . const
