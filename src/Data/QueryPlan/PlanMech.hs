@@ -117,8 +117,13 @@ instance PlanMech (PlanT t n Identity) (CostParams CostTag n) n where
   mcCompStackVal _ n = BndErr $ ErrCycleEphemeral n
 
 
+nodeStatePair :: Monad m => NodeRef n -> PlanT t n m (NodeState, Bool)
+nodeStatePair = fmap (\x -> (x,isMat x)) . getNodeState
 instance PlanMech (PlanT t n Identity) (MatParams n) n where
-  mcGetMech Proxy ref = gets $ refLU ref . matableMechMap
+  mcGetMech Proxy ref = do
+    x <- nodeStatePair ref
+    trM $ "Lu" <: x
+    gets $ refLU ref . matableMechMap
   mcPutMech Proxy ref m = modify $ \gsc ->
     gsc { matableMechMap = refInsert ref m $ matableMechMap gsc }
   mcIsMatProc Proxy _ref _proc = arr $ const $ BndRes $ BoolV True
@@ -129,7 +134,7 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref
-    neigh' <- traverse2 (fmap (\x -> (x,isMat x)) . getNodeState) neigh
+    neigh' <- traverse2 nodeStatePair neigh
     trM $ "Neighbors: " ++ show (ref,neigh')
     -- If the node is materialized const true, otherwise const
     -- false. The coepochs are updated by the caller, particularly by
