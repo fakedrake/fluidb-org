@@ -81,7 +81,7 @@ haltPlan matRef mop = do
 
 histCosts :: Monad m => PlanT t n m Cost
 histCosts = do
-  hcs :: [Maybe HCost] <- takeListT 1 pastCosts
+  hcs :: [Maybe HCost] <- takeListT 0 pastCosts
   -- Curate the consts that are too likely to be non-comp
   return $ mconcat $ mapMaybe (>>= toCost) hcs
   where
