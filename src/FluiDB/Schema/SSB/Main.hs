@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-deferred-type-errors #-}
-module FluiDB.Schema.SSB.Main (ssbMain) where<
+module FluiDB.Schema.SSB.Main (ssbMain) where
 
 import           Control.Monad.Except
 import           Control.Monad.Identity
@@ -33,7 +33,6 @@ import           System.IO
 import           System.IO.Unsafe
 import           System.Process
 import           System.Timeout
-import Data.Unique
 
 type AnnotQuery =
   Query (ShapeSym ExpTypeSym Table) (QueryShape ExpTypeSym Table,Table)

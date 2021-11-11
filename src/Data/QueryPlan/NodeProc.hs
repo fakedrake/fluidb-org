@@ -38,7 +38,6 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 
 -- | Check that a node is materialized and add mark it as such in the

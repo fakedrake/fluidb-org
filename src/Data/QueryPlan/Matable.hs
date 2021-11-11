@@ -14,5 +14,5 @@ isMaterializable ref = do
   res <- getPlanBndR @(MatParams n) Proxy ForceResult ref
   case res of
     BndErr _e -> throwPlan "Antisthenis should have figured errors are False."
-    BndRes r  -> return $ unExists $ gbTrue r
+    BndRes (BoolV r)  -> return r
     BndBnd _b -> throwPlan "Tried to force result but got bound"

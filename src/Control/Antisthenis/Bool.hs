@@ -14,7 +14,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.Bool
-  (BoolV
+  (BoolV(..)
   ,BoolOp(..)
   ,GBool(..)
   ,BoolCap
@@ -87,7 +87,8 @@ data GBool op v = GBool { gbTrue :: v,gbFalse :: v }
 instance AShow v => AShow  (GBool op v)
 type BoolCap op = GBool op (Maybe Cost)
 type BoolBound op = GBool op Cost
-type BoolV op = GBool op Exists
+newtype BoolV op = BoolV Bool deriving (Generic,Show,Eq)
+instance AShow (BoolV op)
 
 instance Semigroup (GAbsorbing Cost) where
   a <> b =
@@ -109,14 +110,6 @@ instance Ord (BoolBound op) where
 
 data Or
 data And
-
-ifelse :: a -> a -> Bool -> a
-ifelse t e p = if p then t else e
-
-data ElemType = AbsorbingElem | NormalElem
-elemType :: BoolOp op => GBool op Exists -> ElemType
-elemType =
-  ifelse AbsorbingElem NormalElem . unExists . gaAbsorbing . toGAbsorbing
 
 -- | Bet the bound of the current
 --
@@ -150,11 +143,19 @@ zFinished z = isAbsorb || emptyIniIt (zBgState z)
         NormalElem    -> False
       _ -> False
 
-class BoolOp op where
+data ElemType = AbsorbingElem | NormalElem
+class Semigroup (BoolV op) => BoolOp op where
   -- | Whether the Bool or error is trumped or trumps the result
   -- depends on the operation.
   toGAbsorbing :: GBool op v -> GAbsorbing v
   toGBool :: GAbsorbing v -> GBool op v
+  elemType :: BoolV op -> ElemType
+
+instance Semigroup (BoolV Or) where
+  BoolV a <> BoolV b = BoolV $ a || b
+
+instance Semigroup (BoolV And) where
+  BoolV a <> BoolV b = BoolV $ a && b
 
 instance BoolOp Or where
   toGAbsorbing
@@ -163,6 +164,8 @@ instance BoolOp Or where
   toGBool
     GAbsorbing {..} = GBool { gbFalse = gaNonAbsorbing,gbTrue = gaAbsorbing }
   {-# INLINE toGBool #-}
+  elemType (BoolV x) = if x then AbsorbingElem else NormalElem
+
 
 instance BoolOp And where
   toGAbsorbing
@@ -171,6 +174,7 @@ instance BoolOp And where
   toGBool
     GAbsorbing {..} = GBool { gbTrue = gaNonAbsorbing,gbFalse = gaAbsorbing }
   {-# INLINE toGBool #-}
+  elemType (BoolV x) = if x then  NormalElem else AbsorbingElem
 
 
 -- assocMinCost

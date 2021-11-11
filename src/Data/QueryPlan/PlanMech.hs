@@ -18,7 +18,6 @@ import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.MetaOp
-import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Functors
@@ -121,16 +120,11 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcGetMech Proxy ref = gets $ refLU ref . matableMechMap
   mcPutMech Proxy ref m = modify $ \gsc ->
     gsc { matableMechMap = refInsert ref m $ matableMechMap gsc }
-  mcMkCost = error "We dont' make costs for Bool (materializable) mech"
-  mcIsMatProc Proxy _ref _proc =
-    arr
-    $ const
-    $ BndRes
-    $ GBool { gbTrue = Exists True,gbFalse = Exists False }
+  mcIsMatProc Proxy _ref _proc = arr $ const $ BndRes $ BoolV True
   -- | The NodeProc system registers the cycle as noncomp in the
   -- coepoch.
-  mcCompStackVal _ _n =
-    BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
+  mcMkCost = error "We dont' make costs for Bool (materializable) mech"
+  mcCompStackVal _ _n = BndRes $ BoolV False
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref
@@ -141,8 +135,7 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
     -- materialized.
     return
       $ (conf,)
-      $ if null neigh then arrConst
-        $ BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
+      $ if null neigh then arrConst $ BndRes $ BoolV False
       else makeMatProc ref $ [getOrMakeMech <$> inps | inps <- neigh]
     where
       arrConst = arr . const

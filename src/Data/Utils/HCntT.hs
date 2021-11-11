@@ -16,16 +16,13 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer
-import qualified Data.Heap            as H
 import qualified Data.IntMap.Strict   as IM
-import qualified Data.List.NonEmpty   as NEL
 import           Data.Proxy
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.Heaps
 import           Data.Utils.ListT
 import           Data.Utils.MinElem
-import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
 
@@ -422,7 +419,7 @@ nested success failCase c = HCntT $ \fin -> go mempty $ unHCntT c fin
         Nothing          -> failCase
         Just ((k,b'),h') -> HRes (Tup2 (singletonHeap k $ go h' b') mempty,[])
 
-#if 1
+#if 0
 -- | Try to open a file. If it doesn't exist just fail. If it exists
 -- read the contents
 openFile :: (MinElem (HeapKey h),IsHeap h) => String -> HCntT h r IO String

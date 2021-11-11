@@ -27,7 +27,6 @@ module Data.QueryPlan.Dependencies
 import           Control.Applicative
 import           Control.Monad.Except
 import           Control.Monad.State
-import           Data.Functor.Identity
 import qualified Data.HashMap.Strict        as HM
 import           Data.List.Extra
 import qualified Data.List.NonEmpty         as NEL
