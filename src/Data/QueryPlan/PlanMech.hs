@@ -135,8 +135,9 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> do
     neigh
       <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
-    lift $ when (null neigh) $ do
-      st <- getNodeState ref
-      unless (isMat st ) $ error $ "oops:" ++ show (st,ref)
-    return
-      (conf,makeMatProc ref $ [getOrMakeMech <$> inps | (inps,_cost) <- neigh])
+    return $ if null neigh
+      then arrConst GBool { gbTrue = Exists False , gbFalse = Exists True }
+      else return
+           (conf,makeMatProc ref $ [getOrMakeMech <$> inps | (inps,_cost) <- neigh])
+  where
+    arrConst = arr . const
