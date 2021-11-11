@@ -135,8 +135,8 @@ planCombEpochs coepoch epoch a =
 -- Node procs
 -- | NodeProc t n ()
 newtype Predicates n = Predicates { pNonComputables :: NodeSet n }
-instance AShow (Predicates n)
   deriving (Eq,Show,Generic)
+instance AShow (Predicates n)
 instance Semigroup (Predicates n) where
   p <> p' =
     Predicates { pNonComputables = pNonComputables p <> pNonComputables p' }
