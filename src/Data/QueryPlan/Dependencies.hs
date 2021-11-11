@@ -198,7 +198,7 @@ withMemoized isFin ref trail  m = if isFin ref
   then return (nsSingleton ref,mempty)
   else notFinal
   where
-    notFinal = refLU ref <$> get >>= \case
+    notFinal = gets (refLU ref) >>= \case
       Just Nothing              -> mzero
       Just (Just (frnt,trails)) -> isCached frnt trails
       Nothing                   -> notCached
