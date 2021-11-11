@@ -236,9 +236,8 @@ censorPredicate ref c =
       _ -> (unmarkNonComputable ref coepoch,(nxt,ret))
 
 
--- XXX: Cycles make the historical data very slow but they can't be
--- completely ignored because there is no way to tell if a historical
--- node is due to the liberal use.
+-- | Cap is used by History to make sure we dont go all the way down
+-- the rabbit hole.
 getPlanBndR
   :: forall w t n m .
   (PlanMech (PlanT t n Identity) w n
@@ -247,9 +246,10 @@ getPlanBndR
   ,IsPlanParams w n
   ,Monad m)
   => Proxy w
+  -> Cap (ExtCap (MetaTag w))
   -> NodeRef n
   -> PlanT t n m (BndR w)
-getPlanBndR Proxy  ref = do
+getPlanBndR Proxy cap ref = do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   st0 <- get
   conf <- ask
@@ -257,7 +257,7 @@ getPlanBndR Proxy  ref = do
     $ runExceptT
     $ (`runReaderT` conf)
     $ (`runStateT` st0)
-    $ getBndR @w Proxy ForceResult states ref of
+    $ getBndR @w Proxy cap states ref of
       Left e       -> throwError e
       Right (a,st) -> put st >> return a
 

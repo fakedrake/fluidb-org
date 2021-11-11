@@ -11,7 +11,7 @@ import           Data.QueryPlan.Types
 
 isMaterializable :: forall t n m . Monad m => NodeRef n -> PlanT t n m Bool
 isMaterializable ref = do
-  res <- getPlanBndR @(MatParams n) Proxy ref
+  res <- getPlanBndR @(MatParams n) Proxy ForceResult ref
   case res of
     BndErr _e -> throwPlan "Antisthenis should have figured errors are False."
     BndRes r  -> return $ unExists $ gbTrue r

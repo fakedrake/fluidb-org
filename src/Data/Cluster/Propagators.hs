@@ -65,7 +65,6 @@ import           Data.Utils.Hashable
 import           Data.Utils.MTL
 import           Data.Utils.Tup
 import           Data.Utils.Types
-import           Data.Utils.Unsafe
 
 -- | Scaling
 (.*) :: Int -> Double -> Int
