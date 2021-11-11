@@ -34,7 +34,6 @@ import           Control.Applicative
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
 import           Data.Bipartite
 import           Data.Bitraversable
@@ -58,13 +57,11 @@ import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
-import           Data.Utils.ListT
 import           Data.Utils.MTL
 import           Data.Utils.Tup
 import           Data.Utils.Types

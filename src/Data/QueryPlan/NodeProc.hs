@@ -151,14 +151,11 @@ satisfyComputability = go mempty
             let conf' = foldl' (flip markComputable) conf actuallyComputables
             runNodeProc (go trail ref nxt0) conf'
       where
-        -- XXX: when ref' is in the trail getOrMakeMech produces an
-        -- arrow that never stops. We want to stop trails but more
-        -- generally we want to co-censor the copredicates
         isComputableM conf ref' = do
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
-          return $ mcIsComputable ret
+          return $ mcIsComputable @m @w @n Proxy ret
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
 markNonComputable
