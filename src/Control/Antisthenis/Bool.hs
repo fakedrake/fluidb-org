@@ -23,13 +23,13 @@ module Control.Antisthenis.Bool
   ,Or
   ,BoolTag
   ,Exists(..)
-  ,convBool
-  ,notBool) where
+  ,convBool) where
 
 import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Types
 import           Control.Utils.Free
 import           Data.Coerce
+import           Data.Maybe
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
@@ -58,7 +58,6 @@ import           GHC.Generics
 -- non-absorbing element side it must not exceed the size.
 --
 -- The logic of enforement is in the argument of mkMachine.
-
 newtype Cost = Cost Integer
   deriving (Generic,Eq)
 instance AShow Cost
@@ -79,7 +78,10 @@ instance Monoid Exists where
 instance Default Exists where
   def = Exists False
 
+-- | Absorbing is used for caps.
 data GAbsorbing v = GAbsorbing { gaAbsorbing :: v,gaNonAbsorbing :: v }
+
+-- | Bool is used for bounds
 data GBool op v = GBool { gbTrue :: v,gbFalse :: v }
   deriving (Eq,Generic)
 instance AShow v => AShow  (GBool op v)
@@ -116,7 +118,7 @@ elemType :: BoolOp op => GBool op Exists -> ElemType
 elemType =
   ifelse AbsorbingElem NormalElem . unExists . gaAbsorbing . toGAbsorbing
 
--- | Implement it for or:
+-- | Bet the bound of the current
 --
 -- non-absorbings  = sum the non-absorbing iterations
 -- absorbings  = min of the absorbing iterations
@@ -137,13 +139,16 @@ zBound z = do
 
 -- | It is finished if the result is absorbing or if the inits and its
 -- are empty.
-zFinished :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
-zFinished z = case zRes z of
-  Just (Right x) -> case elemType x of
-    AbsorbingElem -> True
-    NormalElem    -> False
-  _ -> False
-
+zFinished
+  :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
+zFinished z = isAbsorb || emptyIniIt (zBgState z)
+  where
+    emptyIniIt ZipState {..} = null bgsInits && isNothing (acNonEmpty bgsIts)
+    isAbsorb = case zRes z of
+      Just (Right x) -> case elemType x of
+        AbsorbingElem -> True
+        NormalElem    -> False
+      _ -> False
 
 class BoolOp op where
   -- | Whether the Bool or error is trumped or trumps the result
@@ -264,6 +269,7 @@ minBndCap bnd cap =
 --     (x,BndR (BoolTag op p))
 --   -> m (x,BndR (BoolTag op p))
 
+-- | Remember the cursor is the result.
 boolEvolutionStrategy
   :: Monad m
   => FreeT (Cmds (BoolTag op p)) m x
@@ -303,21 +309,21 @@ boolEvolutionControl conf z = case confCap conf of
     if exceedsCap @(BoolTag op p) Proxy cap localBnd
       then return $ BndBnd localBnd else Nothing
 
-
 -- | The problem is that there is no w type in Conf w, just ZCap w so
 -- we need to translate Conf w into a functor of ZCap w. This can be
 -- done via generics. Then we can coerce without any problems.
 convBool :: Monad m => ArrProc (BoolTag op p) m -> ArrProc (BoolTag op' p) m
 convBool = dimap (to . coerce . from) (to . coerce . from)
-notBool :: Monad m => ArrProc (BoolTag op p) m -> ArrProc (BoolTag op p) m
-notBool = rmap $ \case
-  BndRes r -> BndRes $ flipB r
-  BndBnd r -> BndBnd $ flipB r
-  BndErr e -> BndErr e
-  where
-    flipB GBool {..} = GBool { gbTrue = gbFalse,gbFalse = gbTrue }
 
-data AnyOp
+-- notBool :: Monad m => ArrProc (BoolTag op p) m -> ArrProc (BoolTag op p) m
+-- notBool = rmap $ \case
+--   BndRes r -> BndRes $ flipB r
+--   BndBnd r -> BndBnd $ flipB r
+--   BndErr e -> BndErr e
+--   where
+--     flipB GBool {..} = GBool { gbTrue = gbFalse,gbFalse = gbTrue }
+
+-- data AnyOp
 -- | Test
 -- data BExp
 --   = BExp :/\: BExp
