@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -74,8 +75,8 @@ hoistEvalStateListT st runSt l = fst <$> hoistRunStateListT runSt st l
 --   _ -> isJust <$> headListT (getDependencies ref)
 isMaterializable :: forall t n m . Monad m => NodeRef n -> PlanT t n m Bool
 isMaterializable ref =
-  wrapTrace ("isMaterializable" <: ref)
-  $ isJust <$> headListT (getDependencies ref)
+  let ?iniRef = ref in tr ("isMaterializable" <: ref)
+    $ isJust <$> headListT (getDependencies ref)
 
 getAStar :: Monad m => NodeRef n -> PlanT t n m Double
 getAStar ref = fmap starToDouble  $ luMatCache ref >>= \case
@@ -91,9 +92,13 @@ instance Applicative VoidProxy where
 instance Monad VoidProxy where
   (>>=) = undefined -- Unreachable
 
+type Tr n = (?iniRef :: NodeRef n)
+tr :: (Tr n,Monad m) => String -> m a -> m a
+tr msg m = if ?iniRef == 159 then wrapTrace msg m else m
+
 getDependencies
   :: forall t n m .
-  (HasCallStack,Monad m)
+  (HasCallStack,Monad m,Tr n)
   => NodeRef n
   -> ListT (PlanT t n m) (NodeSet n,StarScore (MetaOp t n) t n)
 getDependencies ref0 = do
@@ -117,14 +122,10 @@ getDependencies ref0 = do
             }
         }
       return $ fmap2 fst ret
-{-# SPECIALISE getDependencies :: NodeRef n
-               -> ListT
-                 (PlanT t n Identity)
-                 (NodeSet n,StarScore (MetaOp t n) t n) #-}
 
 getDependencies'
   :: forall t n m .
-  (HasCallStack,Monad m)
+  (HasCallStack,Monad m,Tr n)
   => (NodeRef n -> Bool)
   -> NodeRef n
   -> ListT
@@ -137,7 +138,7 @@ getDependencies' isFinalNode ref0 = go [] ref0
        -> ListT
          (StateT (DCache t n) (PlanT t n m))
          (NodeSet n,StarScore (MetaOp t n) t n)
-    go trail ref0' = withMemoized isFinalNode ref0' trail $ do
+    go trail ref0' = withMemoized isFinalNode ref0' trail $ tr ("calcDeps" <: ref0') $ do
       metaOps <- lift2 $ findCostedMetaOps ref0'
       (depset1,mop,mopCost) <- mkListT
         $ return
