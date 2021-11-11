@@ -51,7 +51,7 @@ makeCostProc ref deps =
 
 makeMatProc
   :: forall n m .
-  (Monad m)
+  (Monad m,HasCallStack)
   => NodeRef n
   -> [[ArrProc (MatParams n) m]]
   -> ArrProc (MatParams n) m
