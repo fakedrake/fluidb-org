@@ -117,8 +117,8 @@ instance PlanMech (PlanT t n Identity) (CostParams CostTag n) n where
   mcCompStackVal _ n = BndErr $ ErrCycleEphemeral n
 
 
-nodeStatePair :: Monad m => NodeRef n -> PlanT t n m (NodeState, Bool)
-nodeStatePair = fmap (\x -> (x,isMat x)) . getNodeState
+nodeStatePair :: Monad m => NodeRef n -> PlanT t n m (NodeRef n,Bool)
+nodeStatePair ref = fmap (\x -> (ref,isMat x)) $ getNodeState ref
 instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcGetMech Proxy ref = do
     x <- nodeStatePair ref
