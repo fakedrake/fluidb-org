@@ -130,7 +130,7 @@ haltPlan matRef mop = do
 
 histCosts :: Monad m => PlanT t n m Cost
 histCosts = do
-  hcs :: [Maybe HCost] <- takeListT 0 $ pastCosts mempty
+  hcs :: [Maybe HCost] <- takeListT 1 pastCosts
   -- Curate the consts that are too likely to be non-comp
   return $ mconcat $ mapMaybe (>>= toCost) hcs
   where
@@ -147,7 +147,7 @@ haltPlanCost
 haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
   frefs <- gets $ toNodeList . frontier
   costs <- forM frefs $ \ref -> do
-    cost <- getPlanBndR @(CostParams CostTag n) Proxy mempty ForceResult ref
+    cost <- getPlanBndR @(CostParams CostTag n) Proxy ForceResult ref
     case cost of
       BndRes (Sum (Just r)) -> return $ pcCost r
       BndRes (Sum Nothing) -> throwPlan $ "Infinite cost: " ++ ashow  ref

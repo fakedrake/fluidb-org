@@ -34,16 +34,20 @@ instance PlanMech (PlanT t n Identity) (CostParams HistTag n) n where
   mcMkCost Proxy _ref cost = point $ toComp cost
   mcIsMatProc Proxy = isMatCost
   mcCompStackVal Proxy _ref = BndRes $ point $ point nonComp
+  mcIsComputable _ = \case
+    BndErr _                                 -> False
+    BndRes (Sum (Just (Cert _ (Comp c _r)))) -> c < 0.7
+    _                                        -> True
 
 -- | The expected cost of the next query.
 pastCosts
-  :: forall t n m . Monad m => NodeSet n -> ListT (PlanT t n m) (Maybe HCost)
-pastCosts extraMat = do
+  :: forall t n m . Monad m => ListT (PlanT t n m) (Maybe HCost)
+pastCosts = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 3 qs
   res <- lift
-    $ getPlanBndR @(CostParams HistTag n) Proxy extraMat (CapVal maxCap) q
+    $ getPlanBndR @(CostParams HistTag n) Proxy  (CapVal maxCap) q
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just zero

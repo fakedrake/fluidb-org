@@ -72,8 +72,6 @@ import           GHC.Generics
 newtype Cost = Cost Integer
   deriving (Generic,Eq)
 instance AShow Cost
-instance Default Cost where
-  def = Cost 0
 instance Ord Cost where
   compare (Cost a) (Cost b) = compare a b
 instance Semigroup Cost where
@@ -217,13 +215,16 @@ instance ExtParams (BoolTag op p) p => BndRParams (BoolTag op p) where
   -- when comparing with the cap the logic is different
   bndLt Proxy b1 b2 = b1 < b2
   exceedsCap Proxy cap bnd =
-    gbTrue cap < gbTrue bnd || gbFalse cap < gbFalse cap
+    gbTrue cap .< gbTrue bnd || gbFalse cap .< gbFalse bnd
+    where
+      Just a .< b  = a < b
+      Nothing .< _ = False
 
 instance (AShow (ExtCoEpoch p),ExtParams (BoolTag op p) p,BoolOp op)
   => ZipperParams (BoolTag op p) where
   type ZEpoch (BoolTag op p) = ExtEpoch p
   type ZCoEpoch (BoolTag op p) = ExtCoEpoch p
-  type ZCap (BoolTag op p) = BoolBound op
+  type ZCap (BoolTag op p) = GBool op (Maybe Cost)
   type ZPartialRes (BoolTag op p) =
     Maybe (Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p)))
   type ZItAssoc (BoolTag op p) =
@@ -250,8 +251,16 @@ instance (AShow (ExtCoEpoch p),ExtParams (BoolTag op p) p,BoolOp op)
       gcap <- case confCap conf of
         CapVal cap -> Just cap
         _          -> Nothing
-      return $ min bnd gcap }
+      return $ minBndCap bnd gcap }
 
+minBndCap :: GBool op Cost -> GBool op (Maybe Cost) -> GBool op (Maybe Cost)
+minBndCap bnd cap =
+  GBool { gbTrue = Just $ min' (gbTrue cap) (gbTrue bnd)
+         ,gbFalse = Just $ min' (gbFalse cap) (gbFalse bnd)
+        }
+  where
+    min' Nothing x  = x
+    min' (Just x) y = min x y
 
 -- boolEvolutionStrategy
 --   :: Monad m
@@ -290,7 +299,7 @@ boolEvolutionStrategy = recur Nothing
 -- poperator. This decides when to stop working.
 boolEvolutionControl
   :: forall op m p .
-  (Ord (BoolBound op),BoolOp op,ExtParams (BoolTag op p) p)
+  (BoolOp op,ExtParams (BoolTag op p) p)
   => GConf (BoolTag op p)
   -> Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
   -> Maybe (BndR (BoolTag op p))
@@ -300,7 +309,7 @@ boolEvolutionControl conf z = case confCap conf of
     Right x -> if zFinished z then Just $ BndRes x else Nothing
   CapVal cap -> do
     localBnd <- zBound z
-    if bndLt @(BoolTag op p) Proxy cap localBnd
+    if exceedsCap @(BoolTag op p) Proxy cap localBnd
       then return $ BndBnd localBnd else Nothing
 
 -- | The problem is that there is no w type in Conf w, just ZCap w so

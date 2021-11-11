@@ -88,7 +88,11 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
 --  | All the constraints required to run both min and sum
 type IsPlanCostParams w n =
   (IsPlanParams w n
+  ,Subtr (MechVal (MetaTag w))
+  ,Ord (MechVal (MetaTag w))
    -- For updating the cap
+  ,Zero (MechVal (MetaTag w))
+  ,Zero (ExtCap (MetaTag w))
   ,HasLens (ExtCap (MetaTag w)) (Min (MechVal (MetaTag w)))
   ,ExtParams (MinTag (MetaTag w)) (MetaTag w)
   ,ExtParams (SumTag (MetaTag w)) (MetaTag w))
@@ -101,13 +105,8 @@ type IsPlanParams w n =
   ,ZEpoch w ~ PlanEpoch n
   ,ZCoEpoch w ~ PlanCoEpoch n
   ,ZErr w ~ IndexErr (NodeRef n)
-
   ,AShowV (MechVal (MetaTag w))
   ,Semigroup (MechVal (MetaTag w))
-  ,Subtr (MechVal (MetaTag w))
-  ,Ord (MechVal (MetaTag w))
-  ,Zero (MechVal (MetaTag w))
-  ,Zero (ExtCap (MetaTag w))
   ,AShowV (ExtCap (MetaTag w)))
 
 -- | When the coepoch is older than the epoch we must reset and get

@@ -65,6 +65,16 @@ class Monad m => PlanMech m w n where
   -- Modify cost machine if the ref is materialized.
   mcIsMatProc :: Proxy (m (),w) -> NodeRef n -> ArrProc w m -> ArrProc w m
   mcCompStackVal :: Proxy (m ()) -> NodeRef n -> BndR w
+
+  -- | Check if a value counts as being computable. In most cases
+  -- non-comp is an error but for historical nodes it is if it's
+  -- uncertainty is > 0.7.
+  mcIsComputable :: Proxy (m (),w,n) -> BndR w -> Bool
+  default mcIsComputable :: Proxy (m (),w,n) -> BndR w -> Bool
+  mcIsComputable _ = \case
+    BndErr _ -> False
+    _        -> True
+
   mcMkProcess :: (NodeRef n -> ArrProc w m) -> NodeRef n -> ArrProc w m
   default mcMkProcess
     :: (m ~ PlanT t n Identity
@@ -105,10 +115,12 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
     $ const
     $ BndRes
     $ GBool { gbTrue = Exists True,gbFalse = Exists False }
-  mcCompStackVal _ n = BndErr $ ErrCycleEphemeral n
+  -- | The NodeProc system registers the cycle as noncomp in the
+  -- coepoch.
+  mcCompStackVal _ n =
+    BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> do
     neigh
       <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
     return
-      (conf
-      ,makeMatProc ref $ [getOrMakeMech  <$> inps | (inps,_cost) <- neigh])
+      (conf,makeMatProc ref $ [getOrMakeMech <$> inps | (inps,_cost) <- neigh])

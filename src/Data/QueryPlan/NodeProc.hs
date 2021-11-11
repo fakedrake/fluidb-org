@@ -158,9 +158,7 @@ satisfyComputability = go mempty
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
-          return $ case ret of
-            BndErr _ -> False
-            _        -> True
+          return $ mcIsComputable ret
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
 markNonComputable
@@ -240,6 +238,10 @@ censorPredicate ref c =
             ErrCycle { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch }))
       _ -> (unmarkNonComputable ref coepoch,(nxt,ret))
 
+
+-- XXX: Cycles make the historical data very slow but they can't be
+-- completely ignored because there is no way to tell if a historical
+-- node is due to the liberal use.
 getPlanBndR
   :: forall w t n m .
   (PlanMech (PlanT t n Identity) w n
@@ -248,21 +250,17 @@ getPlanBndR
   ,IsPlanParams w n
   ,Monad m)
   => Proxy w
-  -> NodeSet n
-  -> Cap (ExtCap (MetaTag w))
   -> NodeRef n
   -> PlanT t n m (BndR w)
-getPlanBndR Proxy extraMat cap ref = do
-  states0 <- gets $ fmap isMat . nodeStates . NEL.head . epochs
-  let states =
-        foldl' (\st n -> refInsert n True st) states0 $ toNodeList extraMat
+getPlanBndR Proxy  ref = do
+  states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   st0 <- get
   conf <- ask
   case runIdentity
     $ runExceptT
     $ (`runReaderT` conf)
     $ (`runStateT` st0)
-    $ getBndR @w Proxy cap states ref of
+    $ getBndR @w Proxy ForceResult states ref of
       Left e       -> throwError e
       Right (a,st) -> put st >> return a
 
