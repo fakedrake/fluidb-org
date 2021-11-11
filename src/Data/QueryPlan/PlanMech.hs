@@ -135,9 +135,9 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> do
     neigh
       <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
-    -- TODO: if the node is materialized const true, otherwise const
+    -- If the node is materialized const true, otherwise const
     -- false. The coepochs are updated by the caller, particularly by
-    -- ifMaterialized. Since we got here here it means we are not
+    -- ifMaterialized. Since we got here here it means ref is not
     -- materialized.
     return
       $ (conf,)
