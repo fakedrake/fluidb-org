@@ -54,7 +54,7 @@ isMaterialized = fmap isMat . getNodeState
 {-# INLINE isMaterialized #-}
 
 isProtected :: Monad m => NodeRef n -> PlanT t n m Bool
-isProtected ref = gets (maybe False (> 0) . (refLU ref) . nodeProtection)
+isProtected ref = gets (maybe False (> 0) . refLU ref . nodeProtection)
 
 modifyNodeProtection
   :: Monad m => (Count -> Count) -> NodeRef n -> PlanT t n m ()
@@ -173,7 +173,7 @@ configLU
 configLU msg f r = do
   m <- asks f
   case r `refLU` m of
-    Nothing -> throwPlan
+    Nothing -> error
       $ printf "Lookup failed [%s] %n %s" msg r (show $ refKeys m)
     Just i -> return i
 
