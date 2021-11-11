@@ -456,10 +456,11 @@ safeDelInOrder requiredPages _hc nsOrd =
 
 isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
 isDeletable ref = do
+  trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
     _              -> withNoMat ref $ Mat.isMaterializable ref
-  trM $ "isDeletable" <: (ref,isd)
+  trM $ "[After] isDeletable" <: (ref,isd)
   return isd
 
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a

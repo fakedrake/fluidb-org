@@ -33,7 +33,6 @@ import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
-import           Data.Utils.Default
 import           Data.Utils.Heaps
 import           Data.Utils.Unsafe
 import           GHC.Generics
