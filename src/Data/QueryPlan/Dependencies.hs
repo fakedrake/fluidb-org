@@ -17,12 +17,10 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 module Data.QueryPlan.Dependencies
   ( getDependencies
   , isMaterializable
-  , getAStar
   , orProd
   ) where
 
@@ -78,12 +76,12 @@ isMaterializable ref =
   let ?iniRef = ref in tr ("isMaterializable" <: ref)
     $ isJust <$> headListT (getDependencies ref)
 
-getAStar :: Monad m => NodeRef n -> PlanT t n m Double
-getAStar ref = fmap starToDouble  $ luMatCache ref >>= \case
-  Just (frontierStar -> (_,star)) -> return star
-  Nothing -> headListT (getDependencies ref) >>= \case
-    Nothing       -> throwPlan $ "Can't find star value: " ++ ashow ref
-    Just (_,star) -> return star
+-- getAStar :: Monad m => NodeRef n -> PlanT t n m Double
+-- getAStar ref = fmap starToDouble  $ luMatCache ref >>= \case
+--   Just (frontierStar -> (_,star)) -> return star
+--   Nothing -> headListT (getDependencies ref) >>= \case
+--     Nothing       -> throwPlan $ "Can't find star value: " ++ ashow ref
+--     Just (_,star) -> return star
 
 data VoidProxy a deriving Functor
 instance Applicative VoidProxy where
