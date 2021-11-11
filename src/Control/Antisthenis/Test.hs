@@ -18,7 +18,7 @@
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Control.Antisthenis.Test (withTrail,incrTill,zeroAfter,TestParams) where
+module Control.Antisthenis.Test (withTrail,incrTill,zeroAfter) where
 
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.Types
@@ -95,16 +95,3 @@ withTrail
 withTrail insUniq = handleBndErr $ \handle -> asks insUniq >>= \case
   Left e   -> handle $ Just e
   Right tr -> local (const tr) $ handle Nothing
-
-
-data TestParams
-instance (ZBnd w ~ Min' Int) => ExtParams w TestParams where
-  type MechVal TestParams = Int
-  type ExtEpoch TestParams = Int
-  type ExtCoEpoch TestParams = Min Int
-  type ExtCap TestParams = Min' Int
-  type ExtError TestParams = IndexErr Int
-  -- | If we create
-  extExceedsCap _ = (<)
-  extCombEpochs _ coe e a =
-    if coe < Min (Just e) then ShouldReset else DontReset a

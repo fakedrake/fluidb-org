@@ -14,32 +14,22 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.Bool
-  (interpretBExp
-  ,BoolV
+  (BoolV
   ,BoolOp(..)
   ,GBool(..)
+  ,BoolCap
+  ,BoolBound
   ,And
   ,Or
   ,BoolTag
   ,Exists(..)
-  ,orToAndConv
-  ,andToOrConv) where
+  ,convBool
+  ,notBool) where
 
-import           Control.Antisthenis.ATL.Class.Functorial
-import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.AssocContainer
-import           Control.Antisthenis.Convert
-import           Control.Antisthenis.Test
 import           Control.Antisthenis.Types
-import           Control.Antisthenis.VarMap
-import           Control.Antisthenis.Zipper
-import           Control.Antisthenis.ZipperId
-import           Control.Monad.Reader
-import           Control.Monad.State
 import           Control.Utils.Free
 import           Data.Coerce
-import qualified Data.IntMap                                as IM
-import qualified Data.IntSet                                as IS
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
@@ -93,6 +83,7 @@ data GAbsorbing v = GAbsorbing { gaAbsorbing :: v,gaNonAbsorbing :: v }
 data GBool op v = GBool { gbTrue :: v,gbFalse :: v }
   deriving (Eq,Generic)
 instance AShow v => AShow  (GBool op v)
+type BoolCap op = GBool op (Maybe Cost)
 type BoolBound op = GBool op Cost
 type BoolV op = GBool op Exists
 
@@ -312,6 +303,7 @@ boolEvolutionControl conf z = case confCap conf of
     if exceedsCap @(BoolTag op p) Proxy cap localBnd
       then return $ BndBnd localBnd else Nothing
 
+
 -- | The problem is that there is no w type in Conf w, just ZCap w so
 -- we need to translate Conf w into a functor of ZCap w. This can be
 -- done via generics. Then we can coerce without any problems.
@@ -326,56 +318,55 @@ notBool = rmap $ \case
     flipB GBool {..} = GBool { gbTrue = gbFalse,gbFalse = gbTrue }
 
 data AnyOp
-
 -- | Test
-data BExp
-  = BExp :/\: BExp
-  | BExp :\/: BExp
-  | BNot BExp
-  | BEVar IM.Key -- Expression reference
-  | BLVar IM.Key -- Variable reference
+-- data BExp
+--   = BExp :/\: BExp
+--   | BExp :\/: BExp
+--   | BNot BExp
+--   | BEVar IM.Key -- Expression reference
+--   | BLVar IM.Key -- Variable reference
 
--- | Each constructor is a mech except for Let. Closures are not
--- trivial to implement here
-interpretBExp
-  :: forall m p .
-  (MonadState (ProcMap (BoolTag AnyOp p) m) m
-  ,MonadReader (IS.IntSet,IM.IntMap Bool) m
-  ,Eq (ZCoEpoch (BoolTag AnyOp p))
-  ,AShow (ExtCoEpoch p)
-  ,AShow (ExtEpoch p)
-  ,ExtError p ~ IndexErr IS.Key
-  ,ExtParams (BoolTag Or p) p
-  ,ExtParams (BoolTag And p) p)
-  => BExp
-  -> ArrProc (BoolTag AnyOp p) m
-interpretBExp = recur
-  where
-    recur :: BExp -> ArrProc (BoolTag AnyOp p) m
-    recur = \case
-      e :/\: e' ->
-        convAnd $ mkProcId (zidDefault "and") $ convBool . recur <$> [e,e']
-      e :\/: e' ->
-        convOr $ mkProcId (zidDefault "or") $ convBool . recur <$> [e,e']
-      BNot e -> notBool $ recur e
-      BLVar k -> mealyLift $ fromKleisli $ const $ asks $ \(_trail,m) -> maybe
-        (BndErr $ error $ "Failed to dereference value key: " ++ ashow (k,m))
-        (BndRes . fromBool)
-        $ IM.lookup k m
-      BEVar k -> handleCycles k
-        $ getUpdMech
-          (BndErr $ error $ "Failed to dereference expr key: " ++ show k)
-          k
-    handleCycles k = withTrail $ \(trail,vals) ->
-      if k `IS.member` trail then Left ErrCycle { ecCur = k,ecPred = mempty }
-      else Right (IS.insert k trail,vals)
-    fromBool c = GBool { gbTrue = Exists c,gbFalse = Exists $ not c }
-    convOr :: ArrProc (BoolTag Or p) m -> ArrProc (BoolTag op p) m
-    convOr = convBool
-    convAnd :: ArrProc (BoolTag And p) m -> ArrProc (BoolTag op p) m
-    convAnd = convBool
+-- -- | Each constructor is a mech except for Let. Closures are not
+-- -- trivial to implement here
+-- interpretBExp
+--   :: forall m p .
+--   (MonadState (ProcMap (BoolTag AnyOp p) m) m
+--   ,MonadReader (IS.IntSet,IM.IntMap Bool) m
+--   ,Eq (ZCoEpoch (BoolTag AnyOp p))
+--   ,AShow (ExtCoEpoch p)
+--   ,AShow (ExtEpoch p)
+--   ,ExtError p ~ IndexErr IS.Key
+--   ,ExtParams (BoolTag Or p) p
+--   ,ExtParams (BoolTag And p) p)
+--   => BExp
+--   -> ArrProc (BoolTag AnyOp p) m
+-- interpretBExp = recur
+--   where
+--     recur :: BExp -> ArrProc (BoolTag AnyOp p) m
+--     recur = \case
+--       e :/\: e' ->
+--         convAnd $ mkProcId (zidDefault "and") $ convBool . recur <$> [e,e']
+--       e :\/: e' ->
+--         convOr $ mkProcId (zidDefault "or") $ convBool . recur <$> [e,e']
+--       BNot e -> notBool $ recur e
+--       BLVar k -> mealyLift $ fromKleisli $ const $ asks $ \(_trail,m) -> maybe
+--         (BndErr $ error $ "Failed to dereference value key: " ++ ashow (k,m))
+--         (BndRes . fromBool)
+--         $ IM.lookup k m
+--       BEVar k -> handleCycles k
+--         $ getUpdMech
+--           (BndErr $ error $ "Failed to dereference expr key: " ++ show k)
+--           k
+--     handleCycles k = withTrail $ \(trail,vals) ->
+--       if k `IS.member` trail then Left ErrCycle { ecCur = k,ecPred = mempty }
+--       else Right (IS.insert k trail,vals)
+--     fromBool c = GBool { gbTrue = Exists c,gbFalse = Exists $ not c }
+--     convOr :: ArrProc (BoolTag Or p) m -> ArrProc (BoolTag op p) m
+--     convOr = convBool
+--     convAnd :: ArrProc (BoolTag And p) m -> ArrProc (BoolTag op p) m
+--     convAnd = convBool
 
--- TOWRITE:
+-- towrite:
 -- AND and OR are both absorbing/identity groups
 -- Boolean expressions can be summarized as
 -- * the expression
@@ -383,7 +374,3 @@ interpretBExp = recur
 -- * A pair of bools (absorbing, non-absorbing)
 -- * A pair of bools & the operation to combine them (true false)
 -- We use all three in different contexts.
-andToOrConv :: Conv (BoolTag And m) (BoolTag Or m)
-andToOrConv = coerceConv GenericConv
-orToAndConv :: Conv (BoolTag Or m) (BoolTag And m)
-orToAndConv = coerceConv GenericConv

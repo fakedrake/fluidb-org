@@ -10,6 +10,8 @@ module Data.QueryPlan.AntisthenisTypes
   ,CoPredicates
   ,PlanEpoch(..)
   ,PlanCoEpoch(..)
+  ,MatTag
+  ,MatTag0
   ,IsPlanParams
   ,IsPlanCostParams
   ,MatParams
@@ -34,7 +36,8 @@ import           GHC.Generics
 -- | Tags to disambiguate the properties of historical and cost processes.
 data HistTag
 data CostTag
-data MatTag
+data MatTag0 op
+type MatTag = MatTag0 Or
 type MatParams n = BoolTag Or (PlanParams MatTag n)
 type CostParams tag n = SumTag (PlanParams tag n)
 data PlanParams tag n
@@ -43,18 +46,19 @@ type instance MetaTag (SumTag p) = p
 type instance MetaTag (MinTag p) = p
 type instance MetaTag (BoolTag op p) = p
 
-instance ExtParams (MatParams n) (PlanParams MatTag n) where
-  type MechVal (PlanParams MatTag n) = BoolV Or
-  type ExtError (PlanParams MatTag n) =
+instance (BndRParams w,ZCap w ~ ExtCap (PlanParams (MatTag0 op) n))
+  => ExtParams w (PlanParams (MatTag0 op) n) where
+  type MechVal (PlanParams (MatTag0 op) n) = BoolV op
+  type ExtError (PlanParams (MatTag0 op) n) =
     IndexErr (NodeRef n)
-  type ExtEpoch (PlanParams MatTag n) = PlanEpoch n
-  type ExtCoEpoch (PlanParams MatTag n) = PlanCoEpoch n
-  type ExtCap (PlanParams MatTag n) =
-    ZCap (MatParams n)
-  extExceedsCap Proxy cap bnd =
-    exceedsCap @(MatParams n) Proxy cap bnd
+  type ExtEpoch (PlanParams (MatTag0 op) n) = PlanEpoch n
+  type ExtCoEpoch (PlanParams (MatTag0 op) n) = PlanCoEpoch n
+  type ExtCap (PlanParams (MatTag0 op) n) = BoolCap op
+  extExceedsCap Proxy cap bnd = exceedsCap @w Proxy cap bnd
   extCombEpochs _ = planCombEpochs
 
+-- | We use the general w parameter to cover both min and sum for
+-- params.
 instance ZBnd w ~ ExtCap (PlanParams CostTag n)
   => ExtParams w (PlanParams CostTag n) where
   type MechVal (PlanParams CostTag n) = PlanCost n

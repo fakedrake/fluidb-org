@@ -10,9 +10,12 @@ module Control.Antisthenis.Convert
   ,GenericConv(..)
   ,convMinSum
   ,convSumMin
+  ,convAndOr
+  ,convOrAnd
   ,coerceConv
   ,convArrProc) where
 
+import           Control.Antisthenis.Bool
 import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Sum
 import           Control.Antisthenis.Types
@@ -83,6 +86,12 @@ convBndR Conv{..} = \case
   BndRes r -> BndRes $ convRes r
   BndBnd b -> BndBnd $ convBnd b
   BndErr e -> BndErr $ convErr e
+
+convAndOr :: Conv (BoolTag And m) (BoolTag Or m)
+convAndOr = coerceConv GenericConv
+convOrAnd :: Conv (BoolTag Or m) (BoolTag And m)
+convOrAnd = coerceConv GenericConv
+
 
 -- We only need mempty from this monoid
 convSumMin :: Conv (SumTag p) (MinTag p)

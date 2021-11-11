@@ -55,7 +55,18 @@ makeMatProc
   => NodeRef n
   -> [[ArrProc (MatParams n) m]]
   -> ArrProc (MatParams n) m
-makeMatProc _ref _deps = error "implement me"
+makeMatProc ref deps = mkOrProc $ mkAndProc <$> deps
+  where
+    mkAndProc :: [ArrProc (MatParams n) m]
+              -> ArrProc (BoolTag And (PlanParams (MatTag0 And) n)) m
+    mkAndProc =
+      mkProcId (zidDefault $ "and" <: ref)
+      . fmap (convArrProc $ coerceConv GenericConv)
+    mkOrProc :: [ArrProc (BoolTag And (PlanParams (MatTag0 And) n)) m]
+             -> ArrProc (BoolTag Or (PlanParams MatTag n)) m
+    mkOrProc =
+      mkProcId (zidDefault $ "or" <: ref)
+      . fmap (convArrProc $ coerceConv GenericConv)
 
 class Monad m => PlanMech m w n where
   mcPutMech :: Proxy w -> NodeRef n -> ArrProc w m -> m ()
@@ -117,7 +128,7 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
     $ GBool { gbTrue = Exists True,gbFalse = Exists False }
   -- | The NodeProc system registers the cycle as noncomp in the
   -- coepoch.
-  mcCompStackVal _ n =
+  mcCompStackVal _ _n =
     BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> do
     neigh
