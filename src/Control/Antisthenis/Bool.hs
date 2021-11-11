@@ -22,7 +22,6 @@ module Control.Antisthenis.Bool
   ,And
   ,Or
   ,BoolTag
-  ,Exists(..)
   ,convBool) where
 
 import           Control.Antisthenis.AssocContainer
@@ -67,16 +66,6 @@ instance Semigroup Cost where
   Cost a <> Cost b = Cost $ a + b
 instance Monoid Cost where
   mempty = Cost 0
-
--- | At least one.
-newtype Exists = Exists { unExists :: Bool} deriving Generic
-instance AShow Exists
-instance Semigroup Exists where
-  Exists a <> Exists b = Exists $ a || b
-instance Monoid Exists where
-  mempty = Exists False
-instance Default Exists where
-  def = Exists False
 
 -- | Absorbing is used for caps.
 data GAbsorbing v = GAbsorbing { gaAbsorbing :: v,gaNonAbsorbing :: v }
