@@ -19,7 +19,6 @@ import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
-import           Data.QueryPlan.Nodes                       (getNodeState)
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Functors
@@ -132,9 +131,9 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   -- coepoch.
   mcCompStackVal _ _n =
     BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
-  mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> do
+  mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh
-      <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
+      <- fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
     trM $ "Neighbors" <: (ref,neigh)
     -- If the node is materialized const true, otherwise const
     -- false. The coepochs are updated by the caller, particularly by
