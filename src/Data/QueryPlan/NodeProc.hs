@@ -40,7 +40,6 @@ import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Default
-import           Data.Utils.Nat
 
 -- | Check that a node is materialized and add mark it as such in the
 -- coepoch.
@@ -60,15 +59,15 @@ ifMaterialized ref t e = proc conf -> do
 -- | Build AND INSERT a new mech in the mech directory. The mech does
 -- not update it's place in the mech map.α
 mkNewMech
-  :: forall n  m p .
-  (PlanMech m p n,IsPlanParams p n)
+  :: forall w n  m .
+  (PlanMech m w n,IsPlanParams w n)
   => NodeRef n
-  -> ArrProc p m
+  -> ArrProc w m
 mkNewMech ref =
   asSelfUpdating
   $ ifMaterialized ref (mcIsMatProc @m Proxy ref newProcess) newProcess
   where
-    newProcess :: ArrProc p m
+    newProcess :: ArrProc w m
     newProcess = mcMkProcess getOrMakeMech ref
     -- costProcess = squashMealy $ \conf -> do
     --   -- mops <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
@@ -81,8 +80,7 @@ mkNewMech ref =
     --            ,dsetNeigh = [getOrMakeMech n | n <- inp]
     --           } | (inp,cost) <- neigh]
     --   return (conf,makeCostProc ref mechs)
-    asSelfUpdating :: ArrProc p m
-                   -> ArrProc p m
+    asSelfUpdating :: ArrProc w m -> ArrProc w m
     asSelfUpdating
       (MealyArrow f) = censorPredicate ref $ MealyArrow $ fromKleisli $ \c -> do
       ((nxt,r),_co) <- listen $ toKleisli f c
@@ -97,29 +95,21 @@ mkNewMech ref =
       return (getOrMakeMech ref,r)
 
 markComputable
-  :: IsPlanParams p n
+  :: IsPlanParams w n
   => NodeRef n
-  -> Conf p
-  -> Conf p
+  -> Conf w
+  -> Conf w
 markComputable ref conf =
   conf { confEpoch = (confEpoch conf)
            { peCoPred = nsInsert ref $ peCoPred $ confEpoch conf }
        }
-unmarkComputable
-  :: IsPlanParams p n
-  => NodeRef n
-  -> Conf p
-  -> Conf p
+unmarkComputable :: IsPlanParams w n => NodeRef n -> Conf w -> Conf w
 unmarkComputable ref conf =
   conf { confEpoch = (confEpoch conf)
            { peCoPred = nsDelete ref $ peCoPred $ confEpoch conf }
        }
 
-setComputables
-  :: IsPlanParams p n
-  => NodeSet n
-  -> Conf p
-  -> Conf p
+setComputables :: IsPlanParams w n => NodeSet n -> Conf w -> Conf w
 setComputables refs conf =
   conf { confEpoch = (confEpoch conf) { peCoPred = refs } }
 
@@ -138,11 +128,11 @@ setComputables refs conf =
 -- The property is that assuming a value is not computable while
 -- computing the value itself should not affact the final result.
 satisfyComputability
-  :: forall m p n .
-  (PlanMech m p n,IsPlanParams p n)
+  :: forall m w n .
+  (PlanMech m w n,IsPlanParams w n)
   => NodeRef n
-  -> ArrProc p m
-  -> ArrProc p m
+  -> ArrProc w m
+  -> ArrProc w m
 satisfyComputability = go mempty
   where
     mkNodeProc = MealyArrow . WriterArrow . fromKleisli
@@ -182,25 +172,25 @@ unmarkNonComputable ref pe =
      }
 
 getOrMakeMech
-  :: forall m n p .
-  (PlanMech m p n,IsPlanParams p n)
+  :: forall m n w .
+  (PlanMech m w n,IsPlanParams w n)
   => NodeRef n
-  -> ArrProc p m
+  -> ArrProc w m
 getOrMakeMech ref = squashMealy $ \conf -> do
-  mechM :: Maybe (ArrProc p m)
+  mechM :: Maybe (ArrProc w m)
     <- lift $ mcGetMech @m Proxy ref
   let conf' = unmarkComputable ref conf
-  lift $ mcPutMech @m Proxy ref $ cycleProc @p ref
+  lift $ mcPutMech @m Proxy ref $ cycleProc @w ref
   return (conf',fromMaybe (mkNewMech ref) mechM)
 
 -- | Return an error (uncomputable) and insert a predicate that
 -- whatever results we come up with are predicated on ref being
 -- uncomputable.
 cycleProc
-  :: forall p n m .
-  (PlanMech m p n,IsPlanParams p n)
+  :: forall w n m .
+  (PlanMech m w n,IsPlanParams w n)
   => NodeRef n
-  -> ArrProc p m
+  -> ArrProc w m
 cycleProc ref =
   MealyArrow
   $ WriterArrow
@@ -220,10 +210,10 @@ cycleProc ref =
 -- We need a better theoretical foundation on how fixpoints are handled
 -- for the particular operators we use.
 censorPredicate
-  :: (Monad m,IsPlanParams p n)
+  :: (Monad m,IsPlanParams w n)
   => NodeRef n
-  -> ArrProc p m
-  -> ArrProc p m
+  -> ArrProc w m
+  -> ArrProc w m
 censorPredicate ref c =
   MealyArrow
   $ WriterArrow
@@ -251,18 +241,17 @@ censorPredicate ref c =
       _ -> (unmarkNonComputable ref coepoch,(nxt,ret))
 
 getPlanBndR
-  :: forall p t n m  .
-  (PlanMech (PlanT t n Identity) p n
+  :: forall w t n m .
+  (PlanMech (PlanT t n Identity) w n
   ,HasCallStack
-  ,ExtCap p ~ ZCap p
-  ,Zero (MechVal p)
-  ,IsPlanParams p n
+  ,ZCap w ~ ExtCap (MetaTag w)
+  ,IsPlanParams w n
   ,Monad m)
-  => Proxy p
+  => Proxy w
   -> NodeSet n
-  -> Cap (ExtCap p)
+  -> Cap (ExtCap (MetaTag w))
   -> NodeRef n
-  -> PlanT t n m (BndR p)
+  -> PlanT t n m (BndR w)
 getPlanBndR Proxy extraMat cap ref = do
   states0 <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   let states =
@@ -273,25 +262,24 @@ getPlanBndR Proxy extraMat cap ref = do
     $ runExceptT
     $ (`runReaderT` conf)
     $ (`runStateT` st0)
-    $ getBndR @p Proxy cap states ref of
+    $ getBndR @w Proxy cap states ref of
       Left e       -> throwError e
       Right (a,st) -> put st >> return a
 
 getBndR
-  :: forall p n m .
-  (PlanMech m p n
+  :: forall w n m .
+  (PlanMech m w n
   ,HasCallStack
-  ,ExtCap p ~ ZCap p
-  ,Zero (MechVal p)
-  ,IsPlanParams p n)
-  => Proxy p
-  -> Cap (ExtCap p)
+  ,IsPlanParams w n
+  ,ZCap w ~ ExtCap (MetaTag w))
+  => Proxy w
+  -> Cap (ExtCap (MetaTag w))
   -> RefMap n Bool
   -> NodeRef n
-  -> m (BndR p) -- (Maybe (MechVal p))
+  -> m (BndR w) -- (Maybe (MechVal w))
 getBndR _ cap states ref = wrapTr $ do
   (res,_coepoch) <- runWriterT
-    $ runMech (satisfyComputability @m @p ref $ getOrMakeMech ref)
+    $ runMech (satisfyComputability @m @w ref $ getOrMakeMech ref)
     $ Conf
     { confCap = cap,confEpoch = def { peParams = states },confTrPref = () }
   return res

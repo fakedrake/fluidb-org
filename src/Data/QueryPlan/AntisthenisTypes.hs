@@ -86,29 +86,29 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   extCombEpochs _ = planCombEpochs
 
 --  | All the constraints required to run both min and sum
-type IsPlanCostParams tag n =
-  (IsPlanParams tag n
+type IsPlanCostParams w n =
+  (IsPlanParams w n
    -- For updating the cap
-  ,HasLens (ExtCap (MetaTag tag)) (Min (MechVal (MetaTag tag)))
-  ,ExtParams (MinTag (MetaTag tag)) (MetaTag tag)
-  ,ExtParams (SumTag (MetaTag tag)) (MetaTag tag))
-type IsPlanParams tag n =
-  (ExtError (MetaTag tag) ~ IndexErr
+  ,HasLens (ExtCap (MetaTag w)) (Min (MechVal (MetaTag w)))
+  ,ExtParams (MinTag (MetaTag w)) (MetaTag w)
+  ,ExtParams (SumTag (MetaTag w)) (MetaTag w))
+type IsPlanParams w n =
+  (ExtError (MetaTag w) ~ IndexErr
      (NodeRef n)
-  ,ExtEpoch (MetaTag tag) ~ PlanEpoch n
-  ,ExtCoEpoch (MetaTag tag) ~ PlanCoEpoch n
+  ,ExtEpoch (MetaTag w) ~ PlanEpoch n
+  ,ExtCoEpoch (MetaTag w) ~ PlanCoEpoch n
 
-  ,ZEpoch tag ~ PlanEpoch n
-  ,ZCoEpoch tag ~ PlanCoEpoch n
-  ,ZErr tag ~ IndexErr (NodeRef n)
+  ,ZEpoch w ~ PlanEpoch n
+  ,ZCoEpoch w ~ PlanCoEpoch n
+  ,ZErr w ~ IndexErr (NodeRef n)
 
-  ,AShowV (MechVal (MetaTag tag))
-  ,Semigroup (MechVal (MetaTag tag))
-  ,Subtr (MechVal (MetaTag tag))
-  ,Ord (MechVal (MetaTag tag))
-  ,Zero (MechVal (MetaTag tag))
-  ,Zero (ExtCap (MetaTag tag))
-  ,AShowV (ExtCap (MetaTag tag)))
+  ,AShowV (MechVal (MetaTag w))
+  ,Semigroup (MechVal (MetaTag w))
+  ,Subtr (MechVal (MetaTag w))
+  ,Ord (MechVal (MetaTag w))
+  ,Zero (MechVal (MetaTag w))
+  ,Zero (ExtCap (MetaTag w))
+  ,AShowV (ExtCap (MetaTag w)))
 
 -- | When the coepoch is older than the epoch we must reset and get
 -- a fresh value for the process. Otherwise the progress made so far

@@ -25,11 +25,11 @@ import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Control.Monad.Writer        hiding (Sum)
+import           Control.Monad.Writer            hiding (Sum)
 import           Data.Bipartite
-import qualified Data.HashSet                as HS
+import qualified Data.HashSet                    as HS
 import           Data.List.Extra
-import qualified Data.List.NonEmpty          as NEL
+import qualified Data.List.NonEmpty              as NEL
 import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Query.QuerySize
@@ -47,6 +47,7 @@ import           Data.Utils.ListT
 import           Data.Utils.Tup
 
 import           Data.Proxy
+import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.Cert
 import           Data.QueryPlan.Comp
 import           Data.QueryPlan.MetaOp
@@ -138,25 +139,21 @@ histCosts = do
 
 -- | Compute the frontier cost and the historical costs.
 haltPlanCost
-  :: (HaltKey m ~ PlanSearchScore,MonadHalt m,HasCallStack)
+  :: forall t n m .
+  (HaltKey m ~ PlanSearchScore,MonadHalt m,HasCallStack)
   => Maybe Cost
   -> Double
   -> PlanT t n m Cost
 haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
   frefs <- gets $ toNodeList . frontier
-  (costs,_extraNodes) <- runWriterT $ forM frefs $ \ref -> do
-    cost <- lift $ getPlanBndR @CostTag Proxy mempty ForceResult ref
-    -- case res of
-    --   BndRes (Sum (Just r)) -> return $ Just r
-    --   BndRes (Sum Nothing) -> return $ Just zero
-    --   BndBnd _bnd -> return Nothing
-    --   BndErr e ->
-    --     error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
+  costs <- forM frefs $ \ref -> do
+    cost <- getPlanBndR @(CostParams CostTag n) Proxy mempty ForceResult ref
     case cost of
-      Nothing -> return zero
-      Just c -> do
-        maybe (return ()) tell $ pcPlan c
-        return $ pcCost c
+      BndRes (Sum (Just r)) -> return $ pcCost r
+      BndRes (Sum Nothing) -> throwPlan $ "Infinite cost: " ++ ashow  ref
+      BndBnd _bnd -> throwPlan "Got bound instead of cost"
+      BndErr e -> throwPlan
+        $ "getPlanBndR(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   hc <- maybe histCosts return histCostCached
   trM $ printf "Halt%s: %s" (show frefs) $ show concreteCost

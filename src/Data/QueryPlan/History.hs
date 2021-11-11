@@ -43,13 +43,13 @@ pastCosts extraMat = do
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 3 qs
   res <- lift
-    $ getPlanBndR @(PlanParams HistTag n) Proxy extraMat (CapVal maxCap) q
+    $ getPlanBndR @(CostParams HistTag n) Proxy extraMat (CapVal maxCap) q
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just zero
     BndBnd _bnd -> return Nothing
     BndErr e ->
-      error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
+      error $ "getCost(" ++ ashow q ++ "):antisthenis error: " ++ ashow e
 
 maxCap :: HistCap Cost
 maxCap =
