@@ -132,9 +132,9 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcCompStackVal _ _n =
     BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
-    neigh
-      <- fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
-    trM $ "Neighbors: " ++ show (ref,fmap2 fst neigh)
+    neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
+      $ findCostedMetaOps ref
+    trM $ "Neighbors: " ++ show (ref,neigh)
     -- If the node is materialized const true, otherwise const
     -- false. The coepochs are updated by the caller, particularly by
     -- ifMaterialized. Since we got here here it means ref is not
@@ -143,6 +143,6 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
       $ (conf,)
       $ if null neigh then arrConst
         $ BndRes GBool { gbTrue = Exists False,gbFalse = Exists True }
-      else makeMatProc ref $ [getOrMakeMech <$> inps | (inps,_cost) <- neigh]
+      else makeMatProc ref $ [getOrMakeMech <$> inps | inps <- neigh]
     where
       arrConst = arr . const
