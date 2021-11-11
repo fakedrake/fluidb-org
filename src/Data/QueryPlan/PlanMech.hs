@@ -18,6 +18,8 @@ import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.MetaOp
+import           Data.QueryPlan.Nodes
+import           Data.QueryPlan.Nodes                       (getNodeState)
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Functors
@@ -133,5 +135,8 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> do
     neigh
       <- lift $ fmap2 (first $ toNodeList . metaOpIn) $ findCostedMetaOps ref
+    lift $ when (null neigh) $ do
+      st <- getNodeState ref
+      unless (isMat st ) $ error $ "oops:" ++ show (st,ref)
     return
       (conf,makeMatProc ref $ [getOrMakeMech <$> inps | (inps,_cost) <- neigh])
