@@ -18,6 +18,7 @@ import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.MetaOp
+import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Functors
@@ -128,7 +129,8 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref
-    trM $ "Neighbors: " ++ show (ref,neigh)
+    neigh' <- traverse2 (fmap (\x -> (x,isMat x)) . getNodeState) neigh
+    trM $ "Neighbors: " ++ show (ref,neigh')
     -- If the node is materialized const true, otherwise const
     -- false. The coepochs are updated by the caller, particularly by
     -- ifMaterialized. Since we got here here it means ref is not
