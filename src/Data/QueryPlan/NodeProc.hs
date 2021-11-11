@@ -235,7 +235,6 @@ censorPredicate ref c =
             ErrCycle { ecCur = ref,ecPred = pNonComputables $ pcePred coepoch }))
       _ -> (unmarkNonComputable ref coepoch,(nxt,ret))
 
-
 -- | Cap is used by History to make sure we dont go all the way down
 -- the rabbit hole.
 getPlanBndR
@@ -285,5 +284,5 @@ getBndR _ cap states ref = wrapTr $ do
   --   BndErr e ->
   --     error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
   where
-    wrapTr = wrapTrace ("getBndR" <: ref)
-    -- wrapTr = id
+    -- wrapTr = wrapTrace ("getBndR" <: ref)
+    wrapTr = id

@@ -100,12 +100,12 @@ getDependencies
   => NodeRef n
   -> ListT (PlanT t n m) (NodeSet n,StarScore (MetaOp t n) t n)
 getDependencies ref0 = do
-  stm <- nodeStates . NEL.head . epochs <$> get
+  stm <- gets $ nodeStates . NEL.head . epochs
   let isMat' ref = case refLU ref stm of
         Just (Initial Mat)    -> True
         Just (Concrete _ Mat) -> True
         _                     -> False
-  cache <- matCacheVals . isMaterializableCache . gcCache <$> get
+  cache <- gets $ matCacheVals . isMaterializableCache . gcCache
   hoistEvalStateListT cache storeStateT $ getDependencies' isMat' ref0
   where
     storeStateT

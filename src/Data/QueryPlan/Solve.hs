@@ -44,8 +44,8 @@ import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.Cert
 import           Data.QueryPlan.Comp
--- import           Data.QueryPlan.Matable
 import           Data.QueryPlan.Dependencies
+import           Data.QueryPlan.Matable          as Mat
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
@@ -180,7 +180,7 @@ setNodeStateSafe' getFwdOp node goalState =
         Mat -> node `setNodeStateUnsafe` Concrete Mat Mat
         NoMat -> do
           node `setNodeStateUnsafe` Concrete Mat NoMat
-          isMaterializable node
+          Mat.isMaterializable node
             >>= guardl ("not materializable, can't delete " ++ ashow node)
           delDepMatCache node
           putDelNode node
