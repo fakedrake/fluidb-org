@@ -48,12 +48,17 @@ ifMaterialized
   -> ArrProc p m
   -> ArrProc p m
   -> ArrProc p m
-ifMaterialized ref t e = proc conf -> do
+ifMaterialized ref t e = squashMealy $ \conf -> do
   let isMater = fromMaybe False $ ref `refLU` peParams (confEpoch conf)
-  () <- arrTell -< (mempty { pceParams = refFromAssocs [(ref,isMater)] })
-  case isMater of
-    True -> t -< conf
-    False -> e -< conf
+  tell (mempty { pceParams = refFromAssocs [(ref,isMater)] })
+  return (conf,if isMater then t else e)
+
+-- proc conf -> do
+-- let isMater = fromMaybe False $ ref `refLU` peParams (confEpoch conf)
+-- () <- arrTell -< (mempty { pceParams = refFromAssocs [(ref,isMater)] })
+-- case isMater of
+--   True -> t -< conf
+--   False -> e -< conf
 
 -- | Build AND INSERT a new mech in the mech directory. The mech does
 -- not update it's place in the mech map.α
