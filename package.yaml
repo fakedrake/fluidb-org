@@ -10,7 +10,6 @@ category: Database
 
 ghc-options:
   - -Wall
-  - -g
   - -Wsimplifiable-class-constraints
   - -funfolding-use-threshold=16
   - -O2
