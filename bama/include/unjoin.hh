@@ -68,17 +68,16 @@ class CombOps {
 template<typename Extract>
 Extract UnJoin<Extract>::extract;
 
-
 template <typename Extract>
-auto mkUnJoin(const std::string& left, const std::string& joined,
-              const std::string& anti_join) {
+auto mkUnJoin(const std::string& joined, const std::string& anti_join,
+              const std::string& left) {
   return UnJoin<Extract>(left, joined, anti_join);
 }
 
 template <typename ExtractL, typename ExtractR>
-auto mkUnJoin2(const std::string& l, const std::string& r,
-               const std::string& left_antijoin, const std::string& joined,
-               const std::string& right_antijoin) {
+auto mkUnJoin2(const std::string& joined, const std::string& left_antijoin,
+               const std::string& right_antijoin, const std::string& l,
+               const std::string& r) {
   return CombOps<UnJoin<ExtractL>, UnJoin<ExtractR>>(
       mkUnJoin<ExtractL>(l, joined, left_antijoin),
       mkUnJoin<ExtractR>(r, joined, right_antijoin));

@@ -604,12 +604,12 @@ constrArgs
 constrArgs ioFiles = do
   outAndIn <- toIoTup ioFiles
   case (iofCluster ioFiles,iofDir ioFiles,outAndIn) of
-    (JoinClustW _,ReverseTrigger,([Just l,Just r],[Just lo,Just o,Just ro])) ->
-      return [l,r,lo,o,ro] -- mkUnJoin2
-    (JoinClustW _,ReverseTrigger,([Just i,Nothing],[Just lo,Just o,Nothing])) ->
-      return [i,o,lo]
-    (JoinClustW _,ReverseTrigger,([Nothing,Just i],[Nothing,Just o,Just ro])) ->
-      return [i,o,ro]
+    (JoinClustW _,ReverseTrigger,([Just l,Just r],[Just o,Just lo,Just ro])) ->
+      return [o,lo,ro,l,r] -- mkUnJoin2
+    (JoinClustW _,ReverseTrigger,([Just i,Nothing],[Just o,Just lo,Nothing])) ->
+      return [o,lo,i]
+    (JoinClustW _,ReverseTrigger,([Nothing,Just i],[Just o,Nothing,Just ro])) ->
+      return [o,ro,i]
     (JoinClustW _,ReverseTrigger,oi) ->
       -- XXX: We need to check that the generated tables are actually
       -- created due to triggering the node or if they just happened
