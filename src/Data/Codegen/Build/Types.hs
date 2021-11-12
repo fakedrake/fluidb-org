@@ -29,7 +29,7 @@ import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.String
 import           Data.Utils.AShow
 import           GHC.Generics
@@ -67,7 +67,7 @@ data CodeBuildErr e s t n
     -- Generic error for not found node n
   | NodeNotFoundN (NodeRef n)
     -- The epoch attempts to overwrite an already cache query.
-  | OverwritingFile (NodeRef n) FileSet (Query e s)
+  | OverwritingFile (NodeRef n) QFile (Query e s)
     -- Union types are not equal
   | UnionTypeError (CppSchema' (ShapeSym e s)) (CppSchema' (ShapeSym e s))
     -- A forward transition created a symbol. Only reverse transitions

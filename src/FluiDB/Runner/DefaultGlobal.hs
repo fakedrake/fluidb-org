@@ -23,7 +23,7 @@ import           Data.QnfQuery.Build
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Types
 import           Data.Utils.AShow
 import           Data.Utils.Default
@@ -58,7 +58,7 @@ instance DefaultGlobal e s t n m q => DefaultGlobal e s t n m (Query e s,q) wher
 
 -- TPC-H
 instance MonadFakeIO m
-  => DefaultGlobal ExpTypeSym (Maybe FileSet) () () m Int where
+  => DefaultGlobal ExpTypeSym (Maybe QFile) () () m Int where
   defGlobalConf _ _ = tpchGlobalConf
   getIOQuery i = do
     seed <- globalPopUniqueNum

@@ -40,7 +40,7 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.QuerySchema
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Compose
@@ -52,7 +52,7 @@ import           Prelude                               hiding (exp)
 
 -- | Pattern match on the query and cluster that contains the
 -- filepaths to generate code. (output, input)
-toFiles :: IOFilesD e s -> Tup2 [Maybe (Maybe (QueryShape e s),FileSet)] -- out,in
+toFiles :: IOFilesD e s -> Tup2 [Maybe (Maybe (QueryShape e s),QFile)] -- out,in
 toFiles IOFilesD{..} = maybeSwap $ splitIO $ toList iofCluster where
   maybeSwap (o,fmap3 DataFile -> i) = case iofDir of
     ForwardTrigger -> Tup2 o i

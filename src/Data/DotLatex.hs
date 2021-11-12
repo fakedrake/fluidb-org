@@ -34,7 +34,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.NodeContainers
 import           Data.Query.Algebra
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Types
 import           Data.String
 import           Data.Utils.Default
@@ -333,11 +333,8 @@ instance Latexifiable Integer where
   toLatex = Latex . show
 instance Latexifiable String where
   toLatex = Latex
-instance Latexifiable FileSet where
-  toLatex = \case
-    DataFile x -> Latex $ takeBaseName x
-    DataAndSet x y -> Latex
-      $ printf "(%s, %s)" (takeBaseName x) (takeBaseName y)
+instance Latexifiable QFile where
+  toLatex (DataFile x) = Latex $ takeBaseName x
 
 instance Latexifiable Char where
   toLatex x = Latex [x]

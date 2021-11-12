@@ -44,7 +44,7 @@ inline  void print_records(
 }
 template<typename R, typename I=WrapRecord<size_t>>
 inline constexpr void print_records(
-    const Just<const std::pair<const std::string, const std::string> >& filepath,
+    const Just<std::pair<const std::string, const std::string> >& filepath,
     const size_t n)
 {
     print_records<R>(filepath.value.first, n);

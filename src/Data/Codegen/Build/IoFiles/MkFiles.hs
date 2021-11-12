@@ -18,7 +18,7 @@ import           Data.Codegen.Build.IoFiles.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.Codegen.Build.Monads.CodeBuilder
 import           Data.NodeContainers
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.QueryPlan.Types
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
@@ -59,14 +59,14 @@ makeFilesNaive =
   traverse
   $ tritraverse
     (return . \(NodeRef n) -> NodeRef n)
-    (fmap3 dataFilePath . getPlanAndSet DataFile)
-  $ getPlanAndSet DataFile
+    (fmap3 dataFilePath . getPlanAndQFile DataFile)
+  $ getPlanAndQFile DataFile
 
 
 populateNodeRole
   :: forall constri constro e s t n m .
-  (FileSetConstructor constri
-  ,FileSetConstructor constro
+  (QFileConstructor constri
+  ,QFileConstructor constro
   ,MakeFilesConstr e s t n m)
   => constri
   -> constro
@@ -75,12 +75,12 @@ populateNodeRole
     (NodeRole
        (NodeRef ())
        (Maybe (Maybe (QueryShape e s),FilePath))
-       (Maybe (Maybe (QueryShape e s),FileSet)))
+       (Maybe (Maybe (QueryShape e s),QFile)))
 populateNodeRole constri constro =
   fmap coerceI
   . bitraverse
-  (fmap3 dataFilePath . getPlanAndSet constri)
-  (getPlanAndSet constro)
+  (fmap3 dataFilePath . getPlanAndQFile constri)
+  (getPlanAndQFile constro)
 
 coerceI :: NodeRole (NodeRef n) b c -> NodeRole (NodeRef ()) b c
 coerceI = \case
@@ -89,13 +89,13 @@ coerceI = \case
   Intermediate (NodeRef i) -> Intermediate (NodeRef i)
 
 -- | Lookup the plan and the fileset.
-getPlanAndSet
+getPlanAndQFile
   :: forall constr e s t n m .
-  (FileSetConstructor constr,MakeFilesConstr e s t n m)
+  (QFileConstructor constr,MakeFilesConstr e s t n m)
   => constr
   -> Maybe (NodeRef n)
-  -> m (Maybe (Maybe (QueryShape e s),FileSet))
-getPlanAndSet f =
+  -> m (Maybe (Maybe (QueryShape e s),QFile))
+getPlanAndQFile f =
   traverse
   $ distrib
     (dropReader (asks fst) . getNodeShapeFull)
@@ -112,7 +112,7 @@ makeFilesJUnsafe
   -> m (JIOFiles e s)
 makeFilesJUnsafe jclust = do
   Tup2 jclAntijoin jcrAntijoin <- traverse2
-    (populateNodeRole DataFile DataAndSet)
+    (populateNodeRole DataFile DataFile)
     $ Tup2 (joinClusterLeftAntijoin jclust) (joinClusterRightAntijoin jclust)
   Tup2 jclIntermediate jcrIntermediate <- traverse2 coerce'
     $ Tup2
@@ -140,7 +140,7 @@ makeFilesJUnsafe jclust = do
         (NodeRole
            (NodeRef ())
            (Maybe (Maybe (QueryShape e s),FilePath))
-           (Maybe (Maybe (QueryShape e s),FileSet)))
+           (Maybe (Maybe (QueryShape e s),QFile)))
     coerce' = \case
       Intermediate (NodeRef a) -> return $ Intermediate $ NodeRef a
       _                        -> error "oops non-interm role for interm node"

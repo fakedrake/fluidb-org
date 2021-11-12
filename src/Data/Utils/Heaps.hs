@@ -10,10 +10,9 @@ module Data.Utils.Heaps
   ,chInsert
   ,chMinKey) where
 
-import qualified Control.Monad.Loops as H
-import qualified Data.Heap           as H
-import qualified Data.IntMap         as IM
-import qualified Data.List.NonEmpty  as NEL
+import qualified Data.Heap          as H
+import qualified Data.IntMap        as IM
+import qualified Data.List.NonEmpty as NEL
 import           Data.Utils.AShow
 import           Data.Utils.MinElem
 import           Data.Utils.Nat

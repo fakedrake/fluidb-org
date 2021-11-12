@@ -65,7 +65,7 @@ import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema
 import           Data.Query.QuerySchema.Types
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import qualified Data.Set                         as DS
 import           Data.String
 import           Data.Utils.AShow
@@ -582,21 +582,11 @@ toConstrArgMaybeExp forType = \case
   -- constr "Just" (Just x) [x]
   Nothing -> CC.FunctionAp "Nothing" [CC.TypeArg $ toConstrType forType] []
 
-instance ConstructorArg FileSet where
+instance ConstructorArg QFile where
   toConstrType = \case
-    Nothing -> toConstrType (Nothing :: Maybe FilePath)
+    Nothing           -> toConstrType (Nothing :: Maybe FilePath)
     Just (DataFile f) -> toConstrType $ Just f
-    Just (DataAndSet f f') ->
-      CC.ClassType
-      (DS.singleton CC.CppConst)
-      (CC.TypeArg . toConstrType . Just <$> [f, f'])
-      "std::pair"
-  toConstrArg = \case
-    DataAndSet x y -> CC.FunctionAp "std::pair" (argType <$> [x, y])
-                     $ toConstrArg <$> [x, y]
-    DataFile x -> toConstrArg x
-    where
-      argType = CC.TypeArg . toConstrType . Just
+  toConstrArg (DataFile x) = toConstrArg x
 
 instance ConstructorArg FilePath where
   toConstrType _ = CC.constString
@@ -626,7 +616,7 @@ constrArgs ioFiles = do
       -- to be materialized
       throwAStr $ "outs ins: " ++ ashow oi
     (_,_,(outs,inps')) ->
-      case ((toConstrArgMaybeExp (Nothing :: Maybe FileSet) <$> outs) ++)
+      case ((toConstrArgMaybeExp (Nothing :: Maybe QFile) <$> outs) ++)
       <$> sequenceA inps' of
         Nothing -> throwAStr "oops"
         Just x  -> return x
@@ -641,8 +631,8 @@ toIoTup
 toIoTup ioFiles = catch $ case iofCluster ioFiles of
   JoinClustW JoinClust {..} -> mktup
     (iofDir ioFiles)
-    [joinClusterLeftAntijoin
-    ,binClusterOut joinBinCluster
+    [binClusterOut joinBinCluster
+    ,joinClusterLeftAntijoin
     ,joinClusterRightAntijoin]
     [binClusterLeftIn joinBinCluster,binClusterRightIn joinBinCluster]
   BinClustW BinClust {..} ->
@@ -666,14 +656,14 @@ mktup
        (NodeRole
           (NodeRef ())
           (MaybeBuild (Maybe (QueryShape e s),FilePath))
-          (MaybeBuild (Maybe (QueryShape e s),FileSet)))]
+          (MaybeBuild (Maybe (QueryShape e s),QFile)))]
   -> [WMetaD
        ops
        Identity
        (NodeRole
           (NodeRef ())
           (MaybeBuild (Maybe (QueryShape e s),FilePath))
-          (MaybeBuild (Maybe (QueryShape e s),FileSet)))]
+          (MaybeBuild (Maybe (QueryShape e s),QFile)))]
   -> m
     ([Maybe (CC.Expression CC.CodeSymbol)]
     ,[Maybe (CC.Expression CC.CodeSymbol)])

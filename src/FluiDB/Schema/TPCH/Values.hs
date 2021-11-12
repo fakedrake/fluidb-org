@@ -13,7 +13,6 @@
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 module FluiDB.Schema.TPCH.Values
   (tpchGlobalConf
-  ,toFS
   ,toQnfTpch
   ,resourcesDir
   ,bamaFile
@@ -35,7 +34,7 @@ import           Data.QnfQuery.Build
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.QuerySize
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Types
 import           Data.Utils.AShow
 import           Data.Utils.Default
@@ -65,7 +64,7 @@ tpchGlobalConf =
   $ PreGlobalConf
   { pgcExpIso = (id,id)
    ,pgcToUniq = asUniq
-   ,pgcToFileSet = id
+   ,pgcToQFile = id
    ,pgcPrimKeyAssoc = tpchSqlPrimKeys
    ,pgcSchemaAssoc = tpchSqlSchemaAssoc
    ,pgcTableSizeAssoc = tpchSqlTableSizes
@@ -97,10 +96,6 @@ tblFile :: Table -> FilePath
 tblFile = resourcesDir . printf "tables/%s.tbl" . unTable
 datFile :: Table -> FilePath
 datFile = resourcesDir . printf "tables/%s.dat" . unTable
-class FileSetLike x where toFS :: x -> FileSet
-instance FileSetLike FilePath where toFS = DataFile . datFile . TSymbol
-instance FileSetLike (FilePath,FilePath) where
-  toFS = uncurry DataAndSet . bimap (datFile . TSymbol) (datFile . TSymbol)
 
 toQnfTpch :: SqlTypeVars e s t n => Query e s -> QNFQuery e s
 toQnfTpch q =

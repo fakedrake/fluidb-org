@@ -11,7 +11,7 @@ import           Data.Codegen.Build.Types
 import           Data.Maybe
 import           Data.Query.Algebra
 import           Data.Query.QuerySchema.Types
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Parser
 import           Data.Query.SQL.Types
 import           Data.Utils.Functors

@@ -39,7 +39,7 @@ graphGlobalConf sch =
       ESym a -> a
       e      -> error $ "Graph has only syms: " ++ show (void e))
    ,pgcToUniq = \_ _ -> Nothing
-   ,pgcToFileSet = graphToFileSet sch
+   ,pgcToQFile = graphToQFile sch
    ,pgcPrimKeyAssoc = graphPrimKeys sch
    ,pgcSchemaAssoc = graphSchemaAssoc sch
    ,pgcTableSizeAssoc = graphTableBytes sch

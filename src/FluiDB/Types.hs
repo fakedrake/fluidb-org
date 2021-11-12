@@ -56,7 +56,7 @@ import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations
 import           Data.Query.QuerySize
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
@@ -140,7 +140,7 @@ data PreGlobalConf e0 e s =
   PreGlobalConf
   { pgcExpIso         :: (e -> ExpTypeSym' e0,ExpTypeSym' e0 -> e)
    ,pgcToUniq         :: Int -> e -> Maybe e
-   ,pgcToFileSet      :: s -> Maybe FileSet -- Embedding of tables in filesets
+   ,pgcToQFile        :: s -> Maybe QFile -- Embedding of tables in filesets
    ,pgcPrimKeyAssoc   :: [(s,[e])]          -- Primary keys of each table
    ,pgcSchemaAssoc    :: SchemaAssoc e s     -- The schema of each table
    ,pgcTableSizeAssoc :: [(s,TableSize)]          -- Size of each table in bytes
@@ -286,6 +286,6 @@ joinExcept :: Monad m =>
 joinExcept (ExceptT (ExceptT mx)) = ExceptT $ join <$> mx
 type SqlTypeVars e s t n =
   (e ~ ExpTypeSym,
-   s ~ Maybe FileSet,
+   s ~ Maybe QFile,
    t ~ (),
    n ~ ())

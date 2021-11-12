@@ -39,7 +39,7 @@ import           Data.QnfQuery.Types
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.Utils
 import           Data.Query.QuerySchema.Types
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Types
 import           Data.Utils.Default
@@ -101,7 +101,7 @@ mkQueryCppConf PreGlobalConf{..} = QueryCppConf {
   tableSchema = tableSchema',
   columnType = columnTypeLocal,
   toSymbol = codegenSymbolToSymbol,
-  defaultQueryFileCache = mkFileCache pgcToFileSet pgcSchemaAssoc,
+  defaultQueryFileCache = mkFileCache pgcToQFile pgcSchemaAssoc,
   uniqueColumns = (`lookup` pgcPrimKeyAssoc),
   asUnique = pgcToUniq
   }
@@ -117,14 +117,14 @@ mkQueryCppConf PreGlobalConf{..} = QueryCppConf {
 
 mkFileCache :: forall e s .
               Hashables2 e s =>
-              (s -> Maybe FileSet)
+              (s -> Maybe QFile)
             -> SchemaAssoc e s
             -> QueryFileCache e s
-mkFileCache toFileSet schemaAssoc =
+mkFileCache toQFile schemaAssoc =
   go $ HM.fromList $ catMaybes $ toAssoc <$> schemaAssoc
   where
-    toAssoc :: (s,x) -> Maybe (Either (Query e s) (QNFQuery e s),FileSet)
-    toAssoc (fn,_) = (safeQnf $ Q0 fn,) <$> toFileSet fn
+    toAssoc :: (s,x) -> Maybe (Either (Query e s) (QNFQuery e s),QFile)
+    toAssoc (fn,_) = (safeQnf $ Q0 fn,) <$> toQFile fn
     safeQnf :: Query e s -> Either (Query e s) (QNFQuery e s)
     safeQnf q =
       fmap (fst . fromJustErr)
@@ -132,7 +132,7 @@ mkFileCache toFileSet schemaAssoc =
       $ (`evalStateT` def)
       $ listTMaxQNF fst
       $ toQNF (toTableColumns schemaAssoc) q
-    go :: HM.HashMap (Either (Query e s) (QNFQuery e s)) FileSet
+    go :: HM.HashMap (Either (Query e s) (QNFQuery e s)) QFile
        -> QueryFileCache e s
     go hm =
       QueryFileCache

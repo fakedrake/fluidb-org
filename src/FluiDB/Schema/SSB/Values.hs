@@ -2,7 +2,7 @@ module FluiDB.Schema.SSB.Values (getSsbGlobalConf,T,N) where
 
 import           Data.Bifunctor
 import           Data.Query.QuerySize
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Types
 import           Data.Utils.AShow
 import           Data.Utils.Functors
@@ -26,10 +26,10 @@ getSsbGlobalConf = do
         {pgcPrimKeyAssoc=first TSymbol <$> fmap3 ESym ssbPrimKeys
         ,pgcSchemaAssoc=bimap TSymbol (fmap2 ESym) <$> ssbSchema
         ,pgcTableSizeAssoc=sizes
-        ,pgcBudget=Just 60000 -- 2400M
+        ,pgcBudget=Just 60000 -- 240M
         ,pgcExpIso=(id,id)
         ,pgcToUniq=genUniqName
-        ,pgcToFileSet= \case
+        ,pgcToQFile= \case
             TSymbol s ->Just $ DataFile $ dataDir </> s <.> "dat"
             NoTable   -> Nothing
         }

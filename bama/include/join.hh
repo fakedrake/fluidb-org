@@ -161,7 +161,7 @@ auto mkJoin(const OutType& o, const LeftTriagleType& lt,
             const RightTriagleType& rt, const std::string& l,
             const std::string& r) {
   return Join<Predicate, Combine, OutType, LeftTriagleType, RightTriagleType>(
-                                                                              o, lt, rt, l, r);
+      o, lt, rt, l, r);
 }
 
 template <typename Combine, typename OutType>

@@ -80,4 +80,4 @@ import           Data.CppAst.Template
 import           Data.CppAst.TmplDefArg
 import           Data.CppAst.TypeDef
 import           Data.CppAst.TypeModifier
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile

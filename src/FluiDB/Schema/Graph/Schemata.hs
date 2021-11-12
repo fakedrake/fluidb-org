@@ -10,7 +10,7 @@
 -- Generate the source files.
 
 module FluiDB.Schema.Graph.Schemata
-  (graphToFileSet
+  (graphToQFile
   ,graphTableBytes
   ,graphSchemaAssoc
   ,graphPrimKeys
@@ -27,7 +27,7 @@ import           Data.Codegen.SchemaAssocClass
 import           Data.CppAst
 import           Data.List.Extra
 import           Data.Query.QuerySize
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           GHC.Generics
@@ -45,7 +45,7 @@ mkGraphSchema qs = GraphSchema {
   graphSchemaConnections = [(tbl, graphTable i (tbl, conns))
                            | (i,(tbl, conns)) <-
                              zip [0..] $ edgesToGraph $ nub qs],
-  graphSchemaTableToFileSet = const $ Just $ DataFile "no-file-really.dat"
+  graphSchemaTableToQFile = const $ Just $ DataFile "no-file-really.dat"
   }
   where
     graphTable :: Int -> (s,[s]) -> GraphTable e s
@@ -68,8 +68,8 @@ data GraphTable e s = GraphTable {
 instance (AShow e,AShow s) => AShow (GraphTable e s)
 
 data GraphSchema e s = GraphSchema {
-  graphSchemaConnections    :: [(s, GraphTable e s)],
-  graphSchemaTableToFileSet :: s -> Maybe FileSet
+  graphSchemaConnections  :: [(s, GraphTable e s)],
+  graphSchemaTableToQFile :: s -> Maybe QFile
   } deriving Generic
 
 instance Bifunctor GraphTable where
@@ -82,10 +82,10 @@ graphSchemaIsoMap :: (e -> e') -> (s -> s', s' -> s)
                   -> GraphSchema e s -> GraphSchema e' s'
 graphSchemaIsoMap emap (f,g) GraphSchema{..} = GraphSchema{
   graphSchemaConnections=bimap f (bimap emap f) <$> graphSchemaConnections,
-  graphSchemaTableToFileSet=graphSchemaTableToFileSet . g}
+  graphSchemaTableToQFile=graphSchemaTableToQFile . g}
 
-graphToFileSet :: GraphSchema e s -> s -> Maybe FileSet
-graphToFileSet = graphSchemaTableToFileSet
+graphToQFile :: GraphSchema e s -> s -> Maybe QFile
+graphToQFile = graphSchemaTableToQFile
 
 graphTableBytes :: GraphSchema e s -> [(s, TableSize)]
 graphTableBytes GraphSchema {..} =

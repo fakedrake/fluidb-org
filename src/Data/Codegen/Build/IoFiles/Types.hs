@@ -16,7 +16,7 @@ import           Data.Cluster.Types.Clusters
 import           Data.Codegen.Build.Types
 import           Data.Functor.Identity
 import           Data.NodeContainers
-import           Data.Query.SQL.FileSet
+import           Data.Query.SQL.QFile
 import           Data.Utils.AShow
 import           Data.Utils.Hashable
 import           Data.Void
@@ -61,7 +61,7 @@ type IOFiles e s =
   IOFilesG
     (NodeRef ())
     (Maybe (QueryShape e s),FilePath)
-    (Maybe (QueryShape e s),FileSet)
+    (Maybe (QueryShape e s),QFile)
 
 -- | If a file has Nothing in the filename, it means we should not be
 -- making it.

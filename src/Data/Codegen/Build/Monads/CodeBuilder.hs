@@ -58,10 +58,10 @@ import           Control.Monad.Morph
 import           Control.Monad.Reader
 import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
-import           Data.QnfQuery.Types
 import           Data.Codegen.Build.Monads.Class
 import           Data.List
-import           Data.Query.SQL.FileSet
+import           Data.QnfQuery.Types
+import           Data.Query.SQL.QFile
 import           Data.Utils.AShow
 import           Data.Utils.Functors
 import           Data.Utils.Hashable
@@ -86,7 +86,7 @@ hoistCodeBuilderT' f = hoist (hoist (hoistCGraphBuilderT f))
 type SoftCodeBuilderT e s t n m = StateT Int (CodeBuilderT' e s t n m)
 
 -- |Embed the query cache operations to the codebuilder monad
-putQueryFile :: MonadCodeBuilder e s t n m => QNFQuery e s -> FileSet -> m ()
+putQueryFile :: MonadCodeBuilder e s t n m => QNFQuery e s -> QFile -> m ()
 putQueryFile q f = do
   st <- getCBState
   putCBState st{
@@ -113,7 +113,7 @@ getNodeFile
      ,MonadError (CodeBuildErr e s t n) m
      ,MonadReader (ClusterConfig e s t n) m)
   => NodeRef n
-  -> m (Maybe FileSet)
+  -> m (Maybe QFile)
 getNodeFile n = dropState (ask,const $ return ()) (getNodeQnfN n) >>= \case
   [] -> throwAStr $ "No file for node: " ++ ashow n
   qnfs -> do
@@ -127,14 +127,14 @@ getNodeFile n = dropState (ask,const $ return ()) (getNodeQnfN n) >>= \case
 -- for the query corresponding to the node.
 mkNodeFile
   :: forall e s t n m constr .
-  (FileSetConstructor constr
+  (QFileConstructor constr
   ,Hashables2 e s
   ,MonadCodeBuilder e s t n m
   ,MonadError (CodeBuildErr e s t n) m
   ,MonadReader (ClusterConfig e s t n) m)
   => constr
   -> NodeRef n
-  -> m FileSet
+  -> m QFile
 mkNodeFile constr n =
   dropState (ask,const $ return ()) (getNodeQnfN n) >>= \case
     [] -> error $ "No qnfs for node " ++ show n
@@ -145,17 +145,17 @@ mkNodeFile constr n =
         mapM_ (`putQueryFile` f) qnfs
         return f
 
-mkFileName :: (FileSetConstructor constr, MonadCodeBuilder e s t n m,
+mkFileName :: (QFileConstructor constr, MonadCodeBuilder e s t n m,
               MonadError (CodeBuildErr e s t n) m) =>
              constr
            -> NodeRef n
            -> [QNFQuery e s]
-           -> m FileSet
+           -> m QFile
 mkFileName constr n qnfs = do
   qf <- getCachedFile . defaultQueryFileCache . cbQueryCppConf <$> getCBState
   let assoc = (\qnf -> (qf qnf,qnf)) <$> qnfs
   fileset <- case nub $ mapMaybe fst assoc of
-              []  -> return $ constructFileSet constr (runNodeRef n)
+              []  -> return $ constructQFile constr (runNodeRef n)
               [f] -> return f
               xs  -> throwAStr $ "Conflicting files for node: " ++ ashow (n,xs)
   mapM_ (`putQueryFile` fileset) $ snd <$> filter (isNothing . fst) assoc
