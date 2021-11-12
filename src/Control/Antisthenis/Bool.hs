@@ -124,27 +124,18 @@ zBound z = do
   where
     bgs = zBgState z
 
--- | It is finished if the result is absorbing or if the inits and its
--- are empty.
-zFinished
-  :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
-zFinished z =
-  trace
-    ("Bool finished?"
-     <: (zId z
-        ,first (const ()) <$> zRes z
-        ,length $ bgsInits $ zBgState z
-        ,void $ acNonEmpty $ bgsIts $ zBgState z
-        ,ret))
-    ret
-  where
-    ret = isAbsorb || emptyIniIt (zBgState z)
-    emptyIniIt ZipState {..} = null bgsInits && isNothing (acNonEmpty bgsIts)
-    isAbsorb = case zRes z of
-      Just (Right x) -> case elemType x of
-        AbsorbingElem -> True
-        NormalElem    -> False
-      _ -> False
+-- | It is finished if the result is absorbing. If its/inits are empty
+-- it does NOT mean we are finished since there is also the
+-- cursor. The general zipper facilities induce such finishing by
+-- invoking FinZipper.
+zAbsorb :: BoolOp op
+        => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m)
+        -> Bool
+zAbsorb z = case zRes z of
+  Just (Right x) -> case elemType x of
+    AbsorbingElem -> True
+    NormalElem    -> False
+  _ -> False
 
 data ElemType = AbsorbingElem | NormalElem
 class (AShow (BoolV op),Semigroup (BoolV op)) => BoolOp op where
@@ -310,7 +301,7 @@ boolEvolutionControl
 boolEvolutionControl conf z = case confCap conf of
   ForceResult -> zRes z >>= \case
     Left _e -> Nothing -- xxx: should check if zero is even possible.
-    Right x -> if zFinished z then Just $ BndRes x else Nothing
+    Right x -> if zAbsorb z then Just $ BndRes x else Nothing
   CapVal cap -> do
     localBnd <- zBound z
     if exceedsCap @(BoolTag op p) Proxy cap localBnd
