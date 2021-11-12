@@ -26,6 +26,7 @@ module Control.Antisthenis.Bool
 
 import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Types
+import           Control.Monad
 import           Control.Utils.Free
 import           Data.Bifunctor
 import           Data.Coerce
@@ -127,7 +128,14 @@ zBound z = do
 -- are empty.
 zFinished
   :: BoolOp op => Zipper (BoolTag op p) (ArrProc (BoolTag op p) m) -> Bool
-zFinished z = trace ("Bool finished?" <: (first (const ()) <$> zRes z,ret)) ret
+zFinished z =
+  trace
+    ("Bool finished?"
+     <: (first (const ()) <$> zRes z
+        ,length $ bgsInits $ zBgState z
+        ,void $ acNonEmpty $ bgsIts $ zBgState z
+        ,ret))
+    ret
   where
     ret = isAbsorb || emptyIniIt (zBgState z)
     emptyIniIt ZipState {..} = null bgsInits && isNothing (acNonEmpty bgsIts)
