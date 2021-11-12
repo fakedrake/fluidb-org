@@ -78,7 +78,8 @@ instance AShow v => AShow  (GBool op v)
 type BoolCap op = GBool op (Maybe Cost)
 type BoolBound op = GBool op Cost
 newtype BoolV op = BoolV Bool deriving (Generic,Show,Eq)
-instance AShow (BoolV op)
+instance AShow (BoolV Or) where
+  ashow' (BoolV bv) = sexp "BoolV" [ashow' bv,Sym "::",Sym "Or"]
 
 instance Semigroup (GAbsorbing Cost) where
   a <> b =
