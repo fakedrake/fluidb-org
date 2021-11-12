@@ -109,14 +109,14 @@ updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
     Left e         -> throwError e
     Right (_,rmap) -> return rmap
 
--- | In ([TableSize],Double) empty list means the node is an
+-- | In (TableSize,Double) empty list means the node is an
 -- intermediate.
 putQuerySize
   :: forall e s t n m .
   (Hashables2 e s
   ,MonadError (SizeInferenceError e s t n) m
    -- Nothing in a node means we are currently looking up the node
-  ,MonadState (ClusterConfig e s t n,RefMap n ([TableSize],Double)) m)
+  ,MonadState (ClusterConfig e s t n,RefMap n (TableSize,Double)) m)
   => NodeRef n
   -> m ()
 putQuerySize ref =
@@ -162,7 +162,7 @@ getQnfM k = do
 
 
 filterAlreadySized
-  :: MonadState (RefMap n [TableSize]) m => [NodeRef n] -> m [NodeRef n]
+  :: MonadState (RefMap n TableSize) m => [NodeRef n] -> m [NodeRef n]
 filterAlreadySized refs = do
   rMap <- get
   return $ filter (not . (`refMember` rMap)) refs
@@ -171,7 +171,7 @@ filterInterms
   :: (Hashables2 e s
      ,MonadAShowErr e s err m
      ,MonadState
-        (ClusterConfig e s t n,RefMap n ([TableSize],Double))
+        (ClusterConfig e s t n,RefMap n (TableSize,Double))
         m)
   => [NodeRef n]
   -> m [NodeRef n]
@@ -179,7 +179,7 @@ filterInterms refs = (`filterM` refs) $ \ref
   -> dropReader (gets fst) (isIntermediateClust ref) >>= \case
     False -> return True
     True  -> do
-      modify ( second $ refInsert ref ([],1))
+      modify ( second $ refInsert ref (def,1))
       return False
 
 onlyCC

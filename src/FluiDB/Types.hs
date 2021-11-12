@@ -162,7 +162,7 @@ data GlobalConf e s t n = forall e0 . GlobalConf {
 data NodeReport e s t n = NodeReport {
   nrRef      :: NodeRef n,
   nrMatState :: NodeState,
-  nrSize     :: ([TableSize],Double),
+  nrSize     :: (TableSize,Double),
   nrIsInterm :: Bool,
 
   nrQuery    :: [Query e s]

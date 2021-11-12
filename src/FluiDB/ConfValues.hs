@@ -166,12 +166,12 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
         $ runExceptT clusterBuilt
   (propNetLocal,tableMap) <- first toGlobalError pair
   let newNodes = refKeys tableMap
-  -- nodeTableSize :: NodeRef n -> Either (Maybe s) [TableSize]
+  -- nodeTableSize :: NodeRef n -> Either (Maybe s) TableSize
   let nodeTableSize ref = do
         tbl <- maybe (Left Nothing) return $ ref `refLU` tableMap
-        maybe (Left $ Just tbl) return2 $ tbl `lookup` pgcTableSizeAssoc
+        maybe (Left $ Just tbl) return $ tbl `lookup` pgcTableSizeAssoc
   nodeSizes' <- either (\x -> throwAStr $ ashow x) return
-    $ traverse (\n -> (n,) . (,1) <$> nodeTableSize n) newNodes
+    $ traverse (\n -> (n,) . (,1) <$> nodeTableSize n)  newNodes -- (\n -> (n,) . (,1) <$> nodeTableSize n)
   return
     GlobalConf
     { globalExpTypeSymIso = pgcExpIso

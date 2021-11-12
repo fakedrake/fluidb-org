@@ -76,7 +76,7 @@ mkShapeFromTbl
 mkShapeFromTbl QueryCppConf {..} tableSize s = do
   sch <- tableSchema s
   ucols <- uniqueColumns s
-  mkQueryShape QuerySize { qsTables = [tableSize],qsCertainty = 1 }
+  mkQueryShape QuerySize { qsTables = tableSize,qsCertainty = 1 }
     $ fmap2 (\e -> (mkShapeSym (PrimaryCol e s 0) e,e `elem` ucols)) sch
 
 -- |Get the schema from something that is like a projection.

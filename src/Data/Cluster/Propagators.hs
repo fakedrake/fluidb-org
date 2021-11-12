@@ -374,14 +374,14 @@ bopOutput assoc o = case o of
       where
         secSize = qpSize sizeOnly
         primSize = qpSize schema
-        primTbl = head $ qsTables primSize
-        secTbl = head $ qsTables secSize
+        primTbl = qsTables primSize
+        secTbl = qsTables secSize
         primCard = tsRows primTbl
         secCard = tsRows secTbl
         newTbl = primTbl { tsRows = mkCard primCard secCard }
         newSize =
           QuerySize
-          { qsTables = [newTbl]
+          { qsTables = newTbl
            ,qsCertainty = mkCert (qsCertainty primSize) (qsCertainty secSize)
           }
 
@@ -438,11 +438,11 @@ uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
       $ translateShape' onSize assoc shape
       where
         onSize qs =
-          QuerySize { qsTables = [tbl { tsRows = modCard $ tsRows tbl }]
-                     ,qsCertainty = modCert $ qsCertainty qs
-                    }
-          where
-            tbl = head $ qsTables qs
+          QuerySize
+          { qsTables = (qsTables qs)
+              { tsRows = modCard $ tsRows $ qsTables qs }
+           ,qsCertainty = modCert $ qsCertainty qs
+          }
     outGrpShape p es = G1 $ \inp -> either
       (\e -> throwAStr $ "getQueryShapeGrp failed: " ++ ashow (e,op))
       return

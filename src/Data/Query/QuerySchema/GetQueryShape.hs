@@ -236,7 +236,7 @@ getQueryShapeGrp litType proj es qshape = do
   rowSize <- getRowSize sch
   let querySize =
         QuerySize
-        { qsTables = [TableSize { tsRowSize = rowSize,tsRows = 10 }]
+        { qsTables = TableSize { tsRowSize = rowSize,tsRows = 10 }
          ,qsCertainty = 0.1
         }
   case (es,NEL.nonEmpty proj) of
@@ -371,7 +371,7 @@ getSymShape prims symSchema tableSizeM s = do
   maybe (throwAStr $ "No unique columns: " ++ ashow s) return
     $ mkQueryShape (symSize tableSize) schAnnotUniq
   where
-    symSize tableSize = QuerySize { qsTables = [tableSize],qsCertainty = 1 }
+    symSize tableSize = QuerySize { qsTables = tableSize,qsCertainty = 1 }
     makeSym :: Monad m => e -> m (ShapeSym e s,Bool)
     makeSym e = do
       pks <- maybe (throwAStr "Missing primkeys") return prims

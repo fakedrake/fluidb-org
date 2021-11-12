@@ -16,7 +16,6 @@
 module Data.QueryPlan.NodeProc (NodeProc,getPlanBndR) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
-import           Control.Antisthenis.ATL.Class.Writer
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Types

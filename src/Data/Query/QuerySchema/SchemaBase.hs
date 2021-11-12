@@ -355,19 +355,18 @@ joinQuerySizes luType qs qs' = case luType of
     { qsTables = mkTables combJoin
      ,qsCertainty = qsCertainty qs * qsCertainty qs' * 0.5
     }
-  RightForeignKey -> QuerySize
-    { qsTables = mkTables $ \_ x -> x,qsCertainty = qsCertainty qs' }
-  LeftForeignKey -> QuerySize
-    { qsTables = mkTables $ \x _ -> x,qsCertainty = qsCertainty qs }
+  RightForeignKey ->
+    QuerySize { qsTables = mkTables $ \_ x -> x,qsCertainty = qsCertainty qs' }
+  LeftForeignKey
+   -> QuerySize { qsTables = mkTables const,qsCertainty = qsCertainty qs }
   where
     combJoin x y = (x * y) `div` 3
-    mkTables combCard = case (qsTables qs,qsTables qs') of
-      (x:xs,y:ys) -> TableSize
-        { tsRows = combCard (tsRows x) (tsRows y)
-         ,tsRowSize = tsRowSize x + tsRowSize y
-        }
-        : xs ++ ys
-      _ -> error "Empty table sizes encountered."
+    mkTables combCard =
+      TableSize
+      { tsRows = combCard (tsRows $ qsTables qs) (tsRows $ qsTables qs')
+       ,tsRowSize = tsRowSize (qsTables qs)
+          + tsRowSize (qsTables qs')
+      }
 
 -- | Drop the constants. Nothing means there is no non-const column.
 uniqDropConst

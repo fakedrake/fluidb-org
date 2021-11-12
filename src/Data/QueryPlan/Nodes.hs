@@ -156,8 +156,8 @@ totalNodePages
   -> m PageNum
 totalNodePages ref = do
   let pageSize = 4096
-  sizes <- getDataSizeOf ref
-  fmap sum $ forM sizes $ \size -> case pageNum pageSize size of
+  size <- getDataSizeOf ref
+  case pageNum pageSize size of
     Nothing    -> throwError $ RecordLargerThanPageSize pageSize size ref
     Just 0     -> error
       $ printf "Zero page table spotted node %n (size: %s)" ref $ show size
@@ -182,7 +182,7 @@ getDataSizeOf
      ,MonadError (PlanningError t n) m
      ,HasCallStack)
   => NodeRef n
-  -> m [TableSize]
+  -> m TableSize
 getDataSizeOf = fmap fst . configLU "getDataSizeOf" nodeSizes
 
 -- | Cost of creating a node under the current state of the graph.

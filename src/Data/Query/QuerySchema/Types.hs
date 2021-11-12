@@ -44,26 +44,24 @@ instance Hashable ColumnProps
 
 type QueryShapeNoSize a e s = QueryShape' a (ShapeSym e s)
 type QueryShape e s = QueryShape' QuerySize (ShapeSym e s)
-data QuerySize = QuerySize { qsTables :: [TableSize],qsCertainty :: Double }
+data QuerySize = QuerySize { qsTables :: TableSize,qsCertainty :: Double }
   deriving (Show,Generic,Eq)
 instance Hashable QuerySize
 instance AShow QuerySize
 instance ARead QuerySize
 querySizeBytes :: QuerySize -> Bytes
-querySizeBytes QuerySize{..} = sum $ map tableBytes qsTables
+querySizeBytes QuerySize{..} = tableBytes qsTables
 -- | Use all the properties of the second argument except
 -- cardinality. Use the cardinality with the most certain. Also use the qsCa
 useCardinality :: QuerySize -> QuerySize -> QuerySize
 useCardinality qsCard qs =
   if qsCertainty qs >= qsCertainty qsCard then qs else qsCard
-    { qsTables = zipWith go (qsTables qsCard) (qsTables qs) }
+    { qsTables = go (qsTables qsCard) (qsTables qs) }
   where
     go tsCard ts = ts { tsRows = tsRows tsCard }
 modCardinality :: (Cardinality -> Cardinality) -> QuerySize -> QuerySize
-modCardinality card qs = qs { qsTables = go $ qsTables qs }
-  where
-    go []     = error "Unreachable"
-    go (t:ts) = t { tsRows = card $ tsRows t } : ts
+modCardinality card qs =
+  qs { qsTables = (qsTables qs) { tsRows = card $ tsRows $ qsTables qs } }
 
 modCertainty :: (Double -> Double) -> QuerySize -> QuerySize
 modCertainty f qs = qs { qsCertainty = f $ qsCertainty qs }
@@ -94,11 +92,7 @@ queryShapeBytes :: QueryShape e s -> Bytes
 queryShapeBytes QueryShape{..} = querySizeBytes qpSize
 
 putRowSize :: Bytes -> QuerySize -> QuerySize
-putRowSize rs qs =
-  qs { qsTables = onHead (\ts -> ts { tsRowSize = rs }) $ qsTables qs }
-  where
-    onHead f (x:xs) = f x : xs
-    onHead _f []    = []
+putRowSize rs qs = qs { qsTables = (qsTables qs) { tsRowSize = rs } }
 
 -- | Unique symbols
 data ShapeSym e s = ShapeSym {

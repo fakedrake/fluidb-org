@@ -181,7 +181,7 @@ data GCConfig t n =
   GCConfig
   { -- These are configuration but ok.
     propNet       :: Bipartite t n
-   ,nodeSizes     :: RefMap n ([TableSize],Certainty)
+   ,nodeSizes     :: RefMap n (TableSize,Certainty)
    ,intermediates :: NodeSet n
    ,budget        :: Maybe PageNum
    ,queryHistory  :: QueryHistory n
