@@ -767,7 +767,7 @@ int main() {
   //               (R0 (E0 (ESym "s_suppkey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_suppkey\"))) \n              (R0 (E0 (ESym \"s_suppkey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass8, CallableClass10, CallableClass5>(Just<const std::string>(std::pair<const std::string, const std::string>("data35.dat", "index35.dat")), Just<const std::string>("data36.dat"), Just<const std::string>(std::pair<const std::string, const std::string>("data37.dat", "index37.dat")), "/run/user/1000/fluidb-data/supplier.dat", "/run/user/1000/fluidb-data/lineorder.dat");
+    auto operation = mkEquiJoin<CallableClass8, CallableClass10, CallableClass5>(Just<const std::string>("data36.dat"), Just<const std::string>("data35.dat"), Just<const std::string>("data37.dat"), "/run/user/1000/fluidb-data/supplier.dat", "/run/user/1000/fluidb-data/lineorder.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -781,7 +781,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass17, CallableClass19, CallableClass15>(Just<const std::string>(std::pair<const std::string, const std::string>("data40.dat", "index40.dat")), Just<const std::string>("data41.dat"), Just<const std::string>(std::pair<const std::string, const std::string>("data42.dat", "index42.dat")), "data36.dat", "/run/user/1000/fluidb-data/date.dat");
+    auto operation = mkEquiJoin<CallableClass17, CallableClass19, CallableClass15>(Just<const std::string>("data41.dat"), Just<const std::string>("data40.dat"), Just<const std::string>("data42.dat"), "data36.dat", "/run/user/1000/fluidb-data/date.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -795,7 +795,7 @@ int main() {
   //               (R0 (E0 (ESym "p_partkey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_partkey\"))) \n              (R0 (E0 (ESym \"p_partkey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass26, CallableClass28, CallableClass24>(Just<const std::string>(std::pair<const std::string, const std::string>("data45.dat", "index45.dat")), Just<const std::string>("data46.dat"), Just<const std::string>(std::pair<const std::string, const std::string>("data47.dat", "index47.dat")), "data41.dat", "/run/user/1000/fluidb-data/part.dat");
+    auto operation = mkEquiJoin<CallableClass26, CallableClass28, CallableClass24>(Just<const std::string>("data46.dat"), Just<const std::string>("data45.dat"), Just<const std::string>("data47.dat"), "data41.dat", "/run/user/1000/fluidb-data/part.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -815,7 +815,7 @@ int main() {
   //                 (R0 (E0 (EString "MFGR#12"))))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"s_region\"))) \n                (R0 (E0 (EString \"AMERICA\"))))) \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"p_category\"))) \n                (R0 (E0 (EString \"MFGR#12\"))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass30>(Just<const std::string>("data50.dat"), Nothing<const std::string>(), "data46.dat");
+    auto operation = mkSelect<CallableClass30>(Just<const std::string>("data50.dat"), Just<const std::string>("data51.dat"), "data46.dat");
     operation.run();
     operation.print_output(10);
   }
