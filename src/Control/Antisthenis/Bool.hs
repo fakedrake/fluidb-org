@@ -26,16 +26,12 @@ module Control.Antisthenis.Bool
 
 import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Types
-import           Control.Monad
 import           Control.Utils.Free
-import           Data.Bifunctor
 import           Data.Coerce
-import           Data.Maybe
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
-import           Data.Utils.Debug
 import           Data.Utils.Heaps
 import           Data.Utils.Unsafe
 import           GHC.Generics
