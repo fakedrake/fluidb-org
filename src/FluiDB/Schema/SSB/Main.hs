@@ -56,9 +56,8 @@ shouldRender :: Verbosity -> Bool
 shouldRender Verbose = True
 shouldRender Quiet   = False
 
-type Index = Int
-runQuery :: Verbosity -> Index -> SSBQuery -> SSBGlobalSolveM [Transition T N]
-runQuery verbosity index  query = do
+runQuery :: Verbosity -> WIndex -> SSBQuery -> SSBGlobalSolveM [Transition T N]
+runQuery verbosity windex  query = do
   cppConf <- gets globalQueryCppConf
   aquery <- annotateQuerySSB cppConf query
   (transitions,cppCode)
@@ -70,7 +69,7 @@ runQuery verbosity index  query = do
       liftIO $ putStrLn $ "The reperoire of intermediates: " ++ intermPath
   -- liftIO $ runCpp cppCode
   liftIO $ putStrLn $ ashow transitions
-  storeCpp index cppCode
+  storeCpp windex cppCode
   return transitions
 
 type Seconds = Double
@@ -87,7 +86,7 @@ getSecs = do
   t <- getSecsI
   return $ t - t0
 
-storeCpp :: Index -> CppCode -> SSBGlobalSolveM ()
+storeCpp :: WIndex -> CppCode -> SSBGlobalSolveM ()
 storeCpp i cpp = do
   budgetM <- gets $  budget . globalGCConfig
   lift2 $ do
@@ -129,17 +128,19 @@ singleQuery =
 #endif
 
 data Verbosity = Verbose | Quiet
-actualMain :: Verbosity -> [Int] -> IO ()
-actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \qi -> do
+type QueryId = Int
+type WIndex = Int
+actualMain :: Verbosity -> [(WIndex,QueryId)] -> IO ()
+actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
   mats <- globalizePlanT $ do
-    ns <- nodesInState [Initial Mat,Concrete NoMat Mat, Concrete Mat Mat]
+    ns <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
     mapM (\n -> (n,) <$> totalNodePages n) ns
   lift2 $ traceM $ "mat nodes: " ++ ashow mats
   liftIO $ traceM $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
-      _transitions <- runQuery verbosity qi query
+      _transitions <- runQuery verbosity wi query
       pgs <- globalizePlanT getDataSize
       lift2 $ putStrLn $ "Pages used: " ++ show pgs
 
@@ -201,7 +202,9 @@ ssbMain = do
   -- setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
   let secs = 3 * 60
   traceTM "Starting!"
-  timeout (secs * 1000000) (actualMain Verbose $ take 30 $ cycle [1 .. 12])
+  timeout
+    (secs * 1000000)
+    (actualMain Verbose $ take 30 $ zip [1 ..] $ cycle [1 .. 12])
     >>= \case
       Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
       Just () -> putStrLn "Done!"
