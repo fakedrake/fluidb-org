@@ -22,8 +22,8 @@ struct B {
 
 #define A_DAT "/tmp/removeme_a.dat"
 #define B_DAT "/tmp/removeme_b.dat"
-#define LA_DAT (std::make_pair("/tmp/removeme_la.dat","/tmp/removeme_ila.dat"))
-#define RA_DAT (std::make_pair("/tmp/removeme_ra.dat","/tmp/removeme_ira.dat"))
+#define LA_DAT "/tmp/removeme_la.dat"
+#define RA_DAT "/tmp/removeme_ra.dat"
 #define O_DAT "/tmp/removeme_o.dat"
 
 A mkA(size_t i) { return {i, i}; }
@@ -91,8 +91,8 @@ int main() {
 
   {
     auto j = mkEquiJoin<KeyA, KeyB, Comb>(Just<std::string>(O_DAT),
-                                          Just<filepair>(LA_DAT),
-                                          Just<filepair>(RA_DAT), A_DAT, B_DAT);
+                                          Just<std::string>(LA_DAT),
+                                          Just<std::string>(RA_DAT), A_DAT, B_DAT);
     j.run();
   }
 
@@ -102,7 +102,7 @@ int main() {
     eachRecord<AB>(O_DAT, [&i](AB s) { require_eq(i++, s.a.a1, "Equal"); });
     require_eq(i, TOTAL, "Total records");
     // Check the complement
-    eachRecord<B>(RA_DAT.first,
+    eachRecord<B>(RA_DAT,
                   [&i](const B& s) { require_eq(i++, s.b1, "Equal"); });
     require_eq(i, TOTAL + EXTRA, "Total records");
     eachRecord<A>(LA_DAT.first, [](const A& s) {

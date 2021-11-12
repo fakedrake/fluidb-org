@@ -70,18 +70,13 @@ public:
   void run() {
     Writer<Left> left_antijoin_writer;
     Writer<Right> right_antijoin_writer;
-    Writer<size_t> left_indexes_writer, right_indexes_writer;
     Writer<Out> output(outfile.value);
     bool left_touched;
     size_t left_index = 0;
 
     // Open antijoin files
     WITH(left_antijoin_filename,
-         left_antijoin_writer.open(left_antijoin_filename.value.first));
-    WITH(left_antijoin_filename,
-         left_indexes_writer.open(left_antijoin_filename.value.second));
-    WITH(right_antijoin_filename,
-         right_indexes_writer.open(right_antijoin_filename.value.second));
+         left_antijoin_writer.open(left_antijoin_filename.value));
 
     std::vector<bool> right_touched_map;
     eachRecord<Left>(leftfile, [&](const Left& left_record) {
@@ -95,7 +90,6 @@ public:
           if (left_touched) {
             // We are re-touching, this should be
             // removed if we are unjoining.
-            WITH(left_antijoin_filename, left_indexes_writer.write(left_index));
           } else {
             left_touched = true;
           }
@@ -122,7 +116,6 @@ public:
     // Close antijoin
     if constexpr (!LeftTriagleType::isNothing) {
       left_antijoin_writer.close();
-      left_indexes_writer.close();
     }
 
     // Write the right antijoin.
@@ -130,7 +123,7 @@ public:
       right_indexes_writer.close();
       Reader<Right> right_reader;
       right_reader.open(rightfile);
-      right_antijoin_writer.open(right_antijoin_filename.value.first);
+      right_antijoin_writer.open(right_antijoin_filename.value);
       for (size_t i = 0; i < right_touched_map.size() && right_reader.hasNext();
            i++) {
         auto rec = right_reader.nextRecord();
@@ -240,9 +233,7 @@ public:
 
     WITH(outfile, out_writer.open(outfile.value));
     WITH(left_antijoin_file,
-         dup_indexes_left.open(left_antijoin_file.value.second));
-    WITH(left_antijoin_file,
-         left_antijoin_writer.open(left_antijoin_file.value.first));
+         left_antijoin_writer.open(left_antijoin_file.value));
     while (processed_partitions < number_of_partitions) {
       if (make_pass(processed_partitions++)) {break;}
     }
@@ -260,7 +251,7 @@ public:
       fs::remove(final_left);
     }
     WITH(right_antijoin_file,
-         fs::rename(final_right, right_antijoin_file.value.first));
+         fs::rename(final_right, right_antijoin_file.value));
     WITH(outfile, out_writer.close());
   }
 
