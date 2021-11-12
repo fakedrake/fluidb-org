@@ -65,7 +65,7 @@ class PartitionJoin {
 
       WITH(outfile, output.open(outfile.value));
       WITH(left_antijoin_file,
-           left_antijoin_writer.open(left_antijoin_file.value.first));
+           left_antijoin_writer.open(left_antijoin_file.value));
       WITH(left_antijoin_file,
            left_dup_index_writer.open(left_antijoin_file.value.second));
       WITH(right_antijoin_file,

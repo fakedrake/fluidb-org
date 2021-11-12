@@ -175,11 +175,11 @@ filterInterms
         m)
   => [NodeRef n]
   -> m [NodeRef n]
-filterInterms refs = (`filterM` refs) $ \ref
-  -> dropReader (gets fst) (isIntermediateClust ref) >>= \case
+filterInterms refs = (`filterM` refs) $ \ref ->
+  dropReader (gets fst) (isIntermediateClust ref) >>= \case
     False -> return True
-    True  -> do
-      modify ( second $ refInsert ref (def,1))
+    True -> do
+      modify (second $ refInsert ref (def,1))
       return False
 
 onlyCC
