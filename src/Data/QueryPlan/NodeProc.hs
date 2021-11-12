@@ -43,14 +43,15 @@ import           Data.Utils.Default
 -- | Check that a node is materialized and add mark it as such in the
 -- coepoch.
 ifMaterialized
-  :: (Monad m,IsPlanParams p n)
+  :: forall m w n .
+  (Monad m,IsPlanParams w n,PlanMech m w n)
   => NodeRef n
-  -> ArrProc p m
-  -> ArrProc p m
-  -> ArrProc p m
+  -> ArrProc w m
+  -> ArrProc w m
+  -> ArrProc w m
 ifMaterialized ref t e = squashMealy $ \conf -> do
   let isMater = fromMaybe False $ ref `refLU` peParams (confEpoch conf)
-  when (mcShouldTell ref isMater) $
+  when (mcShouldTell @m @w @n Proxy ref isMater) $
     tell (mempty { pceParams = refFromAssocs [(ref,isMater)] })
   return (conf,if isMater then t else e)
 
