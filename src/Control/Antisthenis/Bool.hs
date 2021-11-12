@@ -80,6 +80,8 @@ type BoolBound op = GBool op Cost
 newtype BoolV op = BoolV Bool deriving (Generic,Show,Eq)
 instance AShow (BoolV Or) where
   ashow' (BoolV bv) = sexp "BoolV" [ashow' bv,Sym "::",Sym "Or"]
+instance AShow (BoolV And) where
+  ashow' (BoolV bv) = sexp "BoolV" [ashow' bv,Sym "::",Sym "And"]
 
 instance Semigroup (GAbsorbing Cost) where
   a <> b =
@@ -136,7 +138,7 @@ zFinished z = trace ("Bool finished?" <: (first (const ()) <$> zRes z,ret)) ret
       _ -> False
 
 data ElemType = AbsorbingElem | NormalElem
-class Semigroup (BoolV op) => BoolOp op where
+class (AShow (BoolV op),Semigroup (BoolV op)) => BoolOp op where
   -- | Whether the Bool or error is trumped or trumps the result
   -- depends on the operation.
   toGAbsorbing :: GBool op v -> GAbsorbing v
