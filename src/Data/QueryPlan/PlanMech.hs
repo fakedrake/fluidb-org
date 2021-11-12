@@ -21,7 +21,6 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Functors
 import           Data.Utils.Nat
 
@@ -123,7 +122,7 @@ instance PlanMech (PlanT t n Identity) (CostParams CostTag n) n where
 
 
 nodeStatePair :: Monad m => NodeRef n -> PlanT t n m (NodeRef n,Bool)
-nodeStatePair ref = fmap (\x -> (ref,isMat x)) $ getNodeState ref
+nodeStatePair ref = (\x -> (ref,isMat x)) <$> getNodeState ref
 instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcGetMech Proxy ref = do
     x <- nodeStatePair ref
@@ -138,7 +137,7 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcCompStackVal _ _n = BndRes $ BoolV False
   -- | Register only materialized nodes as dependencies. If we
   -- materialize a new node then no other nodes can become non-materialized.
-  mcShouldTell _ _ _ isMat0 = isMat0
+  mcShouldTell _ _ isMat0 = isMat0
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref
