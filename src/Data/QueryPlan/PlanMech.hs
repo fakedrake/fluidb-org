@@ -136,7 +136,7 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref
     neigh' <- traverse2 nodeStatePair neigh
-    traceM $ "Neighbors: " ++ show (ref,neigh')
+    trM $ "Neighbors: " ++ show (ref,neigh')
     -- If the node is materialized const true, otherwise const
     -- false. The coepochs are updated by the caller, particularly by
     -- ifMaterialized. Since we got here here it means ref is not
