@@ -50,7 +50,8 @@ ifMaterialized
   -> ArrProc p m
 ifMaterialized ref t e = squashMealy $ \conf -> do
   let isMater = fromMaybe False $ ref `refLU` peParams (confEpoch conf)
-  tell (mempty { pceParams = refFromAssocs [(ref,isMater)] })
+  when (mcShouldTell ref isMater) $
+    tell (mempty { pceParams = refFromAssocs [(ref,isMater)] })
   return (conf,if isMater then t else e)
 
 -- proc conf -> do
@@ -62,6 +63,7 @@ ifMaterialized ref t e = squashMealy $ \conf -> do
 
 -- | Build AND INSERT a new mech in the mech directory. The mech does
 -- not update it's place in the mech map.α
+
 mkNewMech
   :: forall w n  m .
   (PlanMech m w n,IsPlanParams w n)

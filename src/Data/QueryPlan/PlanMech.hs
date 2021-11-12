@@ -107,6 +107,10 @@ class Monad m => PlanMech m w n where
                  } | (inp,cost) <- neigh]
     return (conf,makeCostProc ref mechs)
 
+  mcShouldTell :: Proxy (m (),w,n) -> NodeRef n -> Bool -> Bool
+  default mcShouldTell :: Proxy (m (),w,n) -> NodeRef n -> Bool -> Bool
+  mcShouldTell _ _ _ = True
+
 -- | Make a plan for a node to be concrete.
 instance PlanMech (PlanT t n Identity) (CostParams CostTag n) n where
   mcIsMatProc Proxy _ref _proc = arr $ const $ BndRes zero
@@ -132,6 +136,9 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   -- coepoch.
   mcMkCost = error "We dont' make costs for Bool (materializable) mech"
   mcCompStackVal _ _n = BndRes $ BoolV False
+  -- | Register only materialized nodes as dependencies. If we
+  -- materialize a new node then no other nodes can become non-materialized.
+  mcShouldTell _ _ isMat0 = isMat0
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref
