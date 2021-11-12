@@ -131,7 +131,8 @@ zFinished
 zFinished z =
   trace
     ("Bool finished?"
-     <: (first (const ()) <$> zRes z
+     <: (zId z
+        ,first (const ()) <$> zRes z
         ,length $ bgsInits $ zBgState z
         ,void $ acNonEmpty $ bgsIts $ zBgState z
         ,ret))
