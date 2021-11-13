@@ -41,23 +41,23 @@ instance PlanMech (PlanT t n Identity) (CostParams HistTag n) n where
 
 -- | The expected cost of the next query.
 pastCosts
-  :: forall t n m . Monad m => ListT (PlanT t n m) (Maybe HCost)
-pastCosts = do
+  :: forall t n m . Monad m => Cost -> ListT (PlanT t n m) (Maybe HCost)
+pastCosts maxCost = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 3 qs
   res <- lift
-    $ getPlanBndR @(CostParams HistTag n) Proxy  (CapVal maxCap) q
+    $ getPlanBndR @(CostParams HistTag n) Proxy (CapVal $ maxCap maxCost) q
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return $ Just zero
     BndBnd _bnd -> return Nothing
-    BndErr e ->
-      error $ "getCost(" ++ ashow q ++ "):antisthenis error: " ++ ashow e
+    BndErr
+      e -> error $ "getCost(" ++ ashow q ++ "):antisthenis error: " ++ ashow e
 
-maxCap :: HistCap Cost
-maxCap =
-  HistCap { hcMatsEncountered = 1,hcValCap = MinInf,hcNonCompTolerance = 0.7 }
+maxCap :: Cost -> HistCap Cost
+maxCap maxCost =
+  HistCap { hcMatsEncountered = 2,hcValCap = Min $ Just maxCost,hcNonCompTolerance = 0.7 }
 
 -- | The materialized node indeed has a cost. That cost is
 -- calculated by imposing a scaling on the cost it would have if it

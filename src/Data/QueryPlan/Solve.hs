@@ -78,11 +78,11 @@ haltPlan matRef mop = do
   modify $ \gcs -> gcs
     { frontier = nsDelete matRef (frontier gcs) <> metaOpIn mop }
   extraCost <- metaOpCost [matRef] mop
-  void $ haltPlanCost Nothing $ fromIntegral $ costAsInt extraCost
+  void $ haltPlanCost Nothing extraCost
 
-histCosts :: Monad m => PlanT t n m Cost
-histCosts = do
-  hcs :: [Maybe HCost] <- takeListT 3 pastCosts
+histCosts :: Monad m => Cost -> PlanT t n m Cost
+histCosts maxCost = do
+  hcs :: [Maybe HCost] <- takeListT 3 $ pastCosts maxCost
   -- Curate the consts that are too likely to be non-comp
   return $ mconcat $ mapMaybe (>>= toCost) hcs
   where
@@ -94,7 +94,7 @@ haltPlanCost
   :: forall t n m .
   (HaltKey m ~ PlanSearchScore,MonadHalt m,HasCallStack)
   => Maybe Cost
-  -> Double
+  -> Cost
   -> PlanT t n m Cost
 haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
   frefs <- gets $ toNodeList . frontier
@@ -112,12 +112,12 @@ haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
           ++ "):antisthenis error: "
           ++ ashow e
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  hc <- maybe histCosts return histCostCached
+  hc <- maybe (histCosts $ concreteCost <> mconcat costs) return histCostCached
   trM $ printf "Halt%s: %s" (show frefs) $ show concreteCost
   trM $ printf "Historical costs: %s" $ ashowLine $ ashow hc
   halt
     $ PlanSearchScore
-      concreteCost
+      (fromIntegral $ costAsInt concreteCost)
       (Just $ frontierCost + fromIntegral (costAsInt hc))
   trM "Resume!"
   return hc
@@ -318,7 +318,7 @@ garbageCollectFor
 garbageCollectFor
   ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ \requiredPages -> do
   preReport
-  hc <- haltPlanCost Nothing 0
+  hc <- haltPlanCost Nothing zero
   go requiredPages hc `eitherl` (newEpoch >> go requiredPages hc)
   trM $ "Finished GC to make " ++ show ns
   where
