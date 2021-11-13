@@ -179,21 +179,19 @@ satisfyComputability ref0 mech conf = runCompT $ getValue ref0 mech
           trail <- ask
           if ref `nsMember` trail then return False <|> return True else m
     getComputable :: NodeRef n -> CompT n m Bool
-    getComputable ref =
-      unlessEncountered ref
-      $ local (nsInsert ref)
-      $ wrapTrace ("getComputable" <: ref)
-      $ do
-        -- first run normally.
-        (coepoch,(_nxt0,val)) <- runNodeProc $ getOrMakeMech ref
-        -- The value may change but it is definitely computable.
-        if isComp0 val then finComputable
-          else finWeDontKnow $ toNodeList $ pNonComputables $ pcePred coepoch
+    getComputable
+      ref = unlessEncountered ref $ wrapTrace ("getComputable" <: ref) $ do
+      -- first run normally.
+      (coepoch,(_nxt0,val)) <- runNodeProc $ getOrMakeMech ref
+      -- The value may change but it is definitely computable.
+      if isComp0 val then finComputable
+        else finWeDontKnow $ toNodeList $ pNonComputables $ pcePred coepoch
       where
         finComputable = do
           setComp ref
           return True
-        finWeDontKnow = filterM getComputable >=> \case
+        finWeDontKnow
+          comps = local (nsInsert ref) (filterM getComputable comps) >>= \case
           [] -> do
             setNoComp ref
             return False
