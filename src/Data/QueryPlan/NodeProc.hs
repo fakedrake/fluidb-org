@@ -37,6 +37,7 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 
 -- | Check that a node is materialized and add mark it as such in the
@@ -157,7 +158,7 @@ satisfyComputability = go mempty
             let conf' = foldl' (flip markComputable) conf actuallyComputables
             runNodeProc (go trail ref nxt0) conf'
       where
-        isComputableM conf ref' = do
+        isComputableM conf ref' = wrapTrace ("isComputableM" <: ref') $ do
           (_coproc,(_nxt,ret)) <- runNodeProc
             (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
