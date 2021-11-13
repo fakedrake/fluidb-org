@@ -20,6 +20,7 @@ import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Types
 import           Control.Antisthenis.Zipper
+import           Control.Applicative
 import           Control.Arrow                               hiding ((>>>))
 import           Control.Monad.Except
 import           Control.Monad.Extra
@@ -40,6 +41,9 @@ import           Data.QueryPlan.Types
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Default
+import           Data.Utils.Functors
+import           Data.Utils.ListT
+import           Data.Utils.Unsafe
 
 -- | Check that a node is materialized and add mark it as such in the
 -- coepoch.
@@ -136,6 +140,7 @@ setComputables refs conf =
 -- The property is that assuming a value is not computable while
 -- computing the value itself should not affact the final result.
 data CompTrail n = CompTrail { ctIsComp :: NodeSet n,ctNotComp :: NodeSet n }
+type CompT n m = ReaderT (NodeSet n) (ListT (StateT (CompTrail n) m))
 satisfyComputability
   :: forall m w n .
   (PlanMech m w n,IsPlanParams w n)
@@ -144,13 +149,17 @@ satisfyComputability
   -> Conf w
   -> m (BndR w)
 satisfyComputability ref0 mech conf =
-  (`evalStateT` CompTrail mempty mempty) $ go ref0 mech
+  fmap fromJustErr
+  $ (`evalStateT` CompTrail mempty mempty)
+  $ headListT
+  $ (`runReaderT` mempty)
+  $ go ref0 mech
   where
-    runNodeProc :: ArrProc w m
-                -> StateT (CompTrail n) m (PlanCoEpoch n,(ArrProc w m,BndR w))
+    runNodeProc
+      :: ArrProc w m -> CompT n m (PlanCoEpoch n,(ArrProc w m,BndR w))
     runNodeProc c = do
       ct <- get
-      lift
+      lift3
         $ toKleisli (runWriterArrow $ runMealyArrow c)
         $ setComputables (ctIsComp ct) conf
     isComp0 = mcIsComputable @m @w @n Proxy
@@ -159,7 +168,17 @@ satisfyComputability ref0 mech conf =
         setComp = modify $ \ct -> ct { ctIsComp = nsInsert ref $ ctIsComp ct }
         setNoComp =
           modify $ \ct -> ct { ctNotComp = nsInsert ref $ ctNotComp ct }
-    go :: NodeRef n -> ArrProc w m -> StateT (CompTrail n) m (BndR w)
+    unlessEncountered :: NodeRef n -> CompT n m Bool -> CompT n m Bool
+    unlessEncountered ref m = do
+      CompTrail {..} <- get
+      case (ref `nsMember` ctIsComp,ref `nsMember` ctNotComp) of
+        (True,False) -> return True
+        (True,True) -> error "oops"
+        (False,True) -> return False
+        (False,False) -> do
+          trail <- ask
+          if ref `nsMember` trail then return False <|> return True else m
+    go :: NodeRef n -> ArrProc w m -> CompT n m (BndR w)
     go ref c = do
       -- first run normally.
       (coepoch,(nxt0,val)) <- runNodeProc c
@@ -172,10 +191,9 @@ satisfyComputability ref0 mech conf =
           anyComputable <- anyM isComputableM assumedNonComputables
           if anyComputable then go ref nxt0 else return val
       where
-        isComputableM ref' = do
-          ret <- wrapTrace ("isComputableM" <: ref')
-            $ go ref'
-            $ getOrMakeMech ref'
+        isComputableM :: NodeRef n -> CompT n m Bool
+        isComputableM ref' = unlessEncountered ref' $ do
+          ret <- local (nsInsert ref') $ go ref' $ getOrMakeMech ref'
           return $ isComp0 ret
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
