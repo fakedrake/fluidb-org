@@ -182,6 +182,7 @@ satisfyComputability ref0 mech conf = runCompT $ go ref0 mech
           if ref `nsMember` trail then return False <|> return True else m
     go :: NodeRef n -> ArrProc w m -> CompT n m (BndR w)
     go ref c = do
+      "evaluating" <<: ref
       -- first run normally.
       (coepoch,(nxt0,val)) <- runNodeProc c
       -- Solve each predicate.
