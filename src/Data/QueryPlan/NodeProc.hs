@@ -140,7 +140,14 @@ setComputables refs conf =
 -- The property is that assuming a value is not computable while
 -- computing the value itself should not affact the final result.
 data CompTrail n = CompTrail { ctIsComp :: NodeSet n,ctNotComp :: NodeSet n }
-type CompT n m = ReaderT (NodeSet n) (ListT (StateT (CompTrail n) m))
+type CompT n m = ReaderT (NodeSet n) (StateT (CompTrail n) (ListT m))
+runCompT :: Monad m => CompT n m a -> m a
+runCompT m =
+  fmap fromJustErr
+  $ headListT
+  $ (`evalStateT` CompTrail mempty mempty)
+  $ (`runReaderT` mempty) m
+
 satisfyComputability
   :: forall m w n .
   (PlanMech m w n,IsPlanParams w n)
@@ -148,12 +155,7 @@ satisfyComputability
   -> ArrProc w m
   -> Conf w
   -> m (BndR w)
-satisfyComputability ref0 mech conf =
-  fmap fromJustErr
-  $ (`evalStateT` CompTrail mempty mempty)
-  $ headListT
-  $ (`runReaderT` mempty)
-  $ go ref0 mech
+satisfyComputability ref0 mech conf = runCompT $ go ref0 mech
   where
     runNodeProc
       :: ArrProc w m -> CompT n m (PlanCoEpoch n,(ArrProc w m,BndR w))
@@ -195,6 +197,7 @@ satisfyComputability ref0 mech conf =
         isComputableM ref' = unlessEncountered ref' $ do
           ret <- local (nsInsert ref') $ go ref' $ getOrMakeMech ref'
           return $ isComp0 ret
+
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
 markNonComputable
