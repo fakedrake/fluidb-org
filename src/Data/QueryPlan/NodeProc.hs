@@ -182,7 +182,7 @@ satisfyComputability ref0 mech conf = runCompT $ getValue ref0 mech
     getComputable ref =
       unlessEncountered ref
       $ local (nsInsert ref)
-      $ wraptTrace ("getComputable" <: ref)
+      $ wrapTrace ("getComputable" <: ref)
       $ do
         -- first run normally.
         (coepoch,(_nxt0,val)) <- runNodeProc $ getOrMakeMech ref
