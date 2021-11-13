@@ -47,7 +47,7 @@ pastCosts maxCost = do
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 3 qs
   res <- lift
-    $ wrapTraceT ("pastCost" <: q)
+    $ wrapTraceT ("antisthenis:pastCost" <: q)
     $ getPlanBndR @(CostParams HistTag n) Proxy (CapVal $ maxCap maxCost) q
   case res of
     BndRes (Sum (Just r)) -> return $ Just r

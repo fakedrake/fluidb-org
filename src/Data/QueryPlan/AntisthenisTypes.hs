@@ -164,26 +164,24 @@ instance Monoid (Predicates n) where
 type CoPredicates n = NodeSet n
 data PlanEpoch n =
   PlanEpoch
-  { peCoPred       :: CoPredicates n
-   ,peParams       :: RefMap n Bool
-   ,peMaterialized :: Integer
+  { peCoPred :: CoPredicates n
+   ,peParams :: RefMap n Bool
   }
   deriving Generic
 data PlanCoEpoch n =
   PlanCoEpoch
-  { pcePred       :: Predicates n
-   ,pceParams     :: RefMap n Bool
-   ,pceMaterlized :: Integer
+  { pcePred   :: Predicates n
+   ,pceParams :: RefMap n Bool
   }
   deriving (Show,Eq,Generic)
-instance AShow (PlanCoEpoch n)
-  -- ashow' PlanCoEpoch {..} = ashow' pcePred
+instance AShow (PlanCoEpoch n) where
+  ashow' _ = Sym "<PlanCoEpoch>"
 instance AShow (PlanEpoch n) where
   ashow' PlanEpoch {..} = ashow' peCoPred
 
 instance Default (PlanEpoch n)
 instance Monoid (PlanCoEpoch n) where
-  mempty = PlanCoEpoch mempty mempty 0
+  mempty = PlanCoEpoch mempty mempty
 instance Semigroup (PlanCoEpoch n) where
-  PlanCoEpoch a b d <> PlanCoEpoch a' b' d' =
-    PlanCoEpoch (a <> a') (b <> b') (max d d')
+  PlanCoEpoch a b <> PlanCoEpoch a' b' =
+    PlanCoEpoch (a <> a') (b <> b')
