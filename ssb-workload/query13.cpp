@@ -568,7 +568,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ReverseTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = unJoin<CallableClass3, CallableClass5>("data159.dat", "data192.dat", "/run/user/1000/fluidb-data/date.dat");
+    auto operation = mkUnJoin<CallableClass3, CallableClass5>(Just("data159.dat"), Just("data192.dat"), Nothing(), Just("/run/user/1000/fluidb-data/date.dat"), Nothing());
     operation.run();
     operation.print_output(10);
   }

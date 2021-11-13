@@ -603,7 +603,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ReverseTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = unJoin<CallableClass3, CallableClass5>("data28.dat", "data27.dat", "data25.dat");
+    auto operation = mkUnJoin<CallableClass3, CallableClass5>(Just("data28.dat"), Just("data27.dat"), Nothing(), Just("data25.dat"), Nothing());
     operation.run();
     operation.print_output(10);
   }
