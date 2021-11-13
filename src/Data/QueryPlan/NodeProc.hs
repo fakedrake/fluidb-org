@@ -155,7 +155,7 @@ satisfyComputability
   -> ArrProc w m
   -> Conf w
   -> m (BndR w)
-satisfyComputability ref0 mech conf = runCompT $ go ref0 mech
+satisfyComputability ref0 mech conf = runCompT $ getValue ref0 mech
   where
     runNodeProc
       :: ArrProc w m -> CompT n m (PlanCoEpoch n,(ArrProc w m,BndR w))
@@ -165,11 +165,9 @@ satisfyComputability ref0 mech conf = runCompT $ go ref0 mech
         $ toKleisli (runWriterArrow $ runMealyArrow c)
         $ setComputables (ctIsComp ct) conf
     isComp0 = mcIsComputable @m @w @n Proxy
-    regRef ref val = if isComp0 val then setComp else setNoComp
-      where
-        setComp = modify $ \ct -> ct { ctIsComp = nsInsert ref $ ctIsComp ct }
-        setNoComp =
-          modify $ \ct -> ct { ctNotComp = nsInsert ref $ ctNotComp ct }
+    setComp ref = modify $ \ct -> ct { ctIsComp = nsInsert ref $ ctIsComp ct }
+    setNoComp
+      ref = modify $ \ct -> ct { ctNotComp = nsInsert ref $ ctNotComp ct }
     unlessEncountered :: NodeRef n -> CompT n m Bool -> CompT n m Bool
     unlessEncountered ref m = do
       CompTrail {..} <- get
@@ -180,24 +178,40 @@ satisfyComputability ref0 mech conf = runCompT $ go ref0 mech
         (False,False) -> do
           trail <- ask
           if ref `nsMember` trail then return False <|> return True else m
-    go :: NodeRef n -> ArrProc w m -> CompT n m (BndR w)
-    go ref c = do
+    getComputable :: NodeRef n -> CompT n m Bool
+    getComputable ref = local (nsInsert ref) $ unlessEncountered ref $ do
+      -- first run normally.
+      (coepoch,(_nxt0,val)) <- runNodeProc $ getOrMakeMech ref
+      -- The value may change but it is definitely computable.
+      if isComp0 val then finComputable
+        else finWeDontKnow $ toNodeList $ pNonComputables $ pcePred coepoch
+      where
+        finComputable = do
+          setComp ref
+          return True
+        finWeDontKnow nonComps =
+          -- Solve each predicate.
+          case nonComps of
+            [] -> do
+              setNoComp ref
+              return False
+            assumedNonComputables -> do
+              -- Are any of our assumptions broken?
+              anyComputable <- anyM getComputable assumedNonComputables
+              if anyComputable then getComputable ref else return False
+    getValue :: NodeRef n -> ArrProc w m -> CompT n m (BndR w)
+    getValue ref c = local (nsInsert ref) $ do
       "evaluating" <<: ref
       -- first run normally.
       (coepoch,(nxt0,val)) <- runNodeProc c
+      -- The value may change but it is definitely computable.
+      when (isComp0 val) $ setComp ref
       -- Solve each predicate.
       case toNodeList $ pNonComputables $ pcePred coepoch of
-        [] -> do
-          regRef ref val
-          return val
+        [] -> return val
         assumedNonComputables -> do
-          anyComputable <- anyM isComputableM assumedNonComputables
-          if anyComputable then go ref nxt0 else return val
-      where
-        isComputableM :: NodeRef n -> CompT n m Bool
-        isComputableM ref' = unlessEncountered ref' $ do
-          ret <- local (nsInsert ref') $ go ref' $ getOrMakeMech ref'
-          return $ isComp0 ret
+          anyComputable <- anyM getComputable assumedNonComputables
+          if anyComputable then getValue ref nxt0 else return val
 
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
