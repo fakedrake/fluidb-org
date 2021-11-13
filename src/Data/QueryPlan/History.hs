@@ -21,6 +21,7 @@ import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.ListT
 import           Data.Utils.Nat
 
@@ -46,6 +47,7 @@ pastCosts maxCost = do
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 3 qs
   res <- lift
+    $ wrapTraceT ("pastCost" <: q)
     $ getPlanBndR @(CostParams HistTag n) Proxy (CapVal $ maxCap maxCost) q
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
@@ -68,7 +70,7 @@ maxCap maxCost =
 -- were not materialized. This opens the door to an explosion in
 -- computation.
 isMatCost :: forall t n . NodeRef n -> HistProc t n -> HistProc t n
-isMatCost ref matCost0 = wrapMealy matCost0 guardedGo
+isMatCost _ref matCost0 = wrapMealy matCost0 guardedGo
   where
     go conf matCost = do
       -- "Mat historical" <<: ref
