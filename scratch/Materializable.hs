@@ -45,7 +45,7 @@ type AndTag n = BoolTag And (PlanParams n)
 makeIsMatableProc
   :: forall t n .
   NodeRef n
-  -> [[NodeProc t n (BoolTag Or (PlanParams n) )]]
+  -> [[NodeProc t n (BoolTag Or (PlanParams n))]]
   -> NodeProc t n (BoolTag Or (PlanParams n))
 makeIsMatableProc ref deps =
   procOr
