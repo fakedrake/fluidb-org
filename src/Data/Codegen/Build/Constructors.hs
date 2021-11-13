@@ -603,7 +603,7 @@ constrArgs
   -> m [CC.Expression CC.CodeSymbol]
 constrArgs ioFiles = do
   outAndIn <- toIoTup ioFiles
-  let nothing =  CC.FunctionAp "Nothing" [] [e]
+  let nothing =  CC.FunctionAp "Nothing" [] []
   let just e = CC.FunctionAp "Just" [] [e]
   case (iofCluster ioFiles,iofDir ioFiles,outAndIn) of
     (JoinClustW _,ReverseTrigger,([Just l,Just r],[Just o,Just lo,Just ro])) ->
