@@ -309,6 +309,8 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
         MooreMech iniZ iniMealy = mkZCatIni zid procs
     zNext :: ZState w m -> Conf w -> MBF (ArrProc w m) Void
     zNext zs@ZState {..} gconf = do
+#define DEBUG_ZIPPER
+#ifdef DEBUG_ZIPPER
       let tr :: AShow a => String -> a -> MBF (ArrProc w m) ()
           tr msg arg =
             trZ
@@ -317,7 +319,9 @@ mkProcId zid procs = arrCoListen' $ mkMealy $ zNext zsIni
               -- ["none"] -- print nothing
               []    -- print all
               arg
-      -- let tr _ _ = return ()
+#else
+      let tr _ _ = return ()
+#endif
       tr "zLocalizeConf" (confCap gconf,confEpoch gconf,zsCoEpoch)
       case zLocalizeConf zsCoEpoch gconf zsZipper of
         ShouldReset -> do
