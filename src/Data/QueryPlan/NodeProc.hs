@@ -22,6 +22,7 @@ import           Control.Antisthenis.Types
 import           Control.Antisthenis.Zipper
 import           Control.Arrow                               hiding ((>>>))
 import           Control.Monad.Except
+import           Control.Monad.Extra
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -134,35 +135,48 @@ setComputables refs conf =
 --
 -- The property is that assuming a value is not computable while
 -- computing the value itself should not affact the final result.
+data CompTrail n = CompTrail { ctIsComp :: NodeSet n,ctNotComp :: NodeSet n }
 satisfyComputability
   :: forall m w n .
   (PlanMech m w n,IsPlanParams w n)
   => NodeRef n
   -> ArrProc w m
-  -> ArrProc w m
-satisfyComputability = go mempty
+  -> Conf w
+  -> m (BndR w)
+satisfyComputability ref0 mech conf =
+  (`evalStateT` CompTrail mempty mempty) $ go ref0 mech
   where
-    mkNodeProc = MealyArrow . WriterArrow . fromKleisli
-    runNodeProc = toKleisli . runWriterArrow . runMealyArrow
-    go trail ref c = mkNodeProc $ \conf -> do
+    runNodeProc :: ArrProc w m
+                -> StateT (CompTrail n) m (PlanCoEpoch n,(ArrProc w m,BndR w))
+    runNodeProc c = do
+      ct <- get
+      lift
+        $ toKleisli (runWriterArrow $ runMealyArrow c)
+        $ setComputables (ctIsComp ct) conf
+    isComp0 = mcIsComputable @m @w @n Proxy
+    regRef ref val = if isComp0 val then setComp else setNoComp
+      where
+        setComp = modify $ \ct -> ct { ctIsComp = nsInsert ref $ ctIsComp ct }
+        setNoComp =
+          modify $ \ct -> ct { ctNotComp = nsInsert ref $ ctNotComp ct }
+    go :: NodeRef n -> ArrProc w m -> StateT (CompTrail n) m (BndR w)
+    go ref c = do
       -- first run normally.
-      r@(coepoch,(nxt0,_val)) <- runNodeProc c conf
+      (coepoch,(nxt0,val)) <- runNodeProc c
       -- Solve each predicate.
       case toNodeList $ pNonComputables $ pcePred coepoch of
-        [] -> return r
+        [] -> do
+          regRef ref val
+          return val
         assumedNonComputables -> do
-          actuallyComputables
-            <- filterM (isComputableM conf) assumedNonComputables
-          "(comp,non-comp)" <<: (actuallyComputables,assumedNonComputables)
-          if null actuallyComputables then return r else do
-            let conf' = foldl' (flip markComputable) conf actuallyComputables
-            runNodeProc (go trail ref nxt0) conf'
+          anyComputable <- anyM isComputableM assumedNonComputables
+          if anyComputable then go ref nxt0 else return val
       where
-        isComputableM conf ref' = do
-          (_coproc,(_nxt,ret)) <- wrapTrace ("isComputableM" <: ref')
-            $ runNodeProc (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
-            $ setComputables trail conf
-          return $ mcIsComputable @m @w @n Proxy ret
+        isComputableM ref' = do
+          ret <- wrapTrace ("isComputableM" <: ref')
+            $ go ref'
+            $ getOrMakeMech ref'
+          return $ isComp0 ret
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
 markNonComputable
@@ -279,17 +293,16 @@ getBndR
   -> NodeRef n
   -> m (BndR w) -- (Maybe (MechVal w))
 getBndR _ cap states ref = wrapTr $ do
-  (res,_coepoch) <- runWriterT
-    $ runMech (satisfyComputability @m @w ref $ getOrMakeMech ref)
+  res <- satisfyComputability @m @w ref (getOrMakeMech ref)
     $ Conf
     { confCap = cap,confEpoch = def { peParams = states },confTrPref = () }
   return res
-  -- case res of
-  --   BndRes (Sum (Just r)) -> return $ Just r
-  --   BndRes (Sum Nothing) -> return $ Just zero
-  --   BndBnd _bnd -> return Nothing
-  --   BndErr e ->
-  --     error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
   where
+    -- case res of
+    --   BndRes (Sum (Just r)) -> return $ Just r
+    --   BndRes (Sum Nothing) -> return $ Just zero
+    --   BndBnd _bnd -> return Nothing
+    --   BndErr e ->
+    --     error $ "getCost(" ++ ashow ref ++ "):antisthenis error: " ++ ashow e
     -- wrapTr = wrapTrace ("getBndR" <: ref)
     wrapTr = id
