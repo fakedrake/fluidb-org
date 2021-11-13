@@ -204,11 +204,16 @@ instance ExtParams (BoolTag op p) p => BndRParams (BoolTag op p) where
   -- lower (better) bound to be the most optimistic of the two. But
   -- when comparing with the cap the logic is different
   bndLt Proxy b1 b2 = b1 < b2
+  -- | When the bound exceeds the cap there is Nothing to do. When the
+  -- bound is entirely within the cap provide a way to use it as a
+  -- cap.
   exceedsCap Proxy cap bnd =
-    gbTrue cap .< gbTrue bnd || gbFalse cap .< gbFalse bnd
+    if gbTrue cap .<= gbTrue bnd || gbFalse cap .<= gbFalse bnd
+    then Nothing else Just
+      $ GBool { gbTrue = Just $ gbTrue bnd,gbFalse = Just $ gbFalse bnd }
     where
-      Just a .< b  = a < b
-      Nothing .< _ = False
+      Just a .<= b  = a <= b
+      Nothing .<= _ = False
 
 instance (AShow (ExtCoEpoch p),ExtParams (BoolTag op p) p,BoolOp op)
   => ZipperParams (BoolTag op p) where
@@ -300,8 +305,9 @@ boolEvolutionControl conf z = case confCap conf of
     Right x -> if zAbsorb z then Just $ BndRes x else Nothing
   CapVal cap -> do
     localBnd <- zBound z
-    if exceedsCap @(BoolTag op p) Proxy cap localBnd
-      then return $ BndBnd localBnd else Nothing
+    case exceedsCap @(BoolTag op p) Proxy cap localBnd of
+      Nothing -> return $ BndBnd localBnd
+      Just _  -> Nothing
 
 -- | The problem is that there is no w type in Conf w, just ZCap w so
 -- we need to translate Conf w into a functor of ZCap w. This can be

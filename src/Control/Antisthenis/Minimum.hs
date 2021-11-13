@@ -244,11 +244,12 @@ instance (AShow (MechVal p)
       (SecBnd _ bnd,ForceResult) -> conf { confCap = CapVal $ rgetL bnd }
     where
       chooseCapBnd :: ZCap (MinTag p) -> ZBnd (MinTag p) -> ZCap (MinTag p)
-      chooseCapBnd cap res =
-        if exceedsCap @(MinTag p) Proxy cap res then cap else rgetL res
+      chooseCapBnd cap bnd =
+        fromMaybe cap $ exceedsCap @(MinTag p) Proxy cap bnd
+        -- if exceedsCap @(MinTag p) Proxy cap bnd then cap else rgetL bnd
       chooseCapRes :: ZCap (MinTag p) -> ZRes (MinTag p) -> ZCap (MinTag p)
       chooseCapRes cap res =
-        if exceedsCap @(MinTag p) Proxy cap res then cap else rgetL res
+        fromMaybe cap $ exceedsCap @(MinTag p) Proxy cap res
 
 -- | Given a proposed solution and the configuration from which it
 -- came return a bound that matches the configuration or Nothing if
@@ -272,13 +273,18 @@ minEvolutionControl conf z = case confCap conf of
     x -> return x
   CapVal cap -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
-      SecRes r -> if bndLt @(MinTag p) Proxy r bnd then Just $ BndRes r
-        else if exceedsCap @(MinTag p) Proxy cap bnd
-          then Just $ BndBnd bnd else Nothing
-      _sec -> if exceedsCap @(MinTag p) Proxy cap bnd
-        then Just $ BndBnd bnd else Nothing
+      SecRes secr -> secRes cap bnd secr
+      _sec        -> noSecRes cap bnd
     x -> Just x
   where
+    noSecRes cap bnd = case exceedsCap @(MinTag p) Proxy cap bnd of
+      Nothing -> Just $ BndBnd bnd
+      Just _  -> Nothing
+    secRes cap bnd secr = case bndLt @(MinTag p) Proxy secr bnd of
+      True -> Just $ BndRes secr
+      False -> case exceedsCap @(MinTag p) Proxy cap bnd of
+        Nothing -> Just $ BndBnd bnd
+        Just _  -> Nothing
     -- THE result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of

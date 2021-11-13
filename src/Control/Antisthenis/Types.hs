@@ -169,7 +169,14 @@ class BndRParams w where
   type ZRes w :: *
 
   bndLt :: Proxy w -> ZBnd w -> ZBnd w -> Bool
-  exceedsCap :: Proxy w -> ZCap w -> ZBnd w -> Bool
+  -- | Nothing means the bound exceeds cap and we should continue with
+  -- the same cap. Just (..) means the bound does not exceed the
+  -- cap. A new cap is provided in case we want to use the bound as a
+  -- cap.
+  --
+  -- A bound that is equal to the cap is not considered to be
+  -- exceeding it.
+  exceedsCap :: Proxy w -> ZCap w -> ZBnd w -> Maybe (ZCap w)
 
 type Old a = a
 type New a = a
@@ -357,7 +364,10 @@ class (Monoid (ExtCoEpoch p)) => ExtParams w p where
 
   type MechVal p :: *
 
-  extExceedsCap :: Proxy (p,w) -> ExtCap p -> ZBnd w -> Bool
+  -- | See exceedsCap: Nothing means the bound actually exceeds the
+  -- cap. Just means the bound is smaller than the cap and it might
+  -- provide a tighter cap if appropriate.
+  extExceedsCap :: Proxy (p,w) -> ExtCap p -> ZBnd w -> Maybe (ExtCap p)
   extCombEpochs
     :: Proxy p -> ExtCoEpoch p -> ExtEpoch p -> Conf w -> MayReset (Conf w)
 

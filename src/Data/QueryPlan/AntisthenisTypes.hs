@@ -68,7 +68,7 @@ instance ZBnd w ~ ExtCap (PlanParams CostTag n)
   type ExtCoEpoch (PlanParams CostTag n) = PlanCoEpoch n
   type ExtCap (PlanParams CostTag n) =
     Min (MechVal (PlanParams CostTag n))
-  extExceedsCap Proxy cap bnd = cap < bnd
+  extExceedsCap Proxy cap bnd = if cap <= bnd then Nothing else Just bnd
   extCombEpochs _ = planCombEpochs
 
 maxMatTrail :: Int

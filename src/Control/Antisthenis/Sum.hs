@@ -145,14 +145,14 @@ sumEvolutionControl conf z = traceRes $ case zFullResSum z of
     _ -> trace0 ("sumEvo:no-eval-yet:Forced" <: zId z) Nothing
   SumPart bnd -> case confCap conf of
     CapVal cap ->
-      if exceedsCap @(SumTag p) Proxy cap (coerce bnd :: ZBnd (SumTag p))
-      then Just $ BndBnd $ coerce bnd
-      else trace0 ("zumEvo:bound-cap-exceeds-bound" <: (zId z, cap, bnd)) Nothing
+      case exceedsCap @(SumTag p) Proxy cap (coerce bnd :: ZBnd (SumTag p)) of
+        Nothing -> Just $ BndBnd $ coerce bnd
+        Just _  -> Nothing
     ForceResult -> trace0 ("sumEvp:forceresult" <: zId z) Nothing
   where
     trace0 _ = id
     traceRes = id
-    -- traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
+-- traceRes r = trace ("return(sum): " ++ ashow (zId z,r)) r
 
 -- | The full result includes both zRes and zCursor.
 --
