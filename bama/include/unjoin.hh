@@ -74,13 +74,24 @@ auto mkUnJoin(const std::string& joined, const std::string& anti_join,
   return UnJoin<Extract>(left, joined, anti_join);
 }
 
-template <typename ExtractL, typename ExtractR>
-auto mkUnJoin2(const std::string& joined, const std::string& left_antijoin,
-               const std::string& right_antijoin, const std::string& l,
-               const std::string& r) {
-  return CombOps<UnJoin<ExtractL>, UnJoin<ExtractR>>(
-      mkUnJoin<ExtractL>(l, joined, left_antijoin),
-      mkUnJoin<ExtractR>(r, joined, right_antijoin));
+template <typename ExtractL, typename ExtractR, typename J, typename JL,
+          typename JR, typename IL, typename IR>
+auto mkUnJoin(const J& joined, const JL& left_antijoin,
+              const JR& right_antijoin, const IL& l, const IR& r) {
+  if constexpr (IL::isNothing && JL::isNothing && !IR::isNothing &&
+                !JR::isNothing && !J::isNothing) {
+    return mkUnJoin<ExtractR>(joined.value, right_antijoin.value, r.value);
+  }
+  if constexpr (IR::isNothing && JR::isNothing && !IL::isNothing &&
+                !JL::isNothing && !J::isNothing) {
+    return mkUnJoin<ExtractL>(joined.value, left_antijoin.value, l.value);
+  }
+  if constexpr (!IR::isNothing && !JR::isNothing && !J::isNothing &&
+                !IL::isNothing && !JL::isNothing) {
+    return CombOps<UnJoin<ExtractL>, UnJoin<ExtractR>>(
+      mkUnJoin<ExtractL>(l.value, joined.value, left_antijoin.value),
+      mkUnJoin<ExtractR>(r.value, joined.value, right_antijoin.value));
+  }
 }
 
 #endif /* UNJOIN_H */

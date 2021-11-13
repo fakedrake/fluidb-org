@@ -9,6 +9,7 @@
 #include <map>
 #include <vector>
 #include <filesystem>
+#include <compare>
 
 
 typedef size_t page_num_t;
@@ -196,18 +197,92 @@ void deleteFile(const std::string& fn) { ::remove(fn.c_str()); }
 template<size_t n>
 class fluidb_string : public std::array<char, n> {
  public:
-    fluidb_string() : std::array<char, n>() {}
-    fluidb_string(const std::array<char, n>& arr) : std::array<char, n>(arr) {check();}
-    fluidb_string(const fluidb_string<n>& arr) : std::array<char, n>(arr) {check();}
+  fluidb_string() : std::array<char, n>() {}
+  fluidb_string(const std::array<char, n>& arr) : std::array<char, n>(arr) {
+    check();
+  }
+  fluidb_string(const fluidb_string<n>& arr) : std::array<char, n>(arr) {
+    check();
+  }
+
+
+
  private:
-    void check() {
-        for (char c : *this)
-            assert(isspace(c) || isalnum(c) || ispunct(c) || c == 0);
-    }
+  void check() {
+    for (char c : *this)
+      assert(isspace(c) || isalnum(c) || ispunct(c) || c == 0);
+  }
 };
 #else
 template<size_t n>
 using fluidb_string=std::array<char,n>;
+
+template<size_t n>
+bool compare(const char* c1, const fluidb_string<n>& c2) {
+  for (int i = 0 ; i < n ; i++) {
+    if (c1[i] == 0) return -1;
+    if (c1[i] == c2[i]) continue;
+    if (c1[i] < c2[i])  return -1;
+    if (c1[i] > c2[i])  return 1;
+  }
+  return 0;
+}
+
+template<size_t n>
+bool compare(const fluidb_string<n>& c1, const char* c2) {
+  return -compare(c2,c1);
+}
+
+template<size_t n>
+bool operator<(const char* c1, const fluidb_string<n>& c2) {
+  return compare(c1,c2) == -1;
+}
+template<size_t n>
+bool operator>(const char* c1, const fluidb_string<n>& c2) {
+  return compare(c1,c2) == 1;
+}
+template<size_t n>
+bool operator<=(const char* c1, const fluidb_string<n>& c2) {
+  return compare(c1,c2) != 1;
+}
+template<size_t n>
+bool operator>=(const char* c1, const fluidb_string<n>& c2) {
+  return compare(c1,c2) != -1;
+}
+template<size_t n>
+bool operator==(const char* c1, const fluidb_string<n>& c2) {
+  return compare(c1,c2) == 0;
+}
+template<size_t n>
+bool operator!=(const char* c1, const fluidb_string<n>& c2) {
+  return compare(c1,c2) != 0;
+}
+
+template<size_t n>
+bool operator<(const fluidb_string<n>& c1, const char* c2) {
+  return compare(c1,c2) == -1;
+}
+template<size_t n>
+bool operator>(const fluidb_string<n>& c1, const char* c2) {
+  return compare(c1,c2) == 1;
+}
+template<size_t n>
+bool operator<=(const fluidb_string<n>& c1, const char* c2) {
+  return compare(c1,c2) != 1;
+}
+template<size_t n>
+bool operator>=(const fluidb_string<n>& c1, const char* c2) {
+  return compare(c1,c2) != -1;
+}
+template<size_t n>
+bool operator==(const fluidb_string<n>& c1, const char* c2) {
+  return compare(c1,c2) == 0;
+}
+template<size_t n>
+bool operator!=(const fluidb_string<n>& c1, const char* c2) {
+  return compare(c1,c2) != 0;
+}
+
 #endif
 
 typedef const std::pair<std::string, std::string> filepair;

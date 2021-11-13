@@ -55,9 +55,9 @@ class MergeJoin {
     Writer<Right> right_antijoin;
     WITH(outfile, output.open(outfile.value));
     WITH(left_antijoin_file,
-         left_antijoin.open(left_antijoin_file.value.first));
+         left_antijoin.open(left_antijoin_file.value));
     WITH(right_antijoin_file,
-         right_antijoin.open(right_antijoin_file.value.first));
+         right_antijoin.open(right_antijoin_file.value));
 
     // If left has no records all outputs are empty.
     Reader<Left> left(leftfile);

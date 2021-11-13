@@ -1,6 +1,7 @@
 #ifndef JOIN_H
 #define JOIN_H
 
+#include <cstdio>
 #include <string>
 #include <iostream>
 #include <map>
@@ -81,7 +82,6 @@ public:
     std::vector<bool> right_touched_map;
     eachRecord<Left>(leftfile, [&](const Left& left_record) {
       left_touched = false;
-      size_t right_index = 0;
       eachRecord<Right>(rightfile, [&](const Right& right_record) {
         if (left_index == 0) right_touched_map.push_back(false);
         if (predicate(left_record, right_record)) {
@@ -90,27 +90,13 @@ public:
           if (left_touched) {
             // We are re-touching, this should be
             // removed if we are unjoining.
-          } else {
-            left_touched = true;
-          }
-
-          if (right_touched_map[right_index]) {
-            // We are re-touching, this should be
-            // removed if we are unjoining.
-            WITH(right_antijoin_filename,
-                 right_indexes_writer.write(right_index));
-          } else {
-            right_touched_map[right_index] = true;
           }
         }
-
-        right_index++;
       });
 
       if constexpr (!LeftTriagleType::isNothing) {
         if (!left_touched) left_antijoin_writer.write(left_record);
       }
-      left_index++;
     });
 
     // Close antijoin
@@ -120,7 +106,6 @@ public:
 
     // Write the right antijoin.
     if constexpr (!RightTriagleType::isNothing) {
-      right_indexes_writer.close();
       Reader<Right> right_reader;
       right_reader.open(rightfile);
       right_antijoin_writer.open(right_antijoin_filename.value);
@@ -192,12 +177,10 @@ private:
   const RightTriagleFilePathType right_antijoin_file;
   const std::string leftfile;
   const std::string rightfile;
-  Writer<size_t> dup_indexes_left, dup_indexes_right;
   static LeftExtract left_extract;
   static RightExtract right_extract;
   static Combine combine;
   size_t number_of_partitions;
-  size_t out_index;
 public:
   HashJoin(const OutFilePathType& o,
            const LeftTriagleFilePathType& lt,
@@ -229,26 +212,25 @@ public:
   void run() {
     size_t processed_partitions = 0;
 
-    out_index = 0;
-
     WITH(outfile, out_writer.open(outfile.value));
     WITH(left_antijoin_file,
          left_antijoin_writer.open(left_antijoin_file.value));
     while (processed_partitions < number_of_partitions) {
-      if (make_pass(processed_partitions++)) {break;}
+      if (make_pass(processed_partitions++)) {
+        break;
+      }
     }
     WITH(left_antijoin_file, left_antijoin_writer.close());
-    WITH(left_antijoin_file, dup_indexes_left.close());
 
     // Deal with the leftovers
-    auto final_left = generate_partition_output(
-                                                leftfile, processed_partitions-1);
-    auto final_right = generate_partition_output(
-                                                 rightfile, processed_partitions-1);
+    auto final_left =
+        generate_partition_output(leftfile, processed_partitions - 1);
+    auto final_right =
+        generate_partition_output(rightfile, processed_partitions - 1);
 
     if (number_of_partitions > 1) {
-      WITHOUT(right_antijoin_file, fs::remove(final_right));
-      fs::remove(final_left);
+      WITHOUT(right_antijoin_file, ::remove(final_right.c_str()));
+      ::remove(final_left.c_str());
     }
     WITH(right_antijoin_file,
          fs::rename(final_right, right_antijoin_file.value));
@@ -328,10 +310,7 @@ private:
                             // If we've seen it before mark it as
                             // duplicate on the left.
                             if (it->second.second == false)
-                              WITH(left_antijoin_file,
-                                   dup_indexes_left.write(out_index));
                             it->second.second = false;
-                            out_index++;
                           }
                         } else {
                           right_writer.write(right_record);
@@ -349,8 +328,8 @@ private:
     right_writer.close();
 
     if (partition != 0) {
-      fs::remove(left_input);
-      fs::remove(right_input);
+      ::remove(left_input.c_str());
+      ::remove(right_input.c_str());
     }
     return finished;
   }
@@ -439,10 +418,8 @@ public:
     bool outstanding_left = false, outstanding_right = false;
 
     WITH(outfile, output.open(outfile.value));
-    WITH(left_antijoin_file,
-         left_antijoin.open(left_antijoin_file.value.first));
-    WITH(right_antijoin_file,
-         right_antijoin.open(right_antijoin_file.value.first));
+    WITH(left_antijoin_file, left_antijoin.open(left_antijoin_file.value));
+    WITH(right_antijoin_file, right_antijoin.open(right_antijoin_file.value));
 
     if (left.hasNext() && right.hasNext()) {
       left_record = left.nextRecord();

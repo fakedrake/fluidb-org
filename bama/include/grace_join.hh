@@ -122,8 +122,8 @@ class PartitionJoin {
           }
         }
         left_map.clear();
-        fs::remove(generate_partition_name(leftfile, p));
-        fs::remove(generate_partition_name(rightfile, p));
+        ::remove(generate_partition_name(leftfile, p).c_str());
+        ::remove(generate_partition_name(rightfile, p).c_str());
       }
       WITH(left_antijoin_file, left_antijoin_writer.close());
       WITH(left_antijoin_file, left_dup_index_writer.close());

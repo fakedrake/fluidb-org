@@ -1,18 +1,17 @@
 #ifndef SORT_H
 #define SORT_H
 
-
-#include "common.hh"
-#include "defs.hh"
-#include "io.hh"
-#include "print_record.hh"
-
+#include <cstdio>
 #include <string>
 #include <sstream>
 #include <array>
 #include <map>
 #include <vector>
 
+#include "common.hh"
+#include "defs.hh"
+#include "io.hh"
+#include "print_record.hh"
 
 template <typename ToKeyFn,
           typename OutputPrim,  // Maybe
@@ -118,7 +117,7 @@ class MergeSort {
         for (auto r : readers) {
             auto fn = r->getFilename();
             delete r;
-            fs::remove(fn);
+            ::remove(fn.c_str());
         }
 
         output.flush();

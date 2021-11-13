@@ -105,7 +105,7 @@ int main() {
     eachRecord<B>(RA_DAT,
                   [&i](const B& s) { require_eq(i++, s.b1, "Equal"); });
     require_eq(i, TOTAL + EXTRA, "Total records");
-    eachRecord<A>(LA_DAT.first, [](const A& s) {
+    eachRecord<A>(LA_DAT, [](const A& s) {
       require(false, "No records from A should be left over.");
     });
   }

@@ -463,7 +463,7 @@ joinQueryCall dir EasyJClust {..} = case dir of
       [(i,) . E0 <$> translateSym ejcIO i | i <- shapeAllSyms ejcRight]
     extractlFn <- projToFn $ fmap3 Right lproj
     extractrFn <- projToFn $ fmap3 Right rproj
-    return ("unJoin",tmplClass <$> [extractlFn,extractrFn])
+    return ("mkUnJoin",tmplClass <$> [extractlFn,extractrFn])
   ForwardTrigger -> evalQueryEnv (Tup2 ejcLeft ejcRight) $ do
     -- Note: A `Rantij` A == A `Lantij` A makes duplicate output columns
     -- so don't expect output symbols to be unique within the list.
@@ -603,13 +603,15 @@ constrArgs
   -> m [CC.Expression CC.CodeSymbol]
 constrArgs ioFiles = do
   outAndIn <- toIoTup ioFiles
+  let nothing =  CC.FunctionAp "Nothing" [] [e]
+  let just e = CC.FunctionAp "Just" [] [e]
   case (iofCluster ioFiles,iofDir ioFiles,outAndIn) of
     (JoinClustW _,ReverseTrigger,([Just l,Just r],[Just o,Just lo,Just ro])) ->
-      return [o,lo,ro,l,r] -- mkUnJoin2
+      return $ just <$> [o,lo,ro,l,r] -- mkUnJoin
     (JoinClustW _,ReverseTrigger,([Just i,Nothing],[Just o,Just lo,Nothing])) ->
-      return [o,lo,i]
+      return [just o,just lo,nothing,just i,nothing]
     (JoinClustW _,ReverseTrigger,([Nothing,Just i],[Just o,Nothing,Just ro])) ->
-      return [o,ro,i]
+      return [just o,nothing,just ro,nothing,just i]
     (JoinClustW _,ReverseTrigger,oi) ->
       -- XXX: We need to check that the generated tables are actually
       -- created due to triggering the node or if they just happened
