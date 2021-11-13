@@ -36,7 +36,7 @@ instance PlanMech (PlanT t n Identity) (CostParams HistTag n) n where
   mcCompStackVal Proxy _ref = BndRes $ point $ point nonComp
   mcIsComputable _ = \case
     BndErr _                                 -> False
-    BndRes (Sum (Just (Cert _ (Comp c _r)))) -> c < 0.7
+    BndRes (Sum (Just (Cert _ (Comp c _r)))) -> c < 0.6
     _                                        -> True
 
 -- | The expected cost of the next query.
