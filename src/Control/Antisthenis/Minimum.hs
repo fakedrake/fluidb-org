@@ -38,6 +38,7 @@ import           Data.Maybe
 import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
+import           Data.Utils.Debug
 import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
@@ -271,9 +272,11 @@ minEvolutionControl
 minEvolutionControl conf z = case confCap conf of
   ForceResult -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
-      SecRes r        -> if r < bnd then Just $ BndRes r else Nothing
-      SecBnd _ secBnd -> if secBnd >= bnd then Nothing else error "oops"
-      _               -> Nothing
+      SecRes r -> if r < bnd then Just $ BndRes r
+        else trace ("again1:" <: (zId z)) Nothing
+      SecBnd _ secBnd -> if secBnd >= bnd
+        then trace ("again2:" <: (zId z)) Nothing else error "oops"
+      _ -> trace ("again3:" <: (zId z)) Nothing
     x -> return x
   CapVal cap -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
@@ -283,19 +286,19 @@ minEvolutionControl conf z = case confCap conf of
   where
     noSecRes cap bnd = case exceedsCap @(MinTag p) Proxy cap bnd of
       BndExceeds -> Just $ BndBnd bnd
-      _          -> Nothing
+      _          -> trace ("again4:" <: (zId z)) Nothing
     secRes cap bnd secr = case bndLt @(MinTag p) Proxy secr bnd of
       True -> Just $ BndRes secr
       False -> case exceedsCap @(MinTag p) Proxy cap bnd of
         BndExceeds -> Just $ BndBnd bnd
-        _          -> Nothing
+        _          -> trace ("again5:" <: (zId z)) Nothing
     -- THE result so far. The cursor is assumed to always be either an
     -- init or the most promising.
     res = case fst3 (runIdentity $ zCursor z) of
       Just r -> Just $ BndBnd r
       Nothing -> case zSecondaryBound z of
-        NeverSec   -> Nothing
-        NoSec      -> Nothing
+        NeverSec   -> trace ("again6:" <: (zId z)) Nothing
+        NoSec      -> trace ("again7:" <: (zId z)) Nothing
         SecRes r   -> Just $ BndRes r
         SecBnd _ b -> Just $ BndBnd b
 
