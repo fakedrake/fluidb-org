@@ -158,9 +158,9 @@ satisfyComputability = go mempty
             let conf' = foldl' (flip markComputable) conf actuallyComputables
             runNodeProc (go trail ref nxt0) conf'
       where
-        isComputableM conf ref' = wrapTrace ("isComputableM" <: ref') $ do
-          (_coproc,(_nxt,ret)) <- runNodeProc
-            (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
+        isComputableM conf ref' = do
+          (_coproc,(_nxt,ret)) <- wrapTrace ("isComputableM" <: ref')
+            $ runNodeProc (go (nsInsert ref trail) ref' $ getOrMakeMech ref')
             $ setComputables trail conf
           return $ mcIsComputable @m @w @n Proxy ret
 
