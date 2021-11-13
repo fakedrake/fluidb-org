@@ -203,11 +203,10 @@ satisfyComputability ref0 mech conf = runCompT $ getValue ref0 mech
       -- The value may change but it is definitely computable.
       when (isComp0 val) $ setComp ref
       -- Solve each predicate.
-      case toNodeList $ pNonComputables $ pcePred coepoch of
+      computables <- filterM getComputable $ toNodeList $ pNonComputables $ pcePred coepoch
+      case computables of
         [] -> return val
-        assumedNonComputables -> do
-          anyComputable <- anyM getComputable assumedNonComputables
-          getValue ref nxt0
+        _  -> getValue ref nxt0
 
 
 markNonComputable :: NodeRef n -> PlanCoEpoch n
