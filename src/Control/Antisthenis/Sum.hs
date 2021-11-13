@@ -146,8 +146,8 @@ sumEvolutionControl conf z = traceRes $ case zFullResSum z of
   SumPart bnd -> case confCap conf of
     CapVal cap ->
       case exceedsCap @(SumTag p) Proxy cap (coerce bnd :: ZBnd (SumTag p)) of
-        Nothing -> Just $ BndBnd $ coerce bnd
-        Just _  -> Nothing
+        BndExceeds -> Just $ BndBnd $ coerce bnd
+        _          -> Nothing
     ForceResult -> trace0 ("sumEvp:forceresult" <: zId z) Nothing
   where
     trace0 _ = id

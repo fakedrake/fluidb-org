@@ -28,11 +28,13 @@ import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Types
 import           Control.Utils.Free
 import           Data.Coerce
+import           Data.Pointed
 import           Data.Profunctor
 import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
 import           Data.Utils.Heaps
+import           Data.Utils.Nat
 import           Data.Utils.Unsafe
 import           GHC.Generics
 
@@ -72,7 +74,7 @@ data GAbsorbing v = GAbsorbing { gaAbsorbing :: v,gaNonAbsorbing :: v }
 data GBool op v = GBool { gbTrue :: v,gbFalse :: v }
   deriving (Eq,Generic)
 instance AShow v => AShow  (GBool op v)
-type BoolCap op = GBool op (Maybe Cost)
+type BoolCap op = GBool op (Min Cost)
 type BoolBound op = GBool op Cost
 newtype BoolV op = BoolV Bool deriving (Generic,Show,Eq)
 instance AShow (BoolV Or) where
@@ -208,18 +210,23 @@ instance ExtParams (BoolTag op p) p => BndRParams (BoolTag op p) where
   -- bound is entirely within the cap provide a way to use it as a
   -- cap.
   exceedsCap Proxy cap bnd =
-    if gbTrue cap .<= gbTrue bnd || gbFalse cap .<= gbFalse bnd
-    then Nothing else Just
-      $ GBool { gbTrue = Just $ gbTrue bnd,gbFalse = Just $ gbFalse bnd }
+    case (compare' (gbTrue cap) (gbTrue bnd)
+         ,compare' (gbFalse cap) (gbFalse bnd)) of
+      (LT,_) -> BndExceeds
+      (_,LT) -> BndExceeds
+      (EQ,EQ) -> EqualCap
+      (_,_) -> BndWithinCap
+        $ GBool { gbTrue = point $ gbTrue bnd,gbFalse = point $ gbFalse bnd }
     where
-      Just a .<= b  = a <= b
-      Nothing .<= _ = False
+      compare' (Min (Just a)) b = compare a b
+      compare' MinInf _         = GT
+      compare' (Min Nothing) _  = error "same as MinInf"
 
 instance (AShow (ExtCoEpoch p),ExtParams (BoolTag op p) p,BoolOp op)
   => ZipperParams (BoolTag op p) where
   type ZEpoch (BoolTag op p) = ExtEpoch p
   type ZCoEpoch (BoolTag op p) = ExtCoEpoch p
-  type ZCap (BoolTag op p) = GBool op (Maybe Cost)
+  type ZCap (BoolTag op p) = BoolCap op
   type ZPartialRes (BoolTag op p) =
     Maybe (Either (ZErr (BoolTag op p)) (ZRes (BoolTag op p)))
   type ZItAssoc (BoolTag op p) =
@@ -241,21 +248,23 @@ instance (AShow (ExtCoEpoch p),ExtParams (BoolTag op p) p,BoolOp op)
   -- | As a cap use the minimum bound.
   zLocalizeConf coepoch conf z =
     extCombEpochs (Proxy :: Proxy p) coepoch (confEpoch conf)
-    $ conf { confCap = maybe (confCap conf) CapVal $ do
-      bnd <- chMinKey $ bgsIts $ zBgState z
-      gcap <- case confCap conf of
-        CapVal cap -> Just cap
-        _          -> Nothing
-      return $ minBndCap bnd gcap }
+    $ conf { confCap = getLocalCap (confCap conf) z }
 
-minBndCap :: GBool op Cost -> GBool op (Maybe Cost) -> GBool op (Maybe Cost)
-minBndCap bnd cap =
-  GBool { gbTrue = Just $ min' (gbTrue cap) (gbTrue bnd)
-         ,gbFalse = Just $ min' (gbFalse cap) (gbFalse bnd)
-        }
-  where
-    min' Nothing x  = x
-    min' (Just x) y = min x y
+-- | Get the local cap from the global cap and the zipper.
+getLocalCap
+  :: forall op p x .
+  (BndRParams (BoolTag op p),BoolOp op)
+  => Cap (ZCap (BoolTag op p))
+  -> Zipper (BoolTag op p) x
+  -> Cap (ZCap (BoolTag op p))
+getLocalCap ccap z = case (ccap,chMinKey $ bgsIts $ zBgState z) of
+  (CapVal cap,Just secBnd) ->
+    CapVal $ case exceedsCap @(BoolTag op p) Proxy cap secBnd of
+      BndWithinCap cap' -> cap'
+      _                 -> cap
+  (ForceResult,Just secBnd) -> CapVal
+    $ GBool { gbTrue = point $ gbTrue secBnd,gbFalse = point $ gbFalse secBnd }
+  (_,_) -> ccap
 
 -- boolEvolutionStrategy
 --   :: Monad m
@@ -306,8 +315,8 @@ boolEvolutionControl conf z = case confCap conf of
   CapVal cap -> do
     localBnd <- zBound z
     case exceedsCap @(BoolTag op p) Proxy cap localBnd of
-      Nothing -> return $ BndBnd localBnd
-      Just _  -> Nothing
+      BndExceeds -> return $ BndBnd localBnd
+      _          -> Nothing
 
 -- | The problem is that there is no w type in Conf w, just ZCap w so
 -- we need to translate Conf w into a functor of ZCap w. This can be

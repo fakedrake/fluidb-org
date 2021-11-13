@@ -68,7 +68,10 @@ instance ZBnd w ~ ExtCap (PlanParams CostTag n)
   type ExtCoEpoch (PlanParams CostTag n) = PlanCoEpoch n
   type ExtCap (PlanParams CostTag n) =
     Min (MechVal (PlanParams CostTag n))
-  extExceedsCap Proxy cap bnd = if cap <= bnd then Nothing else Just bnd
+  extExceedsCap Proxy cap bnd = case compare bnd cap of
+    LT -> BndWithinCap bnd
+    EQ -> EqualCap
+    GT -> BndExceeds
   extCombEpochs _ = planCombEpochs
 
 maxMatTrail :: Int
@@ -82,8 +85,12 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   type ExtEpoch (PlanParams HistTag n) = PlanEpoch n
   type ExtCoEpoch (PlanParams HistTag n) = PlanCoEpoch n
   type ExtCap (PlanParams HistTag n) = HistCap Cost
-  extExceedsCap _ HistCap {..} (Min (Just bnd)) =
-    if doesExceed then Nothing else Just newCap
+  extExceedsCap _ HistCap {..} (Min (Just bnd)) = case compBndCap of
+    (GT,_,_)   -> BndExceeds
+    (_,GT,_)   -> BndExceeds
+    (_,_,GT)   -> BndExceeds
+    (EQ,EQ,EQ) -> EqualCap
+    (_,_,_)    -> BndWithinCap newCap
     where
       newCap =
         HistCap
@@ -91,14 +98,14 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
          ,hcValCap = Min $ Just $ maybe bndVal (min bndVal) $ getMin hcValCap
          ,hcMatsEncountered = hcMatsEncountered
         }
-      doesExceed =
-        maybe False (bndVal >) (getMin hcValCap)
-        || bndTrailSize > (maxMatTrail - hcMatsEncountered)
-        || bndNonComp > hcNonCompTolerance
+      compBndCap =
+        (maybe LT (compare bndVal) (getMin hcValCap)
+        ,compare bndTrailSize (maxMatTrail - hcMatsEncountered)
+        ,compare bndNonComp hcNonCompTolerance)
       bndNonComp = cProbNonComp (cData bnd)
       bndVal = cValue $ cData bnd
       bndTrailSize = cTrailSize bnd
-  extExceedsCap _ _ (Min Nothing) = Nothing
+  extExceedsCap _ _ (Min Nothing) = BndExceeds
   extCombEpochs _ = planCombEpochs
 
 --  | All the constraints required to run both min and sum
