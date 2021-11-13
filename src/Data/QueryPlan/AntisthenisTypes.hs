@@ -86,7 +86,7 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
     maybe False (cValue (cData bnd) >) (getMin hcValCap)
     || cTrailSize bnd > (maxMatTrail - hcMatsEncountered)
     || cProbNonComp (cData bnd) > hcNonCompTolerance
-  extExceedsCap _ _ (Min Nothing) = False
+  extExceedsCap _ _ (Min Nothing) = True
   extCombEpochs _ = planCombEpochs
 
 --  | All the constraints required to run both min and sum

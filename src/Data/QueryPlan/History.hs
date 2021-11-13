@@ -21,7 +21,6 @@ import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.ListT
 import           Data.Utils.Nat
 
@@ -55,9 +54,14 @@ pastCosts maxCost = do
     BndErr
       e -> error $ "getCost(" ++ ashow q ++ "):antisthenis error: " ++ ashow e
 
+-- | The cap counts how many materialized nodes WE HAVE ENCOUNTERED.
 maxCap :: Cost -> HistCap Cost
 maxCap maxCost =
-  HistCap { hcMatsEncountered = 2,hcValCap = Min $ Just maxCost,hcNonCompTolerance = 0.7 }
+  HistCap
+  { hcMatsEncountered = 1
+   ,hcValCap = Min $ Just maxCost
+   ,hcNonCompTolerance = 0.7
+  }
 
 -- | The materialized node indeed has a cost. That cost is
 -- calculated by imposing a scaling on the cost it would have if it
@@ -67,7 +71,7 @@ isMatCost :: forall t n . NodeRef n -> HistProc t n -> HistProc t n
 isMatCost ref matCost0 = wrapMealy matCost0 guardedGo
   where
     go conf matCost = do
-      "Mat historical" <<: ref
+      -- "Mat historical" <<: ref
       let conf0 = mapCap unscaleCap conf
       -- The cap used to run the arror will not match the scaled
       -- result. If that happens the outside process will fail to
@@ -83,7 +87,7 @@ isMatCost ref matCost0 = wrapMealy matCost0 guardedGo
       conf' <- yieldMB $ BndRes zero
       return (conf',matCost) else go conf matCost
     isTooDeep c = case confCap c of
-      CapVal cap  -> hcMatsEncountered cap > 3
+      CapVal cap  -> hcMatsEncountered cap >= 3
       ForceResult -> False
 
 -- Nothe that the error is thoun automatically if it is not
