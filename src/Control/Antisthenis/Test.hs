@@ -27,7 +27,6 @@ import           Control.Monad.Reader
 import           Control.Monad.Writer
 import           Data.Utils.Debug
 import           Data.Utils.Functors
-import           Data.Utils.Monoid
 import           Data.Void
 
 

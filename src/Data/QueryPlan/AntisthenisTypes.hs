@@ -83,10 +83,22 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   type ExtCoEpoch (PlanParams HistTag n) = PlanCoEpoch n
   type ExtCap (PlanParams HistTag n) = HistCap Cost
   extExceedsCap _ HistCap {..} (Min (Just bnd)) =
-    maybe False (cValue (cData bnd) >) (getMin hcValCap)
-    || cTrailSize bnd > (maxMatTrail - hcMatsEncountered)
-    || cProbNonComp (cData bnd) > hcNonCompTolerance
-  extExceedsCap _ _ (Min Nothing) = True
+    if doesExceed then Nothing else Just newCap
+    where
+      newCap =
+        HistCap
+        { hcNonCompTolerance = min bndNonComp hcNonCompTolerance
+         ,hcValCap = Min $ Just $ maybe bndVal (min bndVal) $ getMin hcValCap
+         ,hcMatsEncountered = hcMatsEncountered
+        }
+      doesExceed =
+        maybe False (bndVal >) (getMin hcValCap)
+        || bndTrailSize > (maxMatTrail - hcMatsEncountered)
+        || bndNonComp > hcNonCompTolerance
+      bndNonComp = cProbNonComp (cData bnd)
+      bndVal = cValue $ cData bnd
+      bndTrailSize = cTrailSize bnd
+  extExceedsCap _ _ (Min Nothing) = Nothing
   extCombEpochs _ = planCombEpochs
 
 --  | All the constraints required to run both min and sum
