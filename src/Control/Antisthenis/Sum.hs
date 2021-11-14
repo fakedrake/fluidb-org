@@ -12,8 +12,8 @@
 {-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.Sum (SumTag) where
 
-import           Control.Antisthenis.AssocContainer
-import           Control.Antisthenis.Types
+import           Control.Antisthenis.AssocContaineri
+mport           Control.Antisthenis.Types
 import           Control.Monad.Identity
 import           Control.Utils.Free
 import           Data.Coerce
