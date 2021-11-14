@@ -19,16 +19,13 @@ import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.ATL.Transformers.Writer
 import           Control.Antisthenis.Types
-import           Control.Antisthenis.Zipper
 import           Control.Applicative
 import           Control.Arrow                               hiding ((>>>))
 import           Control.Monad.Except
-import           Control.Monad.Extra
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Writer                        hiding (Sum)
-import           Data.Foldable
 import qualified Data.List.NonEmpty                          as NEL
 import           Data.Maybe
 import           Data.NodeContainers
@@ -106,15 +103,6 @@ mkNewMech ref =
       lift $ mcPutMech Proxy ref $ asSelfUpdating nxt
       return (getOrMakeMech ref,r)
 
-markComputable
-  :: IsPlanParams w n
-  => NodeRef n
-  -> Conf w
-  -> Conf w
-markComputable ref conf =
-  conf { confEpoch = (confEpoch conf)
-           { peCoPred = nsInsert ref $ peCoPred $ confEpoch conf }
-       }
 unmarkComputable :: IsPlanParams w n => NodeRef n -> Conf w -> Conf w
 unmarkComputable ref conf =
   conf { confEpoch = (confEpoch conf)

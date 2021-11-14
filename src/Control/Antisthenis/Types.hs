@@ -163,14 +163,23 @@ data ZProcEvolution w m k =
   }
 
 
-data ExceedsCap a = EqualCap | BndExceeds | BndWithinCap a
+data ExceedsCap a
+  = EqualCap
+  | BndExceeds
+  -- when the provided cap is exceeded the bound will exceed at least
+  -- one of arguments.
+  | BndWithinCap a
 class BndRParams w where
   type ZErr w :: *
 
   type ZBnd w :: *
 
   type ZRes w :: *
-
+  -- | Law:  exceedsCap bnd1 cap == BndExceeds _ /\ bndLt bnd1 bnd2 => exceedsCap bnd2 cap
+  --
+  -- There are two strategies for mutli-dimensional data: always
+  -- compare the minimum dimension or compare ONE dimension and have a
+  -- global cutoff for the rest.
   bndLt :: Proxy w -> ZBnd w -> ZBnd w -> Bool
   exceedsCap :: Proxy w -> ZCap w -> ZBnd w -> ExceedsCap (ZCap w)
 

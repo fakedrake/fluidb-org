@@ -22,10 +22,10 @@ import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Sum
 import           Control.Antisthenis.Types
+import qualified Data.IntSet                 as IS
 import           Data.NodeContainers
+import           Data.Pointed
 import           Data.Proxy
-import           Data.QueryPlan.Cert
-import           Data.QueryPlan.Comp
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.HistBnd
 import           Data.Utils.AShow
@@ -78,8 +78,7 @@ maxMatTrail :: Int
 maxMatTrail = 4
 instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   => ExtParams w (PlanParams HistTag n) where
-  type MechVal (PlanParams HistTag n) =
-    Cert (Comp Cost)
+  type MechVal (PlanParams HistTag n) = HistVal Cost
   type ExtError (PlanParams HistTag n) =
     IndexErr (NodeRef n)
   type ExtEpoch (PlanParams HistTag n) = PlanEpoch n
@@ -94,19 +93,19 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
     where
       newCap =
         HistCap
-        { hcNonCompTolerance = min bndNonComp hcNonCompTolerance
-         ,hcValCap = Min $ Just $ maybe bndVal (min bndVal) $ getMin hcValCap
+        { hcNonCompTolerance = bndNonComp
+         ,hcValCap = bndVal
          ,hcMatsEncountered = hcMatsEncountered
         }
       -- XXX: gets stuck getting an uncertain bound and the cap not
       -- budging.
       compBndCap =
-        (maybe LT (compare bndVal) (getMin hcValCap)
-        ,compare bndTrailSize (maxMatTrail - hcMatsEncountered)
+        (compare bndVal hcValCap   -- reverse
+        ,compare (maxMatTrail - hcMatsEncountered) bndTrailSize
         ,compare bndNonComp hcNonCompTolerance)
-      bndNonComp = cProbNonComp (cData bnd)
-      bndVal = cValue $ cData bnd
-      bndTrailSize = cTrailSize bnd
+      bndNonComp = hvNonComp bnd
+      bndVal = point $ hvVal bnd
+      bndTrailSize = maybe 0 fst $ IS.maxView $ hvMaxMatTrail bnd
   extExceedsCap _ _ (Min Nothing) = BndExceeds
   extCombEpochs _ = planCombEpochs
 
