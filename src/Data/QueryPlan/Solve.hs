@@ -43,9 +43,8 @@ import           Data.Utils.Tup
 
 import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
-import           Data.QueryPlan.Cert
-import           Data.QueryPlan.Comp
 import           Data.QueryPlan.Dependencies
+import           Data.QueryPlan.HistBnd
 import           Data.QueryPlan.Matable          as Mat
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
@@ -82,11 +81,11 @@ haltPlan matRef mop = do
 
 histCosts :: Monad m => Cost -> PlanT t n m Cost
 histCosts maxCost = do
-  hcs :: [Maybe Cost] <- takeListT 3 $ pastCosts maxCost
+  hcs :: [Maybe (HistVal Cost)] <- takeListT 3 $ pastCosts maxCost
   -- Curate the consts that are too likely to be non-comp
   return $ mconcat $ mapMaybe (>>= toCost) hcs
   where
-    toCost (Cert _ (Comp c v)) = if c > 0.6 then Nothing else Just v
+    toCost HistVal {..} = if hvNonComp > 0.6 then Nothing else Just hvVal
 
 
 -- | Compute the frontier cost and the historical costs.

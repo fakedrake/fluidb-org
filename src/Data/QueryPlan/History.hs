@@ -39,7 +39,10 @@ instance PlanMech (PlanT t n Identity) (CostParams HistTag n) n where
 
 -- | The expected cost of the next query.
 pastCosts
-  :: forall t n m . Monad m => Cost -> ListT (PlanT t n m) (Maybe Cost)
+  :: forall t n m .
+  Monad m
+  => Cost
+  -> ListT (PlanT t n m) (Maybe (HistVal Cost))
 pastCosts maxCost = do
   QueryHistory qs <- asks queryHistory
   lift $ trM $ "History size: " ++ ashow (length qs)
@@ -48,8 +51,8 @@ pastCosts maxCost = do
     $ wrapTraceT ("antisthenis:pastCost" <: q)
     $ getPlanBndR @(CostParams HistTag n) Proxy (CapVal $ maxCap maxCost) q
   case res of
-    BndRes (Sum (Just r)) -> return $ Just $ hvVal r
-    BndRes (Sum Nothing) -> return $ Just zero
+    BndRes (Sum (Just r)) -> return $ Just r
+    BndRes (Sum Nothing) -> return Nothing
     BndBnd _bnd -> return Nothing
     BndErr
       e -> error $ "getCost(" ++ ashow q ++ "):antisthenis error: " ++ ashow e
@@ -100,9 +103,6 @@ incrementMat hv =
   hv { hvMaxMatTrail =
          IS.singleton $ maybe 1 (1 +) $ fst <$> IS.maxView (hvMaxMatTrail hv)
      }
-matComputability :: Double -> Double
-matComputability d = 1 - 0.8 * (1 - d)
-
 -- | we may be overshooting here and there but it's ok
 double :: Int -> Int
 double i = if i < 0 then i else i * 2
@@ -128,8 +128,6 @@ unscaleCap hc =
 scaleHistVal :: HistVal Cost -> HistVal Cost
 scaleHistVal hv = hv{hvVal=scaleCost $ hvVal hv}
 scaleMin :: Min (HistVal Cost) -> Min (HistVal Cost)
-scaleMin m@(Min Nothing) = m
-scaleMin (Min (Just c))  = point $ scaleHistVal c
 scaleSum :: Sum (HistVal Cost) -> Sum (HistVal Cost)
 scaleSum m@(Sum Nothing) = m
 scaleSum (Sum (Just hv)) = point $ scaleHistVal hv
