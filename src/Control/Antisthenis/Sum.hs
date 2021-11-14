@@ -12,7 +12,7 @@
 {-# LANGUAGE UndecidableInstances  #-}
 module Control.Antisthenis.Sum (SumTag) where
 
-import           Control.Antisthenis.AssocContaineri
+import           Control.Antisthenis.AssocContainer
 import           Control.Antisthenis.Types
 import           Control.Monad.Identity
 import           Control.Utils.Free
