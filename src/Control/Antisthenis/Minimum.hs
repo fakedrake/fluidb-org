@@ -286,7 +286,7 @@ minEvolutionControl conf z = case confCap conf of
   where
     noSecRes cap bnd = case exceedsCap @(MinTag p) Proxy cap bnd of
       BndExceeds -> Just $ BndBnd bnd
-      _          -> trace ("again4:" <: (zId z)) Nothing
+      _          -> trace ("again4:" <: (zId z,cap,bnd)) Nothing -- here
     secRes cap bnd secr = case bndLt @(MinTag p) Proxy secr bnd of
       True -> Just $ BndRes secr
       False -> case exceedsCap @(MinTag p) Proxy cap bnd of

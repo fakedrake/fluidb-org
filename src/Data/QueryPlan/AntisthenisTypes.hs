@@ -98,6 +98,8 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
          ,hcValCap = Min $ Just $ maybe bndVal (min bndVal) $ getMin hcValCap
          ,hcMatsEncountered = hcMatsEncountered
         }
+      -- XXX: gets stuck getting an uncertain bound and the cap not
+      -- budging.
       compBndCap =
         (maybe LT (compare bndVal) (getMin hcValCap)
         ,compare bndTrailSize (maxMatTrail - hcMatsEncountered)
