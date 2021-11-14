@@ -36,7 +36,6 @@ import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.Functors
 import           Data.Utils.ListT
@@ -168,7 +167,7 @@ satisfyComputability ref0 mech conf = runCompT $ getValue ref0 mech
           if ref `nsMember` trail then return False <|> return True else m
     getComputable :: NodeRef n -> CompT n m Bool
     getComputable
-      ref = unlessEncountered ref $ wrapTrace ("getComputable" <: ref) $ do
+      ref = unlessEncountered ref $ do
       -- first run normally.
       (coepoch,(_nxt0,val)) <- runNodeProc $ getOrMakeMech ref
       -- The value may change but it is definitely computable.
@@ -185,7 +184,7 @@ satisfyComputability ref0 mech conf = runCompT $ getValue ref0 mech
             return False
           _ -> getComputable ref
     getValue :: NodeRef n -> ArrProc w m -> CompT n m (BndR w)
-    getValue ref c = local (nsInsert ref) $ wrapTrace ("getValue" <: ref) $ do
+    getValue ref c = local (nsInsert ref) $ do
       -- first run normally.
       (coepoch,(nxt0,val)) <- runNodeProc c
       -- The value may change but it is definitely computable.
