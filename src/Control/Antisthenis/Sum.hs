@@ -13,7 +13,6 @@
 module Control.Antisthenis.Sum (SumTag) where
 
 import           Control.Antisthenis.AssocContainer
-import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
 import           Control.Monad.Identity
 import           Control.Utils.Free
@@ -66,7 +65,6 @@ instance (AShow2 (MechVal p) (ExtCap p)
          ,Zero (MechVal p)
          ,Subtr2 (ExtCap p) (Sum (MechVal p))
           -- For updating the cap
-         ,HasLens (ExtCap p) (Min (MechVal p))
          ,Zero (ExtCap p)
          ,SumExtParams p
          ,AShow2 (ExtError p) (ExtEpoch p)

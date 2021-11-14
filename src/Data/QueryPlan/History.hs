@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies     #-}
+{-# LANGUAGE ViewPatterns     #-}
 module Data.QueryPlan.History (pastCosts) where
 
 import           Control.Antisthenis.ATL.Class.Functorial
@@ -24,7 +25,10 @@ import           Data.Utils.ListT
 import           Data.Utils.Nat
 
 
--- type HCost = Cert (Comp Cost)
+instance Subtr2 a b =>  Subtr2 a (Sum b) where
+  subtr a (Sum (Just b)) = subtr a b
+  subtr _ _              = error "Negative infinity"
+
 instance PlanMech (PlanT t n Identity) (CostParams HistTag n) n where
   mcGetMech Proxy ref = gets $ refLU ref . gcHistMechMap
   mcPutMech Proxy ref me =
@@ -83,12 +87,11 @@ isMatCost _ref matCost0 = wrapMealy matCost0 $ \conf matCost -> if isTooDeep
       conf' <- yieldMB $ BndRes zero
       return (conf',matCost)
     isTooDeep c = case confCap c of
-      CapVal cap  -> hcMatsEncountered cap >= 3
-      ForceResult -> False
+      CapVal (getHistCapI -> Just cap) -> hcMatsEncountered cap >= maxMatTrail
+      ForceResult                      -> False
 
 -- Nothe that the error is thoun automatically if it is not
 -- computable.
-
 incrementMat :: HistVal a -> HistVal a
 incrementMat hv =
   hv { hvMaxMatTrail =

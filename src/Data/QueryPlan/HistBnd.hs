@@ -6,13 +6,14 @@ module Data.QueryPlan.HistBnd
   ,maxCap
   ,scaleSum
   ,unscaleCap
-  ,scaleHistVal,maxMatTrail,exceedsHistCap) where
+  ,scaleHistVal,maxMatTrail,exceedsHistCap,getHistCapI) where
 
 import           Control.Antisthenis.Types
 import qualified Data.IntSet               as IS
 import           Data.Pointed
 import           Data.QueryPlan.CostTypes
 import           Data.Utils.AShow
+import           Data.Utils.Embed
 import           Data.Utils.Nat
 import           GHC.Generics
 
@@ -49,9 +50,6 @@ instance Zero a => Zero (HistCap a) where
     HCOr a b -> isNegative a || isNegative b
     HCCap a  -> isNegative a
     HCVal a  -> isNegative a
-
-toHistCap :: HistVal a ->  HistCap a
-toHistCap = HCVal
 
 instance Semigroup a => Semigroup (HistVal a) where
   hv <> hv' =
@@ -158,3 +156,31 @@ exceedsHistCapI HistCapI {..} bnd = case compBndCap of
     bndNonComp = hvNonComp bnd
     bndVal = point $ hvVal bnd
     bndTrailSize = maybe 0 fst $ IS.maxView $ hvMaxMatTrail bnd
+
+getHistCapI :: HistCap a -> Maybe (HistCapI a)
+getHistCapI = \case
+  HCCap c  -> Just c
+  HCVal _  -> Nothing
+  HCOr c _ -> Just c
+
+instance Embed (Min (HistVal a)) (HistCap a) where
+  emb (Min Nothing) =
+    HCCap
+      HistCapI
+      { hcMatsEncountered = 0,hcValCap = MinInf,hcNonCompTolerance = 1 }
+  emb (Min (Just hv)) = HCVal hv
+
+-- | Used by sum to deduce the partial value from the final.
+instance Subtr2 a b => Subtr2 (HistCapI a) (HistVal b) where
+  subtr HistCapI {..} HistVal {..} =
+    HistCapI
+    { hcMatsEncountered = hcMatsEncountered
+     ,hcValCap = case hcValCap of
+         Min (Just v) -> point $ subtr v hvVal
+         Min Nothing  -> MinInf
+     ,hcNonCompTolerance = hcNonCompTolerance
+    }
+instance Subtr2 a b => Subtr2 (HistCap a) (HistVal b) where
+  subtr (HCOr hci hv') hv = HCOr (subtr hci hv) (subtr hv' hv)
+  subtr (HCCap hci) hv    = HCCap $ subtr hci hv
+  subtr (HCVal hv') hv    = HCVal $ subtr hv' hv

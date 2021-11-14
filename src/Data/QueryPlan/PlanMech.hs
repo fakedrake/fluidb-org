@@ -21,6 +21,7 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
+import           Data.Utils.Embed
 import           Data.Utils.Functors
 import           Data.Utils.Nat
 
@@ -110,6 +111,7 @@ class Monad m => PlanMech m w n where
   default mcShouldTell :: Proxy (m (),w,n) -> NodeRef n -> Bool -> Bool
   mcShouldTell _ _ _ = True
 
+instance Embed (Min (PlanCost n)) (Min (PlanCost n))
 -- | Make a plan for a node to be concrete.
 instance PlanMech (PlanT t n Identity) (CostParams CostTag n) n where
   mcIsMatProc Proxy _ref _proc = arr $ const $ BndRes zero

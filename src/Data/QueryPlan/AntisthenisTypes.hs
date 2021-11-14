@@ -89,8 +89,8 @@ type IsPlanCostParams w n =
   (IsPlanParams w n
   ,Subtr (MechVal (MetaTag w))
   ,Ord (MechVal (MetaTag w))
-  ,Embed (Min (MechVal w)) (ExtCap w)
-  ,Subtr2 (ExtCap w) (Sum (MechVal w))
+  ,Embed (Min (MechVal (MetaTag w))) (ExtCap (MetaTag w))
+  ,Subtr2 (ExtCap (MetaTag w)) (Sum (MechVal (MetaTag w)))
    -- For updating the cap
   ,Zero (MechVal (MetaTag w))
   ,Zero (ExtCap (MetaTag w))

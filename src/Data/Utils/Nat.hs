@@ -109,3 +109,8 @@ instance Zero v => Zero (Min v) where
   zero = point zero
   isNegative (Min Nothing)  = False
   isNegative (Min (Just a)) = isNegative a
+
+instance Subtr2 a b =>  Subtr2 (Min a) (Sum b) where
+  subtr (Min (Just a)) (Sum (Just b)) = point $ subtr a b
+  subtr (Min Nothing) _               = MinInf
+  subtr (Min (Just _)) (Sum Nothing)  = error "Negative infinity"
