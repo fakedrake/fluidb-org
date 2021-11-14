@@ -18,18 +18,16 @@ module Data.QueryPlan.AntisthenisTypes
   ,CostParams) where
 
 import           Control.Antisthenis.Bool
-import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Minimum
 import           Control.Antisthenis.Sum
 import           Control.Antisthenis.Types
-import qualified Data.IntSet                 as IS
 import           Data.NodeContainers
-import           Data.Pointed
 import           Data.Proxy
 import           Data.QueryPlan.CostTypes
 import           Data.QueryPlan.HistBnd
 import           Data.Utils.AShow
 import           Data.Utils.Default
+import           Data.Utils.Embed
 import           Data.Utils.Nat
 import           GHC.Generics
 
@@ -74,8 +72,6 @@ instance ZBnd w ~ ExtCap (PlanParams CostTag n)
     GT -> BndExceeds
   extCombEpochs _ = planCombEpochs
 
-maxMatTrail :: Int
-maxMatTrail = 4
 instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   => ExtParams w (PlanParams HistTag n) where
   type MechVal (PlanParams HistTag n) = HistVal Cost
@@ -84,29 +80,8 @@ instance ZBnd w ~ Min (MechVal (PlanParams HistTag n))
   type ExtEpoch (PlanParams HistTag n) = PlanEpoch n
   type ExtCoEpoch (PlanParams HistTag n) = PlanCoEpoch n
   type ExtCap (PlanParams HistTag n) = HistCap Cost
-  extExceedsCap _ HistCap {..} (Min (Just bnd)) = case compBndCap of
-    (GT,_,_)   -> BndExceeds
-    (_,GT,_)   -> BndExceeds
-    (_,_,GT)   -> BndExceeds
-    (EQ,EQ,EQ) -> EqualCap
-    (_,_,_)    -> BndWithinCap newCap
-    where
-      newCap =
-        HistCap
-        { hcNonCompTolerance = bndNonComp
-         ,hcValCap = bndVal
-         ,hcMatsEncountered = hcMatsEncountered
-        }
-      -- XXX: gets stuck getting an uncertain bound and the cap not
-      -- budging.
-      compBndCap =
-        (compare bndVal hcValCap   -- reverse
-        ,compare (maxMatTrail - hcMatsEncountered) bndTrailSize
-        ,compare bndNonComp hcNonCompTolerance)
-      bndNonComp = hvNonComp bnd
-      bndVal = point $ hvVal bnd
-      bndTrailSize = maybe 0 fst $ IS.maxView $ hvMaxMatTrail bnd
-  extExceedsCap _ _ (Min Nothing) = BndExceeds
+  extExceedsCap _ hv (Min (Just v)) = exceedsHistCap hv v
+  extExceedsCap _ _ (Min Nothing)   = BndExceeds
   extCombEpochs _ = planCombEpochs
 
 --  | All the constraints required to run both min and sum
@@ -114,10 +89,11 @@ type IsPlanCostParams w n =
   (IsPlanParams w n
   ,Subtr (MechVal (MetaTag w))
   ,Ord (MechVal (MetaTag w))
+  ,Embed (Min (MechVal w)) (ExtCap w)
+  ,Subtr2 (ExtCap w) (Sum (MechVal w))
    -- For updating the cap
   ,Zero (MechVal (MetaTag w))
   ,Zero (ExtCap (MetaTag w))
-  ,HasLens (ExtCap (MetaTag w)) (Min (MechVal (MetaTag w)))
   ,ExtParams (MinTag (MetaTag w)) (MetaTag w)
   ,ExtParams (SumTag (MetaTag w)) (MetaTag w))
 type IsPlanParams w n =

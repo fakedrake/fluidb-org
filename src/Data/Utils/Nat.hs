@@ -12,7 +12,10 @@ module Data.Utils.Nat
   ,negSum
   ,negMin
   ,sub
-  ,Subtr(..),sumMap,minMap) where
+  ,Subtr2(..)
+  ,Subtr
+  ,sumMap
+  ,minMap) where
 
 -- Use newtypes so they are coercible. Nothing means infinte
 import           Data.Coerce
@@ -66,7 +69,7 @@ negSum :: Sum a -> Maybe (Neg a)
 negSum = fmap Neg . coerce
 negMin :: Min a -> Maybe (Neg a)
 negMin = fmap Neg . coerce
-sub :: Subtr a => Sum a -> Neg a -> Sum a
+sub :: Subtr2 a b => Sum a -> Neg b -> Sum a
 sub SumInf _               = SumInf
 sub (Sum (Just a)) (Neg b) = Sum $ Just $ subtr a b
 
@@ -78,9 +81,11 @@ class Zero a where
   default isNegative :: Ord a => a -> Bool
   isNegative = (< zero)
 
-class Subtr a where
-  subtr :: a -> a -> a
-  default subtr :: Num a => a -> a -> a
+type Subtr a = Subtr2 a a
+
+class Subtr2 a b where
+  subtr :: a -> b -> a
+  default subtr :: (a ~ b,Num a) => a -> b -> a
   subtr = (-)
 
 minMap :: (a -> a) -> Min a -> Min a

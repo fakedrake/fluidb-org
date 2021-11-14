@@ -18,16 +18,15 @@
 {-# LANGUAGE StandaloneDeriving     #-}
 {-# LANGUAGE TemplateHaskell        #-}
 {-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE UndecidableInstances   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE TypeApplications       #-}
 module Control.Antisthenis.Minimum
   (MinTag) where
 
 import           Control.Antisthenis.AssocContainer
-import           Control.Antisthenis.Lens
 import           Control.Antisthenis.Types
 import           Control.Applicative                hiding (Const (..))
 import           Control.Monad.Identity
@@ -39,6 +38,7 @@ import           Data.Proxy
 import           Data.Utils.AShow
 import           Data.Utils.Const
 import           Data.Utils.Debug
+import           Data.Utils.Embed
 import           Data.Utils.Nat
 import           Data.Utils.Tup
 import           GHC.Generics
@@ -185,13 +185,13 @@ instance (MinExtParams p,Ord (MechVal p)) => BndRParams (MinTag p) where
 
 instance (AShow (MechVal p)
          ,AShow (ExtCoEpoch p)
+         ,Embed (Min (MechVal p)) (ExtCap p)
          ,Ord (MechVal p)
          ,AShow (ExtCap p)
          ,Zero (ExtCap p)
          ,Zero (MechVal p)
          ,MinExtParams p
          ,NoArgError (ExtError p)
-         ,HasLens (ExtCap p) (Min (MechVal p))
          ,AShow (ExtError p)) => ZipperParams (MinTag p) where
   type ZCap (MinTag p) = ExtCap p
   type ZEpoch (MinTag p) = ExtEpoch p
@@ -241,8 +241,8 @@ instance (AShow (MechVal p)
       (NoSec,_) -> conf { confCap = CapVal zero }
       (SecRes res,CapVal c) -> conf { confCap = CapVal $ chooseCapRes c res }
       (SecBnd _ bnd,CapVal c) -> conf { confCap = CapVal $ chooseCapBnd c bnd }
-      (SecRes res,ForceResult) -> conf { confCap = CapVal $ rgetL res }
-      (SecBnd _ bnd,ForceResult) -> conf { confCap = CapVal $ rgetL bnd }
+      (SecRes res,ForceResult) -> conf { confCap = CapVal $ emb res }
+      (SecBnd _ bnd,ForceResult) -> conf { confCap = CapVal $ emb bnd }
     where
       chooseCapBnd :: ZCap (MinTag p) -> ZBnd (MinTag p) -> ZCap (MinTag p)
       chooseCapBnd cap bnd = case exceedsCap @(MinTag p) Proxy cap bnd of
@@ -273,10 +273,10 @@ minEvolutionControl conf z = case confCap conf of
   ForceResult -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of
       SecRes r -> if r < bnd then Just $ BndRes r
-        else trace ("again1:" <: (zId z)) Nothing
+        else trace ("again1:" <: zId z) Nothing
       SecBnd _ secBnd -> if secBnd >= bnd
-        then trace ("again2:" <: (zId z)) Nothing else error "oops"
-      _ -> trace ("again3:" <: (zId z)) Nothing
+        then trace ("again2:" <: zId z) Nothing else error "oops"
+      _ -> trace ("again3:" <: zId z) Nothing
     x -> return x
   CapVal cap -> res >>= \case
     BndBnd bnd -> case zSecondaryBound z of

@@ -30,6 +30,6 @@ instance Applicative Cert where
   pure = point
   Cert a f <*> Cert b x = Cert (max a b) $ f x
 instance Scalable a => Scalable (Cert a) where scale sc = fmap $ scale sc
-instance Subtr a => Subtr (Cert a) where subtr = liftA2 subtr
+instance Subtr2 a b => Subtr2  (Cert a) (Cert b) where subtr = liftA2 subtr
 incrTrail :: Cert a -> Cert a
 incrTrail c = c{cTrailSize=1 + cTrailSize c}

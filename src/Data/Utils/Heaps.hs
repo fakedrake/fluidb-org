@@ -119,9 +119,10 @@ instance Monoid (IHeap a) where
 
 newtype NonNeg a = NonNeg { getNonNeg :: a }
   deriving (Show,Eq,Ord)
-instance (Ord a,Zero a) =>  Zero (NonNeg a) where
+instance (Ord a,Zero a) => Zero (NonNeg a) where
   zero = NonNeg zero
   {-# INLINE zero #-}
+  isNegative _ = False
 instance Num a => Semigroup (NonNeg a) where
   NonNeg a <> NonNeg a' = NonNeg $ a + a'
 

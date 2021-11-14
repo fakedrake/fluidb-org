@@ -33,8 +33,10 @@ data PlanCost n = PlanCost { pcPlan :: Maybe (NodeSet n),pcCost :: Cost }
 instance Scalable (PlanCost n) where
   scale sc pc = pc { pcCost = scale sc $ pcCost pc }
 instance AShow (PlanCost n)
-instance Zero (PlanCost n) where zero = mempty
-instance Subtr (PlanCost n) where
+instance Zero (PlanCost n) where
+  zero = mempty
+  isNegative = isNegative . pcCost
+instance Subtr2 (PlanCost n) (PlanCost n) where
   subtr (PlanCost _ a) (PlanCost _ b) = PlanCost Nothing $ subtr a b
 
 instance Ord (PlanCost n) where
@@ -57,8 +59,9 @@ data Cost = Cost { costReads :: Int,costWrites :: Int }
 
 instance Zero Cost where
   zero = Cost 0 0
-instance Subtr Cost where
-  subtr (Cost a b) (Cost a' b') = Cost (a - a') (b - b')
+instance Subtr2 Cost Cost where
+  subtr (Cost a b) (Cost a' b') =
+    Cost (a - a') (b - b')
 
 -- XXX: Here we are INCONSISTENT in assuming that reads and writes
 -- cost the same.

@@ -18,7 +18,7 @@ instance AShow a => AShow (Comp a) where
   ashow' (Comp i a) =
     Sym $ show i ++ "w+" ++ showSExpOneLine False (ashow' a)
 
--- |Note: ord is ambiguous.
+-- | Ord should mirror
 instance (Ord a,Scalable a) => Ord (Comp a) where
   compare (Comp c1 a) (Comp c2 b) =
     if
@@ -46,7 +46,7 @@ instance Copointed Comp where
   copoint  (Comp _ a) = a
 instance Pointed Comp where
   point = pure
-instance Subtr a => Subtr (Comp a) where
+instance Subtr2 a b => Subtr2 (Comp a) (Comp b) where
   subtr = liftA2 subtr
 
 instance Semigroup a => Semigroup (Comp a) where
@@ -60,6 +60,5 @@ nonComp = Comp 1 zero
 
 toComp :: a -> Comp a
 toComp = Comp 0
-instance Zero a => Zero (Comp a) where
+instance (Ord a,Zero a,Scalable a) => Zero (Comp a) where
   zero = point zero
-  isNegative (Comp _ a) = isNegative a

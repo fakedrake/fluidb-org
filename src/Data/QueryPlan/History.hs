@@ -57,15 +57,6 @@ pastCosts maxCost = do
     BndErr
       e -> error $ "getCost(" ++ ashow q ++ "):antisthenis error: " ++ ashow e
 
--- | The cap counts how many materialized nodes WE HAVE ENCOUNTERED.
-maxCap :: Cost -> HistCap Cost
-maxCap maxCost =
-  HistCap
-  { hcMatsEncountered = 1
-   ,hcValCap = Min $ Just maxCost
-   ,hcNonCompTolerance = 0.7
-  }
-
 -- | The materialized node indeed has a cost. That cost is
 -- calculated by imposing a scaling on the cost it would have if it
 -- were not materialized. This opens the door to an explosion in
@@ -104,30 +95,5 @@ incrementMat hv =
          IS.singleton $ maybe 1 (1 +) $ fst <$> IS.maxView (hvMaxMatTrail hv)
      }
 -- | we may be overshooting here and there but it's ok
-double :: Int -> Int
-double i = if i < 0 then i else i * 2
-halfCeil :: Int -> Int
-halfCeil i =
-  if
-    | i <= 0    -> i
-    | m > 0     -> d + 1
-    | otherwise -> d
-  where
-    (d,m) = divMod i 2
-scaleCost :: Cost -> Cost
-scaleCost (Cost r w) = Cost (halfCeil r) (halfCeil w)
 mapCap :: (ZCap w -> ZCap w) -> Conf w -> Conf w
 mapCap f conf = conf { confCap = f <$> confCap conf }
-unscaleCap :: HistCap Cost -> HistCap Cost
-unscaleCap hc =
-  hc { hcValCap = Min $ fmap unscaleCost $ getMin $ hcValCap hc
-      ,hcMatsEncountered = 1 + hcMatsEncountered hc
-     }
-  where
-    unscaleCost (Cost r w) = Cost (double r) (double w)
-scaleHistVal :: HistVal Cost -> HistVal Cost
-scaleHistVal hv = hv{hvVal=scaleCost $ hvVal hv}
-scaleMin :: Min (HistVal Cost) -> Min (HistVal Cost)
-scaleSum :: Sum (HistVal Cost) -> Sum (HistVal Cost)
-scaleSum m@(Sum Nothing) = m
-scaleSum (Sum (Just hv)) = point $ scaleHistVal hv

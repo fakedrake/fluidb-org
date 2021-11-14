@@ -64,6 +64,7 @@ instance (AShow2 (MechVal p) (ExtCap p)
          ,Subtr (MechVal p)
          ,Semigroup (MechVal p)
          ,Zero (MechVal p)
+         ,Subtr2 (ExtCap p) (Sum (MechVal p))
           -- For updating the cap
          ,HasLens (ExtCap p) (Min (MechVal p))
          ,Zero (ExtCap p)
@@ -113,13 +114,13 @@ instance (AShow2 (MechVal p) (ExtCap p)
           -- caps like negative values. That is ok as it should be
           -- handled by the evolutionControl function. Note again that
           -- zRes does not include the value under cursor.
-          CapVal cap  -> CapVal $ subCap cap partRes
+          CapVal cap  -> CapVal $ subtr cap partRes
           ForceResult -> ForceResult
 
-subCap :: forall cap v . (Subtr v,HasLens cap (Min v)) => cap -> Sum v -> cap
-subCap cap s = modL defLens (coerce . go . coerce :: Min v -> Min v) cap where
-  go :: Sum v -> Sum v
-  go s' = maybe (error "subtracting infinity from cap") (sub s') $ negSum s
+-- subCap :: forall cap v . (Subtr v,HasLens cap (Min v)) => cap -> Sum v -> cap
+-- subCap cap s = modL defLens (coerce . go . coerce :: Min v -> Min v) cap where
+--   go :: Sum v -> Sum v
+--   go s' = maybe (error "subtracting infinity from cap") (sub s') $ negSum s
 
 -- | Return the result expected or Nothing if there is more evolving
 -- that needs to happen before a valid (ie that satisfies the cap)
@@ -127,7 +128,6 @@ subCap cap s = modL defLens (coerce . go . coerce :: Min v -> Min v) cap where
 sumEvolutionControl
   :: forall p m .
   (Semigroup (MechVal p)
-  -- ,HasLens (ZCap (SumTag p)) (Min (MechVal p))
   ,Zero (ZCap (SumTag p))
   ,Zero (ZBnd (SumTag p))
   ,Ord (MechVal p)

@@ -169,6 +169,7 @@ data ExceedsCap a
   -- when the provided cap is exceeded the bound will exceed at least
   -- one of arguments.
   | BndWithinCap a
+  deriving (Functor,Show)
 class BndRParams w where
   type ZErr w :: *
 
