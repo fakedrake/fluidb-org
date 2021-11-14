@@ -1,4 +1,5 @@
-{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DefaultSignatures     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Data.Utils.Embed (Embed(..)) where
 import           Data.Coerce
 
