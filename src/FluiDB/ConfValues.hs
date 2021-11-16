@@ -192,7 +192,6 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
          ,nodeSizes = refFromAssocs nodeSizes'
          ,intermediates = mempty
          ,budget = pgcBudget
-         ,pgcDataDir = "/tmp/fluidb_values"
          ,maxBranching = Nothing
          ,maxTreeDepth = Nothing
         }
