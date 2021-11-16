@@ -71,6 +71,7 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Utils.MTL
 import           Prelude                         hiding (exp)
+import           System.FilePath
 import           Text.Printf
 
 -- |A code builder monad that can throw errors, carries the code
@@ -154,8 +155,8 @@ mkFileName n qnfs = do
   let assoc = (\qnf -> (qf qnf,qnf)) <$> qnfs
   fileset <- case nub $ mapMaybe fst assoc of
     []  -> do
-      dataDir <- <$> getCBState
-      return $ DataFile $ printf "data%s.dat" $ show (runNodeRef n)
+      dd <- cbDataDir <$> getCBState
+      return $ DataFile $ dd </> printf "data%s.dat" (show $ runNodeRef n)
     [f] -> return f
     xs  -> throwAStr $ "Conflicting files for node: " ++ ashow (n,xs)
   mapM_ (`putQueryFile` fileset)
