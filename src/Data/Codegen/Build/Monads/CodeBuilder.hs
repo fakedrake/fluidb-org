@@ -153,7 +153,9 @@ mkFileName n qnfs = do
   qf <- getCachedFile . defaultQueryFileCache . cbQueryCppConf <$> getCBState
   let assoc = (\qnf -> (qf qnf,qnf)) <$> qnfs
   fileset <- case nub $ mapMaybe fst assoc of
-    []  -> return $ DataFile $ printf "data%s.dat" $ show (runNodeRef n)
+    []  -> do
+      dataDir <- <$> getCBState
+      return $ DataFile $ printf "data%s.dat" $ show (runNodeRef n)
     [f] -> return f
     xs  -> throwAStr $ "Conflicting files for node: " ++ ashow (n,xs)
   mapM_ (`putQueryFile` fileset)
