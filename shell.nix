@@ -1,12 +1,12 @@
 { nixpkgs ? import <nixpkgs> {} }:
 with nixpkgs; let
-  haskellPackages = haskell.packages.ghc8107;
+  haskellPackages = haskell.packages.ghc901;
   # Haskell tools
   ghc = haskellPackages.ghcWithPackages (ps: with ps; [
     template-haskell
     base
-    czipwith
-    shake
+    # czipwith
+    # shake
     hasktags
     profiteur
     profiterole
