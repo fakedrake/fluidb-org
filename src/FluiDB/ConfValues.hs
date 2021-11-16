@@ -96,14 +96,16 @@ mkQueryCppConf
   (Hashables2 e s,CodegenSymbol e)
   => PreGlobalConf e0 e s
   -> QueryCppConf e s
-mkQueryCppConf PreGlobalConf{..} = QueryCppConf {
-  literalType = codegenSymbolLiteralType,
-  tableSchema = tableSchema',
-  columnType = columnTypeLocal,
-  toSymbol = codegenSymbolToSymbol,
-  defaultQueryFileCache = mkFileCache pgcToQFile pgcSchemaAssoc,
-  uniqueColumns = (`lookup` pgcPrimKeyAssoc),
-  asUnique = pgcToUniq
+mkQueryCppConf PreGlobalConf {..} =
+  QueryCppConf
+  { literalType = codegenSymbolLiteralType
+   ,tableSchema = tableSchema'
+   ,columnType = columnTypeLocal
+   ,toSymbol = codegenSymbolToSymbol
+   ,defaultQueryFileCache = mkFileCache pgcToQFile pgcSchemaAssoc
+   ,uniqueColumns = (`lookup` pgcPrimKeyAssoc)
+   ,asUnique = pgcToUniq
+   ,dataDir = pgcDataDir
   }
   where
     tableSchema' :: s -> Maybe (CppSchema' e)
@@ -190,6 +192,7 @@ mkGlobalConf pgc@PreGlobalConf {..} = do
          ,nodeSizes = refFromAssocs nodeSizes'
          ,intermediates = mempty
          ,budget = pgcBudget
+         ,pgcDataDir = "/tmp/fluidb_values"
          ,maxBranching = Nothing
          ,maxTreeDepth = Nothing
         }

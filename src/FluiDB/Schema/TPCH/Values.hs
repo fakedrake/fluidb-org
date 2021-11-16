@@ -69,6 +69,7 @@ tpchGlobalConf =
    ,pgcSchemaAssoc = tpchSqlSchemaAssoc
    ,pgcTableSizeAssoc = tpchSqlTableSizes
    ,pgcBudget = Nothing
+   ,pgcDataDir = "/tmp/fluidb_store"
   }
   where
     asUniq i = \case

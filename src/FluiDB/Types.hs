@@ -145,6 +145,7 @@ data PreGlobalConf e0 e s =
    ,pgcSchemaAssoc    :: SchemaAssoc e s     -- The schema of each table
    ,pgcTableSizeAssoc :: [(s,TableSize)]          -- Size of each table in bytes
    ,pgcBudget         :: Maybe PageNum
+   ,pgcDataDir        :: FilePath
   }
 
 data GlobalConf e s t n = forall e0 . GlobalConf {

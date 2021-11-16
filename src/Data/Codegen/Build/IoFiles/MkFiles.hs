@@ -59,28 +59,24 @@ makeFilesNaive =
   traverse
   $ tritraverse
     (return . \(NodeRef n) -> NodeRef n)
-    (fmap3 dataFilePath . getPlanAndQFile DataFile)
-  $ getPlanAndQFile DataFile
+    (fmap3 dataFilePath . getPlanAndQFile)
+    getPlanAndQFile
 
 
 populateNodeRole
-  :: forall constri constro e s t n m .
-  (QFileConstructor constri
-  ,QFileConstructor constro
-  ,MakeFilesConstr e s t n m)
-  => constri
-  -> constro
-  -> NodeRole (NodeRef n) (Maybe (NodeRef n)) (Maybe (NodeRef n))
+  :: forall e s t n m .
+  (MakeFilesConstr e s t n m)
+  => NodeRole (NodeRef n) (Maybe (NodeRef n)) (Maybe (NodeRef n))
   -> m
     (NodeRole
        (NodeRef ())
        (Maybe (Maybe (QueryShape e s),FilePath))
        (Maybe (Maybe (QueryShape e s),QFile)))
-populateNodeRole constri constro =
+populateNodeRole =
   fmap coerceI
   . bitraverse
-  (fmap3 dataFilePath . getPlanAndQFile constri)
-  (getPlanAndQFile constro)
+  (fmap3 dataFilePath . getPlanAndQFile)
+  getPlanAndQFile
 
 coerceI :: NodeRole (NodeRef n) b c -> NodeRole (NodeRef ()) b c
 coerceI = \case
@@ -90,17 +86,16 @@ coerceI = \case
 
 -- | Lookup the plan and the fileset.
 getPlanAndQFile
-  :: forall constr e s t n m .
-  (QFileConstructor constr,MakeFilesConstr e s t n m)
-  => constr
-  -> Maybe (NodeRef n)
+  :: forall e s t n m .
+  (MakeFilesConstr e s t n m)
+  => Maybe (NodeRef n)
   -> m (Maybe (Maybe (QueryShape e s),QFile))
-getPlanAndQFile f =
+getPlanAndQFile =
   traverse
   $ distrib
     (dropReader (asks fst) . getNodeShapeFull)
     (\r -> dropReader (asks fst) (getNodeFile r)
-     >>= maybe (dropReader (asks fst) $ mkNodeFile f r) return)
+     >>= maybe (dropReader (asks fst) $ mkNodeFile r) return)
 
 -- | Join complements have DataSet rather than single files on the
 -- complements. This does not check the existance of input/output
@@ -111,8 +106,7 @@ makeFilesJUnsafe
   => JIOFilesG (NodeRef n) (NodeRef n) (NodeRef n)
   -> m (JIOFiles e s)
 makeFilesJUnsafe jclust = do
-  Tup2 jclAntijoin jcrAntijoin <- traverse2
-    (populateNodeRole DataFile DataFile)
+  Tup2 jclAntijoin jcrAntijoin <- traverse2 populateNodeRole
     $ Tup2 (joinClusterLeftAntijoin jclust) (joinClusterRightAntijoin jclust)
   Tup2 jclIntermediate jcrIntermediate <- traverse2 coerce'
     $ Tup2

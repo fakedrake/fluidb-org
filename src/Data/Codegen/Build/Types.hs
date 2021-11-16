@@ -120,14 +120,16 @@ instance IsString (CodeBuildErr e s t n) where fromString = BuildErrMsg
 
 -- | Code builder state. All the stuff outside main() that main()
 -- depends on.
-data CBState e s t n = CBState {
-  -- XXX: move this to a reader.
-  cbQueryCppConf   :: QueryCppConf e s,
-  cbMatNodePlans   :: RefMap n (QueryShape e s),
-  cbIncludes       :: HS.HashSet CC.Include,
-  cbClasses        :: CC.CodeCache CC.Class,
-  cbFunctions      :: CC.CodeCache CC.Function,
-  cbQueryFileCache :: QueryFileCache e s
+data CBState e s t n =
+  CBState
+  { -- XXX: move this to a reader.
+    cbQueryCppConf   :: QueryCppConf e s
+   ,cbMatNodePlans   :: RefMap n (QueryShape e s)
+   ,cbIncludes       :: HS.HashSet CC.Include
+   ,cbClasses        :: CC.CodeCache CC.Class
+   ,cbFunctions      :: CC.CodeCache CC.Function
+   ,cbQueryFileCache :: QueryFileCache e s
+   ,cbDataDir        :: FilePath
   }
 
 type PrimKeys e = [e]
@@ -146,4 +148,5 @@ data QueryCppConf e s =
    ,defaultQueryFileCache :: QueryFileCache e s
    ,uniqueColumns         :: s -> Maybe (PrimKeys e)
    ,asUnique              :: Int -> e -> Maybe (Uniquified e)
+   ,dataDir               :: FilePath
   }

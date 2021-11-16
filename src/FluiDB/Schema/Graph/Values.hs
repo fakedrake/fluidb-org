@@ -44,6 +44,7 @@ graphGlobalConf sch =
    ,pgcSchemaAssoc = graphSchemaAssoc sch
    ,pgcTableSizeAssoc = graphTableBytes sch
    ,pgcBudget = Nothing
+   ,pgcDataDir = "/tmp/fluidb_data"
   }
 
 graphRelationColumns :: GraphTypeVars e s t n => GraphSchema e s -> s -> Maybe [e]

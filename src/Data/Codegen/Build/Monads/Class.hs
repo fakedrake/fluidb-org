@@ -79,13 +79,15 @@ throwCodeErrStr :: MonadCodeError e s t n m => String -> m a
 throwCodeErrStr = throwError . BuildErrMsg
 
 emptyCBState :: QueryCppConf e s -> CBState e s t n
-emptyCBState conf@QueryCppConf{..} = CBState {
-  cbMatNodePlans = mempty,
-  cbQueryCppConf = conf,
-  cbIncludes = mempty,
-  cbClasses = mempty,
-  cbFunctions = mempty,
-  cbQueryFileCache = defaultQueryFileCache
+emptyCBState conf@QueryCppConf {..} =
+  CBState
+  { cbMatNodePlans = mempty
+   ,cbQueryCppConf = conf
+   ,cbIncludes = mempty
+   ,cbClasses = mempty
+   ,cbFunctions = mempty
+   ,cbQueryFileCache = defaultQueryFileCache
+   ,cbDataDir = dataDir
   }
 
 instance MonadCodeError e s t n (Either (CodeBuildErr e s t n))

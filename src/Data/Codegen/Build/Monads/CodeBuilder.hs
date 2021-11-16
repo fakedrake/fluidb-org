@@ -71,6 +71,7 @@ import           Data.Maybe
 import           Data.NodeContainers
 import           Data.Utils.MTL
 import           Prelude                         hiding (exp)
+import           Text.Printf
 
 -- |A code builder monad that can throw errors, carries the code
 -- building state, has access to a graph and is on the leaf of a plan.
@@ -127,38 +128,36 @@ getNodeFile n = dropState (ask,const $ return ()) (getNodeQnfN n) >>= \case
 -- for the query corresponding to the node.
 mkNodeFile
   :: forall e s t n m constr .
-  (QFileConstructor constr
-  ,Hashables2 e s
+  (Hashables2 e s
   ,MonadCodeBuilder e s t n m
   ,MonadError (CodeBuildErr e s t n) m
   ,MonadReader (ClusterConfig e s t n) m)
-  => constr
-  -> NodeRef n
+  => NodeRef n
   -> m QFile
-mkNodeFile constr n =
+mkNodeFile n =
   dropState (ask,const $ return ()) (getNodeQnfN n) >>= \case
     [] -> error $ "No qnfs for node " ++ show n
     qnfs -> getNodeFile n >>= \case
       Just fn -> throwAStr $ "Overwriting file" ++ ashow (n,qnfs,fn)
       Nothing -> do
-        f <- mkFileName constr n qnfs
+        f <- mkFileName n qnfs
         mapM_ (`putQueryFile` f) qnfs
         return f
 
-mkFileName :: (QFileConstructor constr, MonadCodeBuilder e s t n m,
-              MonadError (CodeBuildErr e s t n) m) =>
-             constr
-           -> NodeRef n
-           -> [QNFQuery e s]
-           -> m QFile
-mkFileName constr n qnfs = do
+mkFileName
+  :: (MonadCodeBuilder e s t n m,MonadError (CodeBuildErr e s t n) m)
+  => NodeRef n
+  -> [QNFQuery e s]
+  -> m QFile
+mkFileName n qnfs = do
   qf <- getCachedFile . defaultQueryFileCache . cbQueryCppConf <$> getCBState
   let assoc = (\qnf -> (qf qnf,qnf)) <$> qnfs
   fileset <- case nub $ mapMaybe fst assoc of
-              []  -> return $ constructQFile constr (runNodeRef n)
-              [f] -> return f
-              xs  -> throwAStr $ "Conflicting files for node: " ++ ashow (n,xs)
-  mapM_ (`putQueryFile` fileset) $ snd <$> filter (isNothing . fst) assoc
+    []  -> return $ DataFile $ printf "data%s.dat" $ show (runNodeRef n)
+    [f] -> return f
+    xs  -> throwAStr $ "Conflicting files for node: " ++ ashow (n,xs)
+  mapM_ (`putQueryFile` fileset)
+    $ snd <$> filter (isNothing . fst) assoc
   return fileset
 
 instance Monad m => MonadCheckpoint (CodeBuilderT' e s t n m) where

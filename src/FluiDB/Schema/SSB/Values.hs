@@ -32,6 +32,7 @@ getSsbGlobalConf = do
         ,pgcToQFile= \case
             TSymbol s ->Just $ DataFile $ dataDir </> s <.> "dat"
             NoTable   -> Nothing
+        ,pgcDataDir = "/tmp/fluidb_store"
         }
   case retM of
     Left l  -> fail $ ashow l

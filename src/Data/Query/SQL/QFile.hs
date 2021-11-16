@@ -3,8 +3,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE TypeFamilies      #-}
 module Data.Query.SQL.QFile
-  (QFileConstructor(..)
-  ,QFile(..)
+  (QFile(..)
   ,QueryFileCache(..)
   ,dataFilePath
   ,mapQFile) where
@@ -14,7 +13,6 @@ import           Data.Query.SQL.Types
 import           Data.Utils.AShow
 import           Data.Utils.Hashable
 import           GHC.Generics
-import           Text.Printf
 
 newtype QFile = DataFile FilePath
   deriving (Eq,Show,Generic,Ord)
@@ -28,13 +26,6 @@ dataFilePath (DataFile f) = f
 mapQFile :: (FilePath -> FilePath) -> QFile -> QFile
 mapQFile f (DataFile x) = DataFile $ f x
 -- instance IsString QFile where fromString = DataFile
-class QFileConstructor constr where
-  constructQFile :: Show a => constr -> a -> QFile
-instance QFileConstructor (FilePath -> FilePath -> QFile) where
-  constructQFile c a =
-    c (printf "data%s.dat" (show a)) (printf "index%s.dat" (show a))
-instance QFileConstructor (FilePath -> QFile) where
-  constructQFile c a = c $ printf "data%s.dat" $ show a
 data QueryFileCache e s = QueryFileCache {
   getCachedFile :: QNFQuery e s -> Maybe QFile,
   putCachedFile :: QNFQuery e s -> QFile -> QueryFileCache e s,
