@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 module FluiDB.Schema.SSB.Main (ssbMain) where
 
+import           CmdLineParser             (getArg)
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.State
@@ -91,7 +92,8 @@ storeCpp i cpp = do
   budgetM <- gets $  budget . globalGCConfig
   lift2 $ do
     tmp <- getTemporaryDirectory
-    let workloadDir = printf "workload-%s" $ maybe "unlimited" show budgetM
+    let workloadDir = "workload"
+    -- let workloadDir = printf "workload-%s" $ maybe "unlimited" show budgetM
     let dir = tmp </> "fluidb-data" </> workloadDir
     createDirectoryIfMissing True dir
     let path = dir </> printf "query%d.cpp" i
