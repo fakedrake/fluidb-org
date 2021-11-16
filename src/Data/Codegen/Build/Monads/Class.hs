@@ -79,7 +79,7 @@ throwCodeErrStr :: MonadCodeError e s t n m => String -> m a
 throwCodeErrStr = throwError . BuildErrMsg
 
 emptyCBState :: QueryCppConf e s -> CBState e s t n
-gemptyCBState conf@QueryCppConf {..} =
+emptyCBState conf@QueryCppConf {..} =
   CBState
   { cbMatNodePlans = mempty
    ,cbQueryCppConf = conf
