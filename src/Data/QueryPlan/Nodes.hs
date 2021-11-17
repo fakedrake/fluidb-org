@@ -217,8 +217,8 @@ setNodeStateUnsafe' verbose r s = do
   let epoch = NEL.head $ epochs gcst
   let epoch' = epoch { nodeStates = r `refInsert` s $ nodeStates epoch }
   put $ gcst { epochs = epoch' NEL.:| NEL.tail (epochs gcst) }
+  totalSize <- getDataSize
   when verbose $ do
-    totalSize <- getDataSize
     trM
       $ printf
         "Unsafe shift %s: %s -> %s [size: %d]"
