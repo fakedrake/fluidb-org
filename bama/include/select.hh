@@ -26,48 +26,22 @@ class Select {
     ~Select () {report();}
 
     void run() {
-        Reader<Record> reader;
-        //Record record;
-        Writer<Record> primary_output;
-        Writer<Record> secondary_output;
+      Reader<Record> reader;
+      // Record record;
+      Writer<Record> primary_output;
+      Writer<Record> secondary_output;
 
-#define APP_EITHER(member, args...) do {        \
-            if (!PrimaryOutType::isNothing) {    \
-                primary_output.member(args);   \
-            }                                   \
-            if (!SecondaryOutType::isNothing) {  \
-                secondary_output.member(args); \
-            }                                   \
-        } while (0)
-
-        if (!PrimaryOutType::isNothing) {
-            primary_output.open(primary_file.value);
+      WITH(primary_file, primary_output.open(primary_file.value));
+      WITH(secondary_file, secondary_output.open(secondary_file.value));
+      eachRecord<Record>(infile, [&](Record record) {
+        if (predicate(record)) {
+          WITH(primary_file, primary_output.write(record));
+        } else {
+          WITH(secondary_file, secondary_output.write(record));
         }
-        if (!SecondaryOutType::isNothing) {
-            secondary_output.open(secondary_file.value);
-        }
-
-
-        // reader.open(infile);
-        // while (reader.hasNext()) {
-        //     record = reader.nextRecord();
-        //     if (predicate(record)) {
-        //         APP_EITHER(write, record);
-        //     }
-        // }
-        // reader.close();
-
-        eachRecord<Record>(
-            infile,
-            [&](Record record) {
-                if (predicate(record)) {
-                    APP_EITHER(write, record);
-                }
-            });
-        APP_EITHER(close);
-
-#undef APP_EITHER
-
+      });
+      WITH(primary_file, primary_output.close());
+      WITH(secondary_file, primary_output.close());
     }
 
     void print_output(size_t x) {

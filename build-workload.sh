@@ -1,6 +1,6 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash
-set -e
+set -xe
 
 # for i in ssb-workload/*.cpp;
 # do
@@ -12,6 +12,7 @@ set -e
 
 cmake -S . -B ./cmake-build
 cmake --build ./cmake-build workload
+rm -r /tmp/fluidb-data/*
 for i in {1..27}; do
     echo "Running query ${i}"
     ./cmake-build/ssb-workload/query${i}

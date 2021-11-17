@@ -15,6 +15,13 @@
 #include <cstdio>
 #include <functional>
 
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+
 
 #define READ_FLAGS O_RDONLY
 #define WRITE_FLAGS (O_WRONLY | O_CREAT | O_TRUNC)
@@ -556,5 +563,18 @@ void bulkWrite(size_t len, const std::string& inpFile, const R* recs)
     wr.open(inpFile);
     wr.bulkWrite(0, recs, len);
     wr.close();
+}
+
+#define BUF_SIZE PAGE_SIZE
+int copyFile(const char* in_path, const char* out_path){
+  size_t n;
+  FILE* in=NULL, * out=NULL;
+  void* buf = calloc(BUF_SIZE, 1);
+  if((in = fopen(in_path, "rb")) && (out = fopen(out_path, "wb")))
+    while((n = fread(buf, 1, BUF_SIZE, in)) && fwrite(buf, 1, n, out));
+  free(buf);
+  if(in) fclose(in);
+  if(out) fclose(out);
+  return EXIT_SUCCESS;
 }
 #endif
