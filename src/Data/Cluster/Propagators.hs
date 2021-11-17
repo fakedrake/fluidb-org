@@ -583,11 +583,7 @@ putShapeCluster
 putShapeCluster = void . traverse (uncurry go . unMetaD) . putId
   where
     go :: Defaulting (QueryShape e s) -> NodeRef n -> m ()
-    go p ref = do
-      si <- fmap2 qpSize $ dropReader get $ getNodeShape ref
-      modNodeShape ref (<> p)
-      si' <- fmap2 qpSize $ dropReader get $ getNodeShape ref
-      when (ref == 290) $ traceM $ "new size" <: (ref, si,fmap qpSize p,si')
+    go p ref = modNodeShape ref (<> p)
     putId :: ShapeCluster NodeRef e s t n
           -> AnyCluster'
             (ShapeSym e s)

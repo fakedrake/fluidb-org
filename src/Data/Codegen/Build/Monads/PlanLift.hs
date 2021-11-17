@@ -110,7 +110,8 @@ updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
     unsizedNodes <- filterInterms unsizedNodes0
     -- Force all the queries first and then put them in the map so
     -- that calculating the size of one query does not change the
-    -- value of another.
+    -- value of another creating discrepancies between the map sent to
+    -- the planner and the query shape map.
     dropState (gets fst,modify . first . const)
       $ mapM_ forceQueryShape unsizedNodes
     mapM putQuerySize unsizedNodes
