@@ -12,7 +12,7 @@ set -xe
 
 cmake -S . -B ./cmake-build
 cmake --build ./cmake-build
-rm -r /tmp/fluidb-data/*
+rm -rf /tmp/fluidb-data/*
 for i in {1..27}; do
     echo "Running query ${i}"
     ./cmake-build/ssb-workload/query${i}
