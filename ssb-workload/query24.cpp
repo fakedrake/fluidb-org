@@ -116,6 +116,45 @@ class Record3 {
 };
 
 
+class Record7 {
+ public:
+  Record7(unsigned __sortElem0, fluidb_string<15> __sortElem1) : sortElem0(__sortElem0), sortElem1(__sortElem1)
+  {
+  }
+  Record7() 
+  {
+  }
+  std::string show() const{
+    std::stringstream o;
+    o << sortElem0 << " | " << arrToString(sortElem1);
+    return o.str();
+  }
+  bool operator <(const Record7& otherRec) const{
+    return (otherRec.sortElem0 < sortElem0 && otherRec.sortElem1 < sortElem1);
+  }
+  bool operator ==(const Record7& otherRec) const{
+    return (otherRec.sortElem0 == sortElem0 && otherRec.sortElem1 == sortElem1);
+  }
+  bool operator !=(const Record7& otherRec) const{
+    return (otherRec.sortElem0 != sortElem0 || otherRec.sortElem1 != sortElem1);
+  }
+  unsigned sortElem0;
+  fluidb_string<15> sortElem1;
+ private:
+};
+
+
+class CallableClass8 {
+ public:
+  Record7 operator()(const Record3& record0) {
+    return Record7(record0.sym__0__8175332404886507711, record0.sym__0__8130415785247634792);
+  }
+  typedef Record7 Codomain;
+  typedef Record3 Domain0;
+ private:
+};
+
+
 class CallableClass6 {
  public:
   Record1 operator()(const Record3& record0) {
@@ -127,34 +166,6 @@ class CallableClass6 {
   AggrFirst<unsigned> vAggrFirst2;
   AggrFirst<fluidb_string<15>> vAggrFirst4;
   AggrSum<unsigned> vAggrSum5;
-};
-
-
-class CallableClass9 {
- public:
-  CallableClass9() : isSet(false)
-  {
-  }
-  bool operator()(const Record3& record0) {
-    if (isSet && record0.sym__0__8175332404886507711 == staticExp7 && record0.sym__0__8130415785247634792 == staticExp8) {
-      return false;
-    } else {
-      staticExp7 = record0.sym__0__8175332404886507711;
-      staticExp8 = record0.sym__0__8130415785247634792;
-      if (isSet) {
-        return true;
-      } else {
-        isSet = true;
-        return false;
-      }
-    }
-  }
-  typedef bool Codomain;
-  typedef Record3 Domain0;
- private:
-  bool isSet;
-  unsigned staticExp7;
-  fluidb_string<15> staticExp8;
 };
 
 
@@ -183,7 +194,7 @@ int main() {
   //         [E0 (ESym "d_year"),E0 (ESym "c_nation")]
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [\n         (ESym \"d_year\",E0 (NAggr AggrFirst (E0 (ESym \"d_year\")))),\n         (ESym \"c_nation\",E0 (NAggr AggrFirst (E0 (ESym \"c_nation\")))),\n         (\n           ESym \"profit\",\n           E0 \n              (NAggr \n                AggrSum \n                (E2 ESub \n                    (E0 (ESym \"lo_revenue\")) \n                    (E0 (ESym \"lo_supplycost\"))))\n          )\n        ] \n        [E0 (ESym \"d_year\"),E0 (ESym \"c_nation\")]\n    ]))" << std::endl;
   {
-    auto operation = mkAggregation<CallableClass6, CallableClass9>(Just<const std::string>("data326.dat"), Just<const std::string>("data325.dat"), "data325.dat");
+    auto operation = mkAggregation<CallableClass6, CallableClass8>(Just<const std::string>("/tmp/fluidb_store/data326.dat"), Just<const std::string>("/tmp/fluidb_store/data325.dat"), "/tmp/fluidb_store/data325.dat");
     operation.run();
     operation.print_output(10);
   }

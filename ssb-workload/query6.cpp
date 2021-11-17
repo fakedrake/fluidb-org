@@ -288,6 +288,17 @@ class Record5 {
 };
 
 
+class CallableClass14 {
+ public:
+  Record4 operator()(const Record10& record7) {
+    return Record4(record7.sym__0__4324879278824997813, record7.sym__0__8486787681075542671);
+  }
+  typedef Record4 Codomain;
+  typedef Record10 Domain0;
+ private:
+};
+
+
 class CallableClass2 {
  public:
   bool operator()(const Record1& record0) {
@@ -307,34 +318,6 @@ class CallableClass6 {
   typedef Record4 Codomain;
   typedef Record5 Domain0;
  private:
-};
-
-
-class CallableClass16 {
- public:
-  CallableClass16() : isSet(false)
-  {
-  }
-  bool operator()(const Record10& record7) {
-    if (isSet && record7.sym__0__4324879278824997813 == staticExp14 && record7.sym__0__8486787681075542671 == staticExp15) {
-      return false;
-    } else {
-      staticExp14 = record7.sym__0__4324879278824997813;
-      staticExp15 = record7.sym__0__8486787681075542671;
-      if (isSet) {
-        return true;
-      } else {
-        isSet = true;
-        return false;
-      }
-    }
-  }
-  typedef bool Codomain;
-  typedef Record10 Domain0;
- private:
-  bool isSet;
-  unsigned staticExp14;
-  fluidb_string<10> staticExp15;
 };
 
 
@@ -379,13 +362,13 @@ int main() {
   //                 (R0 (E0 (EString "MFGR#2228"))))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P2 \n            PAnd \n            (P0 \n              (R2 RLike \n                  (R0 (E0 (ESym \"s_region\"))) \n                  (R0 (E0 (EString \"ASIA\"))))) \n            (P0 \n              (R2 RLe \n                  (R0 (E0 (EString \"MFGR#2221\"))) \n                  (R0 (E0 (ESym \"p_brand1\")))))) \n          (P0 \n            (R2 RLe \n                (R0 (E0 (ESym \"p_brand1\"))) \n                (R0 (E0 (EString \"MFGR#2228\"))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass2>(Just<const std::string>("data92.dat"), Just<const std::string>("data93.dat"), "data46.dat");
+    auto operation = mkSelect<CallableClass2>(Just<const std::string>("/tmp/fluidb_store/data92.dat"), Just<const std::string>("/tmp/fluidb_store/data93.dat"), "/tmp/fluidb_store/data46.dat");
     operation.run();
     operation.print_output(10);
   }
   std::cout << "ForwardTrigger: (Just (Right [QSort [E0 (ESym \"d_year\"),E0 (ESym \"p_brand1\")]]))" << std::endl;
   {
-    auto operation = mkSort<CallableClass6>(Just<const std::string>("data118.dat"), Just<const std::string>("data92.dat"), "data92.dat");
+    auto operation = mkSort<CallableClass6>(Just<const std::string>("/tmp/fluidb_store/data118.dat"), Just<const std::string>("/tmp/fluidb_store/data92.dat"), "/tmp/fluidb_store/data92.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -399,7 +382,7 @@ int main() {
   //         [E0 (ESym "d_year"),E0 (ESym "p_brand1")]
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [(ESym \"tmpSym0\",E0 (NAggr AggrSum (E0 (ESym \"lo_revenue\")))),\n         (ESym \"d_year\",E0 (NAggr AggrFirst (E0 (ESym \"d_year\")))),\n         (ESym \"p_brand1\",E0 (NAggr AggrFirst (E0 (ESym \"p_brand1\"))))] \n        [E0 (ESym \"d_year\"),E0 (ESym \"p_brand1\")]\n    ]))" << std::endl;
   {
-    auto operation = mkAggregation<CallableClass13, CallableClass16>(Just<const std::string>("data119.dat"), Just<const std::string>("data118.dat"), "data118.dat");
+    auto operation = mkAggregation<CallableClass13, CallableClass14>(Just<const std::string>("/tmp/fluidb_store/data119.dat"), Just<const std::string>("/tmp/fluidb_store/data118.dat"), "/tmp/fluidb_store/data118.dat");
     operation.run();
     operation.print_output(10);
   }

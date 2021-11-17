@@ -150,30 +150,6 @@ class Record6 {
 };
 
 
-class CallableClass8 {
- public:
-  CallableClass8() : isSet(false)
-  {
-  }
-  bool operator()(const Record6& record3) {
-    if (isSet) {
-      return false;
-    } else {
-      if (isSet) {
-        return true;
-      } else {
-        isSet = true;
-        return false;
-      }
-    }
-  }
-  typedef bool Codomain;
-  typedef Record6 Domain0;
- private:
-  bool isSet;
-};
-
-
 class CallableClass7 {
  public:
   Record4 operator()(const Record6& record3) {
@@ -228,7 +204,7 @@ int main() {
   //             (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35))))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P2 \n            PAnd \n            (P2 \n              PAnd \n              (P0 \n                (R2 RLe \n                    (R0 (E0 (EInt 5))) \n                    (R0 (E0 (ESym \"lo_discount\"))))) \n              (P0 \n                (R2 RLe \n                    (R0 (E0 (ESym \"lo_discount\"))) \n                    (R0 (E0 (EInt 7)))))) \n            (P0 \n              (R2 RLe \n                  (R0 (E0 (EInt 26))) \n                  (R0 (E0 (ESym \"lo_quantity\")))))) \n          (P0 \n            (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass2>(Just<const std::string>("data32.dat"), Just<const std::string>("data33.dat"), "data28.dat");
+    auto operation = mkSelect<CallableClass2>(Just<const std::string>("/tmp/fluidb_store/data32.dat"), Just<const std::string>("/tmp/fluidb_store/data33.dat"), "/tmp/fluidb_store/data28.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -250,7 +226,7 @@ int main() {
   //         []
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [\n         (\n           ESym \"revenue\",\n           E0 \n              (NAggr \n                AggrSum \n                (E2 EMul \n                    (E0 (ESym \"lo_extendedprice\")) \n                    (E0 (ESym \"lo_discount\"))))\n          )\n        ] \n        []\n    ]))" << std::endl;
   {
-    auto operation = mkAggregation<CallableClass7, CallableClass8>(Just<const std::string>("data34.dat"), Just<const std::string>("data32.dat"), "data32.dat");
+    auto operation = mkTotalAggregation<CallableClass7>(Just<const std::string>("/tmp/fluidb_store/data34.dat"), Just<const std::string>("/tmp/fluidb_store/data32.dat"), "/tmp/fluidb_store/data32.dat");
     operation.run();
     operation.print_output(10);
   }

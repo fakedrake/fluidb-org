@@ -9,7 +9,7 @@ set -e
 # done
 
 
-find ssb-workload/ -name '*.cpp' -exec sed -i -e 's|/run/user/1000|/tmp/fluidb_data/|g' -e 's|\("data[0-9]*.dat"\)|"/tmp/fluidb_data/\1"|g' {} \;
+
 cmake -S . -B ./cmake-build
 cmake --build ./cmake-build workload
 for i in {1..27}; do

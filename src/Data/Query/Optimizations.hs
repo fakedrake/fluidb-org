@@ -43,7 +43,7 @@ sanitizeQuery symEmb =
   fmap
     (fixSubstringIndexOffset
      . optimizeSorts (symEq symEmb)
-     . sortBeforeAggregating (symEq symEmb)
+     -- . sortBeforeAggregating (symEq symEmb)
      . likesToEquals symEmb)
   . squashDates symEmb
   . squashProjections (symEq symEmb)

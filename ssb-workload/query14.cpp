@@ -329,30 +329,6 @@ class CallableClass15 {
 };
 
 
-class CallableClass21 {
- public:
-  CallableClass21() : isSet(false)
-  {
-  }
-  bool operator()(const Record19& record16) {
-    if (isSet) {
-      return false;
-    } else {
-      if (isSet) {
-        return true;
-      } else {
-        isSet = true;
-        return false;
-      }
-    }
-  }
-  typedef bool Codomain;
-  typedef Record19 Domain0;
- private:
-  bool isSet;
-};
-
-
 class CallableClass11 {
  public:
   Record9 operator()(const Record5& record10) {
@@ -407,7 +383,7 @@ int main() {
   //   (Right 
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [QSel (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993)))))]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass2>(Just<const std::string>("data15.dat"), Just<const std::string>("data16.dat"), "/tmp/fluidb-data/date.dat");
+    auto operation = mkSelect<CallableClass2>(Just<const std::string>("/tmp/fluidb_store/data15.dat"), Just<const std::string>("/tmp/fluidb_store/data16.dat"), "/tmp/fluidb_data/fluidb-data/date.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -421,7 +397,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass11, CallableClass13, CallableClass8>(Just<const std::string>("data18.dat"), Just<const std::string>("data17.dat"), Just<const std::string>("data19.dat"), "data15.dat", "/tmp/fluidb-data/lineorder.dat");
+    auto operation = mkEquiJoin<CallableClass11, CallableClass13, CallableClass8>(Just<const std::string>("/tmp/fluidb_store/data18.dat"), Just<const std::string>("/tmp/fluidb_store/data17.dat"), Just<const std::string>("/tmp/fluidb_store/data19.dat"), "/tmp/fluidb_store/data15.dat", "/tmp/fluidb_data/fluidb-data/lineorder.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -441,7 +417,7 @@ int main() {
   //             (R2 RLt (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 25))))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P2 \n            PAnd \n            (P0 \n              (R2 RLe (R0 (E0 (EInt 1))) (R0 (E0 (ESym \"lo_discount\"))))) \n            (P0 \n              (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 3)))))) \n          (P0 \n            (R2 RLt (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 25))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass15>(Just<const std::string>("data22.dat"), Just<const std::string>("data23.dat"), "data18.dat");
+    auto operation = mkSelect<CallableClass15>(Just<const std::string>("/tmp/fluidb_store/data22.dat"), Just<const std::string>("/tmp/fluidb_store/data23.dat"), "/tmp/fluidb_store/data18.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -463,7 +439,7 @@ int main() {
   //         []
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [\n         (\n           ESym \"revenue\",\n           E0 \n              (NAggr \n                AggrSum \n                (E2 EMul \n                    (E0 (ESym \"lo_extendedprice\")) \n                    (E0 (ESym \"lo_discount\"))))\n          )\n        ] \n        []\n    ]))" << std::endl;
   {
-    auto operation = mkAggregation<CallableClass20, CallableClass21>(Just<const std::string>("data24.dat"), Just<const std::string>("data22.dat"), "data22.dat");
+    auto operation = mkTotalAggregation<CallableClass20>(Just<const std::string>("/tmp/fluidb_store/data24.dat"), Just<const std::string>("/tmp/fluidb_store/data22.dat"), "/tmp/fluidb_store/data22.dat");
     operation.run();
     operation.print_output(10);
   }

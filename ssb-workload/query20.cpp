@@ -153,12 +153,12 @@ class Record10 {
 };
 
 
-class Record20 {
+class Record17 {
  public:
-  Record20(unsigned __sortElem0) : sortElem0(__sortElem0)
+  Record17(unsigned __sortElem0) : sortElem0(__sortElem0)
   {
   }
-  Record20() 
+  Record17() 
   {
   }
   std::string show() const{
@@ -166,13 +166,13 @@ class Record20 {
     o << sortElem0;
     return o.str();
   }
-  bool operator <(const Record20& otherRec) const{
+  bool operator <(const Record17& otherRec) const{
     return otherRec.sortElem0 < sortElem0;
   }
-  bool operator ==(const Record20& otherRec) const{
+  bool operator ==(const Record17& otherRec) const{
     return otherRec.sortElem0 == sortElem0;
   }
-  bool operator !=(const Record20& otherRec) const{
+  bool operator !=(const Record17& otherRec) const{
     return otherRec.sortElem0 != sortElem0;
   }
   unsigned sortElem0;
@@ -314,13 +314,13 @@ class Record5 {
 };
 
 
-class CallableClass21 {
+class CallableClass15 {
  public:
-  Record20 operator()(const Record8& record19) {
-    return Record20((-(record19.sym__0__2166610075265459291)));
+  Record4 operator()(const Record10& record7) {
+    return Record4(record7.sym__0___45_1929981849549611910, record7.sym__0___45_2824471779061934926, record7.sym__0__9222959495152449165);
   }
-  typedef Record20 Codomain;
-  typedef Record8 Domain0;
+  typedef Record4 Codomain;
+  typedef Record10 Domain0;
  private:
 };
 
@@ -333,36 +333,6 @@ class CallableClass2 {
   typedef bool Codomain;
   typedef Record1 Domain0;
  private:
-};
-
-
-class CallableClass18 {
- public:
-  CallableClass18() : isSet(false)
-  {
-  }
-  bool operator()(const Record10& record7) {
-    if (isSet && record7.sym__0___45_1929981849549611910 == staticExp15 && record7.sym__0___45_2824471779061934926 == staticExp16 && record7.sym__0__9222959495152449165 == staticExp17) {
-      return false;
-    } else {
-      staticExp15 = record7.sym__0___45_1929981849549611910;
-      staticExp16 = record7.sym__0___45_2824471779061934926;
-      staticExp17 = record7.sym__0__9222959495152449165;
-      if (isSet) {
-        return true;
-      } else {
-        isSet = true;
-        return false;
-      }
-    }
-  }
-  typedef bool Codomain;
-  typedef Record10 Domain0;
- private:
-  bool isSet;
-  fluidb_string<15> staticExp15;
-  fluidb_string<16> staticExp16;
-  unsigned staticExp17;
 };
 
 
@@ -388,6 +358,17 @@ class CallableClass6 {
   }
   typedef Record4 Codomain;
   typedef Record5 Domain0;
+ private:
+};
+
+
+class CallableClass18 {
+ public:
+  Record17 operator()(const Record8& record16) {
+    return Record17((-(record16.sym__0__2166610075265459291)));
+  }
+  typedef Record17 Codomain;
+  typedef Record8 Domain0;
  private:
 };
 
@@ -421,7 +402,7 @@ int main() {
   //                 (R0 (E0 (EString "ASIA"))))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P2 \n            PAnd \n            (P2 \n              PAnd \n              (P0 \n                (R2 RLike \n                    (R0 (E0 (ESym \"c_region\"))) \n                    (R0 (E0 (EString \"ASIA\"))))) \n              (P0 \n                (R2 RGe (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1992)))))) \n            (P0 \n              (R2 RLe (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1997)))))) \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"s_region\"))) \n                (R0 (E0 (EString \"ASIA\"))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass2>(Just<const std::string>("data163.dat"), Just<const std::string>("data164.dat"), "data159.dat");
+    auto operation = mkSelect<CallableClass2>(Just<const std::string>("/tmp/fluidb_store/data163.dat"), Just<const std::string>("/tmp/fluidb_store/data164.dat"), "/tmp/fluidb_store/data159.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -432,7 +413,7 @@ int main() {
   //         [E0 (ESym "c_nation"),E0 (ESym "s_nation"),E0 (ESym "d_year")]
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSort \n        [E0 (ESym \"c_nation\"),E0 (ESym \"s_nation\"),E0 (ESym \"d_year\")]\n    ]))" << std::endl;
   {
-    auto operation = mkSort<CallableClass6>(Just<const std::string>("data203.dat"), Just<const std::string>("data163.dat"), "data163.dat");
+    auto operation = mkSort<CallableClass6>(Just<const std::string>("/tmp/fluidb_store/data203.dat"), Just<const std::string>("/tmp/fluidb_store/data163.dat"), "/tmp/fluidb_store/data163.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -447,13 +428,13 @@ int main() {
   //         [E0 (ESym "c_nation"),E0 (ESym "s_nation"),E0 (ESym "d_year")]
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [(ESym \"c_nation\",E0 (NAggr AggrFirst (E0 (ESym \"c_nation\")))),\n         (ESym \"s_nation\",E0 (NAggr AggrFirst (E0 (ESym \"s_nation\")))),\n         (ESym \"d_year\",E0 (NAggr AggrFirst (E0 (ESym \"d_year\")))),\n         (ESym \"revenue\",E0 (NAggr AggrSum (E0 (ESym \"lo_revenue\"))))] \n        [E0 (ESym \"c_nation\"),E0 (ESym \"s_nation\"),E0 (ESym \"d_year\")]\n    ]))" << std::endl;
   {
-    auto operation = mkAggregation<CallableClass14, CallableClass18>(Just<const std::string>("data204.dat"), Just<const std::string>("data203.dat"), "data203.dat");
+    auto operation = mkAggregation<CallableClass14, CallableClass15>(Just<const std::string>("/tmp/fluidb_store/data204.dat"), Just<const std::string>("/tmp/fluidb_store/data203.dat"), "/tmp/fluidb_store/data203.dat");
     operation.run();
     operation.print_output(10);
   }
   std::cout << "ForwardTrigger: (Just (Right [QSort [E1 ENeg (E0 (ESym \"revenue\"))]]))" << std::endl;
   {
-    auto operation = mkSort<CallableClass21>(Just<const std::string>("data205.dat"), Just<const std::string>("data204.dat"), "data204.dat");
+    auto operation = mkSort<CallableClass18>(Just<const std::string>("/tmp/fluidb_store/data205.dat"), Just<const std::string>("/tmp/fluidb_store/data204.dat"), "/tmp/fluidb_store/data204.dat");
     operation.run();
     operation.print_output(10);
   }
