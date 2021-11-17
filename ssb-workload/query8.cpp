@@ -749,7 +749,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ReverseTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkUnJoin<CallableClass3, CallableClass5>(Just("data41.dat"), Nothing(), Just("data42.dat"), Nothing(), Just("/run/user/1000/fluidb-data/date.dat"));
+    auto operation = mkUnJoin<CallableClass3, CallableClass5>(Just("data41.dat"), Nothing(), Just("data42.dat"), Nothing(), Just("/tmp/fluidb-data/date.dat"));
     operation.run();
     operation.print_output(10);
   }
@@ -763,7 +763,7 @@ int main() {
   //               (R0 (E0 (ESym "c_custkey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_custkey\"))) \n              (R0 (E0 (ESym \"c_custkey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass13, CallableClass15, CallableClass10>(Just<const std::string>("data188.dat"), Just<const std::string>("data187.dat"), Just<const std::string>("data189.dat"), "/run/user/1000/fluidb-data/customer.dat", "data36.dat");
+    auto operation = mkEquiJoin<CallableClass13, CallableClass15, CallableClass10>(Just<const std::string>("data188.dat"), Just<const std::string>("data187.dat"), Just<const std::string>("data189.dat"), "/tmp/fluidb-data/customer.dat", "data36.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -777,7 +777,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass21, CallableClass23, CallableClass19>(Just<const std::string>("data159.dat"), Just<const std::string>("data192.dat"), Just<const std::string>("data193.dat"), "/run/user/1000/fluidb-data/date.dat", "data188.dat");
+    auto operation = mkEquiJoin<CallableClass21, CallableClass23, CallableClass19>(Just<const std::string>("data159.dat"), Just<const std::string>("data192.dat"), Just<const std::string>("data193.dat"), "/tmp/fluidb-data/date.dat", "data188.dat");
     operation.run();
     operation.print_output(10);
   }

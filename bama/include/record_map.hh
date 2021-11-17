@@ -8,11 +8,13 @@
 
 #include <iostream>
 
+#include "require.hh"
 #include "page.hh"
 #include "file.hh"
 #include "defs.hh"
 
-static size_t active_iters = 0;
+// Fewer than 10M records for debugging
+#define MAX_INDEX 10000000
 
 template <typename R>
 class RecordMap {
@@ -116,7 +118,7 @@ template <typename R>
 class RecordMap<R>::Iterator
   : public std::iterator<std::random_access_iterator_tag, R> {
 public:
-  using difference_type = size_t;
+  using difference_type = int;
 
   Iterator() : m_index(0), m_recs(nullptr), m_holding_page(-1) {}
   Iterator(size_t index, RecordMap* recs)
@@ -128,12 +130,15 @@ public:
     rhs.m_holding_page = -1;
   }
   Iterator(const Iterator& rhs)
-      : m_index(rhs.m_index), m_recs(rhs.m_recs), m_holding_page(-1) {}
+      : m_index(rhs.m_index), m_recs(rhs.m_recs), m_holding_page(-1) {
+    require(m_index < MAX_INDEX, "Index too large.");
+  }
 
   Iterator& operator=(const Iterator& rhs) noexcept {
     if (this == &rhs) return *this;
 
     m_index = rhs.m_index;
+    require(m_index < MAX_INDEX, "Index too large.");
     // If there already is a valid holding page forget it
     if (m_holding_page >= 0) {
       m_recs->drop_page(m_holding_page);
@@ -147,6 +152,7 @@ public:
       return *this;
 
     m_index = rhs.m_index;
+    require(m_index < MAX_INDEX, "Index too large.");
     m_recs = rhs.m_recs;
     // If there already is a valid holding page forget it
     if (m_holding_page >= 0) {
@@ -165,11 +171,12 @@ public:
   /* inline Iterator& operator=(const Iterator &rhs) {_ptr = rhs._ptr; return
    * *this;} */
   inline Iterator& operator+=(difference_type rhs) {
-    m_index = rhs;
+    m_index += rhs;
     return *this;
   }
   inline Iterator& operator-=(difference_type rhs) {
     m_index -= rhs;
+    require(m_index < MAX_INDEX, "Index too large.");
     return *this;
   }
   R& operator*() {
@@ -201,6 +208,7 @@ public:
   }
   inline Iterator& operator--() {
     --m_index;
+    require(m_index < MAX_INDEX, "Index too large.");
     return *this;
   }
   inline Iterator operator++(int) const {
@@ -211,6 +219,7 @@ public:
   inline Iterator operator--(int) const {
     Iterator tmp(*this);
     --m_index;
+    require(m_index < MAX_INDEX, "Index too large.");
     return tmp;
   }
   /* inline Iterator operator+(const Iterator& rhs) {return

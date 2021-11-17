@@ -7,8 +7,6 @@
 #include <map>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "file.hh"
 #include "common.hh"
 #include "record_map.hh"
@@ -431,8 +429,6 @@ public:
       // Skip all the left records that are smaller
       while (left_extract(left_record) < right_extract(right_record) &&
              left.hasNext()) {
-        fmt::print("Dropping: {} (right: {})\n", left_record.show(),
-                   right_record.show());
         WITH(left_antijoin_file, left_antijoin.write(left_record));
         left_record = left.nextRecord();
         outstanding_left = true;
@@ -441,8 +437,6 @@ public:
       // Skip all the right records that are smaller
       while (right_extract(right_record) < left_extract(left_record) &&
              right.hasNext()) {
-        fmt::print("Dropping: {} (left: )\n", right_record.show(),
-                   left_record.show());
         WITH(right_antijoin_file, right_antijoin.write(right_record));
         right_record = right.nextRecord();
         outstanding_right = true;
@@ -454,8 +448,6 @@ public:
       while (left_extract(left_record) == right_extract(right_record)) {
         right.rollback();
         while (left_extract(left_record) == right_extract(right_record)) {
-          fmt::print("Matched: {}, {}\n", left_record.show(),
-                     right_record.show());
           WITH(outfile, output.write(combine(left_record, right_record)));
           if (right.hasNext()) {
             right_record = right.nextRecord();

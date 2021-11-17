@@ -162,9 +162,9 @@ MergeSort<ToKeyFn,
                                    const OutputSec& outsec,
                                    const std::string& fn,
                                    size_t nb=5) {
-    return MergeSort<ToKeyFn,
-                     OutputPrim,  // Maybe
-                     OutputSec,  // Maybe
-                     BUFFER_SIZE>(out, outsec, fn, nb);
+    return InlineSort<ToKeyFn,
+                      OutputPrim,  // Maybe
+                      OutputSec,  // Maybe
+                      BUFFER_SIZE>(out, outsec, fn, nb);
 }
 #endif /* SORT_H */

@@ -120,9 +120,17 @@ sortCall
   -> [Expr (ShapeSym e s)]
   -> m Constr
 sortCall OutShape {oaIoAssoc = outAssoc} sr = do
-  -- XXX: here we call any schema at some point
+  toKeyFn <- exprSetFn =<< traverse2 (translateSym $ swap <$> outAssoc)  sr
+  return ("mkSort",tmplClass <$> [toKeyFn])
+
+
+exprSetFn
+  :: (MonadCodeCheckpoint e s t n m,MonadSchemaScope Identity e s m)
+  => [Expr (ShapeSym e s)]
+  -> m (CC.Class CC.CodeSymbol)
+exprSetFn sr = do
   keySch :: CppSchema <- forM (zip [0 :: Int ..] sr) $ \(i,exp) -> do
-    ty <- exprCppTypeErr =<< traverse (translateSym $ swap <$> outAssoc) exp
+    ty <- exprCppTypeErr exp
     let sym = fromString $ "sortElem" ++ show i
     return (ty,sym)
   -- Key record class
@@ -131,14 +139,11 @@ sortCall OutShape {oaIoAssoc = outAssoc} sr = do
   -- Expressions comprising the key
   exprs <- runListT $ do
     exp <- mkListT $ return sr
-    lift
-      $ exprExpression . fmap Right
-      =<< traverse (translateSym $ fmap swap outAssoc) exp
+    lift $ exprExpression $ fmap Right exp
   -- Class function to make key
-  toKeyFn <- tellClassM
+  tellClassM
     $ mkCallClass (CC.ClassType mempty [] keyRecSym)
     $ CC.FunctionAp (CC.SimpleFunctionSymbol keyRecSym) [] exprs
-  return ("mkSort",tmplClass <$> [toKeyFn])
 
 -- mkAggregation<FoldFn :: From -> To, StartNew> There is no reverse
 -- trigger for groupCall
@@ -165,8 +170,8 @@ groupCall pr g = do
       { CC.classPrivateMembers =
           fmap CC.MemberVariable aggrVars ++ CC.classPrivateMembers noAggrDecl
       }
-  startNewCls <- startNewCallClass g
-  return ("mkAggregation",tmplClass <$> [foldCls,startNewCls])
+  grpKeyFn <- exprSetFn g
+  return ("mkAggregation",tmplClass <$> [foldCls,grpKeyFn])
 
 -- mkDrop<Rec, i>
 limitCall

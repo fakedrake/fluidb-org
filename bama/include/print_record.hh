@@ -3,6 +3,8 @@
 
 #include <string>
 #include <iostream>
+
+#include "require.hh"
 #include "common.hh"
 #include "io.hh"
 
@@ -13,11 +15,13 @@ inline  void print_records(const std::string& filepath, const size_t n)
     std::cout << "File: " << filepath
               << "(capacity: " << reader.recordsCapacity() << ")"
               << std::endl;
-    for (size_t i = 0; i < n && reader.hasNext(); i++) {
+    size_t i = 0;
+    for (i = 0; i < n && reader.hasNext(); i++) {
         auto rec = reader.nextRecord();
         std::string str(rec.show());
         std::cout << str << std::endl;
     }
+    require(i > 0, "No file should be empty!");
 }
 
 template<typename R>

@@ -5,28 +5,16 @@
 #include <cassert>
 
 #include "file.hh"
+#include "record_map.hh"
 #include "common.hh"
 #include "print_record.hh"
 
-
-template<typename R>
-class ConstAggr {
- public:
-    ConstAggr() : is_set(false) {}
-    R operator() (const R & r) {
-        if (!is_set) state = r;
-        return state;
-    }
- private:
-    bool is_set;
-    R state;
-};
-
 template<typename FoldFn,
-         typename StartNewRecord>
+         typename ExtractFn>
 class Aggregation {
     typedef typename FoldFn::Codomain RecordTo;
     typedef typename FoldFn::Domain0 RecordFrom;
+    typedef typename ExtractFn::Codomain SubTup;
  public:
     Aggregation (const Just<const std::string>& o, const std::string& i) :
             infile(i), outfile(o.value) {}
@@ -43,9 +31,10 @@ class Aggregation {
         RecordFrom record, last_record;
         bool justWrote;
         RecordTo currentRec;
-        StartNewRecord startNew;
         FoldFn fold;
+        SubTup fn;
         size_t count = 0;
+        sortFile<ExtractFn>(infile);
 
         eachRecord<RecordFrom>(
             infile,
@@ -66,7 +55,6 @@ class Aggregation {
         if (!justWrote) output.write(currentRec);
         output.flush();
         output.close();
-        std::cout << "Records: " << count << std::endl;
     }
 
  private:
@@ -74,11 +62,11 @@ class Aggregation {
     std::string outfile;
 };
 
-template<typename FoldFn,typename StartNewRecord>
+template<typename FoldFn,typename ExtractFn>
 auto mkAggregation(const Just<const std::string>& prim,
                    const Just<const std::string>& sec,
                    const std::string& i) {
     assert(sec.value == i);  // Aggregation should always be short cirquiting
-    return Aggregation<FoldFn, StartNewRecord>(prim,i);
+    return Aggregation<FoldFn, ExtractFn>(prim,i);
 }
 #endif /* AGGREGATION_H */

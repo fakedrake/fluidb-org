@@ -568,7 +568,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ReverseTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkUnJoin<CallableClass3, CallableClass5>(Just("data159.dat"), Just("data192.dat"), Nothing(), Just("/run/user/1000/fluidb-data/date.dat"), Nothing());
+    auto operation = mkUnJoin<CallableClass3, CallableClass5>(Just("data159.dat"), Just("data192.dat"), Nothing(), Just("/tmp/fluidb-data/date.dat"), Nothing());
     operation.run();
     operation.print_output(10);
   }
@@ -582,7 +582,7 @@ int main() {
   //               (R0 (E0 (EInt 199401)))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"d_yearmonthnum\"))) \n              (R0 (E0 (EInt 199401)))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass7>(Just<const std::string>("data5.dat"), Just<const std::string>("data6.dat"), "/run/user/1000/fluidb-data/date.dat");
+    auto operation = mkSelect<CallableClass7>(Just<const std::string>("data5.dat"), Just<const std::string>("data6.dat"), "/tmp/fluidb-data/date.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -596,7 +596,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass16, CallableClass18, CallableClass13>(Just<const std::string>("data8.dat"), Just<const std::string>("data7.dat"), Just<const std::string>("data9.dat"), "data5.dat", "/run/user/1000/fluidb-data/lineorder.dat");
+    auto operation = mkEquiJoin<CallableClass16, CallableClass18, CallableClass13>(Just<const std::string>("data8.dat"), Just<const std::string>("data7.dat"), Just<const std::string>("data9.dat"), "data5.dat", "/tmp/fluidb-data/lineorder.dat");
     operation.run();
     operation.print_output(10);
   }

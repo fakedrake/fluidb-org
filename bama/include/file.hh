@@ -123,13 +123,14 @@ class File {
     }
 
     void readPage(page_num_t o, Page<R>* page) {
-        require(page, "Allocation failed.");
-        require(::lseek(descriptor, PAGE_SIZE*o, SEEK_SET) != -1,
-                "Could not seek in file for read. (read())");
-        ssize_t bytes_read = ::read(descriptor, page, PAGE_SIZE);
-        require_eq(bytes_read, PAGE_SIZE,
-                   "Could not read entire page.");
-        increment_reads(PAGE_SIZE / cacheline_size);
+      require(page, "Allocation failed.");
+      require(::lseek(descriptor, PAGE_SIZE * o, SEEK_SET) != -1,
+              "Could not seek in file for read. (read())");
+      ssize_t bytes_read = ::read(descriptor, page, PAGE_SIZE);
+      require_eq(bytes_read, PAGE_SIZE,
+                 ("Could not read entire page " + std::to_string(o) +
+                  " from file: " + filename));
+      increment_reads(PAGE_SIZE / cacheline_size);
     }
 
     page_type* readPage(page_num_t o) {

@@ -90,9 +90,9 @@ anySchema
 anySchema ashowA toExpr proj = do
   QueryCppConf{..} <- getQueryCppConf
   shapes <- toList <$> getQueries
-  forM proj $ \(prjSym, prjExprLike) ->
-    maybe (err prjSym prjExprLike shapes) return
-    $ (,prjSym) <$> exprCppType literalType shapes (toExpr =<< prjExprLike)
+  forM proj $ \(prjSym, prjExprLike) -> case exprCppType literalType shapes (toExpr =<< prjExprLike) of
+    Just ty -> return (ty,prjSym)
+    Nothing -> err prjSym prjExprLike shapes
   where
     err prjSym prjExprLike shapes =
       throwAStr $ "anySchema " ++

@@ -407,7 +407,7 @@ int main() {
   //   (Right 
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [QSel (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993)))))]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass2>(Just<const std::string>("data15.dat"), Just<const std::string>("data16.dat"), "/run/user/1000/fluidb-data/date.dat");
+    auto operation = mkSelect<CallableClass2>(Just<const std::string>("data15.dat"), Just<const std::string>("data16.dat"), "/tmp/fluidb-data/date.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -421,7 +421,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass11, CallableClass13, CallableClass8>(Just<const std::string>("data18.dat"), Just<const std::string>("data17.dat"), Just<const std::string>("data19.dat"), "data15.dat", "/run/user/1000/fluidb-data/lineorder.dat");
+    auto operation = mkEquiJoin<CallableClass11, CallableClass13, CallableClass8>(Just<const std::string>("data18.dat"), Just<const std::string>("data17.dat"), Just<const std::string>("data19.dat"), "data15.dat", "/tmp/fluidb-data/lineorder.dat");
     operation.run();
     operation.print_output(10);
   }

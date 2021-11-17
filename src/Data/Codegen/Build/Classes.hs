@@ -310,7 +310,6 @@ projToFn pr = do
   let primSym = CC.classNameRef primCls
   let primType = CC.ClassType mempty [] primSym
   tellClassM $ mkCallClass primType primExpr
-
 schemaProjectionClass :: MonadClassBuilder Identity e s t n m =>
                         CppSchema -> m (CC.Class CC.CodeSymbol)
 schemaProjectionClass sch = tellClassM $ do
