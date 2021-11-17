@@ -68,7 +68,7 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
     $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
   reportBudget
 
-reportBudget :: PlanT t n m ()
+reportBudget :: Monad m => PlanT t n m ()
 reportBudget = do
   mats <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
   mats' <- forM mats  $ \n -> (n,) <$> totalNodePages n
