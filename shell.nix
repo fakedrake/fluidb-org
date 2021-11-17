@@ -19,6 +19,7 @@ with nixpkgs; let
   nixPackages = [
     # rash
     cmake
+    fmt
     clang
     ssb
     ghc
