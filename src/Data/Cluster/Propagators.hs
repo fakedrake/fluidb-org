@@ -547,7 +547,7 @@ modNodeShape
 modNodeShape nref f = do
   modify $ \clustConf -> clustConf
     { qnfNodeShapes = refAlter (Just . f . fromMaybe mempty) nref
-                      $ qnfNodeShapes clustConf
+        $ qnfNodeShapes clustConf
     }
 
 -- | Fill the noderefs with shapes.
@@ -582,7 +582,16 @@ putShapeCluster
 putShapeCluster = void . traverse (uncurry go . unMetaD) . putId
   where
     go :: Defaulting (QueryShape e s) -> NodeRef n -> m ()
-    go p ref = modNodeShape ref (<> p)
+    go p ref = do
+      si <- fmap2 (qsTables . qpSize) $ dropReader get $ getNodeShapeFull ref
+      modNodeShape ref (<> p)
+      si' <- fmap2 (qsTables . qpSize) $ dropReader get $ getNodeShapeFull ref
+      case (si,si') of
+        (Nothing,Nothing) -> return ()
+        (Just _,Nothing) -> error "lost full size without node deletion!"
+        (Nothing,Just _) -> return ()
+        (Just a
+          ,Just b) -> if a > b then error "size was reduced." else return ()
     putId :: ShapeCluster NodeRef e s t n
           -> AnyCluster'
             (ShapeSym e s)
@@ -655,7 +664,6 @@ forceQueryShape ref0 = (`evalStateT` mempty) $ go ref0
       modify (nsInsert ref)
       clusts <- lift
         $ filter (elem ref . clusterOutputs) <$> lookupClustersN ref
-
       -- Note that the fact that we take3 means it is possible that it
       -- is unstable.
       forM_ (take 3 clusts)
