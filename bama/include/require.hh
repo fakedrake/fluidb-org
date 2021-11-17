@@ -17,7 +17,7 @@ inline void mabort() {
 #define require(r, s) do {                                              \
         if (! (r)) {                                                    \
             std::cerr << __FILE__ << ":" << __LINE__                    \
-                      << ":" << __func__ <<"(): " << s << ": "          \
+                      << ":" << __func__ <<"(): " << s << ": errno:"          \
                       << (errno != 0 ? ::strerror(errno) : "(errno=0)") \
                       << std::endl;                                     \
             mabort();                                                   \

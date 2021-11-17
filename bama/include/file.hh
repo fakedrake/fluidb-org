@@ -122,8 +122,8 @@ class File {
         static_assert(PAGE_SIZE == sizeof(Page<R>));
         require(! is_open, "file already open: " + fn);
         filename = fn;
-        require_neq(
-            (descriptor = ::open(filename.c_str(), flags, 0644)), -1,
+        require(
+            (descriptor = ::open(filename.c_str(), flags, 0644)) != -1,
             "could not open file: '" + filename
             + "' (flags=" + std::to_string(flags) +")");
         is_open = (descriptor != -1);
