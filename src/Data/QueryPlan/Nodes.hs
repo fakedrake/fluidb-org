@@ -229,11 +229,8 @@ setNodeStateUnsafe' verbose r s = do
 
 
 -- | Set a list of nodes to (Initial Mat)
-setNodeStatesToGCState :: forall t n .
-                         [NodeRef n]
-                       -> GCConfig t n
-                       -> GCState t n
-                       -> GCState t n
+setNodeStatesToGCState
+  :: forall t n . [NodeRef n] -> GCConfig t n -> GCState t n -> GCState t n
 setNodeStatesToGCState nrefs _gcc st@GCState {..} =
   st { epochs = headEpoch { nodeStates = newNs
                           }

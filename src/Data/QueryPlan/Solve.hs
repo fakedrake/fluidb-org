@@ -66,6 +66,10 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   cost <- totalTransitionCost
   trM
     $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
+  mats <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
+  trM $ "mat nodes: " ++ show mats
+  size <- getDataSize
+  trM $ "Used budget: " ++ show size
 
 haltPlan
   :: (HaltKey m ~ PlanSearchScore,MonadHalt m)
