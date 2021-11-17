@@ -170,8 +170,11 @@ groupCall pr g = do
       { CC.classPrivateMembers =
           fmap CC.MemberVariable aggrVars ++ CC.classPrivateMembers noAggrDecl
       }
-  grpKeyFn <- exprSetFn g
-  return ("mkAggregation",tmplClass <$> [foldCls,grpKeyFn])
+  case g of
+    [] -> return ("mkTotalAggregation", [tmplClass foldCls])
+    _:_ -> do
+      grpKeyFn <- exprSetFn g
+      return ("mkAggregation",tmplClass <$> [foldCls,grpKeyFn])
 
 -- mkDrop<Rec, i>
 limitCall
