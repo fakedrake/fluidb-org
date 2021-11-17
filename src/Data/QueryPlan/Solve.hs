@@ -60,16 +60,22 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   -- sizes <- asks nodeSizes
   -- Populate the metaop cache
   -- warmupCache node
+  reportBudget
   setNodeStateSafe node Mat
   -- curateTransitions
   cost <- totalTransitionCost
   trM
     $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
+  reportBudget
+
+reportBudget :: PlanT t n m ()
+reportBudget = do
   mats <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
   mats' <- forM mats  $ \n -> (n,) <$> totalNodePages n
   trM $ "mat nodes: " ++ show mats'
   size <- getDataSize
   trM $ "Used budget: " ++ show size
+
 
 haltPlan
   :: (HaltKey m ~ PlanSearchScore,MonadHalt m)
