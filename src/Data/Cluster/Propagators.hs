@@ -587,7 +587,7 @@ putShapeCluster = void . traverse (uncurry go . unMetaD) . putId
       si <- fmap2 qpSize $ dropReader get $ getNodeShape ref
       modNodeShape ref (<> p)
       si' <- fmap2 qpSize $ dropReader get $ getNodeShape ref
-      when (ref == 290) $ traceM $ "new size" <: (ref, si,si')
+      when (ref == 290) $ traceM $ "new size" <: (ref, si,fmap qpSize p,si')
     putId :: ShapeCluster NodeRef e s t n
           -> AnyCluster'
             (ShapeSym e s)
@@ -655,7 +655,7 @@ forceQueryShape ref0 = (`evalStateT` mempty) $ go ref0
   where
     go :: NodeRef n
        -> StateT (NodeSet n) m (Maybe (Defaulting (QueryShape e s)))
-    go ref = wrapTrace ("forceQueryShape" ++ ashow ref) $ do
+    go ref = do
       trail <- get
       modify (nsInsert ref)
       clusts <- lift
