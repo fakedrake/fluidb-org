@@ -129,7 +129,7 @@ nodesInState st = do
   x <- asks propNet
   dropReader get $ nodesInState' x st
 
-getDataSize :: Monad m => PlanT t n m PageNum
+getDataSize :: (HasCallStack,Monad m) => PlanT t n m PageNum
 getDataSize = do
   matIni <- fmap2 (Initial Mat,) $ nodesInState [Initial Mat]
   matConcN <- fmap2 (Concrete NoMat Mat,) $ nodesInState [Concrete NoMat Mat]
