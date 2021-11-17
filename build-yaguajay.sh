@@ -4,7 +4,7 @@ set -ex
 
 git commit -a -m "sync"
 git push
-ssh christosp@yaguajay bash -c "'cd /home/christosp/Projects/fluidb-org && git pull && ./branches.sh'"
+ssh christosp@yaguajay bash -c "'cd /home/christosp/Projects/fluidb-org && git pull && ./build.sh'"
 
 rm -r ./ssb-workload/query*
 scp -r christosp@yaguajay:/run/user/1000/fluidb-data/workload/* ./ssb-workload/

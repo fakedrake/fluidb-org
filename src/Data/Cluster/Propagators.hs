@@ -588,10 +588,9 @@ putShapeCluster = void . traverse (uncurry go . unMetaD) . putId
       si' <- fmap2 (qsTables . qpSize) $ dropReader get $ getNodeShapeFull ref
       case (si,si') of
         (Nothing,Nothing) -> return ()
-        (Just _,Nothing) -> error "lost full size without node deletion!"
-        (Nothing,Just _) -> return ()
-        (Just a
-          ,Just b) -> if a > b then error "size was reduced." else return ()
+        (Just _,Nothing)  -> error "lost full size without node deletion!"
+        (Nothing,Just _)  -> return ()
+        (Just a,Just b)   -> when (a > b) $ error "size was reduced."
     putId :: ShapeCluster NodeRef e s t n
           -> AnyCluster'
             (ShapeSym e s)
