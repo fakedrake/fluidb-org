@@ -198,10 +198,19 @@ isMat = \case
   Concrete _ m -> m == Mat
 
 setNodeStateUnsafe
-  :: forall t n m . Monad m => NodeRef n -> NodeState -> PlanT t n m ()
+  :: forall t n m .
+  (HasCallStack,Monad m)
+  => NodeRef n
+  -> NodeState
+  -> PlanT t n m ()
 setNodeStateUnsafe = setNodeStateUnsafe' True
 setNodeStateUnsafe'
-  :: forall t n m . Monad m => Bool -> NodeRef n -> NodeState -> PlanT t n m ()
+  :: forall t n m .
+  (HasCallStack,Monad m)
+  => Bool
+  -> NodeRef n
+  -> NodeState
+  -> PlanT t n m ()
 setNodeStateUnsafe' verbose r s = do
   gcst <- get
   oldState <- getNodeState r
