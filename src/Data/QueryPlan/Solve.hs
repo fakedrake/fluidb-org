@@ -43,7 +43,6 @@ import           Data.Utils.Tup
 
 import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
-import           Data.QueryPlan.Dependencies
 import           Data.QueryPlan.HistBnd
 import           Data.QueryPlan.Matable          as Mat
 import           Data.QueryPlan.MetaOp
@@ -67,7 +66,8 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   trM
     $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
   mats <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
-  trM $ "mat nodes: " ++ show mats
+  mats' <- forM mats  $ \n -> (n,) <$> totalNodePages n
+  trM $ "mat nodes: " ++ show mats'
   size <- getDataSize
   trM $ "Used budget: " ++ show size
 
