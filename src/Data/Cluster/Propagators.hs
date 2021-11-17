@@ -655,7 +655,7 @@ forceQueryShape ref0 = (`evalStateT` mempty) $ go ref0
   where
     go :: NodeRef n
        -> StateT (NodeSet n) m (Maybe (Defaulting (QueryShape e s)))
-    go ref = do
+    go ref = wrapTrace ("forceQueryShape" ++ ashow ref) $ do
       trail <- get
       modify (nsInsert ref)
       clusts <- lift
