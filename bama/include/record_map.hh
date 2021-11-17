@@ -211,12 +211,12 @@ public:
     require(m_index < MAX_INDEX, "Index too large.");
     return *this;
   }
-  inline Iterator operator++(int) const {
+  inline Iterator operator++(int) {
     Iterator tmp(*this);
     ++m_index;
     return tmp;
   }
-  inline Iterator operator--(int) const {
+  inline Iterator operator--(int) {
     Iterator tmp(*this);
     --m_index;
     require(m_index < MAX_INDEX, "Index too large.");
