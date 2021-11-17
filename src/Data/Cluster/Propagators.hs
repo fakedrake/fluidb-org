@@ -57,6 +57,7 @@ import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -586,11 +587,12 @@ putShapeCluster = void . traverse (uncurry go . unMetaD) . putId
       si <- fmap2 (qsTables . qpSize) $ dropReader get $ getNodeShapeFull ref
       modNodeShape ref (<> p)
       si' <- fmap2 (qsTables . qpSize) $ dropReader get $ getNodeShapeFull ref
+      when (ref == 290) $ traceM $ "new size" <: (ref, si,si')
       case (si,si') of
         (Nothing,Nothing) -> return ()
         (Just _,Nothing)  -> error "lost full size without node deletion!"
         (Nothing,Just _)  -> return ()
-        (Just a,Just b)   -> when (a > b) $ error "size was reduced."
+        (Just a,Just b)   -> when (a < b) $ error "size was increased."
     putId :: ShapeCluster NodeRef e s t n
           -> AnyCluster'
             (ShapeSym e s)

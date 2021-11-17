@@ -139,7 +139,7 @@ querySize1
   ,MonadState (ClusterConfig e s t n,RefMap n (Maybe (QueryShape e s))) m)
   => AnyCluster e s t n
   -> Query1 (ShapeSym e s) (QueryShape e s)
-  -> m ([TableSize],Double)
+  -> m (TableSize,Double)
 querySize1 clust q = do
   (_,shapeClust) <- dropReader (gets fst)
     $ getValidClustPropagator clust
@@ -169,7 +169,7 @@ querySize
    -- Nothing in a node means we are currently looking up the node
   ,MonadState (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double))) m)
   => NodeRef n
-  -> m (([TableSize],Double),QueryShape e s)
+  -> m ((TableSize,Double),QueryShape e s)
 querySize ref = get >>= go . refLU ref . snd
   where
     go = \case
@@ -211,8 +211,8 @@ medianOn :: Ord b => (a -> b) -> [a] -> Maybe a
 medianOn _ [] = Nothing
 medianOn f as = Just $ sortOn f as !! (length as `div` 2)
 
-medianSize :: forall a . [(([TableSize],Double),a)]
-           -> Maybe (([TableSize],Double),a)
+medianSize :: forall a . [((TableSize,Double),a)]
+           -> Maybe ((TableSize,Double),a)
 medianSize qs = do
   qsWithSums :: [(PageNum,(([TableSize],Double),a))] <- forM qs
     $ \((tss,c),a) -> do
