@@ -15,6 +15,3 @@ target_link_libraries(test_record_map bama)
 
 add_executable(test_join test_join.cpp)
 target_link_libraries(test_join  bama )
-
-add_executable(test_query1 test_query1.cpp)
-target_link_libraries(test_query1  bama )
