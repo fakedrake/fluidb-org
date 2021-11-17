@@ -103,12 +103,25 @@ updateSizes
     (Either (SizeInferenceError e s t n) (PlanningError t n))
     (GCConfig t n)
 updateSizes cConf = updateConf (\gcConf s -> gcConf { nodeSizes = s }) $ do
-  unsizedNodes <- lift missingOrLowCertaintySizes
   oldSizes <- lift2 $ asks nodeSizes
   let runMonads m = runExceptT $ (`execStateT` (cConf,oldSizes)) m
-  runMonads (filterInterms unsizedNodes >>= mapM putQuerySize) >>= \case
-    Left e         -> throwError e
-    Right (_,rmap) -> return rmap
+  unsizedNodes0 <- lift missingOrLowCertaintySizes
+  (>>= either throwError (return . snd)) $ runMonads $ do
+    unsizedNodes <- filterInterms unsizedNodes0
+    -- Force all the queries first and then put them in the map so
+    -- that calculating the size of one query does not change the
+    -- value of another.
+    dropState (gets fst,modify . first . const)
+      $ mapM_ forceQueryShape unsizedNodes
+    mapM putQuerySize unsizedNodes
+  where
+    filterInterms refs = (`filterM` refs) $ \ref ->
+      dropReader (gets fst) (isIntermediateClust ref) >>= \case
+        False -> return True
+        True -> do
+          modify (second $ refInsert ref (def,1))
+          return False
+
 
 -- | In (TableSize,Double) empty list means the node is an
 -- intermediate.
@@ -120,20 +133,11 @@ putQuerySize
   ,MonadState (ClusterConfig e s t n,RefMap n (TableSize,Double)) m)
   => NodeRef n
   -> m ()
-putQuerySize ref =
-  do
-    oldShape <- dropReader (gets fst) $ getNodeShape ref
-    shapeM <- dropState (gets fst,modify . first . const) (forceQueryShape ref)
-    when (ref == 290)
-      $ traceM
-      $ "shape: " <: (ref,fmap2 qpSize shapeM,fmap qpSize oldShape)
-    case shapeM of
-      Nothing -> throwAStr $ "Can't get plan:" ++ show ref
-      Just shapeD -> do
-        shape
-          <- maybe (throwAStr $ "Found empty shape for" <: (ref,shapeD)) return
-          $ getDef shapeD
-        modify $ second $ refInsert ref $ sizeToPair $ qpSize shape
+putQuerySize ref = do
+  shapeD <- dropReader (gets fst) $ getNodeShape ref
+  shape <- maybe (throwAStr $ "Found empty shape for" <: (ref,shapeD)) return
+    $ getDef shapeD
+  modify $ second $ refInsert ref $ sizeToPair $ qpSize shape
   where
     sizeToPair QuerySize {..} = (qsTables,qsCertainty)
 
@@ -171,21 +175,6 @@ filterAlreadySized
 filterAlreadySized refs = do
   rMap <- get
   return $ filter (not . (`refMember` rMap)) refs
-
-filterInterms
-  :: (Hashables2 e s
-     ,MonadAShowErr e s err m
-     ,MonadState
-        (ClusterConfig e s t n,RefMap n (TableSize,Double))
-        m)
-  => [NodeRef n]
-  -> m [NodeRef n]
-filterInterms refs = (`filterM` refs) $ \ref ->
-  dropReader (gets fst) (isIntermediateClust ref) >>= \case
-    False -> return True
-    True -> do
-      modify (second $ refInsert ref (def,1))
-      return False
 
 onlyCC
   :: MonadState (ClusterConfig e s t n,RefMap n (Maybe ([TableSize],Double))) m
