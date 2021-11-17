@@ -11,7 +11,7 @@ set -xe
 
 
 cmake -S . -B ./cmake-build
-cmake --build ./cmake-build workload
+cmake --build ./cmake-build
 rm -r /tmp/fluidb-data/*
 for i in {1..27}; do
     echo "Running query ${i}"
