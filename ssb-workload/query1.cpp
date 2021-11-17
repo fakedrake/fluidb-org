@@ -8,7 +8,7 @@ class Record6 {
   Record6(unsigned __sym__0___45_7574074018531922998, int __sym__0__1125464382786937920, unsigned __sym__0___45_8257174981563598792, unsigned __sym__0__957746932829998382, unsigned __sym__0__934137931677987637, unsigned __sym__0___45_7332894783442362324, fluidb_string<21> __sym__0__8974811218372806325, unsigned __sym__0___45_5217562530132451785, fluidb_string<10> __sym__0__7851147553396318904, unsigned __sym__0___45_4975505511391694456, double __sym__0___45_7249986409969561654, unsigned __sym__0__4671626969570181580, double __sym__0___45_3666121704283105054, unsigned __sym__0__5495011930072844518, unsigned __sym__0___45_4423447118092167055, double __sym__0___45_1608082021099887893, fluidb_string<13> __sym__0__1584187396639360899) : sym__0___45_7574074018531922998(__sym__0___45_7574074018531922998), sym__0__1125464382786937920(__sym__0__1125464382786937920), sym__0___45_8257174981563598792(__sym__0___45_8257174981563598792), sym__0__957746932829998382(__sym__0__957746932829998382), sym__0__934137931677987637(__sym__0__934137931677987637), sym__0___45_7332894783442362324(__sym__0___45_7332894783442362324), sym__0__8974811218372806325(__sym__0__8974811218372806325), sym__0___45_5217562530132451785(__sym__0___45_5217562530132451785), sym__0__7851147553396318904(__sym__0__7851147553396318904), sym__0___45_4975505511391694456(__sym__0___45_4975505511391694456), sym__0___45_7249986409969561654(__sym__0___45_7249986409969561654), sym__0__4671626969570181580(__sym__0__4671626969570181580), sym__0___45_3666121704283105054(__sym__0___45_3666121704283105054), sym__0__5495011930072844518(__sym__0__5495011930072844518), sym__0___45_4423447118092167055(__sym__0___45_4423447118092167055), sym__0___45_1608082021099887893(__sym__0___45_1608082021099887893), sym__0__1584187396639360899(__sym__0__1584187396639360899)
   {
   }
-  Record6()
+  Record6() 
   {
   }
   std::string show() const{
@@ -51,7 +51,7 @@ class Record5 {
   Record5(unsigned __sym__0__6245703584620992382, fluidb_string<18> __sym__0__8423503703594878606, fluidb_string<9> __sym__0__6356725463286426884, fluidb_string<9> __sym__0___45_3286136184259375045, unsigned __sym__0__4066203801312846649, unsigned __sym__0___45_8353576545653999317, fluidb_string<7> __sym__0___45_4468618322478996170, unsigned __sym__0___45_8422568292558358555, unsigned __sym__0__3253898844582805974, unsigned __sym__0__8575488047535294878, unsigned __sym__0__3435466710294281260, unsigned __sym__0___45_8522673847417648165, fluidb_string<15> __sym__0___45_7405363787420957662, fluidb_string<2> __sym__0__7765678614353932314, fluidb_string<2> __sym__0__10543855051499991, fluidb_string<2> __sym__0__3423339159521108575, fluidb_string<2> __sym__0___45_4718580705201763151) : sym__0__6245703584620992382(__sym__0__6245703584620992382), sym__0__8423503703594878606(__sym__0__8423503703594878606), sym__0__6356725463286426884(__sym__0__6356725463286426884), sym__0___45_3286136184259375045(__sym__0___45_3286136184259375045), sym__0__4066203801312846649(__sym__0__4066203801312846649), sym__0___45_8353576545653999317(__sym__0___45_8353576545653999317), sym__0___45_4468618322478996170(__sym__0___45_4468618322478996170), sym__0___45_8422568292558358555(__sym__0___45_8422568292558358555), sym__0__3253898844582805974(__sym__0__3253898844582805974), sym__0__8575488047535294878(__sym__0__8575488047535294878), sym__0__3435466710294281260(__sym__0__3435466710294281260), sym__0___45_8522673847417648165(__sym__0___45_8522673847417648165), sym__0___45_7405363787420957662(__sym__0___45_7405363787420957662), sym__0__7765678614353932314(__sym__0__7765678614353932314), sym__0__10543855051499991(__sym__0__10543855051499991), sym__0__3423339159521108575(__sym__0__3423339159521108575), sym__0___45_4718580705201763151(__sym__0___45_4718580705201763151)
   {
   }
-  Record5()
+  Record5() 
   {
   }
   std::string show() const{
@@ -94,7 +94,7 @@ class Record9 {
   Record9(unsigned __sortElem0) : sortElem0(__sortElem0)
   {
   }
-  Record9()
+  Record9() 
   {
   }
   std::string show() const{
@@ -121,7 +121,7 @@ class Record1 {
   Record1(unsigned __sym__0__2037864888707786451, fluidb_string<18> __sym__0__8533656712666151747, fluidb_string<9> __sym__0__646314041574508429, fluidb_string<9> __sym__0__6064137978327902054, unsigned __sym__0__3754157776500852496, unsigned __sym__0__6284345160241949046, fluidb_string<7> __sym__0___45_773692805971570325, unsigned __sym__0___45_8399474032083007524, unsigned __sym__0___45_2038947427357444789, unsigned __sym__0__6071994954612827827, unsigned __sym__0__7742515703067448213, unsigned __sym__0__5201219213304227654, fluidb_string<15> __sym__0___45_5896625796158057241, fluidb_string<2> __sym__0___45_1108504872221226081, fluidb_string<2> __sym__0__1055103969674359346, fluidb_string<2> __sym__0__9115626546918942554, fluidb_string<2> __sym__0___45_6850413444013389848) : sym__0__2037864888707786451(__sym__0__2037864888707786451), sym__0__8533656712666151747(__sym__0__8533656712666151747), sym__0__646314041574508429(__sym__0__646314041574508429), sym__0__6064137978327902054(__sym__0__6064137978327902054), sym__0__3754157776500852496(__sym__0__3754157776500852496), sym__0__6284345160241949046(__sym__0__6284345160241949046), sym__0___45_773692805971570325(__sym__0___45_773692805971570325), sym__0___45_8399474032083007524(__sym__0___45_8399474032083007524), sym__0___45_2038947427357444789(__sym__0___45_2038947427357444789), sym__0__6071994954612827827(__sym__0__6071994954612827827), sym__0__7742515703067448213(__sym__0__7742515703067448213), sym__0__5201219213304227654(__sym__0__5201219213304227654), sym__0___45_5896625796158057241(__sym__0___45_5896625796158057241), sym__0___45_1108504872221226081(__sym__0___45_1108504872221226081), sym__0__1055103969674359346(__sym__0__1055103969674359346), sym__0__9115626546918942554(__sym__0__9115626546918942554), sym__0___45_6850413444013389848(__sym__0___45_6850413444013389848)
   {
   }
-  Record1()
+  Record1() 
   {
   }
   std::string show() const{
@@ -164,7 +164,7 @@ class Record19 {
   Record19(unsigned __sym__0___45_5026075974618982988, fluidb_string<18> __sym__0__7432298433273316420, fluidb_string<9> __sym__0___45_9015786607055196246, fluidb_string<9> __sym__0__2198911933165628293, unsigned __sym__0__265946737683763507, unsigned __sym__0___45_1464149585091689867, fluidb_string<7> __sym__0__2331409523224201212, unsigned __sym__0___45_3400073426931819017, unsigned __sym__0___45_6721224733529750436, unsigned __sym__0___45_5131153606029886828, unsigned __sym__0__2129148228201323266, unsigned __sym__0__1543195012683462501, fluidb_string<15> __sym__0___45_419662238809251472, fluidb_string<2> __sym__0__2149452457125417400, fluidb_string<2> __sym__0__3812376377317131513, fluidb_string<2> __sym__0___45_6227654738589541775, fluidb_string<2> __sym__0___45_2617432061804376453, unsigned __sym__0___45_7795156420759674248, int __sym__0___45_7236562371630143166, unsigned __sym__0__444671558480953034, unsigned __sym__0__8818510988249917740, unsigned __sym__0__1826882263548907171, unsigned __sym__0__4643003986445135022, fluidb_string<21> __sym__0___45_9212412777591431901, unsigned __sym__0__677568687779685577, fluidb_string<10> __sym__0___45_1566867736534683574, unsigned __sym__0__1881638640430645786, double __sym__0__8532410199738998392, unsigned __sym__0___45_7387497052497342002, double __sym__0___45_2513573066306319392, unsigned __sym__0___45_4939503808341533868, unsigned __sym__0__8468299261170941839, double __sym__0__7117671213534841517, fluidb_string<13> __sym__0___45_3714301134690751467) : sym__0___45_5026075974618982988(__sym__0___45_5026075974618982988), sym__0__7432298433273316420(__sym__0__7432298433273316420), sym__0___45_9015786607055196246(__sym__0___45_9015786607055196246), sym__0__2198911933165628293(__sym__0__2198911933165628293), sym__0__265946737683763507(__sym__0__265946737683763507), sym__0___45_1464149585091689867(__sym__0___45_1464149585091689867), sym__0__2331409523224201212(__sym__0__2331409523224201212), sym__0___45_3400073426931819017(__sym__0___45_3400073426931819017), sym__0___45_6721224733529750436(__sym__0___45_6721224733529750436), sym__0___45_5131153606029886828(__sym__0___45_5131153606029886828), sym__0__2129148228201323266(__sym__0__2129148228201323266), sym__0__1543195012683462501(__sym__0__1543195012683462501), sym__0___45_419662238809251472(__sym__0___45_419662238809251472), sym__0__2149452457125417400(__sym__0__2149452457125417400), sym__0__3812376377317131513(__sym__0__3812376377317131513), sym__0___45_6227654738589541775(__sym__0___45_6227654738589541775), sym__0___45_2617432061804376453(__sym__0___45_2617432061804376453), sym__0___45_7795156420759674248(__sym__0___45_7795156420759674248), sym__0___45_7236562371630143166(__sym__0___45_7236562371630143166), sym__0__444671558480953034(__sym__0__444671558480953034), sym__0__8818510988249917740(__sym__0__8818510988249917740), sym__0__1826882263548907171(__sym__0__1826882263548907171), sym__0__4643003986445135022(__sym__0__4643003986445135022), sym__0___45_9212412777591431901(__sym__0___45_9212412777591431901), sym__0__677568687779685577(__sym__0__677568687779685577), sym__0___45_1566867736534683574(__sym__0___45_1566867736534683574), sym__0__1881638640430645786(__sym__0__1881638640430645786), sym__0__8532410199738998392(__sym__0__8532410199738998392), sym__0___45_7387497052497342002(__sym__0___45_7387497052497342002), sym__0___45_2513573066306319392(__sym__0___45_2513573066306319392), sym__0___45_4939503808341533868(__sym__0___45_4939503808341533868), sym__0__8468299261170941839(__sym__0__8468299261170941839), sym__0__7117671213534841517(__sym__0__7117671213534841517), sym__0___45_3714301134690751467(__sym__0___45_3714301134690751467)
   {
   }
-  Record19()
+  Record19() 
   {
   }
   std::string show() const{
@@ -224,7 +224,7 @@ class Record7 {
   Record7(unsigned __sym__0__2237436879928175675, fluidb_string<18> __sym__0__2611420850730996427, fluidb_string<9> __sym__0__8580827633646556737, fluidb_string<9> __sym__0__3902406656410734878, unsigned __sym__0___45_5891800234269918308, unsigned __sym__0__1538625698420293134, fluidb_string<7> __sym__0___45_7770737979173508973, unsigned __sym__0___45_8493416926131562688, unsigned __sym__0___45_8523615618537444877, unsigned __sym__0__673904973748734491, unsigned __sym__0___45_3380685964368961911, unsigned __sym__0___45_5904043406584142850, fluidb_string<15> __sym__0__7179957875831373607, fluidb_string<2> __sym__0___45_4166143365315415745, fluidb_string<2> __sym__0__3207630749989215602, fluidb_string<2> __sym__0__5395374455822132186, fluidb_string<2> __sym__0___45_7225830269819405580, unsigned __sym__0__8991430536808361215, int __sym__0__4583131517034717385, unsigned __sym__0__1284725072524796001, unsigned __sym__0__3933934698775098051, unsigned __sym__0__3693867617571270668, unsigned __sym__0__3068847290209443605, fluidb_string<21> __sym__0___45_7777800476538033268, unsigned __sym__0___45_1578705594223344318, fluidb_string<10> __sym__0__4948472385509363425, unsigned __sym__0__3673553332159180977, double __sym__0__1218627844997812479, unsigned __sym__0___45_8294279676831449803, double __sym__0___45_6984436199184448105, unsigned __sym__0___45_6848192209483325989, unsigned __sym__0___45_9182405812039241464, double __sym__0___45_3072739000951748362, fluidb_string<13> __sym__0__1424431170346100142) : sym__0__2237436879928175675(__sym__0__2237436879928175675), sym__0__2611420850730996427(__sym__0__2611420850730996427), sym__0__8580827633646556737(__sym__0__8580827633646556737), sym__0__3902406656410734878(__sym__0__3902406656410734878), sym__0___45_5891800234269918308(__sym__0___45_5891800234269918308), sym__0__1538625698420293134(__sym__0__1538625698420293134), sym__0___45_7770737979173508973(__sym__0___45_7770737979173508973), sym__0___45_8493416926131562688(__sym__0___45_8493416926131562688), sym__0___45_8523615618537444877(__sym__0___45_8523615618537444877), sym__0__673904973748734491(__sym__0__673904973748734491), sym__0___45_3380685964368961911(__sym__0___45_3380685964368961911), sym__0___45_5904043406584142850(__sym__0___45_5904043406584142850), sym__0__7179957875831373607(__sym__0__7179957875831373607), sym__0___45_4166143365315415745(__sym__0___45_4166143365315415745), sym__0__3207630749989215602(__sym__0__3207630749989215602), sym__0__5395374455822132186(__sym__0__5395374455822132186), sym__0___45_7225830269819405580(__sym__0___45_7225830269819405580), sym__0__8991430536808361215(__sym__0__8991430536808361215), sym__0__4583131517034717385(__sym__0__4583131517034717385), sym__0__1284725072524796001(__sym__0__1284725072524796001), sym__0__3933934698775098051(__sym__0__3933934698775098051), sym__0__3693867617571270668(__sym__0__3693867617571270668), sym__0__3068847290209443605(__sym__0__3068847290209443605), sym__0___45_7777800476538033268(__sym__0___45_7777800476538033268), sym__0___45_1578705594223344318(__sym__0___45_1578705594223344318), sym__0__4948472385509363425(__sym__0__4948472385509363425), sym__0__3673553332159180977(__sym__0__3673553332159180977), sym__0__1218627844997812479(__sym__0__1218627844997812479), sym__0___45_8294279676831449803(__sym__0___45_8294279676831449803), sym__0___45_6984436199184448105(__sym__0___45_6984436199184448105), sym__0___45_6848192209483325989(__sym__0___45_6848192209483325989), sym__0___45_9182405812039241464(__sym__0___45_9182405812039241464), sym__0___45_3072739000951748362(__sym__0___45_3072739000951748362), sym__0__1424431170346100142(__sym__0__1424431170346100142)
   {
   }
-  Record7()
+  Record7() 
   {
   }
   std::string show() const{
@@ -284,7 +284,7 @@ class Record17 {
   Record17(double __sym__0__6444796841181455837) : sym__0__6444796841181455837(__sym__0__6444796841181455837)
   {
   }
-  Record17()
+  Record17() 
   {
   }
   std::string show() const{
@@ -373,126 +373,89 @@ class CallableClass11 {
  private:
 };
 
+
+
+
+
+
 int main() {
-  // ForwardTrigger: (Just
-  //   (Right
+  // ForwardTrigger: (Just 
+  //   (Right 
   //     [
-  //      QSel
-  //         (P0
-  //           (R2 REq
-  //               (R0 (E0 (ESym "d_yearmonthnum")))
+  //      QSel 
+  //         (P0 
+  //           (R2 REq 
+  //               (R0 (E0 (ESym "d_yearmonthnum"))) 
   //               (R0 (E0 (EInt 199401)))))
-  std::cout
-      << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P0 \n "
-         "         (R2 REq \n              (R0 (E0 (ESym \"d_yearmonthnum\"))) "
-         "\n              (R0 (E0 (EInt 199401)))))\n    ]))"
-      << std::endl;
+  std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"d_yearmonthnum\"))) \n              (R0 (E0 (EInt 199401)))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass2>(
-        Just<const std::string>("/tmp/fluidb_store/data5.dat"),
-        Just<const std::string>("/tmp/fluidb_store/data6.dat"),
-        "/tmp/fluidb_data/fluidb-data/date.dat");
+    auto operation = mkSelect<CallableClass2>(Just<const std::string>("/tmp/fluidb_store/data5.dat"), Just<const std::string>("/tmp/fluidb_store/data6.dat"), "/tmp/fluidb_data/fluidb-data/date.dat");
     operation.run();
     operation.print_output(10);
   }
-  // ForwardTrigger: (Just
-  //   (Left
+  // ForwardTrigger: (Just 
+  //   (Left 
   //     [
-  //      QJoin
-  //         (P0
-  //           (R2 REq
-  //               (R0 (E0 (ESym "lo_orderdate")))
+  //      QJoin 
+  //         (P0 
+  //           (R2 REq 
+  //               (R0 (E0 (ESym "lo_orderdate"))) 
   //               (R0 (E0 (ESym "d_datekey")))))
-  std::cout
-      << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n "
-         "         (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) "
-         "\n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))"
-      << std::endl;
+  std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation =
-        mkEquiJoin<CallableClass11, CallableClass13, CallableClass8>(
-            Just<const std::string>("/tmp/fluidb_store/data8.dat"),
-            Just<const std::string>("/tmp/fluidb_store/data7.dat"),
-            Just<const std::string>("/tmp/fluidb_store/data9.dat"),
-            "/tmp/fluidb_store/data5.dat",
-            "/tmp/fluidb_data/fluidb-data/lineorder.dat");
+    auto operation = mkEquiJoin<CallableClass11, CallableClass13, CallableClass8>(Just<const std::string>("/tmp/fluidb_store/data8.dat"), Just<const std::string>("/tmp/fluidb_store/data7.dat"), Just<const std::string>("/tmp/fluidb_store/data9.dat"), "/tmp/fluidb_store/data5.dat", "/tmp/fluidb_data/fluidb-data/lineorder.dat");
     operation.run();
     operation.print_output(10);
   }
-  // ForwardTrigger: (Just
-  //   (Right
+  // ForwardTrigger: (Just 
+  //   (Right 
   //     [
-  //      QSel
-  //         (P2
-  //           PAnd
-  //           (P2
-  //             PAnd
-  //             (P2
-  //               PAnd
-  //               (P0
-  //                 (R2 RLe
-  //                     (R0 (E0 (EInt 4)))
-  //                     (R0 (E0 (ESym "lo_discount")))))
-  //               (P0
-  //                 (R2 RLe
-  //                     (R0 (E0 (ESym "lo_discount")))
-  //                     (R0 (E0 (EInt 6))))))
-  //             (P0
-  //               (R2 RLe
-  //                   (R0 (E0 (EInt 26)))
-  //                   (R0 (E0 (ESym "lo_quantity"))))))
-  //           (P0
+  //      QSel 
+  //         (P2 
+  //           PAnd 
+  //           (P2 
+  //             PAnd 
+  //             (P2 
+  //               PAnd 
+  //               (P0 
+  //                 (R2 RLe 
+  //                     (R0 (E0 (EInt 4))) 
+  //                     (R0 (E0 (ESym "lo_discount"))))) 
+  //               (P0 
+  //                 (R2 RLe 
+  //                     (R0 (E0 (ESym "lo_discount"))) 
+  //                     (R0 (E0 (EInt 6)))))) 
+  //             (P0 
+  //               (R2 RLe 
+  //                   (R0 (E0 (EInt 26))) 
+  //                   (R0 (E0 (ESym "lo_quantity")))))) 
+  //           (P0 
   //             (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35))))))
-  std::cout
-      << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n "
-         "         PAnd \n          (P2 \n            PAnd \n            (P2 "
-         "\n              PAnd \n              (P0 \n                (R2 RLe "
-         "\n                    (R0 (E0 (EInt 4))) \n                    (R0 "
-         "(E0 (ESym \"lo_discount\"))))) \n              (P0 \n                "
-         "(R2 RLe \n                    (R0 (E0 (ESym \"lo_discount\"))) \n    "
-         "                (R0 (E0 (EInt 6)))))) \n            (P0 \n           "
-         "   (R2 RLe \n                  (R0 (E0 (EInt 26))) \n                "
-         "  (R0 (E0 (ESym \"lo_quantity\")))))) \n          (P0 \n            "
-         "(R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35))))))\n    "
-         "]))"
-      << std::endl;
+  std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P2 \n            PAnd \n            (P2 \n              PAnd \n              (P0 \n                (R2 RLe \n                    (R0 (E0 (EInt 4))) \n                    (R0 (E0 (ESym \"lo_discount\"))))) \n              (P0 \n                (R2 RLe \n                    (R0 (E0 (ESym \"lo_discount\"))) \n                    (R0 (E0 (EInt 6)))))) \n            (P0 \n              (R2 RLe \n                  (R0 (E0 (EInt 26))) \n                  (R0 (E0 (ESym \"lo_quantity\")))))) \n          (P0 \n            (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass15>(
-        Just<const std::string>("/tmp/fluidb_store/data12.dat"),
-        Just<const std::string>("/tmp/fluidb_store/data13.dat"),
-        "/tmp/fluidb_store/data8.dat");
+    auto operation = mkSelect<CallableClass15>(Just<const std::string>("/tmp/fluidb_store/data12.dat"), Just<const std::string>("/tmp/fluidb_store/data13.dat"), "/tmp/fluidb_store/data8.dat");
     operation.run();
     operation.print_output(10);
   }
-  // ForwardTrigger: (Just
-  //   (Right
+  // ForwardTrigger: (Just 
+  //   (Right 
   //     [
-  //      QGroup
+  //      QGroup 
   //         [
   //          (
   //            ESym "revenue",
-  //            E0
-  //               (NAggr
-  //                 AggrSum
-  //                 (E2 EMul
-  //                     (E0 (ESym "lo_extendedprice"))
+  //            E0 
+  //               (NAggr 
+  //                 AggrSum 
+  //                 (E2 EMul 
+  //                     (E0 (ESym "lo_extendedprice")) 
   //                     (E0 (ESym "lo_discount"))))
   //           )
-  //         ]
+  //         ] 
   //         []
-  std::cout
-      << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [\n  "
-         "       (\n           ESym \"revenue\",\n           E0 \n             "
-         " (NAggr \n                AggrSum \n                (E2 EMul \n      "
-         "              (E0 (ESym \"lo_extendedprice\")) \n                    "
-         "(E0 (ESym \"lo_discount\"))))\n          )\n        ] \n        []\n "
-         "   ]))"
-      << std::endl;
+  std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [\n         (\n           ESym \"revenue\",\n           E0 \n              (NAggr \n                AggrSum \n                (E2 EMul \n                    (E0 (ESym \"lo_extendedprice\")) \n                    (E0 (ESym \"lo_discount\"))))\n          )\n        ] \n        []\n    ]))" << std::endl;
   {
-    auto operation = mkTotalAggregation<CallableClass20>(
-        Just<const std::string>("/tmp/fluidb_store/data14.dat"),
-        Just<const std::string>("/tmp/fluidb_store/data12.dat"),
-        "/tmp/fluidb_store/data12.dat");
+    auto operation = mkTotalAggregation<CallableClass20>(Just<const std::string>("/tmp/fluidb_store/data14.dat"), Just<const std::string>("/tmp/fluidb_store/data12.dat"), "/tmp/fluidb_store/data12.dat");
     operation.run();
     operation.print_output(10);
   }
