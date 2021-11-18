@@ -47,6 +47,7 @@ library:
     - ConstraintKinds
     - FunctionalDependencies
   exposed-modules:
+    - FluiDB.Bamify.Main
     - FluiDB.Schema.TPCH.Main
     - FluiDB.Schema.Graph.Main
     - FluiDB.Schema.SSB.Main
@@ -110,3 +111,10 @@ executables:
       - bifunctors
       - mtl
       - bytestring
+  bamify:
+    main: Main.hs
+    source-dirs: tools/Bamify
+    dependencies:
+      - base >= 4.7 && < 5
+      - ghc >= 8.6.5
+      - fluidb
