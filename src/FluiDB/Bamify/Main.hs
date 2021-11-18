@@ -1,19 +1,42 @@
 module FluiDB.Bamify.Main (bamifyMain) where
 import           Control.Monad
-import           Data.Query.QuerySize
-import           Data.Utils.Functors
+import           Data.Bifunctor
+import           Data.List
+import           Data.Query.QuerySchema.Types
+import           Data.String
 import           FluiDB.Bamify.CsvParse
+import           FluiDB.Bamify.Unbamify
+import           FluiDB.Classes               (IOOps (ioFileExists))
 import           FluiDB.Schema.SSB.Queries
+import           System.Directory
 import           System.Environment
+import           System.FilePath.Posix
+import           System.Posix.ByteString      (fileExist)
+import           Text.Printf
 
-bamifySingleSSBFile :: SSBTable -> FilePath -> FilePath -> IO TableSize
-bamifySingleSSBFile name tblFile bamaFile = do
-  case fmap2 fst $ lookup name ssbSchema of
+getSsbSchema :: SSBTable ->  IO CppSchema
+getSsbSchema name = do
+  case lookup name ssbSchema of
     Nothing    -> fail $ "No schema found for " ++ show (name,fst <$> ssbSchema)
-    Just types -> bamifyFile types tblFile bamaFile
+    Just schema -> return $ second fromString <$>  schema
 
 bamifyMain :: IO ()
 bamifyMain = void $ getArgs >>= \case
-  [tblName,tblFile,bamaFile] -> bamifySingleSSBFile tblName tblFile bamaFile
-  args -> fail
-    $ "expected args: <tbl-name> <tbl-file> <bama-file>. Got: " ++ show args
+  [_exe,tblDir,bamaDir,dataDir] -> do
+    tbls <- fmap dropExtensions . filter (".tbl" `isSuffixOf`)
+      <$> listDirectory tblDir
+    forM_ tbls $ \tbl -> do
+      let tblFile = tblDir </> tbl <.> "tbl"
+      let bamaFile = bamaDir </> tbl <.> "bama"
+      let datFile = dataDir </> tbl <.> "dat"
+      bamaExists <- doesPathExist bamaFile
+      datExists <- doesPathExist bamaFile
+      schema <- getSsbSchema tbl
+      unless bamaExists $ do
+        putStrLn $ printf "Bamify-ing %s -> %s [table:%s]" tblFile bamaFile tbl
+        void $ bamifyFile (fst <$> schema) tblFile bamaFile
+      unless datExists $ do
+        putStrLn $ printf "Unbamify-ing %s -> %s [table:%s]" bamaFile datFile tbl
+        mkDataFile schema bamaFile datFile
+  args ->
+    fail $ "expected args: <tbl-dir> <bama-dir> <data-dir>. Got: " ++ show args

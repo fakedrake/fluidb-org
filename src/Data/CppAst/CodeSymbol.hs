@@ -15,11 +15,12 @@ import           Data.Utils.AShow
 import           Data.Utils.Hashable
 import           GHC.Generics
 
-data CodeSymbol = UniqueSymbolDef String Int
-                | UniqueSymbolRef String Int
-                | CppLiteralSymbol String
-                | CppSymbol String
-  deriving (Eq, Generic, Show)
+data CodeSymbol
+  = UniqueSymbolDef String Int
+  | UniqueSymbolRef String Int
+  | CppLiteralSymbol String
+  | CppSymbol String
+  deriving (Eq,Generic,Show)
 symbolRef :: CodeSymbol -> CodeSymbol
 symbolRef (UniqueSymbolDef s i) = UniqueSymbolRef s i
 symbolRef x                     = x
