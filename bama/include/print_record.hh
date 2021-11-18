@@ -21,7 +21,6 @@ inline  void print_records(const std::string& filepath, const size_t n)
         std::string str(rec.show());
         std::cout << str << std::endl;
     }
-    require(i > 0, "No file should be empty!");
 }
 
 template<typename R>

@@ -92,11 +92,12 @@ template<typename R>
 class AggrSum {
  public:
     AggrSum() : state(0) {}
-    const R operator() (const R & r) {
-        state += r;
-        return state;
+    const R operator()(const R& r) {
+      state += r;
+      return state;
     }
- private:
+
+   private:
     R state;
 };
 

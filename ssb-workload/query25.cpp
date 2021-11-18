@@ -596,7 +596,7 @@ int main() {
   //           (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994))))))
   std::cout << "ReverseTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P0 \n            (R2 REq \n                (R0 (E0 (ESym \"d_weeknuminyear\"))) \n                (R0 (E0 (EInt 6))))) \n          (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994))))))\n    ]))" << std::endl;
   {
-    auto operation = mkUnion<CallableClass10, CallableClass13>(Just<const std::string>("/tmp/fluidb_data/fluidb-data/date.dat"), "/tmp/fluidb_store/data25.dat", "/tmp/fluidb_store/data26.dat");
+    auto operation = mkUnion<CallableClass10, CallableClass13>(Just<const std::string>("/tmp/fluidb-data/date.dat"), "/tmp/fluidb_store/data25.dat", "/tmp/fluidb_store/data26.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -610,7 +610,7 @@ int main() {
   //               (R0 (E0 (EInt 199401)))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"d_yearmonthnum\"))) \n              (R0 (E0 (EInt 199401)))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass15>(Just<const std::string>("/tmp/fluidb_store/data5.dat"), Just<const std::string>("/tmp/fluidb_store/data6.dat"), "/tmp/fluidb_data/fluidb-data/date.dat");
+    auto operation = mkSelect<CallableClass15>(Just<const std::string>("/tmp/fluidb_store/data5.dat"), Just<const std::string>("/tmp/fluidb_store/data6.dat"), "/tmp/fluidb-data/date.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -624,7 +624,7 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey")))))
   std::cout << "ForwardTrigger: (Just \n  (Left \n    [\n     QJoin \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\")))))\n    ]))" << std::endl;
   {
-    auto operation = mkEquiJoin<CallableClass23, CallableClass25, CallableClass20>(Just<const std::string>("/tmp/fluidb_store/data8.dat"), Just<const std::string>("/tmp/fluidb_store/data7.dat"), Just<const std::string>("/tmp/fluidb_store/data9.dat"), "/tmp/fluidb_store/data5.dat", "/tmp/fluidb_data/fluidb-data/lineorder.dat");
+    auto operation = mkEquiJoin<CallableClass23, CallableClass25, CallableClass20>(Just<const std::string>("/tmp/fluidb_store/data8.dat"), Just<const std::string>("/tmp/fluidb_store/data7.dat"), Just<const std::string>("/tmp/fluidb_store/data9.dat"), "/tmp/fluidb_store/data5.dat", "/tmp/fluidb-data/lineorder.dat");
     operation.run();
     operation.print_output(10);
   }

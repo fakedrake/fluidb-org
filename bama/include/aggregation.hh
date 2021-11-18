@@ -40,6 +40,8 @@ class Aggregation {
     FoldFn fold;
     SubTup cur_grp_key;
     size_t count = 0;
+    // XXX:  Check if it is empty.
+
     if constexpr (!global_aggr) {
       sortFile<ExtractFn>(infile);
     }
@@ -60,7 +62,7 @@ class Aggregation {
     });
 
     // If the last record was not already written.
-    if (!justWrote) output.write(currentRec);
+    if (!justWrote && count > 0) output.write(currentRec);
     output.flush();
     output.close();
   }

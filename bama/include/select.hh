@@ -41,7 +41,7 @@ class Select {
         }
       });
       WITH(primary_file, primary_output.close());
-      WITH(secondary_file, primary_output.close());
+      WITH(secondary_file, secondary_output.close());
     }
 
     void print_output(size_t x) {
