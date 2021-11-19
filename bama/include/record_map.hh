@@ -313,7 +313,22 @@ void sortFile(const std::string& file) {
     return;
   }
   fmt::print("Not sorted... {}\n", file);
-  std::sort(fs.begin(), fs.end(), cmp);
+  // std::sort(fs.begin(), fs.end(), cmp);
+  bubble_sort(fs.begin(), fs.end(), cmp);
   // hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
   //                                                             fs.end());
+}
+template<typename It,typename Cmp>
+void bubbleSort(It begin, It end, Cmp cmp) {
+   for(It i = begin; i != end; i++) {
+      bool swaps = false;
+      for(It it = begin; it != end; it++) {
+         if(not cmp(*it,*it+1)) {
+            std::swap(it, it+1);
+            swaps = true;
+         }
+      }
+      if(!swaps)
+         break;       // No swap in this pass, so array is sorted
+   }
 }
