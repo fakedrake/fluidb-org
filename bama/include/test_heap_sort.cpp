@@ -3,6 +3,7 @@
 #include <vector>
 #include <iostream>
 #include "heap_sort.hh"
+#include "common.hh"
 #include "require.hh"
 
 
@@ -12,8 +13,8 @@ void test(size_t num) {
     a.push_back(i);
   }
 
-  // hsort<32>(a.begin(),a.end());
-  std::sort(a.begin(),a.end());
+  hsort<32,Identity<int>>(a.begin(),a.end());
+  // std::sort(a.begin(),a.end());
   for (int i = 0; i < (int)num; i++) {
     require_eq(a[i], i, "test");
   }

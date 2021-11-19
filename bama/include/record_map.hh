@@ -5,6 +5,7 @@
 
 #include <map>
 #include <queue>
+#include <fmt/format.h>
 
 #include <iostream>
 
@@ -290,9 +291,25 @@ struct CompareOn {
 
 template <typename Extract>
 void sortFile(const std::string& file) {
+  CompareOn<Extract> cmp;
+  bool sorted = true, started = false;
   RecordMap<typename Extract::Domain0> fs(file);
-  // CompareOn<Extract> cmp;
-  // std::stable_sort(fs.begin(), fs.end(), cmp);
-  hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
-                                                              fs.end());
+  auto tmp = fs.begin();
+  for (auto r = fs.begin(); r != fs.end(); r++) {
+    if (!started) {
+      tmp = r;
+      started = true;
+      continue;
+    }
+    if (not cmp(*r, *tmp)) {
+      sorted = false;
+      break;
+    }
+    tmp = r;
+  }
+  if (sorted) return;
+  fmt::print("Not sorted... {}\n", file);
+  std::sort(fs.begin(), fs.end(), cmp);
+  // hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
+  //                                                             fs.end());
 }

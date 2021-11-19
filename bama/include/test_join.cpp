@@ -32,9 +32,9 @@ B mkB(size_t i) { return {i, i}; }
 struct AB {
   A a;
   B b;
+  AB() = default;
   AB(const A& a, const B& b) : a(a), b(b) {}
   AB(const AB&) = default;
-  AB() = default;
   std::string show() { return fmt::format("AB({},{})", a.show(), b.show()); }
 };
 
@@ -92,9 +92,9 @@ int main() {
   }
 
   {
-    auto j = mkEquiJoin<KeyA, KeyB, Comb>(Just<std::string>(O_DAT),
-                                          Just<std::string>(LA_DAT),
-                                          Just<std::string>(RA_DAT), A_DAT, B_DAT);
+    auto j = mkEquiJoin<KeyA, KeyB, Comb>(
+        Just<std::string>(O_DAT), Just<std::string>(LA_DAT),
+        Just<std::string>(RA_DAT), A_DAT, B_DAT);
     j.run();
   }
 
@@ -104,8 +104,7 @@ int main() {
     eachRecord<AB>(O_DAT, [&i](AB s) { require_eq(i++, s.a.a1, "Equal"); });
     require_eq(i, TOTAL, "Total records");
     // Check the complement
-    eachRecord<B>(RA_DAT,
-                  [&i](const B& s) { require_eq(i++, s.b1, "Equal"); });
+    eachRecord<B>(RA_DAT, [&i](const B& s) { require_eq(i++, s.b1, "Equal"); });
     require_eq(i, TOTAL + EXTRA, "Total records");
     eachRecord<A>(LA_DAT, [](const A& s) {
       require(false, "No records from A should be left over.");
@@ -120,17 +119,17 @@ int main() {
   }
   {
     // Unjoin B
-    auto op = mkUnJoin<ExB>(B_DAT, O_DAT, RA_DAT);
+    auto op = mkUnJoin<ExB>(O_DAT, RA_DAT , B_DAT );
     op.run();
 
     sortFile<KeyB>(B_DAT);
     size_t i = 0;
     eachRecord<B>(B_DAT, [&i](const B& b) { require_eq(i++, b.b1, "Eq"); });
-    require_eq(i, TOTAL + EXTRA, "Eq");
+    require_eq(i, TOTAL + EXTRA, ("Wriong num records: " B_DAT));
   }
   {
     // Unjoin A
-    auto op = mkUnJoin<ExA>(A_DAT, O_DAT, LA_DAT);
+    auto op = mkUnJoin<ExA>(O_DAT, LA_DAT, A_DAT);
     op.run();
 
     sortFile<KeyA>(A_DAT);
