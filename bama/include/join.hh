@@ -454,6 +454,7 @@ public:
         right.rollback();
         while (left_extract(left_record) == right_extract(right_record)) {
           WITH(outfile, output.write(combine(left_record, right_record)));
+          require(product_size++ < 1000, "too large join.");
           if (right.hasNext()) {
             right_record = right.nextRecord();
             outstanding_right = true;
