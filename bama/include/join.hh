@@ -449,7 +449,6 @@ public:
 
       // Here we are in two equal blocks that we need to product
       // together.
-      size_t product_size = 0;
       auto rec = left_extract(left_record);
       right.mark();
       while (rec == left_extract(left_record)) {
@@ -457,7 +456,6 @@ public:
         // increment the right
         while (rec == right_extract(right_record)) {
           WITH(outfile, output.write(combine(left_record, right_record)));
-          require(product_size++ < 1000, "too large join:" + rec.show());
           if (right.hasNext()) {
             right_record = right.nextRecord();
             outstanding_right = true;
