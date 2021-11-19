@@ -90,6 +90,7 @@ public:
     if (pi1 == pi2) {
       return peek_page(pi2);
     }
+    Page<R>* pg_ref;
     drop_page(pi1);
     return get_page(pi2);
   }
@@ -119,6 +120,7 @@ class RecordMap<R>::Iterator
   : public std::iterator<std::random_access_iterator_tag, R> {
 public:
   using difference_type = int;
+  using value_type = R;
 
   Iterator() : m_index(0), m_recs(nullptr), m_holding_page(-1) {}
   Iterator(size_t index, RecordMap* recs)
@@ -289,5 +291,5 @@ template <typename Extract>
 void sortFile(const std::string& file) {
   CompareOn<Extract> cmp;
   RecordMap<typename Extract::Domain0> fs(file);
-  std::sort(fs.begin(), fs.end(), cmp);
+  std::stable_sort(fs.begin(), fs.end(), cmp);
 }

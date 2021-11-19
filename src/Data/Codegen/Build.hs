@@ -187,6 +187,9 @@ forEachEpoch pl = do
     nelTails a@(_ NEL.:| (x:xs)) =
       a : nelTails (x NEL.:| xs)
 
+
+cppReportPerf :: [CC.Statement CC.CodeSymbol]
+cppReportPerf = _
 -- | The main function.
 getCppMain
   :: (AShow e,AShow s,CC.ExpressionLike e,Monad m,Eq e)
@@ -197,7 +200,7 @@ getCppMain body = do
   return CC.Function {
     functionName="main",
     functionType=CC.PrimitiveType mempty CC.CppInt,
-    functionBody=body ++ [ret],
+    functionBody=body ++ cppReportPerf ++ [ret],
     functionArguments=[],
     functionConstMember=False
     }
