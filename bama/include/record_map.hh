@@ -307,7 +307,10 @@ void sortFile(const std::string& file) {
     }
     tmp = r;
   }
-  if (sorted) return;
+  if (sorted) {
+    fmt::print("Already sorted! {}\n", file);
+    return;
+  }
   fmt::print("Not sorted... {}\n", file);
   std::sort(fs.begin(), fs.end(), cmp);
   // hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
