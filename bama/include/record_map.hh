@@ -313,8 +313,8 @@ void sortFile(const std::string& file) {
     return;
   }
   fmt::print("Not sorted... {}\n", file);
-  std::sort(fs.begin(), fs.end(), cmp);
-  // bubble_sort(fs.begin(), fs.end(), cmp);
+  // std::sort(fs.begin(), fs.end(), cmp);
+  bubble_sort(fs.begin(), fs.end(), cmp);
   // hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
   //                                                             fs.end());
 }
