@@ -11,6 +11,7 @@
 #include "require.hh"
 #include "page.hh"
 #include "file.hh"
+#include "heap_sort.hh"
 #include "defs.hh"
 
 // Fewer than 10M records for debugging
@@ -280,7 +281,7 @@ struct RecordMap<R>::RecordLoc {
   }
 };
 
-template<typename Extract>
+template <typename Extract>
 struct CompareOn {
   typedef typename Extract::Domain0 R;
   bool operator()(const R& l, const R& r) { return extr(l) < extr(r); }
@@ -289,7 +290,9 @@ struct CompareOn {
 
 template <typename Extract>
 void sortFile(const std::string& file) {
-  CompareOn<Extract> cmp;
   RecordMap<typename Extract::Domain0> fs(file);
-  std::stable_sort(fs.begin(), fs.end(), cmp);
+  // CompareOn<Extract> cmp;
+  // std::stable_sort(fs.begin(), fs.end(), cmp);
+  hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
+                                                              fs.end());
 }

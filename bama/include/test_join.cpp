@@ -33,6 +33,8 @@ struct AB {
   A a;
   B b;
   AB(const A& a, const B& b) : a(a), b(b) {}
+  AB(const AB&) = default;
+  AB() = default;
   std::string show() { return fmt::format("AB({},{})", a.show(), b.show()); }
 };
 

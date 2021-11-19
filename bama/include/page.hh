@@ -65,7 +65,7 @@ class /*alignas(PAGE_SIZE)*/ Page {
   static const size_t datasize = PAGE_SIZE - header_size;
 
  public:
-  static const size_t allocation = datasize / sizeof(record_type);
+  static constexpr size_t allocation = datasize / sizeof(record_type);
 
  private:
   size_t numrecs;
