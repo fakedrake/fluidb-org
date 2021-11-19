@@ -457,6 +457,7 @@ public:
         // increment the right
         while (rec == right_extract(right_record)) {
           WITH(outfile, output.write(combine(left_record, right_record)));
+          require(product_size++ < 1000, "too large join:" + rec.show());
           if (right.hasNext()) {
             right_record = right.nextRecord();
             outstanding_right = true;
