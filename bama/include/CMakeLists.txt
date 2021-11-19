@@ -7,7 +7,35 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo)
 
 find_package(fmt)
 
-add_library(bama INTERFACE )
+add_library(bama INTERFACE
+  util.hh
+  unjoin.hh
+  union.hh
+  sort.hh
+  select.hh
+  run_tests.sh
+  require.hh
+  record_map.hh
+  projection.hh
+  print_record.hh
+  perf.data.old
+  perf.data
+  page.hh
+  merge_join.hh
+  limit.hh
+  join.hh
+  io.hh
+  heap_sort.hh
+  grace_join.hh
+  filesystem.hh
+  file.hh
+  expressions.hh
+  defs.hh
+  common.hh
+  codegen.hh
+  bamify.hh
+  aggregation.hh
+  join.hh)
 target_link_libraries(bama INTERFACE )
 target_link_libraries(bama INTERFACE fmt::fmt-header-only)
 target_compile_features(bama INTERFACE cxx_std_20)

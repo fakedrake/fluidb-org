@@ -307,6 +307,13 @@ void bubble_sort(It begin, It end, Cmp cmp) {
    }
 }
 
+template <typename It, typename Cmp>
+void copy_sort(It begin, It end, Cmp cmp) {
+  std::vector<typename It::value_type> v(begin, end);
+  std::sort(v.begin(), v.end(), cmp);
+  std::copy(v.begin(), v.end(), begin);
+}
+
 template <typename Extract>
 void sortFile(const std::string& file) {
   CompareOn<Extract> cmp;
@@ -332,7 +339,8 @@ void sortFile(const std::string& file) {
   }
   fmt::print("Not sorted... {}\n", file);
   // std::sort(fs.begin(), fs.end(), cmp);
-  bubble_sort(fs.begin(), fs.end(), cmp);
+  // bubble_sort(fs.begin(), fs.end(), cmp);
+  copy_sort(fs.begin(), fs.end(), cmp);
   // hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
   //                                                             fs.end());
 }

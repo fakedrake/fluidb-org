@@ -14,7 +14,7 @@ new_dir ./ssb-data
 new_dir ./tables
 
 echo "Generating tables in $(pwd)"
-for i in l d s c; do
+for i in l d s c p; do
     echo "Generating table: ${i}"
     dbgen -s 1 -T ${i}
 done
