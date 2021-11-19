@@ -7,7 +7,7 @@
 #include <map>
 #include <vector>
 
-#include "fmt/format.h"
+#include <fmt/format.h>
 
 #include "file.hh"
 #include "common.hh"
