@@ -4,7 +4,7 @@
 #include "file.hh"
 #include "record_map.hh"
 
-#define TOTAL 1000
+#define TOTAL 3000000
 
 int main() {
   fmt::print("start!\n");
@@ -18,7 +18,7 @@ int main() {
 
   {
     RecordMap<size_t> fs("/tmp/removeme.dat");
-    std::sort(fs.begin(), fs.end());
+    std::stable_sort(fs.begin(), fs.end());
   }
 
   {

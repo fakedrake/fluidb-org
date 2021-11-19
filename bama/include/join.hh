@@ -7,6 +7,8 @@
 #include <map>
 #include <vector>
 
+#include "fmt/format.h"
+
 #include "file.hh"
 #include "common.hh"
 #include "record_map.hh"
@@ -403,8 +405,11 @@ public:
   }
 
   void run() {
+    fmt::print("Sorting {}\n", leftfile);
     sortFile<LeftExtract>(leftfile);
+    fmt::print("Sorting {}\n", rightfile);
     sortFile<RightExtract>(rightfile);
+    fmt::print("Joining... {} {}\n", leftfile, rightfile);
 
     Reader<Left> left(leftfile);
     Reader<Right> right(rightfile);

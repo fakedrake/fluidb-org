@@ -127,23 +127,23 @@ struct HeapSort {
 
     discriminate(hA, hB);
     merge_adjheaps(lA, rA);  // PAR
+    merge_adjheaps(lB, rB);
     if (not(hB.is_discrim(lB) and hB.is_discrim(rB))) {
       // If B is not a heap anymore we need to turn it into one again
       merge_page(hB, tB);
       return;
     }
 
-    merge_adjheaps(lB, rB);
     merge_sorted_contiguous(tA, B);
   }
-
-  // XXX: find a better implementation
-  static void merge_page(Range pg, Range B) { merge_adjheaps(pg, B); }
 
   // XXX: This might still fuck up wrt the pages.
   static void merge_sorted_contiguous(Range A, Range B) {
     std::inplace_merge(A.begin, A.end, B.end, less_than);
   }
+
+  // XXX: find a better implementation
+  static void merge_page(Range pg, Range B) { merge_sorted_contiguous(pg, B); }
 
   static void make_heap(Range A) {
     if (A.empty()) return;

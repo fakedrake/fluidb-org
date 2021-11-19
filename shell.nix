@@ -18,6 +18,7 @@ with nixpkgs; let
   ssb = callPackage ./nix/ssb {};
   nixPackages = [
     # rash
+    linuxPackages.perf
     cmake
     fmt
     clang
