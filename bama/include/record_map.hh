@@ -320,8 +320,9 @@ void sortFile(const std::string& file) {
 }
 template<typename It,typename Cmp>
 void bubble_sort(It begin, It end, Cmp cmp) {
+   fmt::print("Bubble time!\n");
    for(It i = begin; i != end; i++) {
-     if ((i - begin) % 1000 == 0) fmt::print("Patience...\n");
+     if ((i - begin) % 100 == 0) fmt::print("Patience...\n");
       bool swaps = false;
       for(It it = begin; it != end - 1; it++) {
          if(not cmp(*it,*(it+1))) {
