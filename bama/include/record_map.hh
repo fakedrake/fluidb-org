@@ -295,6 +295,7 @@ void sortFile(const std::string& file) {
   bool sorted = true, started = false;
   RecordMap<typename Extract::Domain0> fs(file);
   auto tmp = fs.begin();
+  fmt::print("Checking if file is sorted.. {}\n", file);
   for (auto r = fs.begin(); r != fs.end(); r++) {
     if (!started) {
       tmp = r;
