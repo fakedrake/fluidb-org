@@ -324,7 +324,7 @@ void bubble_sort(It begin, It end, Cmp cmp) {
       bool swaps = false;
       for(It it = begin; it != end - 1; it++) {
          if(not cmp(*it,*(it+1))) {
-            std::swap(it, it+1);
+            std::swap(*it, *(it+1));
             swaps = true;
          }
       }
