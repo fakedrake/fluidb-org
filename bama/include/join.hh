@@ -449,9 +449,11 @@ public:
 
       // Here we are in two equal blocks that we need to product
       // together.
+      size_t product_size = 0;
       right.mark();
       while (left_extract(left_record) == right_extract(right_record)) {
         right.rollback();
+        // increment the right
         while (left_extract(left_record) == right_extract(right_record)) {
           WITH(outfile, output.write(combine(left_record, right_record)));
           require(product_size++ < 1000, "too large join.");
@@ -459,8 +461,15 @@ public:
             right_record = right.nextRecord();
             outstanding_right = true;
           } else {
+            break;
             outstanding_right = false;
           }
+        }
+
+        if (left.hasNext()) {
+          left.nextRecord();
+        } else {
+          break;
         }
       }
 
