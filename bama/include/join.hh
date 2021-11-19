@@ -462,7 +462,6 @@ public:
             right_record = right.nextRecord();
             outstanding_right = true;
           } else {
-            break;
             outstanding_right = false;
           }
         }
