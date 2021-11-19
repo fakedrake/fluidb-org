@@ -18,7 +18,6 @@ with nixpkgs; let
   ssb = callPackage ./nix/ssb {};
   nixPackages = [
     # rash
-    linuxPackages.perf
     cmake
     fmt
     clang
@@ -27,7 +26,7 @@ with nixpkgs; let
     stack
     ccls
     graphviz
-  ];
+  ] ++ (if stdenv.isLinux then [ linuxPackages.perf ] else []) ;
 in
 haskell.lib.buildStackProject {
   CPATH = "${builtins.toString ./.}/bama/include";

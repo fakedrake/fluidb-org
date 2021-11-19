@@ -289,6 +289,24 @@ struct CompareOn {
   Extract extr;
 };
 
+
+template<typename It,typename Cmp>
+void bubble_sort(It begin, It end, Cmp cmp) {
+   fmt::print(stderr,"Bubble time!\n");
+   for(It i = begin; i != end; i++) {
+     if ((i - begin) % 100 == 0) fmt::print(stderr,"Patience...\n");
+      bool swaps = false;
+      for(It it = begin; it != end - 1; it++) {
+         if(not cmp(*it,*(it+1))) {
+            std::swap(*it, *(it+1));
+            swaps = true;
+         }
+      }
+      if(!swaps)
+         break;       // No swap in this pass, so array is sorted
+   }
+}
+
 template <typename Extract>
 void sortFile(const std::string& file) {
   CompareOn<Extract> cmp;
@@ -317,20 +335,4 @@ void sortFile(const std::string& file) {
   bubble_sort(fs.begin(), fs.end(), cmp);
   // hsort<Page<typename Extract::Domain0>::allocation, Extract>(fs.begin(),
   //                                                             fs.end());
-}
-template<typename It,typename Cmp>
-void bubble_sort(It begin, It end, Cmp cmp) {
-   fmt::print("Bubble time!\n");
-   for(It i = begin; i != end; i++) {
-     if ((i - begin) % 100 == 0) fmt::print("Patience...\n");
-      bool swaps = false;
-      for(It it = begin; it != end - 1; it++) {
-         if(not cmp(*it,*(it+1))) {
-            std::swap(*it, *(it+1));
-            swaps = true;
-         }
-      }
-      if(!swaps)
-         break;       // No swap in this pass, so array is sorted
-   }
 }
