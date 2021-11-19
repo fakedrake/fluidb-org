@@ -102,7 +102,8 @@ struct HeapSort {
     discriminate(hA, hB);    // PAR
     merge_adjheaps(lA, rA);  // PAR
     if (hB < lB and hB < rB) {
-      merge_adjheaps(tA, B);
+      merge_adjheaps(lB, rB);
+      merge_sorted_contiguous(tA, B);
       return;
     }
 
@@ -110,8 +111,16 @@ struct HeapSort {
     // spilled into the upper bound of the new hB and therefore now hB
     // is bounded by lA, lB.
     merge_adjheaps(lB, rB);
-    merge_adjheaps(hB, tB);
-    merge_adjheaps(tA, B);
+    merge_page(hB, tB);
+    merge_sorted_contiguous(tA, B);
+  }
+
+  // XXX: find a better implementation
+  static void merge_page(Range pg, Range B) { merge_adjheaps(pg, B); }
+
+  // XXX: This might still fuck up wrt the pages.
+  static void merge_sorted_contiguous(Range A, Range B) {
+    std::inplace_merge(A.begin, A.end, B.end);
   }
 
   static void make_heap(Range A) {

@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 {
   fmt::print("Start!\n");
   test(10);
-  test(7000);
+  test(500000);
   // test<32>(1000);
   fmt::print("Success!\n");
   return 0;
