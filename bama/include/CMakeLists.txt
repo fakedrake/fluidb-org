@@ -46,5 +46,9 @@ target_link_libraries(test_record_map bama)
 
 add_executable(test_join test_join.cpp)
 target_link_libraries(test_join  bama )
+
+add_executable(test_query test_query.cpp)
+target_link_libraries(test_query bama)
+
 add_executable(test_heap_sort test_heap_sort.cpp)
 target_link_libraries(test_heap_sort  bama)
