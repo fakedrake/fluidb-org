@@ -189,7 +189,9 @@ forEachEpoch pl = do
 
 
 cppReportPerf :: [CC.Statement CC.CodeSymbol]
-cppReportPerf = _
+cppReportPerf = [
+  CC.FunctionAp "perf_report"
+                ]
 -- | The main function.
 getCppMain
   :: (AShow e,AShow s,CC.ExpressionLike e,Monad m,Eq e)
