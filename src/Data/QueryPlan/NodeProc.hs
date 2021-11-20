@@ -299,7 +299,7 @@ getPlanBndR Proxy extraStates cap ref = do
     $ runExceptT
     $ (`runReaderT` conf)
     $ (`runStateT` st0)
-    $ getBndR @w Proxy cap (states <> extraStates) ref of
+    $ getBndR @w Proxy cap (extraStates <> states) ref of
       Left e       -> throwError e
       Right (a,st) -> put st >> return a
 
