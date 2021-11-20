@@ -16,8 +16,8 @@ class Record38 {
   }
   bool operator==(const Record38& otherRec) const {
     return (otherRec.sortElem0 == sortElem0 && otherRec.sortElem1 == sortElem1);
-  bool operator!=(const Record38& otherRec) const {
   }
+  bool operator!=(const Record38& otherRec) const {
     return (otherRec.sortElem0 != sortElem0 || otherRec.sortElem1 != sortElem1);
   }
   unsigned sortElem0;

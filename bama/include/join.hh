@@ -246,16 +246,18 @@ class MergeJoin {
             outstanding_right = true;
           } else {
             outstanding_right = false;
+            goto i_want_out;
           }
         }
 
         if (left.hasNext()) {
           left.nextRecord();
         } else {
-          break;
+          goto i_want_out;
         }
       }
 
+i_want_out:
       if (outstanding_right)
         WITH(right_antijoin_file, right_antijoin.write(right_record));
       if (outstanding_left)
