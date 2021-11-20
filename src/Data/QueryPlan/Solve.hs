@@ -468,7 +468,7 @@ isDeletable ref = do
   trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
-    _              -> Mat.isMaterializable [ref] ref
+    _              -> withNoMat ref $ Mat.isMaterializable [] ref
   trM $ "[After] isDeletable" <: (ref,isd)
   return isd
 
