@@ -18,58 +18,59 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Data.NodeContainers
-  ( pattern N
-  , NodeRef(..)
-  , NodeSet(..)
-  , RefMap(..)
-  , refSingleton
-  , refRestrictKeys
-  , refIsSubmapOfBy
-  , refIntersectionWithKey
-  , refSplitLookup
-  , refSplit
-  , refMapMaybe
-  , refLU
-  , refKeys
-  , refMember
-  , refMapKeys
-  , refMapKeysMonotonic
-  , refUnion
-  , refMapElems
-  , refIntersection
-  , refInsert
-  , refFromNodeSet
-  , refAdjust
-  , refMapWithKey
-  , refDelete
-  , refAssocs
-  , refFromAssocs
-  , refTraverseWithKey
-  , refMergeWithKey
-  , fromRefAssocs
-  , refNull
-  , refMergeWithKeyA
-  , refUnionWithKey
-  , refUnionWithKeyA
-  , refAlter
-  , nsToRef
-  , nsNull
-  , nsMap
-  , nsInsert
-  , nsDifference
-  , nsDelete
-  , nsFindDeleteMax
-  , nsMember
-  , toNodeList
-  , toAscNodeList
-  , fromNodeList
-  , nsSingleton
-  , traverseRefMap
-  , refToNodeSet
-  , nsDisjoint
-  , nsIsSubsetOf
-  , nsFold
-  ,refLookupMax,nsSize) where
+  (pattern N
+  ,NodeRef(..)
+  ,NodeSet(..)
+  ,RefMap(..)
+  ,refSingleton
+  ,refRestrictKeys
+  ,refIsSubmapOfBy
+  ,refIntersectionWithKey
+  ,refSplitLookup
+  ,refSplit
+  ,refMapMaybe
+  ,refLU
+  ,refKeys
+  ,refMember
+  ,refMapKeys
+  ,refMapKeysMonotonic
+  ,refUnion
+  ,refMapElems
+  ,refIntersection
+  ,refInsert
+  ,refFromNodeSet
+  ,refAdjust
+  ,refMapWithKey
+  ,refDelete
+  ,refAssocs
+  ,refFromAssocs
+  ,refTraverseWithKey
+  ,refMergeWithKey
+  ,fromRefAssocs
+  ,refNull
+  ,refMergeWithKeyA
+  ,refUnionWithKey
+  ,refUnionWithKeyA
+  ,refAlter
+  ,nsToRef
+  ,nsNull
+  ,nsMap
+  ,nsInsert
+  ,nsDifference
+  ,nsDelete
+  ,nsFindDeleteMax
+  ,nsMember
+  ,toNodeList
+  ,toAscNodeList
+  ,fromNodeList
+  ,nsSingleton
+  ,traverseRefMap
+  ,refToNodeSet
+  ,nsDisjoint
+  ,nsIsSubsetOf
+  ,nsFold
+  ,refLookupMax
+  ,nsSize) where
 
 import           Control.Arrow            (first, (***))
 import           Control.Monad.Identity
@@ -139,8 +140,15 @@ newtype RefMap n v = RefMap { runRefMap :: IntMap v }
 instance AShow b => AShow (RefMap a b)
 instance ARead b => ARead (RefMap a b)
 instance Default (RefMap a b)
-instance Semigroup (RefMap a b) where (<>) = RefMap ... mappend `on` runRefMap
-instance Monoid (RefMap a b) where mempty = RefMap mempty
+
+-- We keep the values of the rightmost:
+--
+-- > refFromAssocs [(1,"a"),(2,"b")] <> refFromAssocs [(1,"a'"),(2,"b'")]
+-- RefMap {runRefMap = fromList [(1,"a'"),(2,"b'")]}
+instance Semigroup (RefMap a b) where
+  RefMap a <> RefMap b = RefMap $ b <> a
+instance Monoid (RefMap a b) where
+  mempty = RefMap mempty
 
 instance Hashable a => Hashable (RefMap n a)
 instance Hashable (NodeRef a)

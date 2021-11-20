@@ -1,6 +1,6 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash
-set -e
+set -ex
 
 stack build -j 4 fluidb:bench:benchmark
 stack build -j 4 fluidb:bench:baseline

@@ -54,7 +54,7 @@ instance ArrowTransformer (WriterArrow w) where
 
 instance (Monoid w,Arrow c,Profunctor c) => Category (WriterArrow w c) where
   WriterArrow bc . WriterArrow ab =
-    WriterArrow $ rmap (\(s,(s',x)) -> (s <> s',x)) $ ab >>> second bc
+    WriterArrow $ rmap (\(sab,(sbc,x)) -> (sab <> sbc,x)) $ ab >>> second bc
   id = WriterArrow $ rmap (mempty,) id
   {-# INLINE (.) #-}
   {-# INLINE id #-}
