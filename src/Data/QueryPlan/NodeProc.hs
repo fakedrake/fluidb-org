@@ -292,14 +292,17 @@ getPlanBndR
   -> NodeRef n
   -> PlanT t n m (BndR w)
 getPlanBndR Proxy extraStates cap ref = do
-  states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
+  states0 <- gets $ fmap isMat . nodeStates . NEL.head . epochs
+  let states = states0 <> extraStates
+  forM_ (refAssocs extraStates) $ \(ref,st) ->
+    when (refLU ref states /= Just st) $ throwPlan "Bad state"
   st0 <- get
   conf <- ask
   case runIdentity
     $ runExceptT
     $ (`runReaderT` conf)
     $ (`runStateT` st0)
-    $ getBndR @w Proxy cap (states <> extraStates) ref of
+    $ getBndR @w Proxy cap states ref of
       Left e       -> throwError e
       Right (a,st) -> put st >> return a
 
