@@ -204,14 +204,14 @@ readGraph gpath m = do
 #endif
 
 workload :: [(WIndex, QueryId)]
-workload = take 8 $ zip [1 ..] $ cycle [1 .. 12]
+workload = take 30 $ zip [1 ..] $ cycle [1 .. 12]
 
 workload1 :: [(WIndex, QueryId)]
 workload1 = zip [1 ..] [1 .. 12]
 
 ssbMainWorkload :: IO ()
 ssbMainWorkload = do
-  let secs = 60
+  let secs = 2 * 60
   putStrLn "Building normal workload..."
   timeout (secs * 1000000) (actualMain "main" Verbose workload) >>= \case
     Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
