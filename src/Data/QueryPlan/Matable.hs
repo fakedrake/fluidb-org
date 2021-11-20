@@ -9,7 +9,8 @@ import           Data.QueryPlan.AntisthenisTypes
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Types
 
-isMaterializable :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
+isMaterializable
+  :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
 isMaterializable noMats ref = do
   res <- getPlanBndR
     @(MatParams n)

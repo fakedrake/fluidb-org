@@ -128,7 +128,7 @@ nodeStatePair ref = (\x -> (ref,isMat x)) <$> getNodeState ref
 instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcGetMech Proxy ref = do
     x <- nodeStatePair ref
-    trM $ "Lu" <: x
+    trM $ "Lu mech" <: x
     gets $ refLU ref . matableMechMap
   mcPutMech Proxy ref m = modify $ \gsc ->
     gsc { matableMechMap = refInsert ref m $ matableMechMap gsc }

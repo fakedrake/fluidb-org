@@ -455,8 +455,7 @@ safeDelInOrder requiredPages _hc nsOrd =
       if canStillDel then toDel ref else toConcr ref
     toDel :: NodeRef n -> PlanT t n m PageNum
     toDel ref = do
-      delDepMatCache ref
-      ref `setNodeStateUnsafe` Concrete Mat NoMat
+      ref `setNodeStateSafe` NoMat
       totalNodePages ref
     toConcr :: NodeRef n -> PlanT t n m PageNum
     toConcr ref = do
