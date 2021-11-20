@@ -469,8 +469,8 @@ isDeletable ref = do
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
     st              -> do
-      r0 <- withNoMat ref $ Mat.isMaterializable [] ref
-      -- r0 <- Mat.isMaterializable [ref] ref
+      -- r0 <- withNoMat ref $ Mat.isMaterializable [] ref
+      r0 <- Mat.isMaterializable [ref] ref
       -- when (r0 /= r1) $ throwPlan $ "Deletion is ambiguous for " ++ show ref
       -- st' <- getNodeState ref
       -- when (st /= st') $ throwPlan $ "Fucked the node state: " ++ show (ref,st,st')
