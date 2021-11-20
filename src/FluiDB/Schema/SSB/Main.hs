@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 module FluiDB.Schema.SSB.Main (ssbMainWorkload, ssbMainIndiv) where
 
-import           CmdLineParser             (getArg)
 import           Control.Monad.Except
 import           Control.Monad.Identity
 import           Control.Monad.State
@@ -57,20 +56,26 @@ shouldRender :: Verbosity -> Bool
 shouldRender Verbose = True
 shouldRender Quiet   = False
 
-runQuery :: Verbosity -> WIndex -> SSBQuery -> SSBGlobalSolveM [Transition T N]
-runQuery verbosity windex  query = do
+type WLabel  = String
+runQuery
+  :: WLabel
+  -> Verbosity
+  -> WIndex
+  -> SSBQuery
+  -> SSBGlobalSolveM [Transition T N]
+runQuery lbl verbosity windex query = do
   cppConf <- gets globalQueryCppConf
   aquery <- annotateQuerySSB cppConf query
   (transitions,cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
-      (intermPath, queryPath,pngPath,grPath) <- renderGraph query
+      (intermPath,queryPath,pngPath,grPath) <- renderGraph query
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
       liftIO $ putStrLn $ "Inspect the graph at: " ++ pngPath
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath
       liftIO $ putStrLn $ "The reperoire of intermediates: " ++ intermPath
   -- liftIO $ runCpp cppCode
   liftIO $ putStrLn $ ashow transitions
-  storeCpp windex cppCode
+  storeCpp lbl windex cppCode
   return transitions
 
 type Seconds = Double
@@ -87,12 +92,12 @@ getSecs = do
   t <- getSecsI
   return $ t - t0
 
-storeCpp :: WIndex -> CppCode -> SSBGlobalSolveM ()
-storeCpp i cpp = do
-  budgetM <- gets $  budget . globalGCConfig
+storeCpp :: WLabel -> WIndex -> CppCode -> SSBGlobalSolveM ()
+storeCpp lbl i cpp = do
+  -- budgetM <- gets $  budget . globalGCConfig
   lift2 $ do
     tmp <- getTemporaryDirectory
-    let workloadDir = "workload"
+    let workloadDir = "workload-" ++ lbl
     -- let workloadDir = printf "workload-%s" $ maybe "unlimited" show budgetM
     let dir = tmp </> "fluidb-data" </> workloadDir
     createDirectoryIfMissing True dir
@@ -110,11 +115,11 @@ ssbRunGlobalSolve m = do
   runGlobalSolve ssbGlobalConf (softFail . ashow) $ void m
 
 #ifdef EXAMPLE
-singleQuery :: IO ()
-singleQuery =
+singleQuery :: WLabel -> IO ()
+singleQuery lbl =
   void
   $ ssbRunGlobalSolve
-  $ runQuery 0 Verbose
+  $ runQuery lbl 0 Verbose
   $ ssbParse
   $ unwords
     ["select c_city, s_city, d_year, sum(lo_revenue) as revenue"
@@ -132,8 +137,8 @@ singleQuery =
 data Verbosity = Verbose | Quiet
 type QueryId = Int
 type WIndex = Int
-actualMain :: Verbosity -> [(WIndex,QueryId)] -> IO ()
-actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
+actualMain :: WLabel -> Verbosity -> [(WIndex,QueryId)] -> IO ()
+actualMain lbl verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
   mats <- globalizePlanT $ do
     ns <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
     mapM (\n -> (n,) <$> totalNodePages n) ns
@@ -142,7 +147,7 @@ actualMain verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
-      _transitions <- runQuery verbosity wi query
+      _transitions <- runQuery lbl verbosity wi query
       pgs <- globalizePlanT getDataSize
       lift2 $ putStrLn $ "Pages used: " ++ show pgs
 
@@ -208,7 +213,7 @@ ssbMainWorkload :: IO ()
 ssbMainWorkload = do
   let secs = 60
   putStrLn "Building normal workload..."
-  timeout (secs * 1000000) $ actualMain Verbose workload >>= \case
+  timeout (secs * 1000000) (actualMain "main" Verbose workload) >>= \case
     Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
     Just () -> putStrLn "Done!"
 
@@ -216,7 +221,7 @@ ssbMainIndiv :: IO ()
 ssbMainIndiv = do
   let secs = 60
   putStrLn "Building individuals..."
-  timeout (secs * 1000000) $ forM_ workload1 $ \w -> do
-    actualMain Verbose [w] >>= \case
-      Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
-      Just () -> putStrLn "Done!"
+  timeout (secs * 1000000) (forM_ workload1 $ \w ->
+                            actualMain "indiv" Verbose [w]) >>= \case
+    Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
+    Just () -> putStrLn "Done!"

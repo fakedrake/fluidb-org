@@ -59,6 +59,7 @@ import           Data.Codegen.Build.Constructors
 import           Data.Codegen.Build.Monads
 import           Data.Codegen.Build.UpdateMatShapes
 import           Data.Codegen.TriggerCode
+import           Data.CppAst                        (Expression (FunctionAp))
 import qualified Data.CppAst                        as CC
 import           Data.Either
 import qualified Data.HashSet                       as HS
@@ -189,7 +190,8 @@ forEachEpoch pl = do
 
 
 cppReportPerf :: [CC.Statement CC.CodeSymbol]
-cppReportPerf = []
+cppReportPerf = [CC.ExpressionSt $ CC.FunctionAp "report_counters" [] []]
+
 -- | The main function.
 getCppMain
   :: (AShow e,AShow s,CC.ExpressionLike e,Monad m,Eq e)
