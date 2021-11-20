@@ -287,10 +287,11 @@ getPlanBndR
   ,IsPlanParams w n
   ,Monad m)
   => Proxy w
+  -> RefMap n Bool
   -> Cap (ExtCap (MetaTag w))
   -> NodeRef n
   -> PlanT t n m (BndR w)
-getPlanBndR Proxy cap ref = do
+getPlanBndR Proxy extraStates cap ref = do
   states <- gets $ fmap isMat . nodeStates . NEL.head . epochs
   st0 <- get
   conf <- ask
@@ -298,7 +299,7 @@ getPlanBndR Proxy cap ref = do
     $ runExceptT
     $ (`runReaderT` conf)
     $ (`runStateT` st0)
-    $ getBndR @w Proxy cap states ref of
+    $ getBndR @w Proxy cap (states <> extraStates) ref of
       Left e       -> throwError e
       Right (a,st) -> put st >> return a
 
@@ -314,10 +315,9 @@ getBndR
   -> NodeRef n
   -> m (BndR w) -- (Maybe (MechVal w))
 getBndR _ cap states ref = wrapTr $ do
-  res <- satisfyComputability @m @w ref (getOrMakeMech ref)
+  satisfyComputability @m @w ref (getOrMakeMech ref)
     $ Conf
     { confCap = cap,confEpoch = def { peParams = states },confTrPref = () }
-  return res
   where
     -- case res of
     --   BndRes (Sum (Just r)) -> return $ Just r

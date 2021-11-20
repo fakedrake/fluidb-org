@@ -468,10 +468,11 @@ isDeletable ref = do
   trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
-    _              -> withNoMat ref $ Mat.isMaterializable ref
+    _              -> Mat.isMaterializable [ref] ref
   trM $ "[After] isDeletable" <: (ref,isd)
   return isd
 
+-- | XXX: we are dropping the machines
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a
 withNoMat ref m = do
   st <- get
