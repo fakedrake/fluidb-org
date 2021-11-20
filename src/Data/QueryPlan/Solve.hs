@@ -195,7 +195,7 @@ setNodeStateSafe' getFwdOp node goalState =
         Mat -> node `setNodeStateUnsafe` Concrete Mat Mat
         NoMat -> do
           node `setNodeStateUnsafe` Concrete Mat NoMat
-          Mat.isMaterializable node
+          Mat.isMaterializable [] node
             >>= guardl ("not materializable, can't delete " ++ ashow node)
           delDepMatCache node
           putDelNode node
