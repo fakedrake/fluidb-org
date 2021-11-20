@@ -7,4 +7,4 @@ stack --work-dir .branches-stack-dir/ build -j 4 --ghc-options -DVERBOSE_SOLVING
 echo "Running readdump"
 rm -r /tmp/benchmark.out.bench_branches
 mkdir -p /tmp/benchmark.out.bench_branches
-stack run fluidb:exe:readdump
+stack exec readdump
