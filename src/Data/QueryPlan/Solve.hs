@@ -468,18 +468,20 @@ isDeletable ref = do
   trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
-    _              -> withNoMat ref $ Mat.isMaterializable [] ref
+    _              -> do
+      r0 <- withNoMat ref $ Mat.isMaterializable [] ref
+      r1 <- Mat.isMaterializable [ref] ref
+      when (r0 /= r1) $ throwPlan $ "Deletion is ambiguous for " ++ show ref
+      return r0
   trM $ "[After] isDeletable" <: (ref,isd)
   return isd
 
 -- | XXX: we are dropping the machines
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a
 withNoMat ref m = do
-  -- st <- get
-  mst <- getNodeState ref
+  st <- get
   delDepMatCache ref
   ref `setNodeStateUnsafe` Concrete Mat NoMat
   ret <- m
-  setNodeStateUnsafe ref mst
-  -- put st
+  put st
   return ret
