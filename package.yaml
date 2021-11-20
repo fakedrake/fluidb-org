@@ -91,9 +91,19 @@ library:
     # [r|a raw string with newlines|]
 
 benchmarks:
+  # The entire worklad
   benchmark:
     main: Main.hs
     source-dirs: tools/Benchmark
+    ghc-options: -rtsopts -O2
+    dependencies:
+      - base >= 4.7 && < 5
+      - ghc >= 8.6.5
+      - fluidb
+
+  baseline:
+    main: Main.hs
+    source-dirs: tools/Baseline
     ghc-options: -rtsopts -O2
     dependencies:
       - base >= 4.7 && < 5

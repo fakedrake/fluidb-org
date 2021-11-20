@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-deferred-type-errors #-}
-module FluiDB.Schema.SSB.Main (ssbMain) where
+module FluiDB.Schema.SSB.Main (ssbMainWorkload, ssbMainIndiv) where
 
 import           CmdLineParser             (getArg)
 import           Control.Monad.Except
@@ -198,15 +198,25 @@ readGraph gpath m = do
     Just g  -> evalStateT m def{gbPropNet = g}
 #endif
 
-ssbMain :: IO ()
-ssbMain = do
-  -- let oneGig = ResourceLimit 1000000000
-  -- setResourceLimit ResourceDataSize (ResourceLimits oneGig oneGig)
+workload :: [(WIndex, QueryId)]
+workload = take 30 $ zip [1 ..] $ cycle [1 .. 12]
+
+workload1 :: [(WIndex, QueryId)]
+workload1 = zip [1 ..] [1 .. 12]
+
+ssbMainWorkload :: IO ()
+ssbMainWorkload = do
   let secs = 60
-  traceTM "Starting!"
-  timeout
-    (secs * 1000000)
-    (actualMain Verbose $ take 30 $ zip [1 ..] $ cycle [1 .. 12])
-    >>= \case
+  putStrLn "Building normal workload..."
+  timeout (secs * 1000000) $ actualMain Verbose workload >>= \case
+    Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
+    Just () -> putStrLn "Done!"
+
+ssbMainIndiv :: IO ()
+ssbMainIndiv = do
+  let secs = 60
+  putStrLn "Building individuals..."
+  timeout (secs * 1000000) $ forM_ workload1 $ \w -> do
+    actualMain Verbose [w] >>= \case
       Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
       Just () -> putStrLn "Done!"
