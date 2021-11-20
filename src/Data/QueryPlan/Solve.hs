@@ -108,7 +108,7 @@ haltPlanCost
 haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
   frefs <- gets $ toNodeList . frontier
   costs <- forM frefs $ \ref -> do
-    cost <- getPlanBndR @(CostParams CostTag n) Proxy ForceResult ref
+    cost <- getPlanBndR @(CostParams CostTag n) Proxy mempty ForceResult ref
     case cost of
       BndRes (Sum (Just r)) -> return $ pcCost r
       BndRes (Sum Nothing) -> throwPlan $ "Infinite cost: " ++ ashow ref

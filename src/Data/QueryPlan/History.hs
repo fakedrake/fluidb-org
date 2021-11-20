@@ -20,7 +20,6 @@ import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.PlanMech
 import           Data.QueryPlan.Types
 import           Data.Utils.AShow
-import           Data.Utils.Debug
 import           Data.Utils.ListT
 import           Data.Utils.Nat
 
@@ -52,7 +51,12 @@ pastCosts maxCost = do
   lift $ trM $ "History size: " ++ ashow (length qs)
   q <- mkListT $ return $ take 3 qs
   res <- lift
-    $ getPlanBndR @(CostParams HistTag n) Proxy (CapVal $ maxCap maxCost) q
+    $ getPlanBndR
+      @(CostParams HistTag n)
+      Proxy
+      mempty
+      (CapVal $ maxCap maxCost)
+      q
   case res of
     BndRes (Sum (Just r)) -> return $ Just r
     BndRes (Sum Nothing) -> return Nothing
