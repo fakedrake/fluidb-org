@@ -147,14 +147,13 @@ class File {
     }
 
     void writePage(page_num_t o, const page_type& p) {
-        require(is_open, "File not open (" + filename +")");
-        require(::lseek(descriptor, PAGE_SIZE*o, SEEK_SET) != -1,
-                "Could not seek in file for write (" + filename + ").");
-        ssize_t bytes_written =
-                ::write(descriptor, (void*) &p, PAGE_SIZE);
-        require(bytes_written != -1 && (byte_num_t) bytes_written == PAGE_SIZE,
-                "Could not write page contents.");
-        increment_writes(PAGE_SIZE / cacheline_size);
+      require(is_open, "File not open (" + filename + ")");
+      require(::lseek(descriptor, PAGE_SIZE * o, SEEK_SET) != -1,
+              "Could not seek in file for write (" + filename + ").");
+      ssize_t bytes_written = ::write(descriptor, (void*)&p, PAGE_SIZE);
+      require(bytes_written != -1 && (byte_num_t)bytes_written == PAGE_SIZE,
+              "Could not write page contents.");
+      increment_writes(PAGE_SIZE / cacheline_size);
     }
 
     page_num_t bulkRead(page_num_t off, page_type* pages, page_num_t page_num) {

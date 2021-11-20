@@ -18,8 +18,6 @@ add_library(bama INTERFACE
   record_map.hh
   projection.hh
   print_record.hh
-  perf.data.old
-  perf.data
   page.hh
   merge_join.hh
   limit.hh
