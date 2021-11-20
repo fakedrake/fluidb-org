@@ -475,9 +475,11 @@ isDeletable ref = do
 -- | XXX: we are dropping the machines
 withNoMat :: Monad m => NodeRef n -> PlanT t n m a -> PlanT t n m a
 withNoMat ref m = do
-  st <- get
+  -- st <- get
+  mst <- getNodeState ref
   delDepMatCache ref
   ref `setNodeStateUnsafe` Concrete Mat NoMat
   ret <- m
-  put st
+  setNodeStateUnsafe ref mst
+  -- put st
   return ret
