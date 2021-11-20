@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies      #-}
 module Data.QueryPlan.PlanMech (PlanMech(..),MetaTag) where
 
+import           Control.Antisthenis.ATL.Class.Functorial
 import           Control.Antisthenis.ATL.Transformers.Mealy
 import           Control.Antisthenis.Bool
 import           Control.Antisthenis.Convert
@@ -76,7 +77,8 @@ class Monad m => PlanMech m w n where
   mcMkCost :: Proxy (m (),w) -> NodeRef n -> Cost -> MechVal (MetaTag w)
 
   -- Modify cost machine if the ref is materialized.
-  mcIsMatProc :: Proxy (m (),w) -> NodeRef n -> ArrProc w m -> ArrProc w m
+  mcIsMatProc
+    :: Proxy (m (),w) -> NodeRef n -> ArrProc w m -> ArrProc w m -> ArrProc w m
   mcCompStackVal :: Proxy (m ()) -> NodeRef n -> BndR w
 
   -- | Check if a value counts as being computable. In most cases
@@ -114,7 +116,7 @@ class Monad m => PlanMech m w n where
 instance Embed (Min (PlanCost n)) (Min (PlanCost n))
 -- | Make a plan for a node to be concrete.
 instance PlanMech (PlanT t n Identity) (CostParams CostTag n) n where
-  mcIsMatProc Proxy _ref _proc = arr $ const $ BndRes zero
+  mcIsMatProc Proxy _ref nxt _proc = arr $ const $ BndRes zero
   mcGetMech Proxy ref = gets $ refLU ref . gcMechMap
   mcPutMech Proxy ref m =
     modify $ \gsc -> gsc { gcMechMap = refInsert ref m $ gcMechMap gsc }
@@ -132,7 +134,10 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
     gets $ refLU ref . matableMechMap
   mcPutMech Proxy ref m = modify $ \gsc ->
     gsc { matableMechMap = refInsert ref m $ matableMechMap gsc }
-  mcIsMatProc Proxy _ref _proc = arr $ const $ BndRes $ BoolV True
+  mcIsMatProc Proxy _ref nxt _p = go
+    where
+      go = MealyArrow $ fromKleisli $ const $ do
+        return (nxt,BndRes $ BoolV True)
   -- | The NodeProc system registers the cycle as noncomp in the
   -- coepoch.
   mcMkCost = error "We dont' make costs for Bool (materializable) mech"

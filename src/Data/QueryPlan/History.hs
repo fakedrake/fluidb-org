@@ -68,8 +68,8 @@ pastCosts maxCost = do
 -- calculated by imposing a scaling on the cost it would have if it
 -- were not materialized. This opens the door to an explosion in
 -- computation.
-isMatCost :: forall t n . NodeRef n -> HistProc t n -> HistProc t n
-isMatCost _ref matCost0 = wrapMealy matCost0 $ \conf matCost -> if isTooDeep
+isMatCost :: forall t n . NodeRef n -> HistProc t n -> HistProc t n -> HistProc t n
+isMatCost _ref _nxt matCost0 = wrapMealy matCost0 $ \conf matCost -> if isTooDeep
   conf then zeroRes matCost else do
   -- "Mat historical" <<: ref
   let conf0 = mapCap unscaleCap conf

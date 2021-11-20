@@ -73,7 +73,10 @@ mkNewMech
   -> ArrProc w m
 mkNewMech ref =
   asSelfUpdating
-  $ ifMaterialized ref (mcIsMatProc @m Proxy ref newProcess) newProcess
+  $ ifMaterialized
+    ref
+    (mcIsMatProc @m Proxy ref (getOrMakeMech ref) newProcess)
+    newProcess
   where
     newProcess :: ArrProc w m
     newProcess = mcMkProcess getOrMakeMech ref
@@ -214,8 +217,7 @@ getOrMakeMech
   => NodeRef n
   -> ArrProc w m
 getOrMakeMech ref = squashMealy $ \conf -> do
-  mechM :: Maybe (ArrProc w m)
-    <- lift $ mcGetMech @m Proxy ref
+  mechM :: Maybe (ArrProc w m) <- lift $ mcGetMech @m Proxy ref
   let conf' = unmarkComputable ref conf
   lift $ mcPutMech @m Proxy ref $ cycleProc @w ref
   return (conf',fromMaybe (mkNewMech ref) mechM)
