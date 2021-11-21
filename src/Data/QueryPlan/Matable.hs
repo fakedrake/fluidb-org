@@ -32,10 +32,9 @@ isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
 isMaterializableSlow dels = go
   where
-    go ref = if ref `elem` dels then return False else go0 ref
-    go0 ref = do
+    go ref = do
       ism <- isMat <$> getNodeState ref
-      if ism then return True else checkMats ref
+      if ism && ref `notElem` dels then return True else checkMats ref
     checkMats ref = do
       neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
         $ findCostedMetaOps ref
