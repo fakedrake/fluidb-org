@@ -231,8 +231,8 @@ setNodesMatSafe deps = do
   mapM_ (`setNodeStateSafe` Mat) $ fmap trd3 ret ++ matDeps
 
 -- | Split on each different style of materialization.
-splitOnOutMaterialization :: MonadLogic m =>
-                            NodeRef n -> MetaOp t n -> PlanT t n m ()
+splitOnOutMaterialization
+  :: MonadLogic m => NodeRef n -> MetaOp t n -> PlanT t n m ()
 splitOnOutMaterialization ref forwardMop = do
   ref `setNodeStateUnsafe` Concrete NoMat Mat
   rMops <- reverseMops forwardMop
@@ -437,6 +437,9 @@ killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
   ds <- delSets nsUnord
   safeDelInOrder requiredPages ds
 
+
+-- | Try to delete the node groups in the order they are presented
+-- until the required pages are freed.
 safeDelInOrder
   :: forall t n m .
   MonadLogic m
@@ -458,8 +461,9 @@ safeDelInOrder requiredPages nsOrd =
       if canStillDel then sum <$> mapM toDelMaybe refs else return 0
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
     toDelMaybe ref = do
+      wasMat <- isMat <$> getNodeState ref
       ref `setNodeStateSafe` NoMat
-      totalNodePages ref
+      if wasMat then totalNodePages ref else return 0
 
 isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
 isDeletable ref = do
