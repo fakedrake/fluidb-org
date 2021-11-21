@@ -67,7 +67,7 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   -- curateTransitions
   cost <- totalTransitionCost
   size <- getDataSize
-  trM
+  traceM
     $ printf
       "Successfully materialized %s -- cost: %s, totalsize : %s"
       (show node)
