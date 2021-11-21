@@ -241,7 +241,7 @@ splitOnOutMaterialization ref forwardMop = do
     -- is similar to the case where we materialize the complementary
     -- nodes and then garbage collect them but note that they will be
     -- deleted only after a new epoch.
-    _  -> mapM_ makeTriggerableUnsafe rMopsNotNoop `lsplit` top
+    _  -> mapM_ makeTriggerableUnsafe rMopsNotNoop `eitherl` top
 
 isTriggerable :: MonadLogic m => MetaOp t n -> PlanT t n m Bool
 isTriggerable mop = all isMat <$> mapM getNodeState (toNodeList $ metaOpIn mop)
@@ -470,6 +470,6 @@ isDeletable ref = do
   trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
-    _              -> Mat.isMaterializableSlow [ref] ref
+    _x             -> Mat.isMaterializableSlow [ref] ref
   trM $ "[After] isDeletable" <: (ref,isd)
   return isd
