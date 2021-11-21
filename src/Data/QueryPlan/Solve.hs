@@ -43,12 +43,14 @@ import           Data.Utils.Tup
 
 import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
+import           Data.QueryPlan.GC
 import           Data.QueryPlan.HistBnd
 import           Data.QueryPlan.Matable          as Mat
 import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
 import           Data.Utils.AShow.Print
+import           Data.Utils.Functors
 import           Data.Utils.HCntT
 import           Data.Utils.Nat
 
@@ -87,11 +89,12 @@ haltPlan matRef mop = do
   modify $ \gcs -> gcs
     { frontier = nsDelete matRef (frontier gcs) <> metaOpIn mop }
   extraCost <- metaOpCost [matRef] mop
-  void $ haltPlanCost Nothing extraCost
+  void $ haltPlanCost extraCost
 
 histCosts :: Monad m => Cost -> PlanT t n m Cost
 histCosts maxCost = do
   hcs :: [Maybe (HistVal Cost)] <- takeListT 3 $ pastCosts maxCost
+  trM $ printf "Historical costs: %s" $ ashowLine $ ashow hcs
   -- Curate the consts that are too likely to be non-comp
   return $ mconcat $ mapMaybe (>>= toCost) hcs
   where
@@ -102,10 +105,9 @@ histCosts maxCost = do
 haltPlanCost
   :: forall t n m .
   (HaltKey m ~ PlanSearchScore,MonadHalt m,HasCallStack)
-  => Maybe Cost
-  -> Cost
+  => Cost
   -> PlanT t n m Cost
-haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
+haltPlanCost concreteCost = wrapTrM "haltPlanCost" $ do
   frefs <- gets $ toNodeList . frontier
   costs <- forM frefs $ \ref -> do
     cost <- getPlanBndR @(CostParams CostTag n) Proxy mempty ForceResult ref
@@ -123,7 +125,6 @@ haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   hc <- histCosts $ concreteCost <> mconcat costs
   trM $ printf "Halt%s: %s" (show frefs) $ show concreteCost
-  trM $ printf "Historical costs: %s" $ ashowLine $ ashow hc
   halt
     $ PlanSearchScore
       (fromIntegral $ costAsInt concreteCost)
@@ -327,7 +328,7 @@ garbageCollectFor
 garbageCollectFor
   ns = wrapTrM ("garbageCollectFor " ++ show ns) $ withGC $ \requiredPages -> do
   preReport
-  hc <- haltPlanCost Nothing zero
+  hc <- haltPlanCost zero
   go requiredPages hc `eitherl` (newEpoch >> go requiredPages hc)
   trM $ "Finished GC to make " ++ show ns
   where
@@ -430,32 +431,29 @@ killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
   nsSized <- forM nsUnord $ \ref -> (,ref) <$> totalNodePages ref
   guardl "Not enough deletable nodes"
     $ sum (fst <$> nsSized) > requiredPages
-  let nsOrd = sortOn fst nsSized
-  safeDelInOrder requiredPages hc nsOrd
+  ds <- delSets nsUnord
+  safeDelInOrder requiredPages ds
 
--- XXX: We want to prefer deleting isolated nodes to deleting just one
--- of the siblings. Either delete all of them or just the one
 safeDelInOrder
   :: forall t n m .
   MonadLogic m
   => PageNum
-  -> Cost
-  -> [(PageNum, NodeRef n)]
+  -> [[NodeRef n]]
   -> PlanT t n m PageNum
-safeDelInOrder requiredPages _hc nsOrd =
+safeDelInOrder requiredPages nsOrd =
   wrapTrM ("safeDelInOrder " ++ show nsOrd) $ delRefs 0 [] nsOrd
   where
     delRefs
-      :: PageNum -> [NodeRef n] -> [(PageNum,NodeRef n)] -> PlanT t n m PageNum
+      :: PageNum -> [[NodeRef n]] -> [[NodeRef n]] -> PlanT t n m PageNum
     delRefs freed _prev [] = return freed
-    delRefs freed prev ((size,ref):rest) = do
-      extraFree <- delOrConcreteMat size ref
+    delRefs freed prev (refs:rest) = do
+      extraFree <- delOrConcreteMat refs
       if freed + extraFree > requiredPages then return $ freed + extraFree
-        else delRefs (freed + extraFree) (ref : prev) rest
-    delOrConcreteMat size ref = do
-      canStillDel <- isDeletable ref
-      trM $ "Considering deletion: " ++ show (ref,size,canStillDel)
-      if canStillDel then toDelMaybe ref else toConcr ref
+        else delRefs (freed + extraFree) (refs : prev) rest
+    delOrConcreteMat refs = do
+      canStillDel <- allM isDeletable refs
+      trM $ "Considering deletion: " ++ show (refs,canStillDel)
+      sum <$> mapM (if canStillDel then toDelMaybe else toConcr) refs
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
     toDelMaybe ref = do
       ref `setNodeStateSafe` NoMat
