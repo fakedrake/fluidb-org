@@ -50,7 +50,6 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.Types
 import           Data.QueryPlan.Utils
 import           Data.Utils.AShow.Print
-import           Data.Utils.Functors
 import           Data.Utils.HCntT
 import           Data.Utils.Nat
 
@@ -104,7 +103,6 @@ histCosts maxCost = do
   return $ mconcat $ mapMaybe (>>= toCost) hcs
   where
     toCost HistVal {..} = if hvNonComp > 0.6 then Nothing else Just hvVal
-
 
 -- | Compute the frontier cost and the historical costs.
 haltPlanCost
