@@ -11,7 +11,6 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
-import           Data.Utils.Debug
 import           Data.Utils.Functors
 
 isMaterializable
