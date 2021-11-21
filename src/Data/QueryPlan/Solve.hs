@@ -179,7 +179,7 @@ setNodeStateSafe' getFwdOp node goalState =
               trM $ "Materializing dependencies: " ++ show depset
               setNodesMatSafe depset
               trM $ "Intermediates: " ++ show interm
-              garbageCollectFor $ node : interm
+              once $ garbageCollectFor $ node : interm
               -- Automatically set the states of intermediates
               forM_ interm $ \ni -> do
                 prevState' <- getNodeState ni
@@ -433,6 +433,9 @@ killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
   let nsOrd = snd <$> sortOn fst nsSized
   safeDelInOrder requiredPages hc nsOrd
 
+
+-- XXX: We want to prefer deleting isolated nodes to deleting just one of
+-- the siblings.
 safeDelInOrder
   :: forall t n m .
   MonadLogic m
@@ -454,7 +457,7 @@ safeDelInOrder requiredPages _hc nsOrd =
       trM $ "Considering deletion: " ++ show (ref,canStillDel)
       if canStillDel then toDelMaybe ref  else toConcr ref
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
-    toDelMaybe ref = (`lsplit` return 0) $  do
+    toDelMaybe ref = (`lsplit` return 0) $ do
       ref `setNodeStateSafe` NoMat
       totalNodePages ref
     toConcr :: NodeRef n -> PlanT t n m PageNum

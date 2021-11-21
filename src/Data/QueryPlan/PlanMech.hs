@@ -129,15 +129,12 @@ nodeStatePair :: Monad m => NodeRef n -> PlanT t n m (NodeRef n,Bool)
 nodeStatePair ref = (\x -> (ref,isMat x)) <$> getNodeState ref
 instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcGetMech Proxy ref = do
-    x <- nodeStatePair ref
-    trM $ "Lu mech" <: x
     gets $ refLU ref . matableMechMap
   mcPutMech Proxy ref m = modify $ \gsc ->
     gsc { matableMechMap = refInsert ref m $ matableMechMap gsc }
-  mcIsMatProc Proxy _ref nxt _p = go
-    where
-      go = MealyArrow $ fromKleisli $ const $ do
-        return (nxt,BndRes $ BoolV True)
+  mcIsMatProc Proxy ref nxt _p = MealyArrow $ fromKleisli $ const $ do
+    lift $ trM $ "Mat" <: ref
+    return (nxt,BndRes $ BoolV True)
   -- | The NodeProc system registers the cycle as noncomp in the
   -- coepoch.
   mcMkCost = error "We dont' make costs for Bool (materializable) mech"
@@ -148,8 +145,6 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref
-    neigh' <- traverse2 nodeStatePair neigh
-    trM $ "Neighbors: " ++ show (ref,neigh')
     -- If the node is materialized const true, otherwise const
     -- false. The coepochs are updated by the caller, particularly by
     -- ifMaterialized. Since we got here here it means ref is not
