@@ -66,8 +66,13 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   setNodeStateSafe node Mat
   -- curateTransitions
   cost <- totalTransitionCost
+  size <- getDataSize
   trM
-    $ printf "Successfully materialized %s -- cost: %s" (show node) (show cost)
+    $ printf
+      "Successfully materialized %s -- cost: %s, totalsize : %s"
+      (show node)
+      (show cost)
+      (show size)
   reportBudget
 
 reportBudget :: Monad m => PlanT t n m ()
