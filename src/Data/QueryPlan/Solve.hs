@@ -443,8 +443,7 @@ safeDelInOrder
 safeDelInOrder requiredPages nsOrd =
   wrapTrM ("safeDelInOrder " ++ show nsOrd) $ delRefs 0 [] nsOrd
   where
-    delRefs
-      :: PageNum -> [[NodeRef n]] -> [[NodeRef n]] -> PlanT t n m PageNum
+    delRefs :: PageNum -> [[NodeRef n]] -> [[NodeRef n]] -> PlanT t n m PageNum
     delRefs freed _prev [] = return freed
     delRefs freed prev (refs:rest) = do
       extraFree <- delOrConcreteMat refs
@@ -453,15 +452,11 @@ safeDelInOrder requiredPages nsOrd =
     delOrConcreteMat refs = do
       canStillDel <- allM isDeletable refs
       trM $ "Considering deletion: " ++ show (refs,canStillDel)
-      sum <$> mapM (if canStillDel then toDelMaybe else toConcr) refs
+      if canStillDel then sum <$> mapM toDelMaybe refs else return 0
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
     toDelMaybe ref = do
       ref `setNodeStateSafe` NoMat
       totalNodePages ref
-    toConcr :: NodeRef n -> PlanT t n m PageNum
-    toConcr ref = do
-      ref `setNodeStateUnsafe` Concrete Mat Mat
-      return 0
 
 isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
 isDeletable ref = do
