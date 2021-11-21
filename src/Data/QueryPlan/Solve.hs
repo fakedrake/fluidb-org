@@ -430,32 +430,32 @@ killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
   nsSized <- forM nsUnord $ \ref -> (,ref) <$> totalNodePages ref
   guardl "Not enough deletable nodes"
     $ sum (fst <$> nsSized) > requiredPages
-  let nsOrd = snd <$> sortOn fst nsSized
+  let nsOrd = sortOn fst nsSized
   safeDelInOrder requiredPages hc nsOrd
 
-
--- XXX: We want to prefer deleting isolated nodes to deleting just one of
--- the siblings.
+-- XXX: We want to prefer deleting isolated nodes to deleting just one
+-- of the siblings. Either delete all of them or just the one
 safeDelInOrder
   :: forall t n m .
   MonadLogic m
   => PageNum
   -> Cost
-  -> [NodeRef n]
+  -> [(PageNum, NodeRef n)]
   -> PlanT t n m PageNum
 safeDelInOrder requiredPages _hc nsOrd =
   wrapTrM ("safeDelInOrder " ++ show nsOrd) $ delRefs 0 [] nsOrd
   where
-    delRefs :: PageNum -> [NodeRef n] -> [NodeRef n] -> PlanT t n m PageNum
+    delRefs
+      :: PageNum -> [NodeRef n] -> [(PageNum,NodeRef n)] -> PlanT t n m PageNum
     delRefs freed _prev [] = return freed
-    delRefs freed prev (ref:rest) = do
-      extraFree <- delOrConcreteMat ref
+    delRefs freed prev ((size,ref):rest) = do
+      extraFree <- delOrConcreteMat size ref
       if freed + extraFree > requiredPages then return $ freed + extraFree
         else delRefs (freed + extraFree) (ref : prev) rest
-    delOrConcreteMat ref = do
+    delOrConcreteMat size ref = do
       canStillDel <- isDeletable ref
-      trM $ "Considering deletion: " ++ show (ref,canStillDel)
-      if canStillDel then toDelMaybe ref  else toConcr ref
+      trM $ "Considering deletion: " ++ show (ref,size,canStillDel)
+      if canStillDel then toDelMaybe ref else toConcr ref
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
     toDelMaybe ref = (`lsplit` return 0) $ do
       ref `setNodeStateSafe` NoMat

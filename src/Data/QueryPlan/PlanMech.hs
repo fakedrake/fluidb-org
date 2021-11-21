@@ -141,7 +141,9 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   mcCompStackVal _ _n = BndRes $ BoolV False
   -- | Register only materialized nodes as dependencies. If we
   -- materialize a new node then no other nodes can become non-materialized.
-  mcShouldTell _ _ isMat0 = isMat0
+  --
+  -- OOPS: Non materialized nodes are non-materialized.
+  mcShouldTell _ _ _isMat0 = True
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
       $ findCostedMetaOps ref

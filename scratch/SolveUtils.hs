@@ -73,7 +73,6 @@ warmupCache node = do
       trM $ printf "Deps of %n: %s" node $ ashow xs
       mapM_ findMetaOps =<< asks (refKeys . nodeSizes)
 
-
 reportMatNodes :: Monad m => [NodeRef n] -> PlanT t n m a -> PlanT t n m a
 reportMatNodes deleted m = catchError m $ \e -> do
   mat <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
