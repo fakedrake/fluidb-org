@@ -179,7 +179,7 @@ setNodeStateSafe' getFwdOp node goalState =
               trM $ "Materializing dependencies: " ++ show depset
               setNodesMatSafe depset
               trM $ "Intermediates: " ++ show interm
-              once $ garbageCollectFor $ node : interm
+              garbageCollectFor $ node : interm
               -- Automatically set the states of intermediates
               forM_ interm $ \ni -> do
                 prevState' <- getNodeState ni
