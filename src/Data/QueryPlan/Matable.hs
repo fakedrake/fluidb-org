@@ -31,8 +31,7 @@ isMaterializable noMats ref = do
 
 isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
-isMaterializableSlow dels ref0 =
-  wrapTrace ("isMaterializableSlow" ++ show ref0) $ go mempty ref0
+isMaterializableSlow dels = go mempty
   where
     go cache ref = case ref `refLU` cache of
       Just v -> return v
