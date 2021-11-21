@@ -452,9 +452,9 @@ safeDelInOrder requiredPages _hc nsOrd =
     delOrConcreteMat ref = do
       canStillDel <- isDeletable ref
       trM $ "Considering deletion: " ++ show (ref,canStillDel)
-      if canStillDel then toDel ref else toConcr ref
-    toDel :: NodeRef n -> PlanT t n m PageNum
-    toDel ref = do
+      if canStillDel then toDelMaybe ref  else toConcr ref
+    toDelMaybe :: NodeRef n -> PlanT t n m PageNum
+    toDelMaybe ref = (`lsplit` return 0) $  do
       ref `setNodeStateSafe` NoMat
       totalNodePages ref
     toConcr :: NodeRef n -> PlanT t n m PageNum
@@ -468,8 +468,8 @@ isDeletable ref = do
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
     st              -> do
-      r0 <- withNoMat ref $ Mat.isMaterializable [] ref
-      -- r0 <- Mat.isMaterializable [ref] ref
+      -- r0 <- withNoMat ref $ Mat.isMaterializable [] ref
+      r0 <- Mat.isMaterializable [ref] ref
       -- when (r0 /= r1) $ throwPlan $ "Deletion is ambiguous for " ++ show ref
       -- st' <- getNodeState ref
       -- when (st /= st') $ throwPlan $ "Fucked the node state: " ++ show (ref,st,st')
