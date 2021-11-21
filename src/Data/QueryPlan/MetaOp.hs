@@ -184,8 +184,8 @@ filterTrnsOutputs = \case
         throwPlan $ "No materialized nodes out of: " ++ ashow (zip outs states)
 
 -- | Problematic when intermediate is the argument. They are returned
--- in increasing order of size.
 findMetaOps :: Monad m => NodeRef n -> PlanT t n m [MetaOp t n]
+-- in increasing order of size.
 findMetaOps = fmap2 fst . findCostedMetaOps
 findMetaOps' :: Monad m => NodeRef n -> PlanT t n m [MetaOp t n]
 findMetaOps'

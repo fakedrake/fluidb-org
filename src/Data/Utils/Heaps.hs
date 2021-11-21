@@ -42,7 +42,7 @@ chInsert k v CHeap {..} =
 
 chMinKey :: CHeap k v -> Maybe k
 chMinKey = fmap (H.priority . fst) . H.uncons . chHeap
-instance Ord k =>  Semigroup (LHeap k a) where
+instance Ord k => Semigroup (LHeap k a) where
   h <> h' =
     LHeap { lhHeap = lhHeap h <> lhHeap h',lhMax = case (lhMax h,lhMax h) of
       (Nothing,Nothing) -> Nothing

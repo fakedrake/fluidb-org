@@ -142,7 +142,7 @@ instance PlanMech (PlanT t n Identity) (MatParams n) n where
   -- | Register only materialized nodes as dependencies. If we
   -- materialize a new node then no other nodes can become non-materialized.
   --
-  -- OOPS: Non materialized nodes are non-materialized.
+  -- OOPS: Non-materialized nodes depend on other^ non-materialized.
   mcShouldTell _ _ _isMat0 = True
   mcMkProcess getOrMakeMech ref = squashMealy $ \conf -> lift $ do
     neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
