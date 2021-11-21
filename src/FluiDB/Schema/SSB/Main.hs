@@ -156,7 +156,6 @@ type QueryPath = FilePath
 type GraphPath = FilePath
 type IntermediatesPath = FilePath
 
-
 renderGraph
   :: SSBQuery
   -> SSBGlobalSolveM (IntermediatesPath,QueryPath,ImagePath,GraphPath)
