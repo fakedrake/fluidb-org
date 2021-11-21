@@ -405,7 +405,7 @@ killIntermediates = do
   pgs <- forM nonProtectedMatInterm $ \x -> do
     delDepMatCache x
     x `setNodeStateUnsafe` Concrete Mat NoMat
-    putDelNode True x
+    putDelNode x
     totalNodePages x
   return $ sum pgs
 
