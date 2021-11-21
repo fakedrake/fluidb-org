@@ -4,6 +4,7 @@ module Data.QueryPlan.Matable
 import           Control.Antisthenis.Bool
 import           Control.Antisthenis.Types
 import           Control.Monad.Extra
+import           Control.Monad.State
 import           Data.NodeContainers
 import           Data.Proxy
 import           Data.QueryPlan.AntisthenisTypes
@@ -30,16 +31,21 @@ isMaterializable noMats ref = do
 
 isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
-isMaterializableSlow dels = go mempty
+isMaterializableSlow dels = (`evalStateT` mempty) . go
   where
-    go cache ref = case ref `refLU` cache of
-      Just v -> return v
-      Nothing -> do
-        ism <- isMat <$> getNodeState ref
-        if ism && ref `notElem` dels then return True else checkMats
-        where
-          checkMats = do
-            neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
-              $ findCostedMetaOps ref
-            anyM allMat neigh
-          allMat refs = allM (go $ refInsert ref False cache) refs
+    go ref = do
+      cache <- get
+      case ref `refLU` cache of
+        Just v -> return v
+        Nothing -> do
+          ism <- lift $ isMat <$> getNodeState ref
+          modify $ refInsert ref False
+          res <- if ism && ref `notElem` dels then return True else checkMats
+          modify $ refInsert ref res
+          return res
+      where
+        checkMats = do
+          neigh :: [[NodeRef n]] <- lift
+            $ fmap2 (toNodeList . metaOpIn . fst)
+            $ findCostedMetaOps ref
+          anyM (allM go) neigh
