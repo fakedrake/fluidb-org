@@ -30,7 +30,8 @@ isMaterializable noMats ref = do
 
 isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
-isMaterializableSlow dels = go
+isMaterializableSlow
+  dels = wrapTrace ("isMaterializableSlow" ++ show ref) $ go ref
   where
     go ref = do
       ism <- isMat <$> getNodeState ref
