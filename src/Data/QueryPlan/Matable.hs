@@ -11,6 +11,7 @@ import           Data.QueryPlan.MetaOp
 import           Data.QueryPlan.NodeProc
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
+import           Data.Utils.Debug
 import           Data.Utils.Functors
 
 isMaterializable
@@ -30,8 +31,8 @@ isMaterializable noMats ref = do
 
 isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
-isMaterializableSlow
-  dels = wrapTrace ("isMaterializableSlow" ++ show ref) $ go ref
+isMaterializableSlow dels ref =
+  wrapTrace ("isMaterializableSlow" ++ show ref) $ go ref
   where
     go ref = do
       ism <- isMat <$> getNodeState ref
