@@ -32,13 +32,16 @@ isMaterializable noMats ref = do
 isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
 isMaterializableSlow dels ref0 =
-  wrapTrace ("isMaterializableSlow" ++ show ref0) $ go ref0
+  wrapTrace ("isMaterializableSlow" ++ show ref0) $ go mempty ref0
   where
-    go ref = do
-      ism <- isMat <$> getNodeState ref
-      if ism && ref `notElem` dels then return True else checkMats ref
-    checkMats ref = do
-      neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
-        $ findCostedMetaOps ref
-      anyM allMat neigh
-    allMat refs = allM go refs
+    go cache ref = case ref `refLU` cache of
+      Just v -> return v
+      Nothing -> do
+        ism <- isMat <$> getNodeState ref
+        if ism && ref `notElem` dels then return True else checkMats
+        where
+          checkMats = do
+            neigh :: [[NodeRef n]] <- fmap2 (toNodeList . metaOpIn . fst)
+              $ findCostedMetaOps ref
+            anyM allMat neigh
+          allMat refs = allM (go $ refInsert ref False cache) refs
