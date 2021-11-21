@@ -121,7 +121,7 @@ haltPlanCost histCostCached concreteCost = wrapTrM "haltPlanCost" $ do
           ++ "):antisthenis error: "
           ++ ashow e
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
-  hc <- maybe (histCosts $ concreteCost <> mconcat costs) return histCostCached
+  hc <- histCosts $ concreteCost <> mconcat costs
   trM $ printf "Halt%s: %s" (show frefs) $ show concreteCost
   trM $ printf "Historical costs: %s" $ ashowLine $ ashow hc
   halt
