@@ -30,7 +30,8 @@ isMaterializable noMats ref = do
 
 isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
-isMaterializableSlow dels = go mempty
+isMaterializableSlow dels ref0 =
+  go (refSingleton ref0 False) ref0
   where
     go cache ref = case ref `refLU` cache of
       Just v -> return v
