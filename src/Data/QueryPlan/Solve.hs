@@ -457,7 +457,7 @@ safeDelInOrder requiredPages _hc nsOrd =
       trM $ "Considering deletion: " ++ show (ref,size,canStillDel)
       if canStillDel then toDelMaybe ref else toConcr ref
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
-    toDelMaybe ref = (`lsplit` return 0) $ do
+    toDelMaybe ref = do
       ref `setNodeStateSafe` NoMat
       totalNodePages ref
     toConcr :: NodeRef n -> PlanT t n m PageNum
