@@ -210,7 +210,7 @@ workload1 = zip [1 ..] [1 .. 12]
 
 ssbMainWorkload :: IO ()
 ssbMainWorkload = do
-  let secs = 2* 60
+  let secs = 60
   putStrLn "Building normal workload..."
   timeout (secs * 1000000) (actualMain "main" Verbose workload) >>= \case
     Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
