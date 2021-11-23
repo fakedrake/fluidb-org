@@ -241,21 +241,30 @@ findOnOut = findOnSide (fullRange,fullRange) . getNodeLinksN' Inp fullRange
 
 findTriggerableMetaOps
   :: forall n t m . MonadLogic m => NodeRef n -> PlanT t n m [MetaOp t n]
-findTriggerableMetaOps n = do
-  mops <- findMetaOps n
+findTriggerableMetaOps ref = do
+  mops <- findMetaOps ref
   hbM <- getHardBudget
-  filterM (canTrigger hbM) mops >>= \case
-    [] -> bot $ "None of the metaops are triggerable: " ++ ashowLine (n,mops)
-    rs -> return rs
+  triggerableMops <- mapM (choseOuts hbM) mops
+  case triggerableMops of
+    [] -> bot $ "None of the metaops are triggerable: " ++ ashowLine (ref,mops)
+    rs -> return $ iterleave rs
   where
-    canTrigger hbM mop =
-      (&&) <$> triggerFits hbM mop
-      <*> fmap not (anyM isConcNoMatM $ toNodeList $ metaOpIn mop)
-    isConcNoMatM =
+    choseOuts hbM mop = do
+      nonMatableInp <- anyM isConcreteNoMatM $ toNodeList $ metaOpIn mop
+      if nonMatableInp then return [] else leanMop ref hbM mop
+    isConcreteNoMatM =
       fmap (\case
               Concrete _ NoMat -> True
               _                -> False) . getNodeState
 {-# INLINABLE findTriggerableMetaOps #-}
+
+iterleave :: [[a]] -> [a]
+iterleave  = go [] where
+  go [] []          = []
+  go x []           = go [] $ reverse x
+  go x ((y:ys0):ys) = y:go (ys0:x) ys
+  go x ([]:ys)      = go x ys
+
 
 getHardBudget :: Monad m => PlanT t n m (Maybe Int)
 getHardBudget = do
@@ -265,10 +274,12 @@ getHardBudget = do
     =<< nodesInState [Concrete Mat Mat,Concrete NoMat Mat]
   return $ (\x -> x - concr) <$> budgM
 
-findPrioritizedMetaOp :: forall n t m . MonadLogic m =>
-                        (forall a . PlanT t n m a -> PlanT t n m a -> PlanT t n m a)
-                      -> NodeRef n
-                      -> PlanT t n m (MetaOp t n)
+findPrioritizedMetaOp
+  :: forall n t m .
+  MonadLogic m
+  => (forall a . PlanT t n m a -> PlanT t n m a -> PlanT t n m a)
+  -> NodeRef n
+  -> PlanT t n m (MetaOp t n)
 findPrioritizedMetaOp splitFn ref = do
   mops <- findTriggerableMetaOps ref
   foldr1Unsafe splitFn $ return <$> mops
@@ -281,10 +292,25 @@ metaOpNeededPages MetaOp {..} = do
   return $ sum sizes
 
 -- | Check if a trigger fits in the budget.
-triggerFits :: MonadPlus m => Maybe Int -> MetaOp t n -> PlanT t n m Bool
+triggerFits :: Monad m => Maybe Int -> MetaOp t n -> PlanT t n m Bool
 triggerFits freePages mop = do
   neededPages <- metaOpNeededPages mop
   return $ maybe True (neededPages <) freePages
+
+leanMop
+  :: Monad m
+  => NodeRef n
+  -> Maybe Int
+  -> MetaOp t n
+  -> PlanT t n m [MetaOp t n]
+leanMop ref freePages mop = do
+  mopFits <- triggerFits freePages mop
+  if mopFits then return [mop]
+    else filterM (triggerFits freePages) allMops
+  where
+    allMops =
+      [mop { metaOpOut = fromNodeList $ ref : outs } | outs
+      <- subsequences $ filter (ref /=) $ toNodeList $ metaOpOut mop]
 
 metaOpCost :: Monad m => [NodeRef n] -> MetaOp t n -> PlanT t n m Cost
 metaOpCost matRefs MetaOp{..} = do

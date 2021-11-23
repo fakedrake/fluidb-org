@@ -205,7 +205,8 @@ setNodeStateSafe' getFwdOp node goalState =
           putDelNode node
 
 -- | Set a list of nodes to Mat state in an order that is likely to
--- require the least budget.
+-- require the least budget. Just find a random metaop for each and
+-- sort according to that.
 setNodesMatSafe
   :: (HaltKey m ~ PlanSearchScore,MonadLogic m)
   => [NodeRef n]
