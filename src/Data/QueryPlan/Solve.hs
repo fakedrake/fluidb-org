@@ -175,6 +175,7 @@ setNodeStateSafe' getFwdOp node goalState =
           forwardMop <- getFwdOp
           let interm = toNodeList $ metaOpInterm forwardMop
           let depset = toNodeList $ metaOpIn forwardMop
+          modify $ \gcs -> gcs { frontier = metaOpIn forwardMop <> frontier gcs }
           let trigAction = metaOpPlan forwardMop >>= mapM_ putTransition
           guardlM
             ("Nodes don't fit in budget" ++ show (node : depset ++ interm))
