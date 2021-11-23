@@ -253,8 +253,7 @@ findTriggerableMetaOps ref = do
   where
     chooseOuts hbM mop = do
       nonMatableInp <- anyM isConcreteNoMatM $ toNodeList $ metaOpIn mop
-      if nonMatableInp then bot
-        $ "Some inps are non-mat: " ++ ashowLine mop else leanMop ref hbM mop
+      if nonMatableInp then return [] else leanMop ref hbM mop
     isConcreteNoMatM =
       fmap (\case
               Concrete _ NoMat -> True
