@@ -92,8 +92,6 @@ haltPlan
   -> PlanT t n m ()
 haltPlan matRef mop = do
   -- From the frontier replace matRef with it's dependencies.
-  modify $ \gcs -> gcs
-    { frontier = nsDelete matRef (frontier gcs) <> metaOpIn mop }
   extraCost <- metaOpCost [matRef] mop
   void $ haltPlanCost extraCost
 
