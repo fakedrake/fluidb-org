@@ -31,17 +31,19 @@ isMaterializable noMats ref = do
 
 isMaterializableSlow
   :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
-isMaterializableSlow
-  dels = (`evalStateT` mempty) . go
+isMaterializableSlow dels =
+  (`evalStateT` mempty) . go
   where
     go ref = gets (refLU ref) >>= \case
       Just v -> return v
       Nothing -> do
+        prot <- lift $ isProtected ref
         lift (getNodeState ref) >>= \case
-          Concrete _ NoMat -> cacheAndRet False
-          Concrete _ Mat   -> cacheAndRet True
-          Initial NoMat    -> checkMats >>= cacheAndRet
-          Initial Mat      -> cacheAndRet $ ref `notElem` dels
+          Concrete _ NoMat ->
+            if prot then cacheAndRet False else checkMats >>= cacheAndRet
+          Concrete _ Mat -> cacheAndRet $ ref `notElem` dels
+          Initial NoMat -> checkMats >>= cacheAndRet
+          Initial Mat -> cacheAndRet $ ref `notElem` dels
       where
         cacheAndRet res = do
           modify $ refInsert ref res
