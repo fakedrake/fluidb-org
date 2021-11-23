@@ -62,7 +62,7 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   -- Populate the metaop cache
   -- warmupCache node
   reportBudget
-  isMat <- Mat.isMaterializable [] node
+  isMat <- Mat.isMaterializableSlow [] node
   when (not isMat) $ error $ "Not materializable node: " ++ show node
   setNodeStateSafe node Mat
   -- curateTransitions
