@@ -41,7 +41,7 @@ isMaterializableSlow countProt dels =
           Concrete _ NoMat -> do
             prot <- lift $ isProtected ref
             if countProt
-              && prot then cacheAndRet (ref `notElem` dels) else checkMats >>= cacheAndRet
+              && prot then cacheAndRet False else checkMats >>= cacheAndRet
           Concrete _ Mat -> cacheAndRet $ ref `notElem` dels
           Initial NoMat -> checkMats >>= cacheAndRet
           Initial Mat -> cacheAndRet $ ref `notElem` dels
