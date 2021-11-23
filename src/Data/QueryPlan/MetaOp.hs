@@ -246,12 +246,15 @@ findTriggerableMetaOps ref = do
   hbM <- getHardBudget
   triggerableMops <- mapM (chooseOuts hbM) mops
   case iterleave triggerableMops of
-    [] -> bot $ "None of the metaops are triggerable: " ++ ashowLine (ref,mops)
+    [] -> bot
+      $ "None of the metaops are triggerable: "
+      ++ ashowLine (ref,triggerableMops,mops)
     rs -> return rs
   where
     chooseOuts hbM mop = do
       nonMatableInp <- anyM isConcreteNoMatM $ toNodeList $ metaOpIn mop
-      if nonMatableInp then return [] else leanMop ref hbM mop
+      if nonMatableInp then bot
+        $ "Some inps are non-mat: " ++ ashowLine mop else leanMop ref hbM mop
     isConcreteNoMatM =
       fmap (\case
               Concrete _ NoMat -> True
