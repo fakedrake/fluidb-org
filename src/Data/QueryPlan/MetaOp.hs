@@ -245,9 +245,9 @@ findTriggerableMetaOps ref = do
   mops <- findMetaOps ref
   hbM <- getHardBudget
   triggerableMops <- mapM (choseOuts hbM) mops
-  case triggerableMops of
+  case iterleave triggerableMops of
     [] -> bot $ "None of the metaops are triggerable: " ++ ashowLine (ref,mops)
-    rs -> return $ iterleave rs
+    rs -> return rs
   where
     choseOuts hbM mop = do
       nonMatableInp <- anyM isConcreteNoMatM $ toNodeList $ metaOpIn mop
