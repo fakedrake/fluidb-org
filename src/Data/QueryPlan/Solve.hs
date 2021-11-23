@@ -129,7 +129,7 @@ haltPlanCost concreteCost = wrapTrM "haltPlanCost" $ do
           ++ ashow e
   let frontierCost :: Double = sum [fromIntegral $ costAsInt c | c <- costs]
   hc <- histCosts $ concreteCost <> mconcat costs
-  trM $ printf "Halt%s: %s" (show frefs) $ show concreteCost
+  trM $ printf "Halt%s: %s" (show frefs) $ show (frontierCost,concreteCost)
   halt
     $ PlanSearchScore
       (fromIntegral $ costAsInt concreteCost)
@@ -154,6 +154,7 @@ setNodeStateSafe'
 setNodeStateSafe' getFwdOp node goalState =
   wrapTrM (printf "setNodeStateSafe %s %s" (show node) (show goalState)) $ do
     curState <- getNodeState node
+    modify $ \gcs -> gcs { frontier = nsDelete node $ frontier gcs }
     trM
       $ printf
         "Safe shift %s: %s -> %s"
