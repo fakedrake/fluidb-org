@@ -217,9 +217,9 @@ setNodesMatSafe deps = do
   ret <- fmap (sortOn (\(_,x,_) -> x)) $ forM unMatDeps $ \dep -> do
     pgs <- totalNodePages dep
     -- Unless it's already materialized mat.
+    trigMops <- findTriggerableMetaOps dep
     fp <- maybe (bot $ printf "No metaops for %n" dep) metaOpNeededPages
-      . listToMaybe
-      =<< findTriggerableMetaOps dep
+      $ listToMaybe trigMops
     return (pgs,fp,dep)
   case hbM of
     Nothing -> top
@@ -228,7 +228,7 @@ setNodesMatSafe deps = do
       $ zipWith (\(_,x,_) y -> x + y) ret
       $ scanl (+) 0
       $ fst3 <$> ret
-  mapM_ (`setNodeStateSafe` Mat) $ fmap trd3 ret ++ matDeps
+  mapM_ (`setNodeStateSafe` Mat) $ matDeps ++ fmap trd3 ret
 
 -- | Split on each different style of materialization.
 splitOnOutMaterialization
