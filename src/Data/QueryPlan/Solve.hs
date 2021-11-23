@@ -169,7 +169,7 @@ setNodeStateSafe' getFwdOp node goalState =
         Mat   -> bot "Tried to set concrete" -- XXX: Check that it is not in the frontier
       Initial NoMat -> case goalState of
         NoMat -> node `setNodeStateUnsafe` Concrete NoMat NoMat
-        Mat -> once $ do
+        Mat -> do
           node `setNodeStateUnsafe` Concrete NoMat NoMat
           forwardMop <- getFwdOp
           let interm = toNodeList $ metaOpInterm forwardMop
