@@ -62,8 +62,8 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   -- Populate the metaop cache
   -- warmupCache node
   reportBudget
-  isMat <- Mat.isMaterializableSlow [] node
-  when (not isMat) $ error $ "Not materializable node: " ++ show node
+  ism <- Mat.isMaterializableSlow False [] node
+  unless  ism $ error $ "Not materializable node: " ++ show node
   setNodeStateSafe node Mat
   -- curateTransitions
   cost <- totalTransitionCost
@@ -200,7 +200,7 @@ setNodeStateSafe' getFwdOp node goalState =
         Mat -> node `setNodeStateUnsafe` Concrete Mat Mat
         NoMat -> do
           node `setNodeStateUnsafe` Concrete Mat NoMat
-          Mat.isMaterializableSlow [] node
+          Mat.isMaterializableSlow False [] node
             >>= guardl ("not materializable, can't delete " ++ ashow node)
           delDepMatCache node
           putDelNode node
@@ -472,7 +472,7 @@ isDeletable ref = do
   trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
     Concrete _ Mat -> return False
-    _x             -> Mat.isMaterializableSlow [ref] ref
+    _x             -> Mat.isMaterializableSlow False [ref] ref
   trM $ "[After] isDeletable" <: (ref,isd)
   return isd
 
