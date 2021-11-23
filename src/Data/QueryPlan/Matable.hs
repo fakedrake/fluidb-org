@@ -37,11 +37,15 @@ isMaterializableSlow
     go ref = gets (refLU ref) >>= \case
       Just v -> return v
       Nothing -> do
-        ism <- lift $ isMat <$> getNodeState ref
-        res <- if ism && ref `notElem` dels then return True else checkMats
-        modify $ refInsert ref res
-        return res
+        lift (getNodeState ref) >>= \case
+          Concrete _ NoMat -> cacheAndRet False
+          Concrete _ Mat   -> cacheAndRet True
+          Initial NoMat    -> checkMats >>= cacheAndRet
+          Initial Mat      -> cacheAndRet $ ref `notElem` dels
       where
+        cacheAndRet res = do
+          modify $ refInsert ref res
+          return res
         checkMats = do
           neigh <- lift
             $ fmap2 (toNodeList . metaOpIn . fst)
