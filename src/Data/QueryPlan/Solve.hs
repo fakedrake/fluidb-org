@@ -228,7 +228,7 @@ setNodesMatSafe deps = do
       $ zipWith (\(_,x,_) y -> x + y) ret
       $ scanl (+) 0
       $ fst3 <$> ret
-  mapM_ (`setNodeStateSafe` Mat) $ matDeps ++ fmap trd3 ret
+  mapM_ (`setNodeStateSafe` Mat) $ fmap trd3 ret ++ matDeps
 
 -- | Split on each different style of materialization.
 splitOnOutMaterialization
