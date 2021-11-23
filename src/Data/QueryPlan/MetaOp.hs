@@ -276,7 +276,7 @@ getHardBudget = do
 
 findPrioritizedMetaOp
   :: forall n t m .
-  MonadLogic m
+  (HasCallStack,MonadLogic m)
   => (forall a . PlanT t n m a -> PlanT t n m a -> PlanT t n m a)
   -> NodeRef n
   -> PlanT t n m (MetaOp t n)
