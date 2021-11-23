@@ -169,34 +169,33 @@ setNodeStateSafe' getFwdOp node goalState =
         Mat   -> bot "Tried to set concrete" -- XXX: Check that it is not in the frontier
       Initial NoMat -> case goalState of
         NoMat -> node `setNodeStateUnsafe` Concrete NoMat NoMat
-        Mat       -- just materialize
-          -> do
-            node `setNodeStateUnsafe` Concrete NoMat NoMat
-            forwardMop <- getFwdOp
-            let interm = toNodeList $ metaOpInterm forwardMop
-            let depset = toNodeList $ metaOpIn forwardMop
-            let trigAction = metaOpPlan forwardMop >>= mapM_ putTransition
-            guardlM
-              ("Nodes don't fit in budget" ++ show (node : depset ++ interm))
-              $ nodesFit
-              $ node : depset ++ interm
-            haltPlan node forwardMop
-            withProtected (node : depset ++ interm) $ do
-              trM $ "Materializing dependencies: " ++ show depset
-              setNodesMatSafe depset
-              trM $ "Intermediates: " ++ show interm
-              once $ garbageCollectFor $ node : interm
-              -- Automatically set the states of intermediates
-              forM_ interm $ \ni -> do
-                prevState' <- getNodeState ni
-                let prevState = case prevState' of
-                      Concrete _ r -> r
-                      Initial r    -> r
-                ni `setNodeStateUnsafe` Concrete prevState Mat
-              -- Deal with sibling materializability: what we actually
-              -- want is to be able to reverse.
-              splitOnOutMaterialization node forwardMop
-              trigAction
+        Mat -> once $ do
+          node `setNodeStateUnsafe` Concrete NoMat NoMat
+          forwardMop <- getFwdOp
+          let interm = toNodeList $ metaOpInterm forwardMop
+          let depset = toNodeList $ metaOpIn forwardMop
+          let trigAction = metaOpPlan forwardMop >>= mapM_ putTransition
+          guardlM
+            ("Nodes don't fit in budget" ++ show (node : depset ++ interm))
+            $ nodesFit
+            $ node : depset ++ interm
+          haltPlan node forwardMop
+          withProtected (node : depset ++ interm) $ do
+            trM $ "Materializing dependencies: " ++ show depset
+            setNodesMatSafe depset
+            trM $ "Intermediates: " ++ show interm
+            once $ garbageCollectFor $ node : interm
+            -- Automatically set the states of intermediates
+            forM_ interm $ \ni -> do
+              prevState' <- getNodeState ni
+              let prevState = case prevState' of
+                    Concrete _ r -> r
+                    Initial r    -> r
+              ni `setNodeStateUnsafe` Concrete prevState Mat
+            -- Deal with sibling materializability: what we actually
+            -- want is to be able to reverse.
+            splitOnOutMaterialization node forwardMop
+            trigAction
       Initial Mat -> case goalState of
         Mat -> node `setNodeStateUnsafe` Concrete Mat Mat
         NoMat -> do

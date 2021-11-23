@@ -48,3 +48,25 @@ isMaterializableSlow
             $ findCostedMetaOps ref
           modify $ refInsert ref False
           anyM (allM go) neigh
+
+-- | Get a set of nodes that need to be evaluated based on a quick
+-- plan.
+quickPlanSlow
+  :: forall t n m . Monad m => NodeRef n -> PlanT t n m (Maybe [NodeRef n])
+quickPlanSlow
+  dels = (`evalStateT` mempty) . go
+  where
+    go ref = gets (refLU ref) >>= \case
+      Just v -> return v
+      Nothing -> do
+        ism <- lift $ isMat <$> getNodeState ref
+        res <- if ism then return (Just []) else checkMats
+        modify $ refInsert ref res
+        return res
+      where
+        checkMats = do
+          neigh <- lift
+            $ fmap2 (toNodeList . metaOpIn . fst)
+            $ findCostedMetaOps ref
+          modify $ refInsert ref False
+          anyM (allM go) neigh

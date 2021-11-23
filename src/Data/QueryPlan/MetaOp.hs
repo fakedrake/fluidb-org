@@ -246,9 +246,12 @@ findTriggerableMetaOps ref = do
   hbM <- getHardBudget
   triggerableMops <- mapM (chooseOuts hbM) mops
   case iterleave triggerableMops of
-    [] -> bot
-      $ "None of the metaops are triggerable: "
-      ++ ashowLine (ref,triggerableMops,mops)
+    [] -> do
+      sizedInputs <- mapM (\r -> (r,) <$> getNodeState r)
+        $ toNodeList . metaOpIn =<< mops
+      bot
+        $ "None of the metaops are triggerable: "
+        ++ ashowLine (ref,triggerableMops,sizedInputs,mops)
     rs -> return rs
   where
     chooseOuts hbM mop = do
