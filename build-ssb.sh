@@ -12,7 +12,7 @@ function new_dir {
 cd $root
 new_dir ./ssb-data
 new_dir ./tables
-
+# XXX: build the right stuff
 echo "Generating tables in $(pwd)"
 for i in l d s c p; do
     echo "Generating table: ${i}"
