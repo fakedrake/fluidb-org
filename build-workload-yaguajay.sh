@@ -1,6 +1,6 @@
-#!/bin/bash
-set -ex
-# Push to git and build haskell on yaguajay then build c++ locally.
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash
+set -xe
 
 git commit -a -m "sync" || true
 git push
