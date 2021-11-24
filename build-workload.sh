@@ -16,7 +16,7 @@ else
 fi
 
 cd ./cmake-build/
-make VERBOSE=5
+make VERBOSE=5 -j
 
 rm -rf /tmp/fluidb_store
 mkdir /tmp/fluidb_store
