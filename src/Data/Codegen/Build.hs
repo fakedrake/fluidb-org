@@ -190,7 +190,7 @@ forEachEpoch pl = do
 
 
 cppReportPerf :: [CC.Statement CC.CodeSymbol]
-cppReportPerf = [CC.ExpressionSt $ CC.FunctionAp "report_counters" [] []]
+cppReportPerf = error "oops"  -- [CC.ExpressionSt $ CC.FunctionAp "report_counters" [] []]
 
 -- | The main function.
 getCppMain
