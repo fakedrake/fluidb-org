@@ -215,6 +215,8 @@ setNodesMatSafe
 setNodesMatSafe deps = do
   hbM <- getHardBudget
   (matDeps,unMatDeps) <- partitionM isMaterialized deps
+  matable <- mapM (\r -> (r,) <$> Mat.isMaterializableSlow True [] r) unMatDeps
+  guardl ("Not all deps are matable" ++ show matable) $ all snd matable
   forM_ deps $ \n -> setNodeStateSafe n Mat
   ret <- fmap (sortOn (\(_,x,_) -> x)) $ forM unMatDeps $ \dep -> do
     pgs <- totalNodePages dep
