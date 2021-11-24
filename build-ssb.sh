@@ -24,4 +24,5 @@ new_dir /tmp/fluidb-data/bamas
 bama_dir=/tmp/fluidb-data/bamas
 dat_dir=/tmp/fluidb-data
 echo "Generating bama files in ${bama_dir}  and ${dat_dir}"
-stack run fluidb:exe:bamify $root/ssb-data/tables $bama_dir ${dat_dir}
+stack build fluidb:exe:bamify
+stack exec -- bamify /home/christosp/Projects/fluidb-org/ssb-data/tables /tmp/fluidb-data/bamas /tmp/fluidb-data

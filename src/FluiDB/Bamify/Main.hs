@@ -22,7 +22,7 @@ getSsbSchema name = do
 
 bamifyMain :: IO ()
 bamifyMain = void $ getArgs >>= \case
-  [_exe,tblDir,bamaDir,dataDir] -> do
+  [tblDir,bamaDir,dataDir] -> do
     tbls <- fmap dropExtensions . filter (".tbl" `isSuffixOf`)
       <$> listDirectory tblDir
     forM_ tbls $ \tbl -> do
