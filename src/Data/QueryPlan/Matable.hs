@@ -29,14 +29,14 @@ isMaterializable noMats ref = do
     BndBnd _b -> throwPlan "Tried to force result but got bound"
 
 
-isMaterializableSlow
+isMaterializableSlow'
   :: forall t n m .
   Monad m
   => Bool
   -> [NodeRef n]
   -> NodeRef n
   -> PlanT t n m Bool
-isMaterializableSlow countProt dels =
+isMaterializableSlow' countProt dels =
   (`evalStateT` mempty) . go
   where
     go ref = gets (refLU ref) >>= \case
@@ -51,6 +51,26 @@ isMaterializableSlow countProt dels =
         cacheAndRet res = do
           modify $ refInsert ref res
           return res
+        checkMats = do
+          neigh <- lift
+            $ fmap2 (toNodeList . metaOpIn . fst)
+            $ findCostedMetaOps ref
+          modify $ refInsert ref False
+          anyM (allM go) neigh
+
+isMaterializableSlow
+  :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
+isMaterializableSlow
+  dels = (`evalStateT` mempty) . go
+  where
+    go ref = gets (refLU ref) >>= \case
+      Just v -> return v
+      Nothing -> do
+        ism <- lift $ isMat <$> getNodeState ref
+        res <- if ism && ref `notElem` dels then return True else checkMats
+        modify $ refInsert ref res
+        return res
+      where
         checkMats = do
           neigh <- lift
             $ fmap2 (toNodeList . metaOpIn . fst)
