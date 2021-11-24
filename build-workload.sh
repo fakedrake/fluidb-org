@@ -37,6 +37,6 @@ echo "baseline {" >> /tmp/io_perf.txt
 for i in {1..30}; do
     echo "query:${i}" >> /tmp/io_perf.txt
     echo "Running baseline ${i}"
-    ./ssb-workload/indiv/query${i}
+    ./ssb-workload/indiv/indiv_query${i}
 done
 echo "}" >> /tmp/io_perf.txt
