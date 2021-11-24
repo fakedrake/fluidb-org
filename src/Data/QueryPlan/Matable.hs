@@ -30,7 +30,12 @@ isMaterializable noMats ref = do
 
 
 isMaterializableSlow
-  :: forall t n m . Monad m =>  Bool -> [NodeRef n] -> NodeRef n -> PlanT t n m Bool
+  :: forall t n m .
+  Monad m
+  => Bool
+  -> [NodeRef n]
+  -> NodeRef n
+  -> PlanT t n m Bool
 isMaterializableSlow countProt dels =
   (`evalStateT` mempty) . go
   where
