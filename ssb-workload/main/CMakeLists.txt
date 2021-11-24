@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.16)
+set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_custom_target(workload)
+foreach(I RANGE 1 30)
+  message (STATUS "Adding executable ${I}")
+  add_executable("query${I}" "query${I}.cpp")
+  target_link_libraries("query${I}" PUBLIC bama)
+  add_dependencies(workload "query${I}")
+endforeach()
