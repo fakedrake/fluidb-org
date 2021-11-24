@@ -20,11 +20,10 @@ with nixpkgs; let
     # rash
     cmake
     fmt
-    clang
+    clang_12
     ssb
     ghc
     stack
-    ccls
     graphviz
   ] ++ (if stdenv.isLinux then [ linuxPackages.perf ] else []) ;
 in

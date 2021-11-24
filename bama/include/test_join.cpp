@@ -11,13 +11,19 @@
 struct A {
   size_t a1, a2;
   std::string show() const { return fmt::format("A(a1={},a2={})", a1, a2); }
-  auto operator<=>(const A&) const = default;
+  auto operator<(const A& a) const {
+    return a.a1 < a1 || (a.a1 == a1 && a.a2 < a.a2);
+  }
+  auto operator==(const A& a) const { return a.a1 == a1 && a.a2 == a2; }
 };
 
 struct B {
   size_t b1, b2;
   std::string show() const { return fmt::format("B(b1={},b2={})", b1, b2); }
-  auto operator<=>(const B&) const = default;
+  auto operator==(const B& b) const { return b.b1 == b1 && b.b2 == b2; }
+  auto operator<(const B& b) const {
+    return b.b1 < b1 || (b.b1 == b1 && b.b2 < b.b2);
+  }
 };
 
 #define A_DAT "/tmp/removeme_a.dat"

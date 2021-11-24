@@ -1,5 +1,6 @@
-#ifndef __DEFS_HH__
-#define __DEFS_HH__
+#pragma once
+
+#include <chrono>
 
 #include <cstring>
 #include <cstdlib>
@@ -7,6 +8,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <iostream>
+#include <fstream>
 
 #ifndef PAGESIZE
 static const size_t PAGE_SIZE = 4096;
@@ -48,4 +50,15 @@ static inline void aligned_delete(unsigned char* p) {
     free(p);
 }
 
-#endif
+using seconds_t = std::chrono::seconds;
+void report_counters() {
+  std::ofstream file("/tmp/io_perf.txt", std::ios_base::app);
+  std::cout << "Writing perf to /tmp/io_perf.txt";
+  const auto now = std::chrono::system_clock::now();
+  size_t epoch =
+      std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+  file << "query:"
+       << "time:" << epoch << ",reads:" << reads << ",writes:" << writes
+       << std::endl;
+  file.close();
+}
