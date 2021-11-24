@@ -59,9 +59,14 @@ isMaterializableSlow' countProt dels =
           anyM (allM go) neigh
 
 isMaterializableSlow
-  :: forall t n m . Monad m => [NodeRef n] -> NodeRef n -> PlanT t n m Bool
-isMaterializableSlow
-  dels = (`evalStateT` mempty) . go
+  :: forall t n m .
+  Monad m
+  => Bool
+  -> [NodeRef n]
+  -> NodeRef n
+  -> PlanT t n m Bool
+isMaterializableSlow _coutProt dels =
+  (`evalStateT` mempty) . go
   where
     go ref = gets (refLU ref) >>= \case
       Just v -> return v
