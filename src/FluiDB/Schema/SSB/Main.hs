@@ -161,11 +161,14 @@ renderGraph
   -> SSBGlobalSolveM (IntermediatesPath,QueryPath,ImagePath,GraphPath)
 renderGraph query = do
   gr <- gets $ propNet . globalGCConfig
-  interms <- gets
+  interms0 <- gets
     $ fmap3 (runIdentity . qnfOrigDEBUG')
     . refAssocs
     . nrefToQnfs
     . globalClusterConfig
+  interms <- globalizePlanT $ forM interms0 $ \(ref,q) -> do
+    pgs <- totalNodePages ref
+    return (ref,pgs,q)
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
         dotPath = graphBase <.> "dot"
