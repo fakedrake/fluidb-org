@@ -135,11 +135,13 @@ singleQuery lbl =
 #endif
 
 
-reportMats = do
+reportMats msg = do
   mats <- globalizePlanT $ do
     ns <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
     mapM (\n -> (n,) <$> totalNodePages n) ns
-  lift2 $ traceM $ "mat nodes: " ++ ashow mats
+
+  lift2 $ putStrLn msg
+  lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
   pgs <- globalizePlanT getDataSize
   lift2 $ putStrLn $ "Pages used: " ++ show pgs
 
@@ -149,13 +151,13 @@ type QueryId = Int
 type WIndex = Int
 actualMain :: WLabel -> Verbosity -> [(WIndex,QueryId)] -> IO ()
 actualMain lbl verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
-  reportMats
+  reportMats $ "Pre query: " ++ show (wi,qi)
   liftIO $ traceM $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
       _transitions <- runQuery lbl verbosity wi query
-      reportMats
+      reportMats $ "Post query: " ++ show (wi,qi)
 
 type ImagePath = FilePath
 type QueryPath = FilePath
