@@ -74,7 +74,6 @@ runQuery lbl verbosity windex query = do
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath
       liftIO $ putStrLn $ "The reperoire of intermediates: " ++ intermPath
   -- liftIO $ runCpp cppCode
-  liftIO $ putStrLn $ ashow transitions
   storeCpp lbl windex cppCode
   return transitions
 
@@ -156,7 +155,9 @@ actualMain lbl verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
-      _transitions <- runQuery lbl verbosity wi query
+      transitions <- runQuery lbl verbosity wi query
+      liftIO $ putStrLn $ "Transitions" ++ ashow (wi,qi)
+      liftIO $ putStrLn $ ashow transitions
       reportMats $ "Post query: " ++ show (wi,qi)
 
 type ImagePath = FilePath
