@@ -151,7 +151,6 @@ type WIndex = Int
 actualMain :: WLabel -> Verbosity -> [(WIndex,QueryId)] -> IO ()
 actualMain lbl verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
   reportMats $ "Pre query: " ++ show (wi,qi)
-  liftIO $ traceM $ "Running query: " ++ show qi
   case IM.lookup qi ssbQueriesMap of
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
