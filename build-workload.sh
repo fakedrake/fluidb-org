@@ -21,22 +21,21 @@ make VERBOSE=5 -j
 rm -rf /tmp/fluidb_store
 mkdir /tmp/fluidb_store
 
-# Main measurements
-# echo "main {" >> /tmp/io_perf.txt
-# for i in {1..30}; do
-#     echo "query:${i}" >> /tmp/io_perf.txt
-#     echo "Running query ${i}"
-#     ./ssb-workload/main/query${i}
-# done
-# echo "}" >> /tmp/io_perf.txt
-
-# XXX: run ssb because we removed the initial table.
-
-# Baseline measurements
+# Baseline measurements (should be run first because the workload
+# removes initial tables)
 echo "baseline {" >> /tmp/io_perf.txt
 for i in {1..30}; do
     echo "query:${i}" >> /tmp/io_perf.txt
     echo "Running baseline ${i}"
     ./ssb-workload/indiv/indiv_query${i}
+done
+echo "}" >> /tmp/io_perf.txt
+
+# Main measurements
+echo "main {" >> /tmp/io_perf.txt
+for i in {1..30}; do
+    echo "query:${i}" >> /tmp/io_perf.txt
+    echo "Running query ${i}"
+    ./ssb-workload/main/query${i}
 done
 echo "}" >> /tmp/io_perf.txt

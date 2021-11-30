@@ -1,7 +1,6 @@
 module Data.Query.QuerySchema
   (querySchema
   ,isUniqueSel
-  ,primKeys
   ,shapeSymEqs
   ,joinShapes
   ,shapeProject

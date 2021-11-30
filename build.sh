@@ -3,7 +3,7 @@
 set -ex
 
 stack build -j 4 fluidb:bench:baseline
-# stack build -j 4 fluidb:bench:benchmark
+stack build -j 4 fluidb:bench:benchmark
 
 # stack build -j 4 fluidb:bench:benchmark
 # stack --work-dir .benchmark-stack-dir/ --profile -j 4 run  -- +RTS -p

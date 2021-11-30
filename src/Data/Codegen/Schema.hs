@@ -29,7 +29,6 @@ module Data.Codegen.Schema
   , projSchema
   , withPrimKeys
   , keysToProj
-  , primKeys
   , joinShapes
   , shapeProject
   , refersToShape
@@ -44,6 +43,7 @@ module Data.Codegen.Schema
 
 import           Control.Monad.Identity
 import           Data.Codegen.Build.Monads.Class
+import           Data.Copointed
 import qualified Data.CppAst                          as CC
 import           Data.Foldable
 import           Data.Function
@@ -129,7 +129,7 @@ withPrimKeys
   -> m [(ShapeSym e s,a)]
 withPrimKeys prj = do
   Identity q <- getQueries @Identity @e @s
-  unless (any (all (`elem` fmap fst prj)) $ primKeys q)
+  unless (any (all (`elem` fmap fst prj)) $ fmap2 copoint $ qpUnique q)
     $ throwAStr "No subset of columns are unique."
   return prj
 exprCppTypeErr :: forall c e s t n m .

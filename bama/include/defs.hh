@@ -51,14 +51,16 @@ static inline void aligned_delete(unsigned char* p) {
 }
 
 using seconds_t = std::chrono::seconds;
+template <int budget>
 void report_counters() {
   std::ofstream file("/tmp/io_perf.txt", std::ios_base::app);
   std::cout << "Writing perf to /tmp/io_perf.txt";
   const auto now = std::chrono::system_clock::now();
   size_t epoch =
-      std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+      std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
+          .count();
   file << "query:"
-       << "time:" << epoch << ",reads:" << reads << ",writes:" << writes
-       << std::endl;
+       << "time:" << epoch << ",budgetx0.01=" << budget << ",reads:" << reads
+       << ",writes:" << writes << std::endl;
   file.close();
 }

@@ -15,6 +15,7 @@ ghc-options:
   - -O2
   - -optc-O3
   - -with-rtsopts=-M5G
+  - -DBUDGET=20500
 
 when:
   - condition: os(darwin)
