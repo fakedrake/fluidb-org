@@ -59,8 +59,7 @@ void report_counters() {
   size_t epoch =
       std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
           .count();
-  file << "query:"
-       << "time:" << epoch << ",budgetx0.01=" << budget << ",reads:" << reads
+  file << "budgetx0.01:" << budget << ",reads:" << reads
        << ",writes:" << writes << std::endl;
   file.close();
 }
