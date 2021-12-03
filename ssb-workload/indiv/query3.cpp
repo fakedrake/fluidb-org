@@ -459,6 +459,6 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
-  report_counters();
+  report_counters<60000>();
   return 0;
 }
