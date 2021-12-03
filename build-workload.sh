@@ -24,7 +24,7 @@ mkdir /tmp/fluidb_store
 # Baseline measurements (should be run first because the workload
 # removes initial tables)
 echo "baseline {" >> /tmp/io_perf.txt
-for i in {1..30}; do
+for i in {1..12}; do
     echo "query:${i}" >> /tmp/io_perf.txt
     echo "Running baseline ${i}"
     ./ssb-workload/indiv/indiv_query${i}
