@@ -200,7 +200,7 @@ getCppMain body = do
   let cppReportPerf =
         [CC.ExpressionSt
          $ CC.FunctionAp
-           "repxbort_counters"
+           "report_counters"
            [CC.TemplArg $ CC.LiteralIntExpression $ fromMaybe (-1) budget]
            []]
   let ret = CC.ReturnSt $ CC.LiteralIntExpression 0
