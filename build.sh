@@ -5,10 +5,16 @@ set -ex
 stack build -j 4 fluidb:bench:baseline
 stack build -j 4 fluidb:bench:benchmark
 
-# stack build -j 4 fluidb:bench:benchmark
-# stack --work-dir .benchmark-stack-dir/ --profile -j 4 run  -- +RTS -p
-# profiterole benchmark.prof
-# profiteur benchmark.prof
+rm -rf ./ssb-workload/main/*.cpp
+rm -rf ./ssb-workload/indiv/*.cpp
 
-# echo "Graphical overview: $(pwd)/benchmark.prof.html"
-# echo "Textual overview: $(pwd)/benchmark.profiterole.txt"
+cp /run/user/1000/fluidb-data/workload-main/*.cpp ./ssb-workload/main/
+cp /run/user/1000/fluidb-data/workload-indiv/*.cpp ./ssb-workload/indiv/
+
+find ./ssb-workload/ \
+     -name '*.cpp' \
+     -exec sed -i '' -e 's|/run/user/1000/|/tmp/|g' \
+                     {} \;
+
+git commit -a -m "yaguasync"
+git push

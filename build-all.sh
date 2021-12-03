@@ -3,5 +3,5 @@
 set -ex
 
 # ./build-ssb.sh
-# ./build.sh
+./build.sh
 ./build-workload.sh
