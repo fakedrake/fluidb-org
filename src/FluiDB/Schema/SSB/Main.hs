@@ -176,7 +176,7 @@ renderGraph query = do
     . globalClusterConfig
   interms <- globalizePlanT $ forM interms0 $ \(ref,q) -> do
     pgs <- totalNodePages ref
-    return (ref,pgs,q)
+    return (ref,pgs,Sym $ unLatex $ toLatex q)
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
         dotPath = graphBase <.> "dot"
