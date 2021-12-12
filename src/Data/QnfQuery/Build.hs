@@ -733,7 +733,7 @@ nqnfSelectI p q = nqnfSpecializeQueryF q <&> \case
 -- other way of accessing the input columns). This means that the
 -- correct implementation is cyclical. Therefore we drop the selection
 -- and product info aspect from all symbols in qnfSel. It is obvious
--- that they refer to the product and selection if the query itself.
+-- that they refer to the product and selection of the query.
 --
 -- Also selection is under the proj/aggr operation. Therefore if we
 -- are inserting into an aggregated query we need to first wrap it
