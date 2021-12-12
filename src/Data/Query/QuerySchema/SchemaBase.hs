@@ -18,6 +18,7 @@ module Data.Query.QuerySchema.SchemaBase
   ,setShapeSymOrig
   ,refersToShape
   ,querySchema
+  ,primKeys
   ,joinShapes
   ,shapeAllSyms
   ,shapeProject
@@ -35,14 +36,12 @@ module Data.Query.QuerySchema.SchemaBase
 import           Control.Monad.Reader
 import           Data.Bifunctor
 import           Data.Bitraversable
-import           Data.Copointed
 import           Data.CppAst
 import           Data.Functor.Identity
 import qualified Data.HashMap.Strict          as HM
 import           Data.List
 import qualified Data.List.NonEmpty           as NEL
 import           Data.Maybe
-import           Data.Pointed
 import           Data.QnfQuery.Build
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
@@ -85,6 +84,9 @@ refersToShape ps shape = case shapeSymQnfName ps of
 schemaQP :: QueryShape e s -> [(ShapeSym e s,ColumnProps)]
 schemaQP = qpSchema
 
+primKeys :: QueryShape e s -> NEL.NonEmpty (NEL.NonEmpty (ShapeSym e s))
+primKeys = qpUnique
+
 shapeAllSyms :: QueryShape e s -> [ShapeSym e s]
 shapeAllSyms = fmap fst . schemaQP
 
@@ -108,7 +110,7 @@ mkQueryShape size sch =
     fromSchemaQP
       sch' = NEL.nonEmpty [s | (s,_,isU) <- sch',isU] <&> \uniq -> QueryShape
       { qpSchema = [(s,prop) | (s,prop,_isU) <- sch']
-       ,qpUnique = return $ point <$> uniq
+       ,qpUnique = return uniq
        ,qpSize = size
       }
 
@@ -186,7 +188,7 @@ translateShapeMap''
   -> Either (AShowStr e s) (QueryShapeNoSize a e s)
 translateShapeMap'' f modSize assoc p =
   traverse (bitraverse safeLookup pure) (qpSchema p) >>= \sch -> do
-    qpu <- traverse3 safeLookup $ qpUnique p
+    qpu <- traverse2 safeLookup $ qpUnique p
     return
       QueryShape { qpSchema = sch,qpUnique = qpu,qpSize = modSize $ qpSize p }
   where
@@ -220,7 +222,7 @@ isUniqueSel
   => QueryShape e s
   -> [(Expr (ShapeSym e s),Expr (ShapeSym e s))]
   -> Bool
-isUniqueSel qp eqs = (`any` fmap copoint (qpUnique qp)) $ \ukeys ->
+isUniqueSel qp eqs = (`any` qpUnique qp) $ \ukeys ->
   (`all` ukeys)
   $ \uk -> (`any` (eqs ++ fmap flip eqs))
   $ \(el,er) ->
@@ -253,31 +255,23 @@ shapeProject exprColumnProps prj shape = do
       mapMaybe (\case
                   (e,E0 (Right ev)) -> Just (ev,e)
                   _                 -> Nothing) prj
-    translUniq ukeys = traverse2 (`lookup` keyAssoc) ukeys
+    translUniq ukeys = mapM (`lookup` keyAssoc) ukeys
 
 -- | Given an assoc and a list all the possible
 -- λ> substitutions [('a','A')] ['a','b']
 -- ('a' :| "b") :| [('A' :| "b")]
 -- λ> substitutions [('x','X')] ['a','b']
 -- ('a' :| "b") :| []
-substitutions
-  :: forall a .
-  Eq a
-  => [(a,a)]
-  -> NEL.NonEmpty (Filtered a)
-  -> NEL.NonEmpty (NEL.NonEmpty (Filtered a))
+substitutions :: forall a . Eq a =>
+                [(a,a)] -> NEL.NonEmpty a -> NEL.NonEmpty (NEL.NonEmpty a)
 substitutions eqs uniqs0 =
   foldl (\uniqs' eqpair -> disamb eqpair =<< uniqs') (return uniqs0) eqs
   where
     disamb (x,y) uniqs' =
-      uniqs' NEL.:| toList (replace x y uniqs')
-      ++ toList (replace y x uniqs')
-    replace :: a
-            -> a
-            -> NEL.NonEmpty (Filtered a)
-            -> Maybe (NEL.NonEmpty (Filtered a))
-    replace f t es =
-      if any2 (== f) es then Just $ fmap2 (\e -> if e == f then t else e) es
+      uniqs' NEL.:| toList (replace x y uniqs') ++ toList (replace y x uniqs')
+    replace :: a -> a -> NEL.NonEmpty a -> Maybe (NEL.NonEmpty a)
+    replace f t es = if f `elem` es
+      then Just $ (\e -> if e == f then t else e) <$> es
       else Nothing
 
 data LookupSide
@@ -320,23 +314,22 @@ joinShapes eqs qpL qpR =
   where
     sch = qpSchema qpL ++ qpSchema qpR
     (luSide,uniq) = bimap (mconcat . toList) join $ NEL.unzip uniqAnnot
-    -- For each pair of unique subtuples. Maintain the original filtering
-    uniqAnnot
-      :: NEL.NonEmpty (LookupSide,NEL.NonEmpty (NEL.NonEmpty (Filtered e)))
+    -- For each pair of unique subtuples.
+    uniqAnnot :: NEL.NonEmpty (LookupSide,NEL.NonEmpty (NEL.NonEmpty e))
     uniqAnnot = do
-      usetL :: NEL.NonEmpty (Filtered e) <- qpUnique qpL
-      usetR :: NEL.NonEmpty (Filtered e) <- qpUnique qpR
+      usetL :: NEL.NonEmpty e <- qpUnique qpL
+      usetR :: NEL.NonEmpty e <- qpUnique qpR
       -- Check if the equalities are lookups
-      let luOnL = all (`elem` fmap fst normEqs) $ copoint <$> usetL
-      let luOnR = all (`elem` fmap snd normEqs) $ copoint <$> usetR
+      let luOnL = all (`elem` fmap fst normEqs) usetL
+      let luOnR = all (`elem` fmap snd normEqs) usetR
       return $ case (luOnL,luOnR) of
-        (True,False) -> (RightForeignKey,substitutions normEqs usetL)
-        (False,True) -> (LeftForeignKey,substitutions (swap <$> normEqs) usetR)
-        (_,_) -> (NoLookup
-                 ,NEL.nub
-                  $ substitutions normEqs usetL
-                  <> substitutions (swap <$> normEqs) usetR)
-    normEqs :: [(e,e)]
+        (True,False) -> (RightForeignKey,) $ substitutions normEqs usetL
+        (False,True) -> (LeftForeignKey,)
+          $ substitutions (swap <$> normEqs) usetR
+        (_,_) -> (NoLookup,)
+          $ NEL.nub
+          $ substitutions normEqs usetL
+          <> substitutions (swap <$> normEqs) usetR
     normEqs = mapMaybe (uncurry go) eqs
       where
         go l r =
@@ -384,7 +377,7 @@ uniqDropConst p =
   -- Note: if we have ONLY consts in a unique set something is wrong
   -- or we called this function at the wrong place (not over a
   -- product-like)
-  $ mapMaybe (NEL.nonEmpty . filter (isNotConst . copoint) . toList)
+  $ mapMaybe (NEL.nonEmpty . filter isNotConst . toList)
   $ toList
   $ qpUnique p
   where

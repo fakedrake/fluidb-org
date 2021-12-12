@@ -443,6 +443,6 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
-  report_counters<60000>();
+  report_counters();
   return 0;
 }

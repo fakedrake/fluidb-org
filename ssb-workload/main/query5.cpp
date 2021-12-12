@@ -678,6 +678,287 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
+  // Delete: (S 
+  //   (P1 
+  //     PNot 
+  //     (P0 
+  //       (R2 REq (R0 (E0 (ESym "d_yearmonthnum"))) (R0 (E0 (EInt 199401)))))) 
+  std::cout << "Delete: (S \n  (P1 \n    PNot \n    (P0 \n      (R2 REq (R0 (E0 (ESym \"d_yearmonthnum\"))) (R0 (E0 (EInt 199401)))))) \n  (Q0 (TSymbol \"date\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data6.dat");
+  // Delete: (S (P1 PNot (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993)))))) 
+  std::cout << "Delete: (S (P1 PNot (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993)))))) \n   (Q0 (TSymbol \"date\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data16.dat");
+  // Delete: (S 
+  //   (P1 
+  //     PNot 
+  //     (P2 
+  //       PAnd 
+  //       (P0 
+  //         (R2 REq (R0 (E0 (ESym "d_weeknuminyear"))) (R0 (E0 (EInt 6))))) 
+  //       (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994))))))) 
+  std::cout << "Delete: (S \n  (P1 \n    PNot \n    (P2 \n      PAnd \n      (P0 \n        (R2 REq (R0 (E0 (ESym \"d_weeknuminyear\"))) (R0 (E0 (EInt 6))))) \n      (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994))))))) \n  (Q0 (TSymbol \"date\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data26.dat");
+  // Delete: (Q1 
+  //   (QGroup 
+  //     [
+  //      (
+  //        ESym "revenue",
+  //        E0 
+  //           (NAggr 
+  //             AggrSum 
+  //             (E2 EMul 
+  //                 (E0 (ESym "lo_extendedprice")) 
+  //                 (E0 (ESym "lo_discount"))))
+  //       )
+  //     ] 
+  //     []) 
+  //   (S 
+  //     (P2 
+  //       PAnd 
+  //       (P2 
+  //         PAnd 
+  //         (P2 
+  //           PAnd 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (EInt 4))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 6)))))) 
+  //         (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym "lo_quantity")))))) 
+  //       (P0 (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35)))))) 
+  //     (J 
+  //       (P0 
+  //         (R2 REq 
+  //             (R0 (E0 (ESym "lo_orderdate"))) 
+  //             (R0 (E0 (ESym "d_datekey"))))) 
+  //       (S 
+  //         (P0 
+  //           (R2 REq 
+  //               (R0 (E0 (ESym "d_yearmonthnum"))) 
+  //               (R0 (E0 (EInt 199401))))) 
+  //         (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q1 \n  (QGroup \n    [\n     (\n       ESym \"revenue\",\n       E0 \n          (NAggr \n            AggrSum \n            (E2 EMul \n                (E0 (ESym \"lo_extendedprice\")) \n                (E0 (ESym \"lo_discount\"))))\n      )\n    ] \n    []) \n  (S \n    (P2 \n      PAnd \n      (P2 \n        PAnd \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLe (R0 (E0 (EInt 4))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 \n            (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 6)))))) \n        (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym \"lo_quantity\")))))) \n      (P0 (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35)))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_orderdate\"))) \n            (R0 (E0 (ESym \"d_datekey\"))))) \n      (S \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"d_yearmonthnum\"))) \n              (R0 (E0 (EInt 199401))))) \n        (Q0 (TSymbol \"date\"))) \n      (Q0 (TSymbol \"lineorder\")))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data14.dat");
+  // Delete: (S 
+  //   (P2 
+  //     PAnd 
+  //     (P2 
+  //       PAnd 
+  //       (P2 PAnd 
+  //           (P0 (R2 RLe (R0 (E0 (EInt 4))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 6)))))) 
+  //       (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym "lo_quantity")))))) 
+  //     (P0 (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35)))))) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey"))))) 
+  //     (S 
+  //       (P0 
+  //         (R2 REq 
+  //             (R0 (E0 (ESym "d_yearmonthnum"))) 
+  //             (R0 (E0 (EInt 199401))))) 
+  //       (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (S \n  (P2 \n    PAnd \n    (P2 \n      PAnd \n      (P2 PAnd \n          (P0 (R2 RLe (R0 (E0 (EInt 4))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 6)))))) \n      (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym \"lo_quantity\")))))) \n    (P0 (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35)))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\"))))) \n    (S \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"d_yearmonthnum\"))) \n            (R0 (E0 (EInt 199401))))) \n      (Q0 (TSymbol \"date\"))) \n    (Q0 (TSymbol \"lineorder\"))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data12.dat");
+  // Delete: (Q1 
+  //   (QGroup 
+  //     [
+  //      (
+  //        ESym "revenue",
+  //        E0 
+  //           (NAggr 
+  //             AggrSum 
+  //             (E2 EMul 
+  //                 (E0 (ESym "lo_extendedprice")) 
+  //                 (E0 (ESym "lo_discount"))))
+  //       )
+  //     ] 
+  //     []) 
+  //   (S 
+  //     (P2 
+  //       PAnd 
+  //       (P2 PAnd 
+  //           (P0 (R2 RLe (R0 (E0 (EInt 1))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 3)))))) 
+  //       (P0 (R2 RLt (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 25)))))) 
+  //     (J 
+  //       (P0 
+  //         (R2 REq 
+  //             (R0 (E0 (ESym "lo_orderdate"))) 
+  //             (R0 (E0 (ESym "d_datekey"))))) 
+  //       (S (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993))))) 
+  //          (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q1 \n  (QGroup \n    [\n     (\n       ESym \"revenue\",\n       E0 \n          (NAggr \n            AggrSum \n            (E2 EMul \n                (E0 (ESym \"lo_extendedprice\")) \n                (E0 (ESym \"lo_discount\"))))\n      )\n    ] \n    []) \n  (S \n    (P2 \n      PAnd \n      (P2 PAnd \n          (P0 (R2 RLe (R0 (E0 (EInt 1))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 3)))))) \n      (P0 (R2 RLt (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 25)))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_orderdate\"))) \n            (R0 (E0 (ESym \"d_datekey\"))))) \n      (S (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993))))) \n         (Q0 (TSymbol \"date\"))) \n      (Q0 (TSymbol \"lineorder\")))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data24.dat");
+  // Delete: (S 
+  //   (P2 
+  //     PAnd 
+  //     (P2 PAnd 
+  //         (P0 (R2 RLe (R0 (E0 (EInt 1))) (R0 (E0 (ESym "lo_discount"))))) 
+  //         (P0 (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 3)))))) 
+  //     (P0 (R2 RLt (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 25)))))) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey"))))) 
+  //     (S (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993))))) 
+  //        (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (S \n  (P2 \n    PAnd \n    (P2 PAnd \n        (P0 (R2 RLe (R0 (E0 (EInt 1))) (R0 (E0 (ESym \"lo_discount\"))))) \n        (P0 (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 3)))))) \n    (P0 (R2 RLt (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 25)))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\"))))) \n    (S (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993))))) \n       (Q0 (TSymbol \"date\"))) \n    (Q0 (TSymbol \"lineorder\"))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data22.dat");
+  // Delete: (Q1 
+  //   (QGroup 
+  //     [
+  //      (
+  //        ESym "revenue",
+  //        E0 
+  //           (NAggr 
+  //             AggrSum 
+  //             (E2 EMul 
+  //                 (E0 (ESym "lo_extendedprice")) 
+  //                 (E0 (ESym "lo_discount"))))
+  //       )
+  //     ] 
+  //     []) 
+  //   (S 
+  //     (P2 
+  //       PAnd 
+  //       (P2 
+  //         PAnd 
+  //         (P2 
+  //           PAnd 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (EInt 5))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 7)))))) 
+  //         (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym "lo_quantity")))))) 
+  //       (P0 (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35)))))) 
+  //     (J 
+  //       (P0 
+  //         (R2 REq 
+  //             (R0 (E0 (ESym "lo_orderdate"))) 
+  //             (R0 (E0 (ESym "d_datekey"))))) 
+  //       (S 
+  //         (P2 
+  //           PAnd 
+  //           (P0 
+  //             (R2 REq 
+  //                 (R0 (E0 (ESym "d_weeknuminyear"))) 
+  //                 (R0 (E0 (EInt 6))))) 
+  //           (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994)))))) 
+  //         (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q1 \n  (QGroup \n    [\n     (\n       ESym \"revenue\",\n       E0 \n          (NAggr \n            AggrSum \n            (E2 EMul \n                (E0 (ESym \"lo_extendedprice\")) \n                (E0 (ESym \"lo_discount\"))))\n      )\n    ] \n    []) \n  (S \n    (P2 \n      PAnd \n      (P2 \n        PAnd \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLe (R0 (E0 (EInt 5))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 \n            (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 7)))))) \n        (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym \"lo_quantity\")))))) \n      (P0 (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35)))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_orderdate\"))) \n            (R0 (E0 (ESym \"d_datekey\"))))) \n      (S \n        (P2 \n          PAnd \n          (P0 \n            (R2 REq \n                (R0 (E0 (ESym \"d_weeknuminyear\"))) \n                (R0 (E0 (EInt 6))))) \n          (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994)))))) \n        (Q0 (TSymbol \"date\"))) \n      (Q0 (TSymbol \"lineorder\")))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data34.dat");
+  // Delete: (S 
+  //   (P2 
+  //     PAnd 
+  //     (P2 
+  //       PAnd 
+  //       (P2 PAnd 
+  //           (P0 (R2 RLe (R0 (E0 (EInt 5))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 7)))))) 
+  //       (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym "lo_quantity")))))) 
+  //     (P0 (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35)))))) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey"))))) 
+  //     (S 
+  //       (P2 
+  //         PAnd 
+  //         (P0 
+  //           (R2 REq (R0 (E0 (ESym "d_weeknuminyear"))) (R0 (E0 (EInt 6))))) 
+  //         (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994)))))) 
+  //       (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (S \n  (P2 \n    PAnd \n    (P2 \n      PAnd \n      (P2 PAnd \n          (P0 (R2 RLe (R0 (E0 (EInt 5))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 7)))))) \n      (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym \"lo_quantity\")))))) \n    (P0 (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35)))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\"))))) \n    (S \n      (P2 \n        PAnd \n        (P0 \n          (R2 REq (R0 (E0 (ESym \"d_weeknuminyear\"))) (R0 (E0 (EInt 6))))) \n        (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994)))))) \n      (Q0 (TSymbol \"date\"))) \n    (Q0 (TSymbol \"lineorder\"))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data32.dat");
+  // Delete: (Q2 
+  //   (QLeftAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey")))))) 
+  //   (S 
+  //     (P0 
+  //       (R2 REq (R0 (E0 (ESym "d_yearmonthnum"))) (R0 (E0 (EInt 199401))))) 
+  //     (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q2 \n  (QLeftAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (S \n    (P0 \n      (R2 REq (R0 (E0 (ESym \"d_yearmonthnum\"))) (R0 (E0 (EInt 199401))))) \n    (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data7.dat");
+  // Delete: (Q2 
+  //   (QRightAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey")))))) 
+  //   (S 
+  //     (P0 
+  //       (R2 REq (R0 (E0 (ESym "d_yearmonthnum"))) (R0 (E0 (EInt 199401))))) 
+  //     (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q2 \n  (QRightAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (S \n    (P0 \n      (R2 REq (R0 (E0 (ESym \"d_yearmonthnum\"))) (R0 (E0 (EInt 199401))))) \n    (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data9.dat");
+  // Delete: (Q2 
+  //   (QLeftAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey")))))) 
+  //   (S (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993))))) 
+  //      (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q2 \n  (QLeftAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (S (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993))))) \n     (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data17.dat");
+  // Delete: (Q2 
+  //   (QRightAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey")))))) 
+  //   (S (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993))))) 
+  //      (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q2 \n  (QRightAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (S (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993))))) \n     (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data19.dat");
+  // Delete: (Q2 
+  //   (QLeftAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey")))))) 
+  //   (S 
+  //     (P2 
+  //       PAnd 
+  //       (P0 
+  //         (R2 REq (R0 (E0 (ESym "d_weeknuminyear"))) (R0 (E0 (EInt 6))))) 
+  //       (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994)))))) 
+  //     (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q2 \n  (QLeftAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (S \n    (P2 \n      PAnd \n      (P0 \n        (R2 REq (R0 (E0 (ESym \"d_weeknuminyear\"))) (R0 (E0 (EInt 6))))) \n      (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994)))))) \n    (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data27.dat");
+  // Delete: (Q2 
+  //   (QRightAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey")))))) 
+  //   (S 
+  //     (P2 
+  //       PAnd 
+  //       (P0 
+  //         (R2 REq (R0 (E0 (ESym "d_weeknuminyear"))) (R0 (E0 (EInt 6))))) 
+  //       (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994)))))) 
+  //     (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (Q2 \n  (QRightAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (S \n    (P2 \n      PAnd \n      (P0 \n        (R2 REq (R0 (E0 (ESym \"d_weeknuminyear\"))) (R0 (E0 (EInt 6))))) \n      (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994)))))) \n    (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data29.dat");
+  // Delete: (J 
+  //   (P0 
+  //     (R2 REq 
+  //         (R0 (E0 (ESym "lo_orderdate"))) 
+  //         (R0 (E0 (ESym "d_datekey"))))) 
+  //   (S 
+  //     (P0 
+  //       (R2 REq (R0 (E0 (ESym "d_yearmonthnum"))) (R0 (E0 (EInt 199401))))) 
+  //     (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (J \n  (P0 \n    (R2 REq \n        (R0 (E0 (ESym \"lo_orderdate\"))) \n        (R0 (E0 (ESym \"d_datekey\"))))) \n  (S \n    (P0 \n      (R2 REq (R0 (E0 (ESym \"d_yearmonthnum\"))) (R0 (E0 (EInt 199401))))) \n    (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data8.dat");
   // ForwardTrigger: (Just 
   //   (Left 
   //     [
@@ -692,6 +973,75 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
+  // Delete: (S 
+  //   (P1 
+  //     PNot 
+  //     (P2 
+  //       PAnd 
+  //       (P2 
+  //         PAnd 
+  //         (P2 
+  //           PAnd 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (EInt 4))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 6)))))) 
+  //         (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym "lo_quantity")))))) 
+  //       (P0 (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35))))))) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey"))))) 
+  //     (S 
+  //       (P0 
+  //         (R2 REq 
+  //             (R0 (E0 (ESym "d_yearmonthnum"))) 
+  //             (R0 (E0 (EInt 199401))))) 
+  //       (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (S \n  (P1 \n    PNot \n    (P2 \n      PAnd \n      (P2 \n        PAnd \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLe (R0 (E0 (EInt 4))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 \n            (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 6)))))) \n        (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym \"lo_quantity\")))))) \n      (P0 (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35))))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\"))))) \n    (S \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"d_yearmonthnum\"))) \n            (R0 (E0 (EInt 199401))))) \n      (Q0 (TSymbol \"date\"))) \n    (Q0 (TSymbol \"lineorder\"))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data13.dat");
+  // Delete: (J 
+  //   (P0 
+  //     (R2 REq 
+  //         (R0 (E0 (ESym "lo_orderdate"))) 
+  //         (R0 (E0 (ESym "d_datekey"))))) 
+  //   (S (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993))))) 
+  //      (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (J \n  (P0 \n    (R2 REq \n        (R0 (E0 (ESym \"lo_orderdate\"))) \n        (R0 (E0 (ESym \"d_datekey\"))))) \n  (S (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993))))) \n     (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data18.dat");
+  // Delete: (S 
+  //   (P1 
+  //     PNot 
+  //     (P2 
+  //       PAnd 
+  //       (P2 PAnd 
+  //           (P0 (R2 RLe (R0 (E0 (EInt 1))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 3)))))) 
+  //       (P0 (R2 RLt (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 25))))))) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey"))))) 
+  //     (S (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993))))) 
+  //        (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (S \n  (P1 \n    PNot \n    (P2 \n      PAnd \n      (P2 PAnd \n          (P0 (R2 RLe (R0 (E0 (EInt 1))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 3)))))) \n      (P0 (R2 RLt (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 25))))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\"))))) \n    (S (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993))))) \n       (Q0 (TSymbol \"date\"))) \n    (Q0 (TSymbol \"lineorder\"))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data23.dat");
+  // Delete: (J 
+  //   (P0 
+  //     (R2 REq 
+  //         (R0 (E0 (ESym "lo_orderdate"))) 
+  //         (R0 (E0 (ESym "d_datekey"))))) 
+  //   (S 
+  //     (P2 
+  //       PAnd 
+  //       (P0 
+  //         (R2 REq (R0 (E0 (ESym "d_weeknuminyear"))) (R0 (E0 (EInt 6))))) 
+  //       (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994)))))) 
+  //     (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (J \n  (P0 \n    (R2 REq \n        (R0 (E0 (ESym \"lo_orderdate\"))) \n        (R0 (E0 (ESym \"d_datekey\"))))) \n  (S \n    (P2 \n      PAnd \n      (P0 \n        (R2 REq (R0 (E0 (ESym \"d_weeknuminyear\"))) (R0 (E0 (EInt 6))))) \n      (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994)))))) \n    (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data28.dat");
   // ForwardTrigger: (Just 
   //   (Left 
   //     [
@@ -706,6 +1056,88 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
+  // Delete: (Q2 
+  //   (QLeftAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_suppkey"))) 
+  //           (R0 (E0 (ESym "s_suppkey")))))) 
+  //   (Q0 (TSymbol "supplier")) 
+  std::cout << "Delete: (Q2 \n  (QLeftAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_suppkey\"))) \n          (R0 (E0 (ESym \"s_suppkey\")))))) \n  (Q0 (TSymbol \"supplier\")) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data35.dat");
+  // Delete: (Q2 
+  //   (QRightAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_suppkey"))) 
+  //           (R0 (E0 (ESym "s_suppkey")))))) 
+  //   (Q0 (TSymbol "supplier")) 
+  std::cout << "Delete: (Q2 \n  (QRightAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_suppkey\"))) \n          (R0 (E0 (ESym \"s_suppkey\")))))) \n  (Q0 (TSymbol \"supplier\")) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data37.dat");
+  // Delete: (S 
+  //   (P1 
+  //     PNot 
+  //     (P2 
+  //       PAnd 
+  //       (P2 
+  //         PAnd 
+  //         (P2 
+  //           PAnd 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (EInt 5))) (R0 (E0 (ESym "lo_discount"))))) 
+  //           (P0 
+  //             (R2 RLe (R0 (E0 (ESym "lo_discount"))) (R0 (E0 (EInt 7)))))) 
+  //         (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym "lo_quantity")))))) 
+  //       (P0 (R2 RLe (R0 (E0 (ESym "lo_quantity"))) (R0 (E0 (EInt 35))))))) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey"))))) 
+  //     (S 
+  //       (P2 
+  //         PAnd 
+  //         (P0 
+  //           (R2 REq (R0 (E0 (ESym "d_weeknuminyear"))) (R0 (E0 (EInt 6))))) 
+  //         (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994)))))) 
+  //       (Q0 (TSymbol "date"))) 
+  std::cout << "Delete: (S \n  (P1 \n    PNot \n    (P2 \n      PAnd \n      (P2 \n        PAnd \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLe (R0 (E0 (EInt 5))) (R0 (E0 (ESym \"lo_discount\"))))) \n          (P0 \n            (R2 RLe (R0 (E0 (ESym \"lo_discount\"))) (R0 (E0 (EInt 7)))))) \n        (P0 (R2 RLe (R0 (E0 (EInt 26))) (R0 (E0 (ESym \"lo_quantity\")))))) \n      (P0 (R2 RLe (R0 (E0 (ESym \"lo_quantity\"))) (R0 (E0 (EInt 35))))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\"))))) \n    (S \n      (P2 \n        PAnd \n        (P0 \n          (R2 REq (R0 (E0 (ESym \"d_weeknuminyear\"))) (R0 (E0 (EInt 6))))) \n        (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994)))))) \n      (Q0 (TSymbol \"date\"))) \n    (Q0 (TSymbol \"lineorder\"))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data33.dat");
+  // Delete: (S (P0 (R2 REq (R0 (E0 (ESym "d_yearmonthnum"))) (R0 (E0 (EInt 199401))))) 
+  std::cout << "Delete: (S (P0 (R2 REq (R0 (E0 (ESym \"d_yearmonthnum\"))) (R0 (E0 (EInt 199401))))) \n   (Q0 (TSymbol \"date\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data5.dat");
+  std::cout << "Delete: (Q0 (TSymbol \"date\"))" << std::endl;
+  deleteFile("/tmp/fluidb-data/date.dat");
+  // Delete: (S (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993))))) 
+  std::cout << "Delete: (S (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993))))) \n   (Q0 (TSymbol \"date\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data15.dat");
+  // Delete: (S 
+  //   (P2 PAnd 
+  //       (P0 (R2 REq (R0 (E0 (ESym "d_weeknuminyear"))) (R0 (E0 (EInt 6))))) 
+  //       (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1994)))))) 
+  std::cout << "Delete: (S \n  (P2 PAnd \n      (P0 (R2 REq (R0 (E0 (ESym \"d_weeknuminyear\"))) (R0 (E0 (EInt 6))))) \n      (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1994)))))) \n  (Q0 (TSymbol \"date\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data25.dat");
+  // Delete: (Q2 
+  //   (QLeftAntijoin 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_orderdate"))) 
+  //           (R0 (E0 (ESym "d_datekey")))))) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_suppkey"))) 
+  //           (R0 (E0 (ESym "s_suppkey"))))) 
+  //     (Q0 (TSymbol "supplier")) 
+  //     (Q0 (TSymbol "lineorder"))) 
+  std::cout << "Delete: (Q2 \n  (QLeftAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_suppkey\"))) \n          (R0 (E0 (ESym \"s_suppkey\"))))) \n    (Q0 (TSymbol \"supplier\")) \n    (Q0 (TSymbol \"lineorder\"))) \n  (Q0 (TSymbol \"date\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data40.dat");
+  // Delete: (J 
+  //   (P0 
+  //     (R2 REq (R0 (E0 (ESym "lo_suppkey"))) (R0 (E0 (ESym "s_suppkey"))))) 
+  //   (Q0 (TSymbol "supplier")) 
+  std::cout << "Delete: (J \n  (P0 \n    (R2 REq (R0 (E0 (ESym \"lo_suppkey\"))) (R0 (E0 (ESym \"s_suppkey\"))))) \n  (Q0 (TSymbol \"supplier\")) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data36.dat");
   // ForwardTrigger: (Just 
   //   (Right 
   //     [
@@ -746,6 +1178,6 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
-  report_counters<60000>();
+  report_counters();
   return 0;
 }

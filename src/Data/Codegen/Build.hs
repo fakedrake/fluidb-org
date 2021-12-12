@@ -189,6 +189,8 @@ forEachEpoch pl = do
       a : nelTails (x NEL.:| xs)
 
 
+cppReportPerf :: [CC.Statement CC.CodeSymbol]
+cppReportPerf = [CC.ExpressionSt $ CC.FunctionAp "report_counters" [] []]
 
 -- | The main function.
 getCppMain
@@ -196,23 +198,14 @@ getCppMain
   => [CC.Statement CC.CodeSymbol]
   -> CodeBuilderT e s t n m (CC.Function CC.CodeSymbol)
 getCppMain body = do
-  budget <- lift $ lift4 $ asks budget
-  let cppReportPerf =
-        [CC.ExpressionSt
-         $ CC.FunctionAp
-           "report_counters"
-           [CC.TemplArg $ CC.LiteralIntExpression $ fromMaybe (-1) budget]
-           []]
   let ret = CC.ReturnSt $ CC.LiteralIntExpression 0
-  return
-    CC.Function
-    { functionName = "main"
-     ,functionType = CC.PrimitiveType mempty CC.CppInt
-     ,functionBody = body ++ cppReportPerf ++ [ret]
-     ,functionArguments = []
-     ,functionConstMember = False
+  return CC.Function {
+    functionName="main",
+    functionType=CC.PrimitiveType mempty CC.CppInt,
+    functionBody=body ++ cppReportPerf ++ [ret],
+    functionArguments=[],
+    functionConstMember=False
     }
-
 
 -- | Get the entire program as a string.
 getCppProgram

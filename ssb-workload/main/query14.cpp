@@ -481,94 +481,6 @@ int main() {
   //     (Q0 (TSymbol "date"))) 
   std::cout << "Delete: (Q2 \n  (QRightAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (S \n    (P0 \n      (R2 REq (R0 (E0 (ESym \"d_yearmonthnum\"))) (R0 (E0 (EInt 199401))))) \n    (Q0 (TSymbol \"date\"))) \n  (Q0 (TSymbol \"lineorder\")))" << std::endl;
   deleteFile("/tmp/fluidb_store/data9.dat");
-  // Delete: (S 
-  //   (P1 
-  //     PNot 
-  //     (P0 
-  //       (R2 RLike 
-  //           (R0 (E0 (ESym "s_region"))) 
-  //           (R0 (E0 (EString "AMERICA")))))) 
-  //   (J 
-  //     (P0 
-  //       (R2 REq 
-  //           (R0 (E0 (ESym "lo_suppkey"))) 
-  //           (R0 (E0 (ESym "s_suppkey"))))) 
-  //     (S 
-  //       (P0 
-  //         (R2 RLike 
-  //             (R0 (E0 (ESym "c_region"))) 
-  //             (R0 (E0 (EString "AMERICA"))))) 
-  //       (J 
-  //         (P0 
-  //           (R2 REq 
-  //               (R0 (E0 (ESym "lo_custkey"))) 
-  //               (R0 (E0 (ESym "c_custkey"))))) 
-  //         (Q0 (TSymbol "customer")) 
-  //         (Q0 (TSymbol "lineorder")))) 
-  std::cout << "Delete: (S \n  (P1 \n    PNot \n    (P0 \n      (R2 RLike \n          (R0 (E0 (ESym \"s_region\"))) \n          (R0 (E0 (EString \"AMERICA\")))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_suppkey\"))) \n          (R0 (E0 (ESym \"s_suppkey\"))))) \n    (S \n      (P0 \n        (R2 RLike \n            (R0 (E0 (ESym \"c_region\"))) \n            (R0 (E0 (EString \"AMERICA\"))))) \n      (J \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_custkey\"))) \n              (R0 (E0 (ESym \"c_custkey\"))))) \n        (Q0 (TSymbol \"customer\")) \n        (Q0 (TSymbol \"lineorder\")))) \n    (Q0 (TSymbol \"supplier\"))))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data310.dat");
-  // Delete: (Q2 
-  //   (QLeftAntijoin 
-  //     (P0 
-  //       (R2 REq 
-  //           (R0 (E0 (ESym "lo_orderdate"))) 
-  //           (R0 (E0 (ESym "d_datekey")))))) 
-  //   (Q0 (TSymbol "date")) 
-  //   (S 
-  //     (P0 
-  //       (R2 RLike 
-  //           (R0 (E0 (ESym "s_region"))) 
-  //           (R0 (E0 (EString "AMERICA"))))) 
-  //     (J 
-  //       (P0 
-  //         (R2 REq 
-  //             (R0 (E0 (ESym "lo_suppkey"))) 
-  //             (R0 (E0 (ESym "s_suppkey"))))) 
-  //       (S 
-  //         (P0 
-  //           (R2 RLike 
-  //               (R0 (E0 (ESym "c_region"))) 
-  //               (R0 (E0 (EString "AMERICA"))))) 
-  //         (J 
-  //           (P0 
-  //             (R2 REq 
-  //                 (R0 (E0 (ESym "lo_custkey"))) 
-  //                 (R0 (E0 (ESym "c_custkey"))))) 
-  //           (Q0 (TSymbol "customer")) 
-  //           (Q0 (TSymbol "lineorder")))) 
-  std::cout << "Delete: (Q2 \n  (QLeftAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (Q0 (TSymbol \"date\")) \n  (S \n    (P0 \n      (R2 RLike \n          (R0 (E0 (ESym \"s_region\"))) \n          (R0 (E0 (EString \"AMERICA\"))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_suppkey\"))) \n            (R0 (E0 (ESym \"s_suppkey\"))))) \n      (S \n        (P0 \n          (R2 RLike \n              (R0 (E0 (ESym \"c_region\"))) \n              (R0 (E0 (EString \"AMERICA\"))))) \n        (J \n          (P0 \n            (R2 REq \n                (R0 (E0 (ESym \"lo_custkey\"))) \n                (R0 (E0 (ESym \"c_custkey\"))))) \n          (Q0 (TSymbol \"customer\")) \n          (Q0 (TSymbol \"lineorder\")))) \n      (Q0 (TSymbol \"supplier\")))))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data311.dat");
-  // Delete: (Q2 
-  //   (QRightAntijoin 
-  //     (P0 
-  //       (R2 REq 
-  //           (R0 (E0 (ESym "lo_orderdate"))) 
-  //           (R0 (E0 (ESym "d_datekey")))))) 
-  //   (Q0 (TSymbol "date")) 
-  //   (S 
-  //     (P0 
-  //       (R2 RLike 
-  //           (R0 (E0 (ESym "s_region"))) 
-  //           (R0 (E0 (EString "AMERICA"))))) 
-  //     (J 
-  //       (P0 
-  //         (R2 REq 
-  //             (R0 (E0 (ESym "lo_suppkey"))) 
-  //             (R0 (E0 (ESym "s_suppkey"))))) 
-  //       (S 
-  //         (P0 
-  //           (R2 RLike 
-  //               (R0 (E0 (ESym "c_region"))) 
-  //               (R0 (E0 (EString "AMERICA"))))) 
-  //         (J 
-  //           (P0 
-  //             (R2 REq 
-  //                 (R0 (E0 (ESym "lo_custkey"))) 
-  //                 (R0 (E0 (ESym "c_custkey"))))) 
-  //           (Q0 (TSymbol "customer")) 
-  //           (Q0 (TSymbol "lineorder")))) 
-  std::cout << "Delete: (Q2 \n  (QRightAntijoin \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_orderdate\"))) \n          (R0 (E0 (ESym \"d_datekey\")))))) \n  (Q0 (TSymbol \"date\")) \n  (S \n    (P0 \n      (R2 RLike \n          (R0 (E0 (ESym \"s_region\"))) \n          (R0 (E0 (EString \"AMERICA\"))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_suppkey\"))) \n            (R0 (E0 (ESym \"s_suppkey\"))))) \n      (S \n        (P0 \n          (R2 RLike \n              (R0 (E0 (ESym \"c_region\"))) \n              (R0 (E0 (EString \"AMERICA\"))))) \n        (J \n          (P0 \n            (R2 REq \n                (R0 (E0 (ESym \"lo_custkey\"))) \n                (R0 (E0 (ESym \"c_custkey\"))))) \n          (Q0 (TSymbol \"customer\")) \n          (Q0 (TSymbol \"lineorder\")))) \n      (Q0 (TSymbol \"supplier\")))))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data312.dat");
   // Delete: (J 
   //   (P0 
   //     (R2 REq 
@@ -636,6 +548,6 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
-  report_counters<60000>();
+  report_counters();
   return 0;
 }

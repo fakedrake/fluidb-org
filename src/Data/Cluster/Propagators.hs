@@ -41,7 +41,6 @@ import           Data.Cluster.ClusterConfig
 import           Data.Cluster.Types
 import           Data.Cluster.Types.Monad
 import           Data.Cluster.Types.Zip
-import           Data.Copointed
 import           Data.CppAst.CppType
 import           Data.Either
 import           Data.Functor.Identity
@@ -51,7 +50,6 @@ import           Data.List
 import qualified Data.List.NonEmpty                   as NEL
 import           Data.Maybe
 import           Data.NodeContainers
-import           Data.Pointed
 import           Data.Query.Algebra
 import           Data.Query.Optimizations.RemapUnique
 import           Data.Query.QuerySchema
@@ -59,6 +57,7 @@ import           Data.Query.QuerySchema.SchemaBase
 import           Data.Query.QuerySchema.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
+import           Data.Utils.Debug
 import           Data.Utils.Default
 import           Data.Utils.EmptyF
 import           Data.Utils.Function
@@ -399,12 +398,7 @@ uopOutputs
   -> UQOp (ShapeSym e s)
   -> Tup2 (G e s (QueryShape e s))
 uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
-  QSel p -> tw
-    (>>= fmap2 (setFilter (FltSelect 0.5) . point)
-     . fmap HS.toList
-     . disambEq p
-     . HS.fromList
-     . fmap copoint)
+  QSel p -> tw (>>= fmap HS.toList . disambEq p . HS.fromList)
   -- For proj and group associations dont mean much
   QGroup p es -> Tup2 (outGrpShape p es) (G0 Nothing)
   QProj inv prj -> Tup2
@@ -414,7 +408,7 @@ uopOutputs (Tup2 assocPrim assocSec) literalType op = case op of
   QLimit _ -> tw id
   QDrop _ -> tw id
   where
-    tw :: ([[Filtered (ShapeSym e s)]] -> [[Filtered (ShapeSym e s)]])
+    tw :: ([[ShapeSym e s]] -> [[ShapeSym e s]])
        -> Tup2 (G e s (QueryShape e s))
     tw modUniq =
       Tup2

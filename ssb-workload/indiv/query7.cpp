@@ -722,7 +722,7 @@ int main() {
   //                 (R0 (E0 (EString "MFGR#2221"))))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"s_region\"))) \n                (R0 (E0 (EString \"EUROPE\"))))) \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"p_brand1\"))) \n                (R0 (E0 (EString \"MFGR#2221\"))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass30>(Just<const std::string>("/tmp/fluidb_store/data20.dat"), Just<const std::string>("/tmp/fluidb_store/data21.dat"), "/tmp/fluidb_store/data16.dat");
+    auto operation = mkSelect<CallableClass30>(Just<const std::string>("/tmp/fluidb_store/data20.dat"), Nothing<const std::string>(), "/tmp/fluidb_store/data16.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -746,6 +746,6 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
-  report_counters<60000>();
+  report_counters();
   return 0;
 }

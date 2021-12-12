@@ -328,8 +328,6 @@ int main() {
   // Delete: (S (P1 PNot (P0 (R2 REq (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1993)))))) 
   std::cout << "Delete: (S (P1 PNot (P0 (R2 REq (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1993)))))) \n   (Q0 (TSymbol \"date\")))" << std::endl;
   deleteFile("/tmp/fluidb_store/data16.dat");
-  std::cout << "Delete: (Q0 (TSymbol \"date\"))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data1.dat");
   // Delete: (Q1 
   //   (QGroup 
   //     [
@@ -471,6 +469,6 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
-  report_counters<60000>();
+  report_counters();
   return 0;
 }

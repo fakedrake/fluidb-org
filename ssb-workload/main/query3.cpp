@@ -10,6 +10,6 @@
 
 
 int main() {
-  report_counters<60000>();
+  report_counters();
   return 0;
 }

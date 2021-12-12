@@ -912,14 +912,28 @@ int main() {
   //       PAnd 
   //       (P2 
   //         PAnd 
-  //         (P0 
-  //           (R2 RLike 
-  //               (R0 (E0 (ESym "c_region"))) 
-  //               (R0 (E0 (EString "ASIA"))))) 
+  //         (P2 
+  //           POr 
+  //           (P0 
+  //             (R2 RLike 
+  //                 (R0 (E0 (ESym "c_city"))) 
+  //                 (R0 (E0 (EString "UNITED KI1"))))) 
+  //           (P0 
+  //             (R2 RLike 
+  //                 (R0 (E0 (ESym "c_city"))) 
+  //                 (R0 (E0 (EString "UNITED KI5")))))) 
   //         (P0 (R2 RGe (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1992)))))) 
   //       (P0 (R2 RLe (R0 (E0 (ESym "d_year"))) (R0 (E0 (EInt 1997)))))) 
-  //     (P0 
-  //       (R2 RLike (R0 (E0 (ESym "s_region"))) (R0 (E0 (EString "ASIA")))))) 
+  //     (P2 
+  //       POr 
+  //       (P0 
+  //         (R2 RLike 
+  //             (R0 (E0 (ESym "s_city"))) 
+  //             (R0 (E0 (EString "UNITED KI1"))))) 
+  //       (P0 
+  //         (R2 RLike 
+  //             (R0 (E0 (ESym "s_city"))) 
+  //             (R0 (E0 (EString "UNITED KI5"))))))) 
   //   (J 
   //     (P0 
   //       (R2 REq 
@@ -938,8 +952,8 @@ int main() {
   //               (R0 (E0 (ESym "d_datekey"))))) 
   //         (Q0 (TSymbol "date")) 
   //         (Q0 (TSymbol "lineorder")))) 
-  std::cout << "Delete: (S \n  (P2 \n    PAnd \n    (P2 \n      PAnd \n      (P2 \n        PAnd \n        (P0 \n          (R2 RLike \n              (R0 (E0 (ESym \"c_region\"))) \n              (R0 (E0 (EString \"ASIA\"))))) \n        (P0 (R2 RGe (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1992)))))) \n      (P0 (R2 RLe (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1997)))))) \n    (P0 \n      (R2 RLike (R0 (E0 (ESym \"s_region\"))) (R0 (E0 (EString \"ASIA\")))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_suppkey\"))) \n          (R0 (E0 (ESym \"s_suppkey\"))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_custkey\"))) \n            (R0 (E0 (ESym \"c_custkey\"))))) \n      (Q0 (TSymbol \"customer\")) \n      (J \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\"))))) \n        (Q0 (TSymbol \"date\")) \n        (Q0 (TSymbol \"lineorder\")))) \n    (Q0 (TSymbol \"supplier\"))))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data163.dat");
+  std::cout << "Delete: (S \n  (P2 \n    PAnd \n    (P2 \n      PAnd \n      (P2 \n        PAnd \n        (P2 \n          POr \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"c_city\"))) \n                (R0 (E0 (EString \"UNITED KI1\"))))) \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"c_city\"))) \n                (R0 (E0 (EString \"UNITED KI5\")))))) \n        (P0 (R2 RGe (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1992)))))) \n      (P0 (R2 RLe (R0 (E0 (ESym \"d_year\"))) (R0 (E0 (EInt 1997)))))) \n    (P2 \n      POr \n      (P0 \n        (R2 RLike \n            (R0 (E0 (ESym \"s_city\"))) \n            (R0 (E0 (EString \"UNITED KI1\"))))) \n      (P0 \n        (R2 RLike \n            (R0 (E0 (ESym \"s_city\"))) \n            (R0 (E0 (EString \"UNITED KI5\"))))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_suppkey\"))) \n          (R0 (E0 (ESym \"s_suppkey\"))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_custkey\"))) \n            (R0 (E0 (ESym \"c_custkey\"))))) \n      (Q0 (TSymbol \"customer\")) \n      (J \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\"))))) \n        (Q0 (TSymbol \"date\")) \n        (Q0 (TSymbol \"lineorder\")))) \n    (Q0 (TSymbol \"supplier\"))))" << std::endl;
+  deleteFile("/tmp/fluidb_store/data220.dat");
   // ForwardTrigger: (Just 
   //   (Right 
   //     [
@@ -982,6 +996,6 @@ int main() {
     operation.run();
     operation.print_output(10);
   }
-  report_counters<60000>();
+  report_counters();
   return 0;
 }

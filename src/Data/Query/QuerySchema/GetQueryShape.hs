@@ -35,7 +35,6 @@ import           Data.Codegen.Build.Types
 import           Data.CppAst                       as CC
 import qualified Data.List.NonEmpty                as NEL
 import           Data.Maybe
-import           Data.Pointed
 import           Data.QnfQuery.Build
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
@@ -245,14 +244,14 @@ getQueryShapeGrp litType proj es qshape = do
     ([],Just nelProj) -> return
       QueryShape
       { qpSchema = [(e,p { columnPropsConst = True }) | (e,p) <- sch]
-       ,qpUnique = return . setFilter FltNone . point . fst <$> nelProj
+       ,qpUnique = return . fst <$> nelProj
        ,qpSize = querySize
       }
     _ -> do
       let uniqCandidates = case grpSymsM of
             Nothing -> qpUnique qshape
-            Just x  -> deoverlap $ return (fmap point x) <> qpUnique qshape
-      case mapMaybeNEL (traverse2 (`lookup` ioAssoc)) uniqCandidates of
+            Just x  -> deoverlap $ return x <> qpUnique qshape
+      case mapMaybeNEL (traverse (`lookup` ioAssoc)) uniqCandidates of
         Left _ -> throwAStr
           $ "LU fail: "
           ++ ashow (proj,ioAssoc,toList <$> toList uniqCandidates)
@@ -260,8 +259,6 @@ getQueryShapeGrp litType proj es qshape = do
           QueryShape
           { qpSchema = sch,qpUnique = deoverlap uniq,qpSize = querySize }
   where
-    deoverlap :: NEL.NonEmpty (NEL.NonEmpty (Filtered (ShapeSym e s)))
-              -> NEL.NonEmpty (NEL.NonEmpty (Filtered (ShapeSym e s)))
     deoverlap =
       go
       . fmap snd
@@ -315,7 +312,7 @@ getQueryShapePrj :: forall e s . (HasCallStack,Hashables2 e s) =>
 getQueryShapePrj litType proj qshape = do
   sch <- projQueryShapeInternal' =<< traverse3 go proj
   rowSize <- getRowSize sch
-  case mapMaybeNEL (traverse2 (`lookup` ioAssoc)) (qpUnique qshape) of
+  case mapMaybeNEL (traverse (`lookup` ioAssoc)) (qpUnique qshape) of
     Left _ -> throwAStr
       $ "No unique sets exposed in their entirety: "
       ++ ashow

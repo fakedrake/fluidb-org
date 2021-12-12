@@ -76,10 +76,9 @@ import           Text.Printf
 
 -- |A code builder monad that can throw errors, carries the code
 -- building state, has access to a graph and is on the leaf of a plan.
-type CodeBuilderT' e s t n m =
-  ExceptT
-    (CodeBuildErr e s t n)
-    (StateT (CBState e s t n) (CGraphBuilderT e s t n m))
+type CodeBuilderT' e s t n m = ExceptT (CodeBuildErr e s t n)
+                               (StateT (CBState e s t n)
+                                (CGraphBuilderT e s t n m))
 hoistCodeBuilderT' :: Monad m =>
                      (forall a . m a -> g a)
                    -> CodeBuilderT' e s t n m a
@@ -180,6 +179,6 @@ instance Monad m => MonadCheckpoint (SoftCodeBuilderT e s t n m) where
     return (c, c')
   {-# INLINE getCheckpoint #-}
 
-clusterLiftCB
-  :: Monad m => CGraphBuilderT e s t n m a -> CodeBuilderT' e s t n m a
+clusterLiftCB :: Monad m =>
+                CGraphBuilderT e s t n m a -> CodeBuilderT' e s t n m a
 clusterLiftCB = lift2

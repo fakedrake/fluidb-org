@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE RecordWildCards      #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -13,22 +12,19 @@ module Data.Query.QuerySchema.Types
   ,CppSchema'
   ,CppSchema
   ,QueryShape
-  ,Filtered(..)
   ,ColumnProps(..)
   ,putRowSize
   ,QueryShapeNoSize
   ,modSize
   ,modCertainty
-  ,useCardinality,modCardinality,querySizeBytes,queryShapeBytes,setFilter,Filter(..)) where
+  ,useCardinality,modCardinality,querySizeBytes,queryShapeBytes) where
 
-import           Data.Copointed
 import           Data.CppAst.CodeSymbol
 import           Data.CppAst.CppType
 import           Data.CppAst.Expression
 import           Data.CppAst.ExpressionLike
 import           Data.CppAst.Symbol
 import qualified Data.List.NonEmpty         as NEL
-import           Data.Pointed
 import           Data.QnfQuery.Types
 import           Data.Query.QuerySize
 import           Data.Utils.AShow
@@ -72,27 +68,10 @@ modCertainty f qs = qs { qsCertainty = f $ qsCertainty qs }
 
 modSize :: (s0 -> s1) -> QueryShape' s0 e -> QueryShape' s1 e
 modSize f QueryShape {..} = QueryShape { qpSize = f qpSize,.. }
-data Filter = FltSelect Double | FltNone | FltSingle deriving (Generic,Show,Eq)
-data Filtered e = Filtered { fltFilter :: Filter,fltSymbol :: e }
-  deriving (Generic,Show,Functor,Traversable,Foldable,Eq)
-instance Hashable Filter
-instance AShow Filter
-instance ARead Filter
-
-setFilter :: Filter -> Filtered a -> Filtered a
-setFilter percent flt  = flt {fltFilter = percent}
-instance Hashable e => Hashable (Filtered e) where
-instance AShow e => AShow (Filtered e)
-instance ARead e => ARead (Filtered e)
-instance Pointed Filtered where
-  point a = Filtered { fltFilter = FltNone,fltSymbol = a }
-instance Copointed Filtered where
-  copoint = fltSymbol
-
 data QueryShape' sizeType e' =
   QueryShape
   { qpSchema :: [(e',ColumnProps)]
-   ,qpUnique :: NEL.NonEmpty (NEL.NonEmpty (Filtered e'))
+   ,qpUnique :: NEL.NonEmpty (NEL.NonEmpty e')
    ,qpSize   :: sizeType
   }
   deriving (Show,Generic,Eq,Functor)
