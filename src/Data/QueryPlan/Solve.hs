@@ -469,7 +469,7 @@ safeDelInOrder requiredPages nsOrd =
         doNotDelete = do
           forM_ refs $ \ref -> do
             st <- getNodeState ref
-            unless (st == Initial Mat)
+            unless (isMat st == True)
               $ throwPlan
               $ "Bad state: " ++ show (ref,st)
             ref `setNodeStateUnsafe` Concrete Mat Mat
