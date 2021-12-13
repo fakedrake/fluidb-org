@@ -185,7 +185,7 @@ setNodeStateSafe' getFwdOp node goalState =
             trM $ "Materializing dependencies: " ++ show depset
             setNodesMatSafe depset
             trM $ "Intermediates: " ++ show interm
-            once $ garbageCollectFor $ node : interm
+            garbageCollectFor $ node : interm
             -- Automatically set the states of intermediates
             forM_ interm $ \ni -> do
               prevState' <- getNodeState ni
@@ -463,7 +463,7 @@ safeDelInOrder requiredPages nsOrd =
     delOrConcreteMat refs = do
       canStillDel <- allM isDeletable refs
       trM $ "Considering deletion: " ++ show (refs,canStillDel)
-      if canStillDel then doDelete `eitherl` return 0 else return 0
+      if canStillDel then doDelete `lsplit` return 0 else return 0
       where
         doDelete = sum <$> mapM toDelMaybe refs
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
