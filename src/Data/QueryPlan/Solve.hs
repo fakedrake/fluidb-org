@@ -463,13 +463,16 @@ safeDelInOrder requiredPages nsOrd =
     delOrConcreteMat refs = do
       canStillDel <- allM isDeletable refs
       trM $ "Considering deletion: " ++ show (refs,canStillDel)
-      if canStillDel then doDelete `eitherl` return 0 else return 0
+      if canStillDel then doDelete `lsplit` doNotDelete else doNotDelete
       where
+        doNotDelete = do
+          mapM_ (`setNodeStateUnsafe` Concrete Mat Mat) refs
+          return 0
         doDelete = sum <$> mapM toDelMaybe refs
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
     toDelMaybe ref = do
       wasMat <- isMat <$> getNodeState ref
-      ref `setNodeStateSafe` NoMat
+      setNodeStateSafe ref NoMat
       if wasMat then totalNodePages ref else return 0
 
 isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
