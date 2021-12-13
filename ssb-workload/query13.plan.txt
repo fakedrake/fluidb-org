@@ -1,12 +1,9 @@
 
 Query |\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (\sigma_{(((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35)} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)| {
   |\(Q_{5}\)| := Materialize[|\(\sigma_{\mathit{d\_yearmonthnum} = 199401} (Q_{1})\)|]
-  GC { Delete[|\(Q_{318}\)|] }
-  GC { Delete[|\(Q_{319}\)|] }
   GC { Delete[|\(Q_{322}\)|] }
   GC { Delete[|\(Q_{321}\)|] }
   GC { Delete[|\(Q_{290}\)|] }
-  GC { Delete[|\(Q_{310}\)|] }
   GC { Delete[|\(Q_{311}\)|] }
   GC { Delete[|\(Q_{312}\)|] }
   GC { Delete[|\(Q_{315}\)|] }
