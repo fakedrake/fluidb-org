@@ -54,6 +54,7 @@ data Table
   = NoTable
   | TSymbol String
   deriving (Show,Eq,Generic,Ord,Read)
+
 unTable :: Table -> String
 unTable (TSymbol s) = s
 unTable _           = error "No string associated with table."

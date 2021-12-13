@@ -19,6 +19,7 @@ module Data.DotLatex
   ( Latex(..)
   , NodeType(..)
   , Latexifiable(..)
+  ,latexPlan
   , simpleRender
   ) where
 
@@ -27,19 +28,29 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Bifunctor
 import           Data.Bipartite
+import           Data.Cluster.Types
+import           Data.Codegen.Build.Classes
 import           Data.Coerce
 import           Data.List
-import qualified Data.List.NonEmpty     as NEL
+import           Data.List.Extra
+import qualified Data.List.NonEmpty         as NEL
 import           Data.Maybe
 import           Data.Monoid
-import           Data.NodeContainers
+import           Data.NodeContainers        hiding (N)
+import           Data.QnfQuery.BuildUtils   (qnfOrigDEBUG)
+import           Data.QnfQuery.Types
 import           Data.Query.Algebra
+import           Data.Query.QuerySchema
 import           Data.Query.SQL.QFile
 import           Data.Query.SQL.Types
+import           Data.QueryPlan.Types
 import           Data.String
+import           Data.Utils.AShow
 import           Data.Utils.Default
 import           Data.Utils.Functors
-import           Prelude                hiding (filter, lookup)
+import           Data.Utils.Hashable
+import           Data.Utils.Tup
+import           Prelude                    hiding (filter, lookup)
 import           System.FilePath.Posix
 import           Text.Printf
 
@@ -332,7 +343,12 @@ instance Latexifiable Int where
 instance Latexifiable Integer where
   toLatex = Latex . show
 instance Latexifiable String where
-  toLatex = Latex
+  toLatex = Latex . go
+    where
+      go ('\\':x:xs) = x : go xs
+      go ('_':xs)    = '\\' : '_' : go xs
+      go (x:xs)      = x : go xs
+      go []          = []
 instance Latexifiable QFile where
   toLatex (DataFile x) = Latex $ takeBaseName x
 
@@ -420,8 +436,8 @@ instance Latexifiable e => Latexifiable (BQOp e) where
     QUnion           -> "\\cup"
     QDistinct        -> "distinct"
     QProjQuery       -> "\\pi_{q}"
-    QLeftAntijoin p  -> "\\triangleleft_{" <> toLatex p <> "}"
-    QRightAntijoin p -> "\\triangleright_{" <> toLatex p <> "}"
+    QLeftAntijoin p  -> "\\cancel\\ltimes_{" <> toLatex p <> "}"
+    QRightAntijoin p -> "\\cancel\\rtimes_{" <> toLatex p <> "}"
 
 instance Latexifiable e => Latexifiable (Aggr e) where
   toLatex (NAggr f x) = case f of
@@ -438,7 +454,7 @@ instance Latexifiable e => Latexifiable (UQOp e) where
     QProj _ p -> "\\pi_{" <> prj p <> "}"
       where
         prj = comma . fmap (\(x,y) -> spaces [toLatex x,"\\mapsto",toLatex y])
-    QGroup prj grp -> "a_{"
+    QGroup prj grp -> "\\gamma_{"
       <> comma (toLatex <$> grp')
       <> "} "
       <> toLatex (QProj QProjNoInv prj')
@@ -449,10 +465,10 @@ instance Latexifiable e => Latexifiable (UQOp e) where
     QLimit l -> "l_{" <> toLatex l <> "}"
     QDrop d -> "d_{" <> toLatex d <> "}"
 
-instance (Latexifiable e, Latexifiable s)  => Latexifiable (Query e s) where
+instance (Latexifiable e,Latexifiable s) => Latexifiable (Query e s) where
   toLatex = \case
-    Q2 o _ _ -> spaces [parens "...", toLatex o, parens "..."]
-    Q1 o _   -> spaces [toLatex o, parens "..."]
+    Q2 o l r -> spaces [parens $ toLatex l,toLatex o,parens $ toLatex r]
+    Q1 o q   -> spaces [toLatex o,parens $ toLatex q]
     Q0 a     -> toLatex a
 
 instance Latexifiable a => Latexifiable (Maybe a) where
@@ -478,8 +494,127 @@ instance Latexifiable e => Latexifiable (ExpTypeSym' e) where
     EInterval x     -> "D(" <> toLatex x <> ")"
     EFloat x        -> fromString $ show x
     EInt x          -> fromString $ show x
-    EString x       -> fromString $ "``" ++ x ++ "''"
-    ESym x          -> toLatex x
+    EString x       -> fromString $ "\\mathit{\"" ++ x ++ "\"}"
+    ESym x          -> "\\mathit{" <> toLatex x <> "}"
     EBool x         -> fromString $ show x
     ECount Nothing  -> fromString "count(*)"
     ECount (Just e) -> "count(" <> toLatex e <> ")"
+
+
+instance Latexifiable Table where
+  toLatex NoTable       = "\\empty"
+  toLatex (TSymbol sym) = fromString $ "\\mathit{" <> sym <> "}"
+
+instance Latexifiable (NodeRef n) where
+  toLatex (NodeRef n) = "Q_{" <> fromString (show n) <> "}"
+
+instance (Latexifiable e,Latexifiable s)
+  => Latexifiable (TransitionBundle e s t n) where
+  toLatex = \case
+    (DeleteTransitionBundle nr) -> "GC { Delete[|\\(" <> toLatex nr <> "\\)|] }"
+    (ForwardTransitionBundle (Tup2 _inod onod) ac) -> case ac of
+      JoinClustW JoinClust {..} ->
+        let (oop:_,oRef) = unMetaD $ binClusterOut joinBinCluster
+            (_,ilref) = unMetaD $ binClusterLeftIn joinBinCluster
+            (_,irref) = unMetaD $ binClusterRightIn joinBinCluster
+            (lop:_,olref) = unMetaD joinClusterLeftAntijoin
+            (rop:_x,orref) = unMetaD joinClusterRightAntijoin
+            mkQ op =
+              toLatex
+                (Q2
+                   (shapeSymQnfOriginal <$> op)
+                   (Q0 $ toLatex ilref)
+                   (Q0 $ toLatex irref))
+            qo = mkQ oop
+            ql = mkQ lop
+            qr = mkQ rop
+            (refs0,qs0) =
+              unzip
+              $ [(toLatex r,q)
+                | (r,q) <- [(oRef,qo),(olref,ql),(orref,qr)],r `elem` onod]
+            refs = comma $ toLatex <$> refs0
+        in materializeTo (comma qs0) refs
+      BinClustW BinClust {..} ->
+        let (op:_,toLatex -> oRef) = unMetaD binClusterOut
+            (_,toLatex -> ilref) = unMetaD binClusterLeftIn
+            (_,toLatex -> irref) = unMetaD binClusterRightIn
+            q = toLatex (Q2 (shapeSymQnfOriginal <$> op) (Q0 ilref) (Q0 irref))
+        in materializeTo q oRef
+      UnClustW UnClust {..} ->
+        let (opP:_,oPRef) = unMetaD unClusterPrimaryOut
+            (opSs,oSRef) = unMetaD unClusterSecondaryOut
+            (_,iRef) = unMetaD unClusterIn
+            mkQ op =
+              toLatex (Q1 (shapeSymQnfOriginal <$> op) (Q0 $ toLatex iRef))
+            qP = mkQ opP
+            qSs = mkQ <$> opSs
+            rqs =
+              ((oPRef,qP) :) $ maybe [] (return . (oPRef,)) $ listToMaybe qSs
+            (refs0
+              ,qs0) = unzip $ nubOrdOn fst [(r,q) | (r,q) <- rqs,r `elem` onod]
+            refs = comma $ toLatex <$> refs0 in if iRef /= oSRef
+          then materializeTo (comma qs0) refs
+          else materializeTo qP $ toLatex oPRef
+      NClustW (NClust nc) -> toLatex nc
+    (ReverseTransitionBundle (Tup2 inod onod) ac) -> case ac of
+      JoinClustW JoinClust {..} ->
+        let (oop:_,oRef) = unMetaD $ binClusterOut joinBinCluster
+            (_,ilref) = unMetaD $ binClusterLeftIn joinBinCluster
+            (_,irref) = unMetaD $ binClusterRightIn joinBinCluster
+            (_,olref) = unMetaD joinClusterLeftAntijoin
+            (_,orref) = unMetaD joinClusterRightAntijoin
+            mkQ prim cols =
+              "\\bar\\pi_{cols("
+              <> toLatex cols
+              <> ")} ("
+              <> toLatex oRef
+              <> ") \\cup "
+              <> toLatex prim
+            (refs0,qs0) =
+              unzip
+              $ [(toLatex r,q)
+                | (r,q) <- [(ilref,mkQ olref ilref),(irref,mkQ orref irref)]
+                 ,r `elem` onod]
+            refs = comma $ toLatex <$> refs0
+            qs = comma $ qs0 in materializeTo qs refs
+      BinClustW BinClust {..} -> error "Not implemented"
+      UnClustW UnClust {..} -> "# A reverse un op.."
+      NClustW nc -> "# a reverse nclust"
+
+materializeTo :: Latex n -> Latex n -> Latex n
+materializeTo mat vars =
+  "|\\(" <> vars <> "\\)| := Materialize[|\\(" <> mat <> "\\)|]"
+
+-- | Find the map in nrefToQnfs from ClusterConfig
+latexInventory
+  :: forall k n e s .
+  (Latexifiable e,Latexifiable s)
+  => RefMap n [QNFQuery e s]
+  -> [NodeRef n]
+  -> Maybe (Latex k)
+latexInventory m ns = fmap inventory $ forM ns $ \n -> do
+  x <- qnfOrigDEBUG . head <$> refLU n m
+  return $ "|\\(" <> toLatex n <> "\\)| := |\\(" <> toLatex x <> "\\)|"
+  where
+    inventory :: [Latex k] -> Latex k
+    inventory x = "Inventory {\n" <> mconcat (intersperse "\n" x) <>  "\n}"
+
+latexPlan
+  :: (Hashables2 e s
+     ,MonadReader (ClusterConfig e s t n) m
+     ,Latexifiable e
+     ,Latexifiable s
+     ,MonadAShowErr e s err m)
+  => NodeRef n -- init node
+  -> [NodeRef n] -- mat
+  -> [Transition t n]
+  -> m (Latex k)
+latexPlan n mats ts = do
+  qmap <- asks nrefToQnfs
+  bs <- fmap2 toLatex $ bundleTransitions ts
+  let plan = "  " <> mconcat (intersperse "\n  " bs)
+  let qnM = qnfOrigDEBUG . head <$> refLU n qmap
+  case (latexInventory qmap mats,qnM) of
+    (Just inv,Just qn) -> return
+      $ "\nQuery |\\(" <> toLatex qn <> "\\)| {\n" <> plan <> "\n}\n\n" <> inv
+    _ -> throwAStr "Couldn't lookup some stuff..."

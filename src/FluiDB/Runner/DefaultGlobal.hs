@@ -81,11 +81,7 @@ instance MonadFakeIO m
     either throwError return $ annotateQuery cppConf luSize q
 
 qgenRoot :: FilePath
-
-
-
 qgenRoot = "/Users/drninjabatman/Projects/UoE/fluidb/resources/tpch-dbgen"
-
 
 -- Join-only
 instance (MonadFakeIO m

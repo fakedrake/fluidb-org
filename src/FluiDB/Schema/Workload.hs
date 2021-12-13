@@ -101,7 +101,7 @@ sqlToSolution
   :: forall a e s t n m .
   (Hashables2 e s,MonadFakeIO m,AShow e,AShow s)
   => Query (ShapeSym e s) (QueryShape e s,s)
-  -> ICodeBuilder e s t n m a
+  -> (NodeRef n -> ICodeBuilder e s t n m a)
   -> GlobalSolveT e s t n m a
 sqlToSolution query getSolution = do
   GlobalConf{globalExpTypeSymIso=symIso,globalQueryCppConf=cppConf} <- get
@@ -174,12 +174,12 @@ insertAndRun
   ,BotMonad m
   ,HaltKey m ~ PlanSearchScore)
   => Free (Compose NEL.NonEmpty (TQuery e)) (s,QueryShape e s)
-  -> CodeBuilderT e s t n m a
+  -> (NodeRef n -> CodeBuilderT e s t n m a)
   -> GlobalSolveT e s t n m a
 insertAndRun queries postSolution = do
   (ret,conf) <- joinExcept $ hoist (runCodeBuild . lift) $ do
     ref <- insertQueries queries
-    lift $ matNode postSolution ref
+    lift $ matNode (postSolution ref) ref
   modify $ \gs' -> gs' { globalGCConfig = conf }
   case ret of
     Left e  -> throwError e
@@ -193,8 +193,8 @@ insertQueries queries = do
   QueryCppConf {..} <- gets cbQueryCppConf
   when False $ do
     matNodes <- lift materializedNodes
-    traceM $ "Mat nodes: " ++ ashow matNodes
-    when (null matNodes) $ throwAStr "No ground truth"
+    when (null matNodes) $ throwAStr
+      $ "No ground truth, Mat nodes: " ++ ashow matNodes
   nOptqRef :: NodeRef n <- lift3 $ insertQueryForest literalType queries
   lift4 clearClustBuildCache
   -- lift $ reportGraph >> reportClusterConfig/
@@ -248,11 +248,10 @@ type CppCode = String
 runSingleQuery
   :: (Hashables2 e s,AShow2 e s,ExpressionLike e,MonadFakeIO m)
   => Query (ShapeSym e s) (QueryShape e s,s)
-  -> GlobalSolveT e s t n m ([Transition t n],CppCode)
-runSingleQuery query = sqlToSolution query $ do
+  -> GlobalSolveT e s t n m (NodeRef n, [Transition t n],CppCode)
+runSingleQuery query = sqlToSolution query $ \ref -> do
   ts <- dropReader getGCState getTransitions
-  traceM $ "Transitions: " ++ ashow ts
-  (ts,) <$> getQuerySolutionCpp
+  (ref,ts,) <$> getQuerySolutionCpp
 
 -- | Iterate over the queryes
 forEachQuery
@@ -281,7 +280,7 @@ runWorkloadCpp
   -> [q]
   -> m [([(Transition t n,Cost)],[NodeRef n])]
 runWorkloadCpp modGQnf qios = forEachQuery modGQnf qios $ \i query -> do
-  (trigs,cppCode) <- runSingleQuery query
+  (_ref,trigs,cppCode) <- runSingleQuery query
   gcc :: GCConfig t n <- gets getGlobalConf
   costTrigs <- either (throwError . toGlobalError) return
     $ dropReader (return gcc)
@@ -310,6 +309,6 @@ runWorkloadEvals
   -> [q]
   -> m [[Evaluation e s t n [QNFQuery e s]]]
 runWorkloadEvals modGConf qs = forEachQuery modGConf qs $ \_i query ->
-  sqlToSolution query $ dropReader (lift2 askStates) getEvaluations
+  sqlToSolution query $ \_ref -> dropReader (lift2 askStates) getEvaluations
   where
     askStates = gets (,,,) <*> lift2 get <*> lift3 get <*> lift3 ask

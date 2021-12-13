@@ -57,18 +57,19 @@ import           Data.Utils.Nat
 
 setNodeMaterialized
   :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
-setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
+setNodeMaterialized node = wrapTrM ("setNodeMaterialized " ++ show node) $ do
   -- sizes <- asks nodeSizes
   -- Populate the metaop cache
   -- warmupCache node
   reportBudget
   ism <- Mat.isMaterializableSlow False [] node
-  unless  ism $ error $ "Not materializable node: " ++ show node
+  unless ism $ error $ "Not materializable node: " ++ show node
   setNodeStateSafe node Mat
   -- curateTransitions
   cost <- totalTransitionCost
   size <- getDataSize
-  traceM
+  when False
+    $ traceM
     $ printf
       "Successfully materialized %s -- cost: %s, totalsize : %s"
       (show node)
@@ -80,7 +81,7 @@ reportBudget :: Monad m => PlanT t n m ()
 reportBudget = do
   mats <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
   mats' <- forM mats  $ \n -> (n,) <$> totalNodePages n
-  trM $ "mat nodes: " ++ show mats'
+  trM $ "Mat nodes: " ++ show mats'
   size <- getDataSize
   trM $ "Used budget: " ++ show size
 

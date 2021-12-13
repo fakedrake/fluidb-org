@@ -14,6 +14,7 @@ import qualified Data.IntMap               as IM
 import           Data.NodeContainers
 import           Data.QnfQuery.Types
 import           Data.Query.Algebra
+import           Data.Query.QuerySize
 import           Data.Query.SQL.Types
 import           Data.QueryPlan.Nodes
 import           Data.QueryPlan.Types
@@ -21,6 +22,7 @@ import           Data.Time
 import           Data.Utils.AShow
 import           Data.Utils.Debug
 import           Data.Utils.Functors
+import           Data.Utils.MTL
 import           FluiDB.Schema.Common
 import           FluiDB.Schema.SSB.Queries
 import           FluiDB.Schema.SSB.Values
@@ -66,7 +68,7 @@ runQuery
 runQuery lbl verbosity windex query = do
   cppConf <- gets globalQueryCppConf
   aquery <- annotateQuerySSB cppConf query
-  (transitions,cppCode)
+  (ref,transitions,cppCode)
     <- finallyError (runSingleQuery aquery) $ when (shouldRender verbosity) $ do
       (intermPath,queryPath,pngPath,grPath) <- renderGraph query
       liftIO $ putStrLn $ "Inspect the query at: " ++ queryPath
@@ -74,6 +76,9 @@ runQuery lbl verbosity windex query = do
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath
       liftIO $ putStrLn $ "The reperoire of intermediates: " ++ intermPath
   -- liftIO $ runCpp cppCode
+  let planFile = printf "ssb-workload/query%d.plan.txt" windex
+  recordPlan planFile ref $ reverse transitions
+  liftIO $ putStrLn $ "Plan file: " ++ planFile
   storeCpp lbl windex cppCode
   return transitions
 
@@ -133,11 +138,12 @@ singleQuery lbl =
     ,"order by d_year, revenue desc"]
 #endif
 
-
+getMats :: SSBGlobalSolveM [(NodeRef N,PageNum)]
+getMats = globalizePlanT $ do
+  ns <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
+  mapM (\n -> (n,) <$> totalNodePages n) ns
 reportMats msg = do
-  mats <- globalizePlanT $ do
-    ns <- nodesInState [Initial Mat,Concrete NoMat Mat,Concrete Mat Mat]
-    mapM (\n -> (n,) <$> totalNodePages n) ns
+  mats <- getMats
 
   lift2 $ putStrLn msg
   lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
@@ -155,7 +161,7 @@ actualMain lbl verbosity qs = ssbRunGlobalSolve $ forM_ qs $ \(wi,qi) -> do
     Nothing -> throwAStr $ printf "No such query %d" qi
     Just query -> do
       transitions <- runQuery lbl verbosity wi query
-      liftIO $ putStrLn $ "Transitions" ++ ashow (wi,qi)
+      liftIO $ putStrLn $ "Transitions " ++ ashow (wi,qi)
       liftIO $ putStrLn $ ashow transitions
       reportMats $ "Post query: " ++ show (wi,qi)
 
@@ -176,7 +182,7 @@ renderGraph query = do
     . globalClusterConfig
   interms <- globalizePlanT $ forM interms0 $ \(ref,q) -> do
     pgs <- totalNodePages ref
-    return (ref,pgs,q)
+    return (ref,pgs,Sym . unLatex . toLatex <$> q)
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
         dotPath = graphBase <.> "dot"
@@ -226,6 +232,16 @@ ssbMainWorkload = do
   timeout (secs * 1000000) (actualMain "main" Verbose workload) >>= \case
     Nothing -> putStrLn $ printf "TIMEOUT after %ds" secs
     Just () -> putStrLn "Done!"
+
+recordPlan
+  :: FilePath
+  -> NodeRef N
+  -> [Transition T N]
+  -> SSBGlobalSolveM ()
+recordPlan path slv trns = do
+  mats <- fmap2 fst getMats
+  Latex ltx <- dropReader (gets getGlobalConf) $ latexPlan slv mats trns
+  lift2 $ writeFile path ltx
 
 ssbMainIndiv :: IO ()
 ssbMainIndiv = do

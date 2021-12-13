@@ -92,10 +92,11 @@ runCpp str = tmpDir' KeepDir "runCpp" $ \dirp -> do
   let exeFile = dirp </> "exec.exe"
   writeFile cppFile str
   -- Compile the C++ file
-  traceM $ "Compiling: c++ " ++ cppFile ++ " -o " ++ exeFile
-  tmpDir "compilation" $ \dir -> runProc $ mkProc "c++" ["-std=c++17",cppFile,"-o",exeFile]
+  putStrLn $ "Compiling: c++ " ++ cppFile ++ " -o " ++ exeFile
+  tmpDir "compilation"
+    $ \dir -> runProc $ mkProc "c++" ["-std=c++17",cppFile,"-o",exeFile]
   -- Run the executable
-  traceM "Running..."
+  putStrLn "Running..."
   tmpDir "run_compiled" $ \dir -> runProc $ mkProc exeFile []
 
 transferToFile :: String -> Handle -> FilePath -> IO ()
