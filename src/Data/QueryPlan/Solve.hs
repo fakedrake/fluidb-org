@@ -274,7 +274,7 @@ makeTriggerableUnsafe mop = wrapTrM ("makeTriggerableUnsafe " ++ showMetaOp mop)
   withProtected (inList ++ outList ++ intermList) $ do
     nonMatInList <- filterM (fmap (not . isMat) . getNodeState) inList
     -- The materialized nodes do not exceed our space
-    garbageCollectFor nonMatInList
+    once $ garbageCollectFor nonMatInList
     -- All input s are concretely materialized
     mapM_ setConcreteMat inList
 
