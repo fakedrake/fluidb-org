@@ -467,12 +467,10 @@ safeDelInOrder requiredPages nsOrd =
       where
         -- Assume the node is NoMat
         doNotDelete = do
-          forM_ refs $ \ref -> do
-            st <- getNodeState ref
-            unless (isMat st == True)
-              $ throwPlan
-              $ "Bad state: " ++ show (ref,st)
-            ref `setNodeStateUnsafe` Concrete Mat Mat
+          forM_ refs $ \ref -> getNodeState ref >>= \case
+            Initial Mat   -> ref `setNodeStateUnsafe` Concrete Mat Mat
+            Initial NoMat -> ref `setNodeStateUnsafe` Concrete NoMat NoMat
+            Concrete _ _  -> return ()
           return 0
         doDelete = sum <$> mapM toDelMaybe refs
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
