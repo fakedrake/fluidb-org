@@ -57,7 +57,7 @@ import           Data.Utils.Nat
 
 setNodeMaterialized
   :: forall t n m . MonadLogic m => NodeRef n -> PlanT t n m ()
-setNodeMaterialized node = wrapTrM ("setNodeMaterialized " ++ show node) $ do
+setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   -- sizes <- asks nodeSizes
   -- Populate the metaop cache
   -- warmupCache node
