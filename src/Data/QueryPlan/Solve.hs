@@ -463,7 +463,7 @@ safeDelInOrder requiredPages nsOrd =
     delOrConcreteMat refs = do
       canStillDel <- allM isDeletable refs
       trM $ "Considering deletion: " ++ show (refs,canStillDel)
-      if canStillDel then doDelete `lsplit` doNotDelete else doNotDelete
+      if canStillDel then doDelete `eitherl` doNotDelete else doNotDelete
       where
         -- Assume the node is NoMat
         doNotDelete = do
