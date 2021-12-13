@@ -476,13 +476,19 @@ instance Latexifiable a => Latexifiable (Maybe a) where
     Nothing -> "\\bot"
     Just a  -> toLatex a
 
-simpleRender :: (Latexifiable t,Latexifiable n) => Bipartite t n -> String
-simpleRender bip = runRenderM def
+simpleRender
+  :: (Latexifiable t,Latexifiable n) => [NodeRef n] -> Bipartite t n -> String
+simpleRender mats0 bip =
+  runRenderM def
   $ toDot'
-  $ (`evalState` def{
-        gbPropNet=bimap (unLatex . toLatex) (unLatex . toLatex) bip
-        })
-  $ renderAll def mempty mempty "G"
+  $ (`evalState` def
+     { gbPropNet = bimap (unLatex . toLatex) (unLatex . toLatex) bip })
+  $ renderAll def mempty fillColor "G"
+  where
+    mats :: NodeSet NodeLabel
+    mats = fromNodeList $ coerce mats0
+    fillColor :: [(NodeRef NodeLabel -> Bool,Color1)]
+    fillColor = [((`nsMember` mats), Grey)]
 
 instance Latexifiable Date where
   toLatex Date{..} = fromString

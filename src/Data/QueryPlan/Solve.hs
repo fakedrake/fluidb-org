@@ -63,7 +63,7 @@ setNodeMaterialized node = wrapTrace ("setNodeMaterialized " ++ show node) $ do
   -- warmupCache node
   reportBudget
   ism <- Mat.isMaterializableSlow False [] node
-  unless ism $ error $ "Not materializable node: " ++ show node
+  unless ism $ throwPlan $ "Not materializable node: " ++ show node
   setNodeStateSafe node Mat
   -- curateTransitions
   cost <- totalTransitionCost
@@ -463,21 +463,12 @@ safeDelInOrder requiredPages nsOrd =
     delOrConcreteMat refs = do
       canStillDel <- allM isDeletable refs
       trM $ "Considering deletion: " ++ show (refs,canStillDel)
-      if canStillDel then doDelete `eitherl` doNotDelete else doNotDelete
+      if canStillDel then doDelete else return 0
       where
-        -- Assume the node is NoMat
-        doNotDelete = do
-          forM_ refs $ \ref -> getNodeState ref >>= \case
-            Initial Mat   -> ref `setNodeStateUnsafe` Concrete Mat Mat
-            Initial NoMat -> ref `setNodeStateUnsafe` Concrete NoMat NoMat
-            Concrete _ _  -> return ()
-          return 0
         doDelete = sum <$> mapM toDelMaybe refs
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
     toDelMaybe ref = do
       wasMat <- isMat <$> getNodeState ref
-      delable <- isDeletable ref
-      unless delable $ throwPlan $ "It's not deletable!" ++ show ref
       setNodeStateSafe ref NoMat
       if wasMat then totalNodePages ref else return 0
 
@@ -485,7 +476,7 @@ isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
 isDeletable ref = do
   trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
-    Initial Mat -> Mat.isMaterializableSlow True [ref] ref
+    Initial Mat -> Mat.isMaterializableSlow False [ref] ref
     _x          -> return False
   trM $ "[After] isDeletable" <: (ref,isd)
   return isd
