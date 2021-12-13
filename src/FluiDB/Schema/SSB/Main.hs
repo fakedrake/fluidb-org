@@ -66,6 +66,7 @@ runQuery
   -> SSBQuery
   -> SSBGlobalSolveM [Transition T N]
 runQuery lbl verbosity windex query = do
+  mem <- gets $ budget . globalGCConfig
   cppConf <- gets globalQueryCppConf
   aquery <- annotateQuerySSB cppConf query
   (ref,transitions,cppCode)
@@ -76,7 +77,9 @@ runQuery lbl verbosity windex query = do
       liftIO $ putStrLn $ "The raw graph at: " ++ grPath
       liftIO $ putStrLn $ "The reperoire of intermediates: " ++ intermPath
   -- liftIO $ runCpp cppCode
-  let planFile = printf "ssb-workload/query%d.plan.txt" windex
+  let planFile =
+        "ssb-workload"
+        </> printf "query-%s-%s-%d.plan.txt" lbl (maybe "unlim" show mem) windex
   recordPlan planFile ref $ reverse transitions
   liftIO $ putStrLn $ "Plan file: " ++ planFile
   storeCpp lbl windex cppCode
@@ -98,15 +101,13 @@ getSecs = do
 
 storeCpp :: WLabel -> WIndex -> CppCode -> SSBGlobalSolveM ()
 storeCpp lbl i cpp = do
-  -- budgetM <- gets $  budget . globalGCConfig
+  mem <- gets $ budget . globalGCConfig
   lift2 $ do
-    tmp <- getTemporaryDirectory
-    let workloadDir = "workload-" ++ lbl
-    -- let workloadDir = printf "workload-%s" $ maybe "unlimited" show budgetM
-    let dir = tmp </> "fluidb-data" </> workloadDir
-    createDirectoryIfMissing True dir
-    let path = dir </> printf "query%d.cpp" i
-    writeFile path  cpp
+    createDirectoryIfMissing True "ssb-workload"
+    let path =
+          "ssb-workload"
+          </> printf "query-%s-%s-%i.cpp" lbl (maybe "unlim" show mem) i
+    writeFile path cpp
     secs <- getSecs
     putStrLn $ printf "[%f sec]Wrote C++ code for query %d in: %s" secs i path
 
