@@ -465,8 +465,14 @@ safeDelInOrder requiredPages nsOrd =
       trM $ "Considering deletion: " ++ show (refs,canStillDel)
       if canStillDel then doDelete `lsplit` doNotDelete else doNotDelete
       where
+        -- Assume the node is NoMat
         doNotDelete = do
-          mapM_ (`setNodeStateUnsafe` Concrete Mat Mat) refs
+          forM_ refs $ \ref -> do
+            st <- getNodeState ref
+            unless (st == Initial Mat)
+              $ throwPlan
+              $ "Bad state: " ++ show (ref,st)
+            ref `setNodeStateUnsafe` Concrete Mat Mat
           return 0
         doDelete = sum <$> mapM toDelMaybe refs
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
