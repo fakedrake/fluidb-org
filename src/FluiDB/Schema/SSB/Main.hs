@@ -144,7 +144,6 @@ getMats = globalizePlanT $ do
   mapM (\n -> (n,) <$> totalNodePages n) ns
 reportMats msg = do
   mats <- getMats
-
   lift2 $ putStrLn msg
   lift2 $ putStrLn $ "mat nodes: " ++ ashow mats
   pgs <- globalizePlanT getDataSize
@@ -183,6 +182,7 @@ renderGraph query = do
   interms <- globalizePlanT $ forM interms0 $ \(ref,q) -> do
     pgs <- totalNodePages ref
     return (ref,pgs,Sym . unLatex . toLatex <$> q)
+  mats <- getMats
   liftIO $ tmpDir' KeepDir "graph_render" $ \d -> do
     let graphBase = d </> "graph"
         dotPath = graphBase <.> "dot"
@@ -193,7 +193,7 @@ renderGraph query = do
     writeFile grPath $ ashow gr
     writeFile qPath $ ashow query
     writeFile isPath $ ashow interms
-    writeFile dotPath $ simpleRender gr
+    writeFile dotPath $ simpleRender (fst <$> mats) gr
     withFile dotPath ReadMode $ \hndl -> do
       runProc
         (mkProc "dot" ["-o" ++ imgPath,"-Tsvg"]) { std_in = UseHandle hndl }

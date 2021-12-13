@@ -433,7 +433,7 @@ isOversized requiredPages = do
     return True else return False
 
 killPrimaries :: MonadLogic m => PageNum -> Cost -> PlanT t n m PageNum
-killPrimaries requiredPages hc = wrapTrM "killPrimaries" $ do
+killPrimaries requiredPages _hc = wrapTrM "killPrimaries" $ do
   nsUnordMaybeIsolated <- nodesInState [Initial Mat]
   nsUnord <- filterM isDeletable nsUnordMaybeIsolated
   nsSized <- forM nsUnord $ \ref -> (,ref) <$> totalNodePages ref

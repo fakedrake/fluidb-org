@@ -1,0 +1,24 @@
+
+Query |\(s_{\mathit{d\_year}, \mathit{p\_brand1}} (\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (\sigma_{(\mathit{s\_region} \sim \mathit{"EUROPE"}) \land (\mathit{p\_brand1} \sim \mathit{"MFGR#2221"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))))\)| {
+  GC { Delete[|\(Q_{119}\)|] }
+  GC { Delete[|\(Q_{118}\)|] }
+  GC { Delete[|\(Q_{92}\)|] }
+  |\(Q_{120}\)| := Materialize[|\(\sigma_{(\mathit{s\_region} \sim \mathit{"EUROPE"}) \land (\mathit{p\_brand1} \sim \mathit{"MFGR#2221"})} (Q_{46})\)|]
+  |\(Q_{146}\)| := Materialize[|\(\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (Q_{120})\)|]
+  |\(Q_{147}\)| := Materialize[|\(s_{\mathit{d\_year}, \mathit{p\_brand1}} (Q_{146})\)|]
+}
+
+Inventory {
+|\(Q_{0}\)| := |\(\mathit{lineorder}\)|
+|\(Q_{2}\)| := |\(\mathit{part}\)|
+|\(Q_{3}\)| := |\(\mathit{supplier}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{41}\)| := |\(((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})\)|
+|\(Q_{42}\)| := |\(((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})\)|
+|\(Q_{45}\)| := |\((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \cancel\ltimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{46}\)| := |\((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{47}\)| := |\((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{120}\)| := |\(\sigma_{(\mathit{s\_region} \sim \mathit{"EUROPE"}) \land (\mathit{p\_brand1} \sim \mathit{"MFGR#2221"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{146}\)| := |\(\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (\sigma_{(\mathit{s\_region} \sim \mathit{"EUROPE"}) \land (\mathit{p\_brand1} \sim \mathit{"MFGR#2221"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})))\)|
+|\(Q_{147}\)| := |\(s_{\mathit{d\_year}, \mathit{p\_brand1}} (\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (\sigma_{(\mathit{s\_region} \sim \mathit{"EUROPE"}) \land (\mathit{p\_brand1} \sim \mathit{"MFGR#2221"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))))\)|
+}

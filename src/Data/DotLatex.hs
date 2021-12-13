@@ -562,9 +562,9 @@ instance (Latexifiable e,Latexifiable s)
           then materializeTo (comma qs0) refs
           else materializeTo qP $ toLatex oPRef
       NClustW (NClust nc) -> toLatex nc
-    (ReverseTransitionBundle (Tup2 inod onod) ac) -> case ac of
+    (ReverseTransitionBundle (Tup2 _inod onod) ac) -> case ac of
       JoinClustW JoinClust {..} ->
-        let (oop:_,oRef) = unMetaD $ binClusterOut joinBinCluster
+        let (_,oRef) = unMetaD $ binClusterOut joinBinCluster
             (_,ilref) = unMetaD $ binClusterLeftIn joinBinCluster
             (_,irref) = unMetaD $ binClusterRightIn joinBinCluster
             (_,olref) = unMetaD joinClusterLeftAntijoin
@@ -583,9 +583,9 @@ instance (Latexifiable e,Latexifiable s)
                  ,r `elem` onod]
             refs = comma $ toLatex <$> refs0
             qs = comma $ qs0 in materializeTo qs refs
-      BinClustW BinClust {..} -> error "Not implemented"
-      UnClustW UnClust {..} -> "# A reverse un op.."
-      NClustW nc -> "# a reverse nclust"
+      BinClustW BinClust {} -> error "Not implemented"
+      UnClustW UnClust {} -> "# A reverse un op.."
+      NClustW _nc -> "# a reverse nclust"
 
 materializeTo :: Latex n -> Latex n -> Latex n
 materializeTo mat vars =
