@@ -15,8 +15,8 @@ set -xe
 #     echo "reusing ./cmake-build"
 # fi
 
-cd ./cmake-build/
-make VERBOSE=5 -j
+# cd ./cmake-build/
+# make VERBOSE=5 -j
 
 rm -rf /tmp/fluidb_store
 mkdir /tmp/fluidb_store
