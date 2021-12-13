@@ -479,8 +479,8 @@ isDeletable :: MonadLogic m => NodeRef n -> PlanT t n m Bool
 isDeletable ref = do
   trM $ "[Before] isDeletable" <: ref
   isd <- getNodeState ref >>= \case
-    Concrete _ Mat -> return False
-    _x             -> Mat.isMaterializableSlow True [ref] ref
+    Initial Mat -> Mat.isMaterializableSlow True [ref] ref
+    _x          -> return False
   trM $ "[After] isDeletable" <: (ref,isd)
   return isd
 
