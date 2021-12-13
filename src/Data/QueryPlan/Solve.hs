@@ -476,6 +476,8 @@ safeDelInOrder requiredPages nsOrd =
     toDelMaybe :: NodeRef n -> PlanT t n m PageNum
     toDelMaybe ref = do
       wasMat <- isMat <$> getNodeState ref
+      delable <- isDeletable ref
+      unless delable $ throwPlan $ "It's not deletable!" ++ show ref
       setNodeStateSafe ref NoMat
       if wasMat then totalNodePages ref else return 0
 
