@@ -25,7 +25,7 @@ function cpp_build {
     local cpp=$1
     c++ -std=c++2a -g -I ./bama/include/include -DFMT_HEADER_ONLY $cpp -o $(basename $cpp).exe
     echo "$cpp" >> /tmp/io_perf.txt
-    $(basename $cpp).exe
+    ./$(basename $cpp).exe
 }
 
 # Baseline measurements
