@@ -1,0 +1,39 @@
+
+Query |\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (\sigma_{(((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35)} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)| {
+  |\(Q_{5}\)| := Materialize[|\(\sigma_{\mathit{d\_yearmonthnum} = 199401} (Q_{1})\)|]
+  GC { Delete[|\(Q_{318}\)|] }
+  GC { Delete[|\(Q_{319}\)|] }
+  GC { Delete[|\(Q_{322}\)|] }
+  GC { Delete[|\(Q_{321}\)|] }
+  GC { Delete[|\(Q_{290}\)|] }
+  GC { Delete[|\(Q_{311}\)|] }
+  GC { Delete[|\(Q_{312}\)|] }
+  GC { Delete[|\(Q_{315}\)|] }
+  GC { Delete[|\(Q_{2}\)|] }
+  GC { Delete[|\(Q_{292}\)|] }
+  |\(Q_{8}, Q_{7}, Q_{9}\)| := Materialize[|\((Q_{5}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{5}) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{5}) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0})\)|]
+  |\(Q_{12}\)| := Materialize[|\(\sigma_{(((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35)} (Q_{8})\)|]
+  |\(Q_{14}\)| := Materialize[|\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (Q_{12})\)|]
+}
+
+Inventory {
+|\(Q_{0}\)| := |\(\mathit{lineorder}\)|
+|\(Q_{1}\)| := |\(\mathit{date}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{5}\)| := |\(\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})\)|
+|\(Q_{6}\)| := |\(\sigma_{\neg (\mathit{d\_yearmonthnum} = 199401)} (\mathit{date})\)|
+|\(Q_{7}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{8}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{9}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{10}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \pi_{q} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{11}\)| := |\((\mathit{lineorder}) \pi_{q} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{12}\)| := |\(\sigma_{(((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35)} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{13}\)| := |\(\sigma_{\neg ((((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35))} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{14}\)| := |\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (\sigma_{(((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35)} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)|
+|\(Q_{301}\)| := |\(\sigma_{(\mathit{c\_region} \sim \mathit{"AMERICA"}) \land (\mathit{s\_region} \sim \mathit{"AMERICA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))\)|
+|\(Q_{306}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"AMERICA"}} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{307}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"AMERICA"}} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{lineorder}))) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{316}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"AMERICA"}} ((\sigma_{\mathit{s\_region} \sim \mathit{"AMERICA"}} (((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer}))) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{317}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"AMERICA"}} ((\sigma_{\mathit{s\_region} \sim \mathit{"AMERICA"}} (((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer}))) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{320}\)| := |\(\sigma_{\neg ((\mathit{p\_mfgr} \sim \mathit{"MFGR#1"}) \lor (\mathit{p\_mfgr} \sim \mathit{"MFGR#2"}))} ((\sigma_{(\mathit{s\_region} \sim \mathit{"AMERICA"}) \land (\mathit{c\_region} \sim \mathit{"AMERICA"})} ((((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer}))) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+}
