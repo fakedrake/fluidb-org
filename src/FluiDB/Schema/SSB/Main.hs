@@ -107,7 +107,7 @@ storeCpp lbl i cpp = do
     createDirectoryIfMissing True "ssb-workload"
     let path =
           "ssb-workload"
-          </> printf "query-%s-%s-%i.cpp" lbl (maybe "unlim" show mem) i
+          </> printf "query-%s-%s-%03i.cpp" lbl (maybe "unlim" show mem) i
     writeFile path cpp
     secs <- getSecs
     putStrLn $ printf "[%f sec]Wrote C++ code for query %d in: %s" secs i path
