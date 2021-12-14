@@ -28,6 +28,12 @@ function cpp_build {
     ./$(basename $cpp).exe
 }
 
+function reset_primaries {
+    for i in lineitem date customer part supplier; do
+        cp -r /tmp/fluidb-primaries/$i.dat /run/user/1000/fluidb-data
+    done
+}
+
 # Baseline measurements
 echo "baseline {" >> /tmp/io_perf.txt
 for cpp in ./ssb-workload/query-indiv-*.cpp; do
@@ -37,7 +43,7 @@ done
 echo "}" >> /tmp/io_perf.txt
 
 # Main measurements
-cp -r /tmp/fluidb-primaries/* /run/user/1000/fluidb-data
+reset_primaries
 echo "main {" >> /tmp/io_perf.txt
 for cpp in ./ssb-workload/query-main-*.cpp; do
     cpp_build $cpp
