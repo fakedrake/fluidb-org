@@ -31,11 +31,13 @@ function cpp_build {
 # Baseline measurements
 echo "baseline {" >> /tmp/io_perf.txt
 for cpp in ./ssb-workload/query-indiv-*.cpp; do
+    cp -r /tmp/fluidb-primaries /run/user/1000/fluidb-data
     cpp_build $cpp
 done
 echo "}" >> /tmp/io_perf.txt
 
 # Main measurements
+cp -r /tmp/fluidb-primaries /run/user/1000/fluidb-data
 echo "main {" >> /tmp/io_perf.txt
 for cpp in ./ssb-workload/query-main-*.cpp; do
     cpp_build $cpp
