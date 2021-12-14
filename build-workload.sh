@@ -33,7 +33,7 @@ function cpp_build {
 }
 
 function reset_primaries {
-    for i in lineitem date customer part supplier; do
+    for i in lineorder date customer part supplier; do
         cp -r /tmp/fluidb-primaries/$i.dat /run/user/1000/fluidb-data
     done
 }
