@@ -80,6 +80,7 @@ runQuery lbl verbosity windex query = do
   let planFile =
         "ssb-workload"
         </> printf "query-%s-%s-%03d.plan.txt" lbl (maybe "unlim" show mem) windex
+  liftIO $ createDirectoryIfMissing True "ssb-workload"
   recordPlan planFile ref $ reverse transitions
   liftIO $ putStrLn $ "Plan file: " ++ planFile
   storeCpp lbl windex cppCode
