@@ -20,7 +20,7 @@ set -xe
 
 size=60000
 indiv_prefix=query-indiv-${size}-
-main_prefix=query-indiv-${size}-
+main_prefix=query-main-${size}-
 
 rm -rf /tmp/fluidb_store
 mkdir /tmp/fluidb_store
