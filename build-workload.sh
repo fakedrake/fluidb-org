@@ -18,6 +18,10 @@ set -xe
 # cd ./cmake-build/
 # make VERBOSE=5 -j
 
+size=60000
+indiv_prefix=query-indiv-${size}-
+main_prefix=query-indiv-${size}-
+
 rm -rf /tmp/fluidb_store
 mkdir /tmp/fluidb_store
 
@@ -36,7 +40,7 @@ function reset_primaries {
 
 # Baseline measurements
 echo "baseline {" >> /tmp/io_perf.txt
-for cpp in ./ssb-workload/query-indiv-*.cpp; do
+for cpp in ./ssb-workload/$prefix*.cpp; do
     cp -r /tmp/fluidb-primaries/* /run/user/1000/fluidb-data/
     cpp_build $cpp
 done
