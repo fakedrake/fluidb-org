@@ -79,7 +79,7 @@ runQuery lbl verbosity windex query = do
   -- liftIO $ runCpp cppCode
   let planFile =
         "ssb-workload"
-        </> printf "query-%s-%s-%d.plan.txt" lbl (maybe "unlim" show mem) windex
+        </> printf "query-%s-%s-%03d.plan.txt" lbl (maybe "unlim" show mem) windex
   recordPlan planFile ref $ reverse transitions
   liftIO $ putStrLn $ "Plan file: " ++ planFile
   storeCpp lbl windex cppCode
