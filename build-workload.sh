@@ -21,21 +21,24 @@ set -xe
 rm -rf /tmp/fluidb_store
 mkdir /tmp/fluidb_store
 
+function cpp_build {
+    local cpp=$1
+    c++ -std=c++2a -g -I ./bama/include/include -DFMT_HEADER_ONLY $cpp -o $(basename $cpp).exe
+    echo "$cpp" >> /tmp/io_perf.txt
+    $(basename $cpp).exe
+}
+
 # Baseline measurements
 echo "baseline {" >> /tmp/io_perf.txt
 for cpp in ./ssb-workload/query-indiv-*; do
-    c++ -std=c++2a -g -I ./bama/include/include $cpp -o $(basename $cpp).exe
-    echo "$cpp" >> /tmp/io_perf.txt
-    $(basename $cpp).exe
+    cpp_build $cpp
 done
 echo "}" >> /tmp/io_perf.txt
 
 # Main measurements
 echo "main {" >> /tmp/io_perf.txt
 for cpp in ./ssb-workload/query-main-*; do
-    c++ -std=c++2a -g -I ./bama/include/include $cpp -o $(basename $cpp).exe
-    echo "$cpp" >> /tmp/io_perf.txt
-    $(basename $cpp).exe
+    cpp_build $cpp
 done
 echo "}" >> /tmp/io_perf.txt
 
