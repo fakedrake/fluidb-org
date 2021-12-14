@@ -2,6 +2,6 @@
 #! nix-shell -i bash
 set -ex
 
-# ./build-ssb.sh
 ./build.sh
+./build-ssb.sh
 ./build-workload.sh
