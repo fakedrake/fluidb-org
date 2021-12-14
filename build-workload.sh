@@ -40,7 +40,7 @@ function reset_primaries {
 
 # Baseline measurements
 echo "baseline {" >> /tmp/io_perf.txt
-for cpp in ./ssb-workload/$prefix*.cpp; do
+for cpp in ./ssb-workload/${indiv_prefix}*.cpp; do
     cp -r /tmp/fluidb-primaries/* /run/user/1000/fluidb-data/
     cpp_build $cpp
 done
@@ -49,7 +49,7 @@ echo "}" >> /tmp/io_perf.txt
 # Main measurements
 reset_primaries
 echo "main {" >> /tmp/io_perf.txt
-for cpp in ./ssb-workload/query-main-*.cpp; do
+for cpp in ./ssb-workload/${main_prefix}*.cpp; do
     cpp_build $cpp
 done
 echo "}" >> /tmp/io_perf.txt
