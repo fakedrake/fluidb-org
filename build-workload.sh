@@ -30,14 +30,14 @@ function cpp_build {
 
 # Baseline measurements
 echo "baseline {" >> /tmp/io_perf.txt
-for cpp in ./ssb-workload/query-indiv-*; do
+for cpp in ./ssb-workload/query-indiv-*.cpp; do
     cpp_build $cpp
 done
 echo "}" >> /tmp/io_perf.txt
 
 # Main measurements
 echo "main {" >> /tmp/io_perf.txt
-for cpp in ./ssb-workload/query-main-*; do
+for cpp in ./ssb-workload/query-main-*.cpp; do
     cpp_build $cpp
 done
 echo "}" >> /tmp/io_perf.txt
