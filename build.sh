@@ -2,7 +2,7 @@
 #! nix-shell -i bash
 set -ex
 
-stack build -j 4 fluidb:bench:baseline
+# stack build -j 4 fluidb:bench:baseline
 stack build -j 4 fluidb:bench:benchmark
 
 # stack build -j 4 fluidb:bench:benchmark
