@@ -18,7 +18,7 @@ set -xe
 # cd ./cmake-build/
 # make VERBOSE=5 -j
 
-size=65000
+size=22000
 indiv_prefix=query-indiv-${size}-
 main_prefix=query-main-${size}-
 
