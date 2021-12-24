@@ -1,0 +1,39 @@
+
+Query |\(s_{\mathit{d\_year}, - (\mathit{revenue})} (\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))))\)| {
+  |\(Q_{6}, Q_{5}, Q_{7}\)| := Materialize[|\((Q_{1}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{1}) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{1}) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0})\)|]
+  |\(Q_{11}, Q_{10}, Q_{12}\)| := Materialize[|\((Q_{4}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{6}), (Q_{4}) \cancel\ltimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{6}), (Q_{4}) \cancel\rtimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{6})\)|]
+  |\(Q_{22}\)| := Materialize[|\(\sigma_{((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land (\mathit{c\_region} \sim \mathit{"ASIA"})} (Q_{11})\)|]
+  |\(Q_{39}, Q_{38}, Q_{40}\)| := Materialize[|\((Q_{22}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{22}) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{22}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3})\)|]
+  GC { Delete[|\(Q_{8}\)|] }
+  GC { Delete[|\(Q_{9}\)|] }
+  GC { Delete[|\(Q_{13}\)|] }
+  GC { Delete[|\(Q_{14}\)|] }
+  GC { Delete[|\(Q_{41}\)|] }
+  GC { Delete[|\(Q_{42}\)|] }
+  GC { Delete[|\(Q_{5}\)|] }
+  GC { Delete[|\(Q_{7}\)|] }
+  GC { Delete[|\(Q_{38}\)|] }
+  GC { Delete[|\(Q_{3}\)|] }
+  GC { Delete[|\(Q_{22}\)|] }
+  GC { Delete[|\(Q_{10}\)|] }
+  GC { Delete[|\(Q_{12}\)|] }
+  GC { Delete[|\(Q_{11}\)|] }
+  |\(Q_{20}\)| := Materialize[|\(\sigma_{\mathit{s\_region} \sim \mathit{"ASIA"}} (Q_{39})\)|]
+  |\(Q_{65}\)| := Materialize[|\(\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (Q_{20})\)|]
+  |\(Q_{66}\)| := Materialize[|\(s_{\mathit{d\_year}, - (\mathit{revenue})} (Q_{65})\)|]
+}
+
+Inventory {
+|\(Q_{0}\)| := |\(\mathit{lineorder}\)|
+|\(Q_{1}\)| := |\(\mathit{date}\)|
+|\(Q_{2}\)| := |\(\mathit{part}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{6}\)| := |\((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{20}\)| := |\(\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))\)|
+|\(Q_{23}\)| := |\(\sigma_{\neg (((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land (\mathit{c\_region} \sim \mathit{"ASIA"}))} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)|
+|\(Q_{39}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"ASIA"}} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{40}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"ASIA"}} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{43}\)| := |\(\sigma_{\neg (\mathit{s\_region} \sim \mathit{"ASIA"})} ((\sigma_{((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land (\mathit{c\_region} \sim \mathit{"ASIA"})} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))\)|
+|\(Q_{65}\)| := |\(\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})))\)|
+|\(Q_{66}\)| := |\(s_{\mathit{d\_year}, - (\mathit{revenue})} (\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))))\)|
+}

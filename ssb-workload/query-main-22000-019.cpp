@@ -307,8 +307,8 @@ int main() {
   //             (Q0 (TSymbol "supplier")) 
   //             (Q0 (TSymbol "lineorder"))) 
   //           (Q0 (TSymbol "date"))) 
-  std::cout << "Delete: (Q1 \n  (QSort [E0 (ESym \"d_year\"),E0 (ESym \"p_brand1\")]) \n  (Q1 \n    (QGroup \n      [(ESym \"tmpSym0\",E0 (NAggr AggrSum (E0 (ESym \"lo_revenue\")))),\n       (ESym \"d_year\",E0 (NAggr AggrFirst (E0 (ESym \"d_year\")))),\n       (ESym \"p_brand1\",E0 (NAggr AggrFirst (E0 (ESym \"p_brand1\"))))] \n      [E0 (ESym \"d_year\"),E0 (ESym \"p_brand1\")]) \n    (S \n      (P2 \n        PAnd \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"s_region\"))) \n                (R0 (E0 (EString \"ASIA\"))))) \n          (P0 \n            (R2 RLe \n                (R0 (E0 (EString \"MFGR#2221\"))) \n                (R0 (E0 (ESym \"p_brand1\")))))) \n        (P0 \n          (R2 RLe \n              (R0 (E0 (ESym \"p_brand1\"))) \n              (R0 (E0 (EString \"MFGR#2228\")))))) \n      (J \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_partkey\"))) \n              (R0 (E0 (ESym \"p_partkey\"))))) \n        (J \n          (P0 \n            (R2 REq \n                (R0 (E0 (ESym \"lo_orderdate\"))) \n                (R0 (E0 (ESym \"d_datekey\"))))) \n          (J \n            (P0 \n              (R2 REq \n                  (R0 (E0 (ESym \"lo_suppkey\"))) \n                  (R0 (E0 (ESym \"s_suppkey\"))))) \n            (Q0 (TSymbol \"supplier\")) \n            (Q0 (TSymbol \"lineorder\"))) \n          (Q0 (TSymbol \"date\"))) \n        (Q0 (TSymbol \"part\"))))))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data119.dat");
+  std::cout << "Delete: N109" << std::endl;
+  deleteFile("/tmp/fluidb_store/data109.dat");
   // Delete: (Q1 
   //   (QGroup 
   //     [(ESym "tmpSym0",E0 (NAggr AggrSum (E0 (ESym "lo_revenue")))),
@@ -350,8 +350,8 @@ int main() {
   //           (Q0 (TSymbol "supplier")) 
   //           (Q0 (TSymbol "lineorder"))) 
   //         (Q0 (TSymbol "date"))) 
-  std::cout << "Delete: (Q1 \n  (QGroup \n    [(ESym \"tmpSym0\",E0 (NAggr AggrSum (E0 (ESym \"lo_revenue\")))),\n     (ESym \"d_year\",E0 (NAggr AggrFirst (E0 (ESym \"d_year\")))),\n     (ESym \"p_brand1\",E0 (NAggr AggrFirst (E0 (ESym \"p_brand1\"))))] \n    [E0 (ESym \"d_year\"),E0 (ESym \"p_brand1\")]) \n  (S \n    (P2 \n      PAnd \n      (P2 \n        PAnd \n        (P0 \n          (R2 RLike \n              (R0 (E0 (ESym \"s_region\"))) \n              (R0 (E0 (EString \"ASIA\"))))) \n        (P0 \n          (R2 RLe \n              (R0 (E0 (EString \"MFGR#2221\"))) \n              (R0 (E0 (ESym \"p_brand1\")))))) \n      (P0 \n        (R2 RLe \n            (R0 (E0 (ESym \"p_brand1\"))) \n            (R0 (E0 (EString \"MFGR#2228\")))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_partkey\"))) \n            (R0 (E0 (ESym \"p_partkey\"))))) \n      (J \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_orderdate\"))) \n              (R0 (E0 (ESym \"d_datekey\"))))) \n        (J \n          (P0 \n            (R2 REq \n                (R0 (E0 (ESym \"lo_suppkey\"))) \n                (R0 (E0 (ESym \"s_suppkey\"))))) \n          (Q0 (TSymbol \"supplier\")) \n          (Q0 (TSymbol \"lineorder\"))) \n        (Q0 (TSymbol \"date\"))) \n      (Q0 (TSymbol \"part\")))))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data118.dat");
+  std::cout << "Delete: N108" << std::endl;
+  deleteFile("/tmp/fluidb_store/data108.dat");
   // Delete: (S 
   //   (P2 
   //     PAnd 
@@ -387,8 +387,8 @@ int main() {
   //         (Q0 (TSymbol "supplier")) 
   //         (Q0 (TSymbol "lineorder"))) 
   //       (Q0 (TSymbol "date"))) 
-  std::cout << "Delete: (S \n  (P2 \n    PAnd \n    (P2 \n      PAnd \n      (P0 \n        (R2 RLike \n            (R0 (E0 (ESym \"s_region\"))) \n            (R0 (E0 (EString \"ASIA\"))))) \n      (P0 \n        (R2 RLe \n            (R0 (E0 (EString \"MFGR#2221\"))) \n            (R0 (E0 (ESym \"p_brand1\")))))) \n    (P0 \n      (R2 RLe \n          (R0 (E0 (ESym \"p_brand1\"))) \n          (R0 (E0 (EString \"MFGR#2228\")))))) \n  (J \n    (P0 \n      (R2 REq \n          (R0 (E0 (ESym \"lo_partkey\"))) \n          (R0 (E0 (ESym \"p_partkey\"))))) \n    (J \n      (P0 \n        (R2 REq \n            (R0 (E0 (ESym \"lo_orderdate\"))) \n            (R0 (E0 (ESym \"d_datekey\"))))) \n      (J \n        (P0 \n          (R2 REq \n              (R0 (E0 (ESym \"lo_suppkey\"))) \n              (R0 (E0 (ESym \"s_suppkey\"))))) \n        (Q0 (TSymbol \"supplier\")) \n        (Q0 (TSymbol \"lineorder\"))) \n      (Q0 (TSymbol \"date\"))) \n    (Q0 (TSymbol \"part\"))))" << std::endl;
-  deleteFile("/tmp/fluidb_store/data92.dat");
+  std::cout << "Delete: N82" << std::endl;
+  deleteFile("/tmp/fluidb_store/data82.dat");
   // ForwardTrigger: (Just 
   //   (Right 
   //     [
@@ -405,7 +405,7 @@ int main() {
   //                 (R0 (E0 (EString "MFGR#2221"))))))
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QSel \n        (P2 \n          PAnd \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"s_region\"))) \n                (R0 (E0 (EString \"EUROPE\"))))) \n          (P0 \n            (R2 RLike \n                (R0 (E0 (ESym \"p_brand1\"))) \n                (R0 (E0 (EString \"MFGR#2221\"))))))\n    ]))" << std::endl;
   {
-    auto operation = mkSelect<CallableClass2>(Just<const std::string>("/tmp/fluidb_store/data120.dat"), Nothing<const std::string>(), "/tmp/fluidb_store/data46.dat");
+    auto operation = mkSelect<CallableClass2>(Just<const std::string>("/tmp/fluidb_store/data110.dat"), Nothing<const std::string>(), "/tmp/fluidb_store/data36.dat");
     operation.run();
     operation.print_output(10);
   }
@@ -419,13 +419,13 @@ int main() {
   //         [E0 (ESym "d_year"),E0 (ESym "p_brand1")]
   std::cout << "ForwardTrigger: (Just \n  (Right \n    [\n     QGroup \n        [(ESym \"tmpSym0\",E0 (NAggr AggrSum (E0 (ESym \"lo_revenue\")))),\n         (ESym \"d_year\",E0 (NAggr AggrFirst (E0 (ESym \"d_year\")))),\n         (ESym \"p_brand1\",E0 (NAggr AggrFirst (E0 (ESym \"p_brand1\"))))] \n        [E0 (ESym \"d_year\"),E0 (ESym \"p_brand1\")]\n    ]))" << std::endl;
   {
-    auto operation = mkAggregation<CallableClass9, CallableClass11>(Just<const std::string>("/tmp/fluidb_store/data146.dat"), Just<const std::string>("/tmp/fluidb_store/data120.dat"), "/tmp/fluidb_store/data120.dat");
+    auto operation = mkAggregation<CallableClass9, CallableClass11>(Just<const std::string>("/tmp/fluidb_store/data136.dat"), Just<const std::string>("/tmp/fluidb_store/data110.dat"), "/tmp/fluidb_store/data110.dat");
     operation.run();
     operation.print_output(10);
   }
   std::cout << "ForwardTrigger: (Just (Right [QSort [E0 (ESym \"d_year\"),E0 (ESym \"p_brand1\")]]))" << std::endl;
   {
-    auto operation = mkSort<CallableClass13>(Just<const std::string>("/tmp/fluidb_store/data147.dat"), Just<const std::string>("/tmp/fluidb_store/data146.dat"), "/tmp/fluidb_store/data146.dat");
+    auto operation = mkSort<CallableClass13>(Just<const std::string>("/tmp/fluidb_store/data137.dat"), Just<const std::string>("/tmp/fluidb_store/data136.dat"), "/tmp/fluidb_store/data136.dat");
     operation.run();
     operation.print_output(10);
   }
