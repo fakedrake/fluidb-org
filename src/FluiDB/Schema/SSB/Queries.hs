@@ -220,6 +220,9 @@ ssbQueriesList =
      ,"and d_yearmonthnum = 199401"
      ,"and lo_discount between 4 and 6"
      ,"and lo_quantity between 26 and 35"]
+
+
+      -- Flight 1
     ,["select sum(lo_extendedprice*lo_discount) as revenue"
      ,"from lineorder, date"
      ,"where lo_orderdate = d_datekey"
@@ -238,13 +241,7 @@ ssbQueriesList =
      ,"and d_yearmonthnum = 199401"
      ,"and lo_discount between 4 and 6"
      ,"and lo_quantity between 26 and 35"]
-    ,["select sum(lo_extendedprice*lo_discount) as revenue"
-     ,"from lineorder, date"
-     ,"where lo_orderdate = d_datekey"
-     ,"and d_weeknuminyear = 6"
-     ,"and d_year = 1994"
-     ,"and lo_discount between 5 and 7"
-     ,"and lo_quantity between 26 and 35"]
+    -- Flight 2
     ,["select sum(lo_revenue), d_year, p_brand1"
      ,"from lineorder, date, part, supplier"
      ,"where lo_orderdate = d_datekey"
@@ -272,6 +269,7 @@ ssbQueriesList =
      ,"and s_region = 'EUROPE'"
      ,"group by d_year, p_brand1"
      ,"order by d_year, p_brand1"]
+    -- Flight 3
     ,["select c_nation, s_nation, d_year, sum(lo_revenue) as revenue"
      ,"from customer, lineorder, supplier, date"
      ,"where lo_custkey = c_custkey"
@@ -311,6 +309,7 @@ ssbQueriesList =
      ,"and d_yearmonth = 'Dec1997'"
      ,"group by c_city, s_city, d_year"
      ,"order by d_year, revenue desc"]
+    -- Flight 4
     ,["select d_year, c_nation, sum(lo_revenue - lo_supplycost) as profit"
      ,"from date, customer, supplier, part, lineorder"
      ,"where lo_custkey = c_custkey"
