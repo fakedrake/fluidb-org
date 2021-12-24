@@ -123,7 +123,7 @@ getCppCode = runSoftCodeBuilder $ forEachEpoch $ do
         $ fmap2 qnfOrigDEBUG
         $ getNodeQnfN n
       let comment = CC.Comment $ "Delete: " ++ ashow queryView
-      let cout = ashowCout "Delete: " queryView
+      let cout = ashowCout "Delete: " n
       dropReader (lift getClusterConfig) $ delNodeFile n
       case fileM of
         Nothing   -> return []
