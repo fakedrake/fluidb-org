@@ -1,0 +1,74 @@
+
+Query |\(s_{\mathit{d\_year}, - (\mathit{revenue})} (\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))))\)| {
+  |\(Q_{3}\)| := Materialize[|\(\bar\pi_{cols(Q_{3})} (Q_{322}) \cup Q_{323}\)|]
+  |\(Q_{4}\)| := Materialize[|\(\bar\pi_{cols(Q_{4})} (Q_{351}) \cup Q_{352}\)|]
+  GC { Delete[|\(Q_{324}\)|] }
+  GC { Delete[|\(Q_{325}\)|] }
+  GC { Delete[|\(Q_{353}\)|] }
+  GC { Delete[|\(Q_{354}\)|] }
+  GC { Delete[|\(Q_{81}\)|] }
+  GC { Delete[|\(Q_{80}\)|] }
+  GC { Delete[|\(Q_{109}\)|] }
+  GC { Delete[|\(Q_{108}\)|] }
+  GC { Delete[|\(Q_{137}\)|] }
+  GC { Delete[|\(Q_{136}\)|] }
+  GC { Delete[|\(Q_{40}\)|] }
+  |\(Q_{0}\)| := Materialize[|\(\bar\pi_{cols(Q_{0})} (Q_{8}) \cup Q_{9}\)|]
+  |\(Q_{159}\)| := Materialize[|\(\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} (Q_{1})\)|]
+  GC { Delete[|\(Q_{10}\)|] }
+  GC { Delete[|\(Q_{11}\)|] }
+  GC { Delete[|\(Q_{41}\)|] }
+  |\(Q_{157}, Q_{161}, Q_{162}\)| := Materialize[|\((Q_{159}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{159}) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{159}) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0})\)|]
+  GC { Delete[|\(Q_{163}\)|] }
+  GC { Delete[|\(Q_{164}\)|] }
+  GC { Delete[|\(Q_{82}\)|] }
+  GC { Delete[|\(Q_{36}\)|] }
+  |\(Q_{166}, Q_{165}, Q_{167}\)| := Materialize[|\((Q_{4}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{157}), (Q_{4}) \cancel\ltimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{157}), (Q_{4}) \cancel\rtimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{157})\)|]
+  |\(Q_{155}\)| := Materialize[|\(\sigma_{\mathit{c\_region} \sim \mathit{"ASIA"}} (Q_{166})\)|]
+  |\(Q_{172}, Q_{171}, Q_{173}\)| := Materialize[|\((Q_{155}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{155}) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{155}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3})\)|]
+  GC { Delete[|\(Q_{168}\)|] }
+  GC { Delete[|\(Q_{169}\)|] }
+  GC { Delete[|\(Q_{174}\)|] }
+  GC { Delete[|\(Q_{175}\)|] }
+  GC { Delete[|\(Q_{83}\)|] }
+  |\(Q_{153}\)| := Materialize[|\(\sigma_{\mathit{s\_region} \sim \mathit{"ASIA"}} (Q_{172})\)|]
+  |\(Q_{193}\)| := Materialize[|\(\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (Q_{153})\)|]
+  |\(Q_{194}\)| := Materialize[|\(s_{\mathit{d\_year}, - (\mathit{revenue})} (Q_{193})\)|]
+}
+
+Inventory {
+|\(Q_{0}\)| := |\(\mathit{lineorder}\)|
+|\(Q_{1}\)| := |\(\mathit{date}\)|
+|\(Q_{3}\)| := |\(\mathit{supplier}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{8}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{9}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{110}\)| := |\(\sigma_{(\mathit{s\_region} \sim \mathit{"EUROPE"}) \land (\mathit{p\_brand1} \sim \mathit{"MFGR#2221"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{111}\)| := |\(\sigma_{\neg ((\mathit{s\_region} \sim \mathit{"EUROPE"}) \land (\mathit{p\_brand1} \sim \mathit{"MFGR#2221"}))} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{153}\)| := |\(\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))\)|
+|\(Q_{155}\)| := |\(\sigma_{((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land (\mathit{c\_region} \sim \mathit{"ASIA"})} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)|
+|\(Q_{157}\)| := |\(\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{159}\)| := |\(\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} (\mathit{date})\)|
+|\(Q_{160}\)| := |\(\sigma_{\neg ((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997))} (\mathit{date})\)|
+|\(Q_{161}\)| := |\((\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} (\mathit{date})) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{162}\)| := |\((\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{165}\)| := |\((\mathit{customer}) \cancel\ltimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{166}\)| := |\((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{167}\)| := |\((\mathit{customer}) \cancel\rtimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{170}\)| := |\(\sigma_{\neg (\mathit{c\_region} \sim \mathit{"ASIA"})} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))\)|
+|\(Q_{171}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"ASIA"}} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{172}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"ASIA"}} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{173}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"ASIA"}} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{176}\)| := |\(\sigma_{\neg (\mathit{s\_region} \sim \mathit{"ASIA"})} ((\sigma_{((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land (\mathit{c\_region} \sim \mathit{"ASIA"})} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))\)|
+|\(Q_{193}\)| := |\(\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})))\)|
+|\(Q_{194}\)| := |\(s_{\mathit{d\_year}, - (\mathit{revenue})} (\gamma_{\mathit{c\_nation}, \mathit{s\_nation}, \mathit{d\_year}} \pi_{\mathit{c\_nation} \mapsto first(\mathit{c\_nation}), \mathit{s\_nation} \mapsto first(\mathit{s\_nation}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{(((\mathit{c\_region} \sim \mathit{"ASIA"}) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land (\mathit{s\_region} \sim \mathit{"ASIA"})} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))))\)|
+|\(Q_{280}\)| := |\(\sigma_{((\mathit{c\_region} \sim \mathit{"AMERICA"}) \land (\mathit{s\_region} \sim \mathit{"AMERICA"})) \land ((\mathit{p\_mfgr} \sim \mathit{"MFGR#1"}) \lor (\mathit{p\_mfgr} \sim \mathit{"MFGR#2"}))} (((((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{313}\)| := |\(\sigma_{(((\mathit{c\_region} \sim \mathit{"AMERICA"}) \land (\mathit{s\_region} \sim \mathit{"AMERICA"})) \land ((\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998))) \land ((\mathit{p\_mfgr} \sim \mathit{"MFGR#1"}) \lor (\mathit{p\_mfgr} \sim \mathit{"MFGR#2"}))} (((((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{322}\)| := |\((\sigma_{(\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{323}\)| := |\((\sigma_{(\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{343}\)| := |\(\sigma_{(((\mathit{c\_region} \sim \mathit{"AMERICA"}) \land (\mathit{s\_nation} \sim \mathit{"UNITED STATES"})) \land ((\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998))) \land (\mathit{p\_category} \sim \mathit{"MFGR#14"})} (((((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{351}\)| := |\((\sigma_{\mathit{s\_nation} \sim \mathit{"UNITED STATES"}} ((\sigma_{(\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer})\)|
+|\(Q_{352}\)| := |\((\sigma_{\mathit{s\_nation} \sim \mathit{"UNITED STATES"}} ((\sigma_{(\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))) \cancel\rtimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer})\)|
+|\(Q_{367}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"AMERICA"}} ((\sigma_{((\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998)) \land (\mathit{s\_nation} \sim \mathit{"UNITED STATES"})} (((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer}))) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{368}\)| := |\((\sigma_{\mathit{c\_region} \sim \mathit{"AMERICA"}} ((\sigma_{((\mathit{d\_year} = 1997) \lor (\mathit{d\_year} = 1998)) \land (\mathit{s\_nation} \sim \mathit{"UNITED STATES"})} (((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer}))) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+}

@@ -1,0 +1,35 @@
+
+Query |\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (\sigma_{((1 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 3)) \land (\mathit{lo\_quantity} < 25)} ((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)| {
+  |\(Q_{15}\)| := Materialize[|\(\sigma_{\mathit{d\_year} = 1993} (Q_{1})\)|]
+  |\(Q_{18}, Q_{17}, Q_{19}\)| := Materialize[|\((Q_{15}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{15}) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{15}) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0})\)|]
+  |\(Q_{22}\)| := Materialize[|\(\sigma_{((1 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 3)) \land (\mathit{lo\_quantity} < 25)} (Q_{18})\)|]
+  |\(Q_{24}\)| := Materialize[|\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (Q_{22})\)|]
+}
+
+Inventory {
+|\(Q_{0}\)| := |\(\mathit{lineorder}\)|
+|\(Q_{1}\)| := |\(\mathit{date}\)|
+|\(Q_{2}\)| := |\(\mathit{part}\)|
+|\(Q_{3}\)| := |\(\mathit{supplier}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{5}\)| := |\(\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})\)|
+|\(Q_{6}\)| := |\(\sigma_{\neg (\mathit{d\_yearmonthnum} = 199401)} (\mathit{date})\)|
+|\(Q_{7}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{8}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{9}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{10}\)| := |\((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \pi_{q} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{11}\)| := |\((\mathit{lineorder}) \pi_{q} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{12}\)| := |\(\sigma_{(((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35)} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{13}\)| := |\(\sigma_{\neg ((((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35))} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{14}\)| := |\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (\sigma_{(((4 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 6)) \land (26 \le \mathit{lo\_quantity})) \land (\mathit{lo\_quantity} \le 35)} ((\sigma_{\mathit{d\_yearmonthnum} = 199401} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)|
+|\(Q_{15}\)| := |\(\sigma_{\mathit{d\_year} = 1993} (\mathit{date})\)|
+|\(Q_{16}\)| := |\(\sigma_{\neg (\mathit{d\_year} = 1993)} (\mathit{date})\)|
+|\(Q_{17}\)| := |\((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{18}\)| := |\((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{19}\)| := |\((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})\)|
+|\(Q_{20}\)| := |\((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \pi_{q} ((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{21}\)| := |\((\mathit{lineorder}) \pi_{q} ((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{22}\)| := |\(\sigma_{((1 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 3)) \land (\mathit{lo\_quantity} < 25)} ((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{23}\)| := |\(\sigma_{\neg (((1 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 3)) \land (\mathit{lo\_quantity} < 25))} ((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))\)|
+|\(Q_{24}\)| := |\(\gamma_{} \pi_{\mathit{revenue} \mapsto (\sum (\mathit{lo\_extendedprice}) \dot (\mathit{lo\_discount}))} (\sigma_{((1 \le \mathit{lo\_discount}) \land (\mathit{lo\_discount} \le 3)) \land (\mathit{lo\_quantity} < 25)} ((\sigma_{\mathit{d\_year} = 1993} (\mathit{date})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)|
+}
