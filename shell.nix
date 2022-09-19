@@ -8,8 +8,8 @@ with nixpkgs; let
     # czipwith
     # shake
     hasktags
-    profiteur
-    profiterole
+    # profiteur
+    # profiterole
     floskell
     haskell-language-server
     # implicit-hie
