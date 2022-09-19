@@ -1,0 +1,33 @@
+
+Query |\(((\mathit{lineorder}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})\)| {
+  |\(Q_{35}, Q_{34}, Q_{36}\)| := Materialize[|\((Q_{0}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{1}), (Q_{0}) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{1}), (Q_{0}) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{1})\)|]
+  GC { Delete[|\(Q_{8}\)|] }
+  GC { Delete[|\(Q_{9}\)|] }
+  GC { Delete[|\(Q_{13}\)|] }
+  GC { Delete[|\(Q_{14}\)|] }
+  GC { Delete[|\(Q_{37}\)|] }
+  GC { Delete[|\(Q_{38}\)|] }
+  GC { Delete[|\(Q_{5}\)|] }
+  GC { Delete[|\(Q_{0}\)|] }
+  GC { Delete[|\(Q_{3}\)|] }
+  GC { Delete[|\(Q_{36}\)|] }
+  GC { Delete[|\(Q_{10}\)|] }
+  GC { Delete[|\(Q_{12}\)|] }
+  GC { Delete[|\(Q_{11}\)|] }
+  |\(Q_{30}, Q_{39}, Q_{40}\)| := Materialize[|\((Q_{4}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{35}), (Q_{4}) \cancel\ltimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{35}), (Q_{4}) \cancel\rtimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{35})\)|]
+}
+
+Inventory {
+|\(Q_{1}\)| := |\(\mathit{date}\)|
+|\(Q_{2}\)| := |\(\mathit{part}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{6}\)| := |\((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{7}\)| := |\((\mathit{lineorder}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{30}\)| := |\(((\mathit{lineorder}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\mathit{customer})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})\)|
+|\(Q_{34}\)| := |\((\mathit{lineorder}) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})\)|
+|\(Q_{35}\)| := |\((\mathit{lineorder}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})\)|
+|\(Q_{39}\)| := |\((\mathit{customer}) \cancel\ltimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date}))\)|
+|\(Q_{40}\)| := |\((\mathit{customer}) \cancel\rtimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date}))\)|
+|\(Q_{41}\)| := |\((\mathit{customer}) \pi_{q} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})))\)|
+|\(Q_{42}\)| := |\(((\mathit{lineorder}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \pi_{q} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})))\)|
+}
