@@ -1,0 +1,48 @@
+
+Query |\(s_{\mathit{d\_year}, - (\mathit{revenue})} (\gamma_{\mathit{c\_city}, \mathit{s\_city}, \mathit{d\_year}} \pi_{\mathit{c\_city} \mapsto first(\mathit{c\_city}), \mathit{s\_city} \mapsto first(\mathit{s\_city}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{((((\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"})) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land ((\mathit{s\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{s\_city} \sim \mathit{"UNITED KI5"}))} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))))\)| {
+  GC { Delete[|\(Q_{209}\)|] }
+  GC { Delete[|\(Q_{208}\)|] }
+  GC { Delete[|\(Q_{200}\)|] }
+  GC { Delete[|\(Q_{202}\)|] }
+  GC { Delete[|\(Q_{205}\)|] }
+  GC { Delete[|\(Q_{201}\)|] }
+  |\(Q_{139}, Q_{138}, Q_{140}\)| := Materialize[|\((Q_{1}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{1}) \cancel\ltimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0}), (Q_{1}) \cancel\rtimes_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (Q_{0})\)|]
+  GC { Delete[|\(Q_{141}\)|] }
+  GC { Delete[|\(Q_{142}\)|] }
+  GC { Delete[|\(Q_{197}\)|] }
+  GC { Delete[|\(Q_{195}\)|] }
+  |\(Q_{144}, Q_{143}, Q_{145}\)| := Materialize[|\((Q_{4}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{139}), (Q_{4}) \cancel\ltimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{139}), (Q_{4}) \cancel\rtimes_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (Q_{139})\)|]
+  |\(Q_{212}\)| := Materialize[|\(\sigma_{((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land ((\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"}))} (Q_{144})\)|]
+  GC { Delete[|\(Q_{146}\)|] }
+  GC { Delete[|\(Q_{147}\)|] }
+  GC { Delete[|\(Q_{138}\)|] }
+  GC { Delete[|\(Q_{140}\)|] }
+  GC { Delete[|\(Q_{143}\)|] }
+  GC { Delete[|\(Q_{145}\)|] }
+  GC { Delete[|\(Q_{213}\)|] }
+  GC { Delete[|\(Q_{144}\)|] }
+  |\(Q_{216}, Q_{215}, Q_{217}\)| := Materialize[|\((Q_{212}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{212}) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{212}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3})\)|]
+  GC { Delete[|\(Q_{218}\)|] }
+  GC { Delete[|\(Q_{219}\)|] }
+  GC { Delete[|\(Q_{139}\)|] }
+  |\(Q_{210}\)| := Materialize[|\(\sigma_{(\mathit{s\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{s\_city} \sim \mathit{"UNITED KI5"})} (Q_{216})\)|]
+  |\(Q_{223}\)| := Materialize[|\(\gamma_{\mathit{c\_city}, \mathit{s\_city}, \mathit{d\_year}} \pi_{\mathit{c\_city} \mapsto first(\mathit{c\_city}), \mathit{s\_city} \mapsto first(\mathit{s\_city}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (Q_{210})\)|]
+  |\(Q_{224}\)| := Materialize[|\(s_{\mathit{d\_year}, - (\mathit{revenue})} (Q_{223})\)|]
+}
+
+Inventory {
+|\(Q_{0}\)| := |\(\mathit{lineorder}\)|
+|\(Q_{1}\)| := |\(\mathit{date}\)|
+|\(Q_{3}\)| := |\(\mathit{supplier}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{127}\)| := |\(((\sigma_{\mathit{s\_region} \sim \mathit{"EUROPE"}} ((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{128}\)| := |\(((\sigma_{\mathit{s\_region} \sim \mathit{"EUROPE"}} ((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{210}\)| := |\(\sigma_{((((\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"})) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land ((\mathit{s\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{s\_city} \sim \mathit{"UNITED KI5"}))} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))\)|
+|\(Q_{212}\)| := |\(\sigma_{((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land ((\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"}))} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))\)|
+|\(Q_{215}\)| := |\((\sigma_{(\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"})} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{216}\)| := |\((\sigma_{(\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"})} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{217}\)| := |\((\sigma_{(\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"})} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} (\sigma_{(\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))))) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{220}\)| := |\(\sigma_{\neg ((\mathit{s\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{s\_city} \sim \mathit{"UNITED KI5"}))} ((\sigma_{((\mathit{d\_year} \ge 1992) \land (\mathit{d\_year} \le 1997)) \land ((\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"}))} ((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))\)|
+|\(Q_{223}\)| := |\(\gamma_{\mathit{c\_city}, \mathit{s\_city}, \mathit{d\_year}} \pi_{\mathit{c\_city} \mapsto first(\mathit{c\_city}), \mathit{s\_city} \mapsto first(\mathit{s\_city}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{((((\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"})) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land ((\mathit{s\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{s\_city} \sim \mathit{"UNITED KI5"}))} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})))\)|
+|\(Q_{224}\)| := |\(s_{\mathit{d\_year}, - (\mathit{revenue})} (\gamma_{\mathit{c\_city}, \mathit{s\_city}, \mathit{d\_year}} \pi_{\mathit{c\_city} \mapsto first(\mathit{c\_city}), \mathit{s\_city} \mapsto first(\mathit{s\_city}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{revenue} \mapsto (\sum \mathit{lo\_revenue})} (\sigma_{((((\mathit{c\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{c\_city} \sim \mathit{"UNITED KI5"})) \land (\mathit{d\_year} \ge 1992)) \land (\mathit{d\_year} \le 1997)) \land ((\mathit{s\_city} \sim \mathit{"UNITED KI1"}) \lor (\mathit{s\_city} \sim \mathit{"UNITED KI5"}))} (((\mathit{customer}) \Join_{\mathit{lo\_custkey} = \mathit{c\_custkey}} ((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier}))))\)|
+}

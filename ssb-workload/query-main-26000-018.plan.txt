@@ -1,0 +1,37 @@
+
+Query |\(s_{\mathit{d\_year}, \mathit{p\_brand1}} (\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (\sigma_{((\mathit{s\_region} \sim \mathit{"ASIA"}) \land (\mathit{"MFGR#2221"} \le \mathit{p\_brand1})) \land (\mathit{p\_brand1} \le \mathit{"MFGR#2228"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))))\)| {
+  |\(Q_{2}\)| := Materialize[|\(\bar\pi_{cols(Q_{2})} (Q_{57}) \cup Q_{58}\)|]
+  GC { Delete[|\(Q_{59}\)|] }
+  GC { Delete[|\(Q_{60}\)|] }
+  GC { Delete[|\(Q_{81}\)|] }
+  GC { Delete[|\(Q_{80}\)|] }
+  GC { Delete[|\(Q_{40}\)|] }
+  GC { Delete[|\(Q_{61}\)|] }
+  |\(Q_{84}\)| := Materialize[|\(\sigma_{\mathit{s\_region} \sim \mathit{"ASIA"}} (Q_{31})\)|]
+  GC { Delete[|\(Q_{85}\)|] }
+  GC { Delete[|\(Q_{58}\)|] }
+  GC { Delete[|\(Q_{57}\)|] }
+  |\(Q_{99}, Q_{98}, Q_{100}\)| := Materialize[|\((Q_{84}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2}), (Q_{84}) \cancel\ltimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2}), (Q_{84}) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2})\)|]
+  GC { Delete[|\(Q_{101}\)|] }
+  GC { Delete[|\(Q_{102}\)|] }
+  GC { Delete[|\(Q_{98}\)|] }
+  GC { Delete[|\(Q_{2}\)|] }
+  GC { Delete[|\(Q_{84}\)|] }
+  |\(Q_{82}\)| := Materialize[|\(\sigma_{(\mathit{"MFGR#2221"} \le \mathit{p\_brand1}) \land (\mathit{p\_brand1} \le \mathit{"MFGR#2228"})} (Q_{99})\)|]
+  |\(Q_{108}\)| := Materialize[|\(\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (Q_{82})\)|]
+  |\(Q_{109}\)| := Materialize[|\(s_{\mathit{d\_year}, \mathit{p\_brand1}} (Q_{108})\)|]
+}
+
+Inventory {
+|\(Q_{0}\)| := |\(\mathit{lineorder}\)|
+|\(Q_{1}\)| := |\(\mathit{date}\)|
+|\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{31}\)| := |\(((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})\)|
+|\(Q_{82}\)| := |\(\sigma_{((\mathit{s\_region} \sim \mathit{"ASIA"}) \land (\mathit{"MFGR#2221"} \le \mathit{p\_brand1})) \land (\mathit{p\_brand1} \le \mathit{"MFGR#2228"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{99}\)| := |\(((\sigma_{\mathit{s\_region} \sim \mathit{"ASIA"}} ((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{100}\)| := |\(((\sigma_{\mathit{s\_region} \sim \mathit{"ASIA"}} ((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder}))) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{103}\)| := |\(\sigma_{\neg ((\mathit{"MFGR#2221"} \le \mathit{p\_brand1}) \land (\mathit{p\_brand1} \le \mathit{"MFGR#2228"}))} ((\sigma_{\mathit{s\_region} \sim \mathit{"ASIA"}} (((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date}))) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{108}\)| := |\(\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (\sigma_{((\mathit{s\_region} \sim \mathit{"ASIA"}) \land (\mathit{"MFGR#2221"} \le \mathit{p\_brand1})) \land (\mathit{p\_brand1} \le \mathit{"MFGR#2228"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})))\)|
+|\(Q_{109}\)| := |\(s_{\mathit{d\_year}, \mathit{p\_brand1}} (\gamma_{\mathit{d\_year}, \mathit{p\_brand1}} \pi_{\mathit{tmpSym0} \mapsto (\sum \mathit{lo\_revenue}), \mathit{d\_year} \mapsto first(\mathit{d\_year}), \mathit{p\_brand1} \mapsto first(\mathit{p\_brand1})} (\sigma_{((\mathit{s\_region} \sim \mathit{"ASIA"}) \land (\mathit{"MFGR#2221"} \le \mathit{p\_brand1})) \land (\mathit{p\_brand1} \le \mathit{"MFGR#2228"})} ((((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{lineorder})) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{date})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))))\)|
+|\(Q_{259}\)| := |\(((\mathit{date}) \Join_{\mathit{lo\_orderdate} = \mathit{d\_datekey}} (\mathit{lineorder})) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+}
