@@ -18,7 +18,8 @@ set -xe
 # cd ./cmake-build/
 # make VERBOSE=5 -j
 
-size=30000
+# size=30000
+size=17000
 indiv_prefix=query-indiv-${size}-
 main_prefix=query-main-${size}-
 
@@ -27,7 +28,7 @@ mkdir /tmp/fluidb_store
 
 function cpp_build {
     local cpp=$1
-    c++ -std=c++2a -g -I ./bama/include/include -DFMT_HEADER_ONLY $cpp -o $(basename $cpp).exe
+    time c++ -std=c++2a -g -I ./bama/include/include -DFMT_HEADER_ONLY $cpp -o $(basename $cpp).exe
     echo "$cpp" >> /tmp/io_perf.txt
     ./$(basename $cpp).exe
 }

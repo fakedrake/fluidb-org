@@ -24,6 +24,7 @@ with nixpkgs; let
     ssb
     ghc
     stack
+    (python3.withPackages (pkgs: with pkgs; [pandas matplotlib]))
     graphviz
   ] ++ (if stdenv.isLinux then [ linuxPackages.perf ] else []) ;
 in
