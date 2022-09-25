@@ -222,7 +222,7 @@ readGraph gpath m = do
 #endif
 
 workload :: [(WIndex, QueryId)]
-workload = take 30 $ zip [1 ..] $ cycle [1 .. 13]
+workload = take 30 $ zip [1 ..] [1 .. ]
 
 workload1 :: [(WIndex, QueryId)]
 workload1 = zip [1 ..] [1 .. 13]
