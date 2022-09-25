@@ -371,52 +371,30 @@ int main() {
   //       (R2 REq 
   //           (R0 (E0 (ESym "lo_suppkey"))) 
   //           (R0 (E0 (ESym "s_suppkey")))))) 
-  //   (Q0 (TSymbol "lineorder")) 
-  std::cout << "Delete: N5" << std::endl;
-  deleteFile("/tmp/fluidb_store/data5.dat");
-  std::cout << "Delete: N0" << std::endl;
-  deleteFile("/tmp/fluidb_store/data0.dat");
-  std::cout << "Delete: N3" << std::endl;
-  deleteFile("/tmp/fluidb_store/data3.dat");
+  //   (Q0 (TSymbol "supplier")) 
+  //   (J 
+  //     (P0 
+  //       (R2 REq 
+  //           (R0 (E0 (ESym "lo_partkey"))) 
+  //           (R0 (E0 (ESym "p_partkey"))))) 
+  //     (Q0 (TSymbol "lineorder")) 
+  std::cout << "Delete: N20" << std::endl;
+  deleteFile("/tmp/fluidb_store/data20.dat");
   // Delete: (Q2 
   //   (QRightAntijoin 
   //     (P0 
   //       (R2 REq 
-  //           (R0 (E0 (ESym "lo_orderdate"))) 
-  //           (R0 (E0 (ESym "d_datekey")))))) 
-  //   (Q0 (TSymbol "lineorder")) 
-  std::cout << "Delete: N36" << std::endl;
-  deleteFile("/tmp/fluidb_store/data36.dat");
-  // Delete: (Q2 
-  //   (QLeftAntijoin 
-  //     (P0 
-  //       (R2 REq 
-  //           (R0 (E0 (ESym "lo_partkey"))) 
-  //           (R0 (E0 (ESym "p_partkey")))))) 
+  //           (R0 (E0 (ESym "lo_suppkey"))) 
+  //           (R0 (E0 (ESym "s_suppkey")))))) 
+  //   (Q0 (TSymbol "supplier")) 
   //   (J 
   //     (P0 
   //       (R2 REq 
-  //           (R0 (E0 (ESym "lo_suppkey"))) 
-  //           (R0 (E0 (ESym "s_suppkey"))))) 
-  //     (Q0 (TSymbol "lineorder")) 
-  //     (Q0 (TSymbol "supplier"))) 
-  std::cout << "Delete: N10" << std::endl;
-  deleteFile("/tmp/fluidb_store/data10.dat");
-  // Delete: (Q2 
-  //   (QRightAntijoin 
-  //     (P0 
-  //       (R2 REq 
   //           (R0 (E0 (ESym "lo_partkey"))) 
-  //           (R0 (E0 (ESym "p_partkey")))))) 
-  //   (J 
-  //     (P0 
-  //       (R2 REq 
-  //           (R0 (E0 (ESym "lo_suppkey"))) 
-  //           (R0 (E0 (ESym "s_suppkey"))))) 
+  //           (R0 (E0 (ESym "p_partkey"))))) 
   //     (Q0 (TSymbol "lineorder")) 
-  //     (Q0 (TSymbol "supplier"))) 
-  std::cout << "Delete: N12" << std::endl;
-  deleteFile("/tmp/fluidb_store/data12.dat");
+  std::cout << "Delete: N21" << std::endl;
+  deleteFile("/tmp/fluidb_store/data21.dat");
   // Delete: (J 
   //   (P0 
   //     (R2 REq (R0 (E0 (ESym "lo_partkey"))) (R0 (E0 (ESym "p_partkey"))))) 

@@ -1,26 +1,18 @@
 
 Query |\(((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)| {
-  |\(Q_{3}\)| := Materialize[|\(\bar\pi_{cols(Q_{3})} (Q_{6}) \cup Q_{7}\)|]
-  |\(Q_{0}\)| := Materialize[|\(\bar\pi_{cols(Q_{0})} (Q_{35}) \cup Q_{34}\)|]
-  GC { Delete[|\(Q_{8}\)|] }
-  GC { Delete[|\(Q_{9}\)|] }
-  GC { Delete[|\(Q_{37}\)|] }
-  GC { Delete[|\(Q_{38}\)|] }
   GC { Delete[|\(Q_{41}\)|] }
   GC { Delete[|\(Q_{42}\)|] }
+  GC { Delete[|\(Q_{34}\)|] }
+  GC { Delete[|\(Q_{36}\)|] }
   GC { Delete[|\(Q_{39}\)|] }
   GC { Delete[|\(Q_{40}\)|] }
   GC { Delete[|\(Q_{30}\)|] }
-  |\(Q_{16}, Q_{15}, Q_{17}\)| := Materialize[|\((Q_{0}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2}), (Q_{0}) \cancel\ltimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2}), (Q_{0}) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2})\)|]
-  GC { Delete[|\(Q_{18}\)|] }
-  GC { Delete[|\(Q_{19}\)|] }
-  GC { Delete[|\(Q_{7}\)|] }
-  GC { Delete[|\(Q_{34}\)|] }
-  GC { Delete[|\(Q_{15}\)|] }
-  GC { Delete[|\(Q_{17}\)|] }
+  |\(Q_{6}, Q_{5}, Q_{7}\)| := Materialize[|\((Q_{0}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{0}) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3}), (Q_{0}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{3})\)|]
+  GC { Delete[|\(Q_{8}\)|] }
+  GC { Delete[|\(Q_{9}\)|] }
   GC { Delete[|\(Q_{35}\)|] }
-  GC { Delete[|\(Q_{6}\)|] }
-  |\(Q_{11}, Q_{20}, Q_{21}\)| := Materialize[|\((Q_{3}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{16}), (Q_{3}) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{16}), (Q_{3}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (Q_{16})\)|]
+  GC { Delete[|\(Q_{16}\)|] }
+  |\(Q_{11}, Q_{10}, Q_{12}\)| := Materialize[|\((Q_{6}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2}), (Q_{6}) \cancel\ltimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2}), (Q_{6}) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (Q_{2})\)|]
 }
 
 Inventory {
@@ -29,10 +21,12 @@ Inventory {
 |\(Q_{2}\)| := |\(\mathit{part}\)|
 |\(Q_{3}\)| := |\(\mathit{supplier}\)|
 |\(Q_{4}\)| := |\(\mathit{customer}\)|
+|\(Q_{5}\)| := |\((\mathit{lineorder}) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{6}\)| := |\((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{7}\)| := |\((\mathit{lineorder}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})\)|
+|\(Q_{10}\)| := |\(((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \cancel\ltimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
 |\(Q_{11}\)| := |\(((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
-|\(Q_{16}\)| := |\((\mathit{lineorder}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
-|\(Q_{20}\)| := |\((\mathit{supplier}) \cancel\ltimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
-|\(Q_{21}\)| := |\((\mathit{supplier}) \cancel\rtimes_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
-|\(Q_{22}\)| := |\((\mathit{supplier}) \pi_{q} ((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})))\)|
-|\(Q_{23}\)| := |\(((\mathit{lineorder}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})) \pi_{q} ((\mathit{supplier}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} ((\mathit{lineorder}) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})))\)|
+|\(Q_{12}\)| := |\(((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \cancel\rtimes_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part})\)|
+|\(Q_{13}\)| := |\(((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \pi_{q} (((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
+|\(Q_{14}\)| := |\((\mathit{part}) \pi_{q} (((\mathit{lineorder}) \Join_{\mathit{lo\_suppkey} = \mathit{s\_suppkey}} (\mathit{supplier})) \Join_{\mathit{lo\_partkey} = \mathit{p\_partkey}} (\mathit{part}))\)|
 }
