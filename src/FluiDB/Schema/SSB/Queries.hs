@@ -230,7 +230,7 @@ ssbParse = fromRightStr . parseSQL inQuery
 ssbQueriesList :: [Query ExpTypeSym Table]
 ssbQueriesList =
   fmap (ssbParse . unwords) $
-    take 10 $
+    take 31 $
       cycle
         [ [ "select * from lineorder, date, customer",
             "where lo_orderdate = d_datekey",
