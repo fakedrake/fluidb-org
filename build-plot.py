@@ -1,97 +1,126 @@
 #!/usr/bin/env python
 
 import itertools as it
+from typing import *
 
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def till_bracket(i):
-    line = next(i)
-    while line != "}\n":
-        ret.append(line)
+class Line(object):
+    def __init__(self, txt, num):
+        self.txt = txt.strip()
+        self.num = num
 
-    return ret
+    def is_cpp_path(self) -> bool:
+        return self.txt.endswith(".cpp")
 
-def parse_line(line):
-    budget_s,budget_v,reads_s,reads_v,writes_s,writes_v = \
-        it.chain(*[i.split(',') for i in line.split(':')])
-    assert read_s == "reads" and writes_s == "writes"
-    return budget_v,reads_v,writes_v
+    def get_begin(self) -> Optional[str]:
+        if self.txt == "main {":
+            return "main"
+        elif self.txt == "baseline {":
+            return "baseline"
+        else:
+            return None
 
-def parse_body(i):
-    fr = []
-    for l in till_bracket(i):
-        budget,reads,writes = parse_line(l)
-        fr.append((reads,writes))
+    def is_workload_end(self) -> bool:
+        return self.txt.startswith("}")
 
-    return fr
-
-def merge_longest(d1,d2):
-    if len(d1) < len(d2):
-        return merge_longest(d1,d2)
-
-    return zip(d1,it.repeat(d2))
-
-def join_dicts(baselines,workloads):
-    for budget,baseline in baselines.items():
+    def parse(self) -> (int, int):
+        line = self.txt
         try:
-            d = defaultdict(lambda : [])
-            for bi,wi in zip(it.repeat(baseline),workloads[budget])
-                breads, bwrites = bi
-                wreads, wwrites = wi
-                d['workload_reads'],append(wreads)
-                d['workload_writes'],append(wwrites)
-                d['baseline_reads'],append(breads)
-                d['baseline_writes'],append(bwrites)
+            _q, _t, time, _r, read_s, _w, write_s = \
+                it.chain(*[i.split(',') for i in line.split(':')])
+        except ValueError:
+            raise ValueError(repr(self))
 
-            yield d
-        except:
-            continue
+        assert _r == "reads" and _w == "writes"
+        return int(read_s), int(write_s)
 
-def parse(path):
-    workloads = dict()
-    baselines = dict()
-    with open(path,'r') as perf:
-        lines = pref.getlines()
-        i = iter(lines)
-        while True:
+    def __repr__(self):
+        return f"Line({self.num}, {self.txt})"
+
+
+class Workload(object):
+    def __init__(self, wl_type: str, queries: List[Tuple[int, int]]):
+        self.wl_type = wl_type
+        self.queries = queries
+
+    def __repr__(self):
+        return f"Workload({self.wl_type}, {self.queries})"
+
+    def ops(self, repeat_till: int) -> Iterable[int]:
+        return it.islice(it.cycle((r + w for r, w in self.queries)), repeat_till)
+
+    def __len__(self):
+        return len(self.queries)
+
+class LineIter(object):
+    def __init__(self, path):
+        self.it = (Line(l,i) for i,l in enumerate(open(path, 'r')))
+
+    def parse_workload(self) -> Workload:
+        """Get the reads and writes of each iteration."""
+
+        try:
+            l = next(self.it)
+        except StopIteration:
+            return
+
+        wl_type = l.get_begin()
+        assert wl_type, f"Not the beginning of body: {l}"
+
+        try:
+            l = next(self.it)
+        except StopIteration:
+            return
+
+        fr = []
+        while not l.is_workload_end():
+            if not l.is_cpp_path():
+                fr.append(l.parse())
+
             try:
-                line = next(i)
-            except:
-                break
+                l = next(self.it)
+            except StopIteration:
+                return
 
-            if line == "main {\n":
-                budget,d = parse_body(i)
-                workloads[budget] = d
-            elif line == "baseline {\n":
-                budget,d = parse_body(i)
-                baselines[budget] = d
+        return Workload(wl_type, fr)
 
-    return pd.DataFrame(join_dicts(baselines,workloads))
+    def workloads(self) -> Iterable[Workload]:
+        wl = self.parse_workload()
+        while wl is not None:
+            yield wl
+            wl = self.parse_workload()
 
-def plot_wl(data,size,logarithmic=False):
-  baseline = data['baseline_reads'] + data['baseline_writes']
-  wl = data['workload_reads'] + data['workload_writes']
-  plt_data = pd.DataFrame({'Baseline': baseline, 'Workload': wl})
-  ax = plt_data.plot(
-      ylabel='Page read/writes',
-      xlabel='Query sequence',
-      logy=logarithmic,
-      title='FluiDB SSB-TPCH performance\n(page budget: %d)' % size)
-  ax.get_figure()
-  fig.savefig('/tmp/workload_%d%s.pdf' % (size,"log" if logarithmic else ""))
+def dataframe(wls):
+    wls = list(wls)
+    data_len = max(map(len, wls))
+    return pd.DataFrame({w.wl_type: w.ops(data_len) for w in wls})
 
-def plot_rel(data,size):
-  baseline = data['baseline_reads'] + data['baseline_writes']
-  wl = data['workload_reads'] + data['workload_writes']
-  plt_data = pd.DataFrame({'Workload': wl / baseline})
-  ax = plt_data.plot(
-      ylabel='Page read/writes',
-      xlabel='Query sequence',
-      logy=False,
-      title='FluiDB SSB-TPCH performance\n(page budget: %d)' % size)
-  ax.get_figure()
-  fig.savefig('/tmp/workload_rel_%d%s.pdf' % (size,"log" if logarithmic else ""))
 
-plot_wl(data20500, 20500)
-plot_wl(data20500, 20500, logarithmic=True)
+
+
+def plot(budget: int, wls: Iterable[Workload], logarithmic: bool = False) -> str:
+    from matplotlib.ticker import EngFormatter
+
+    plt_data = dataframe(wls)
+    ax = plt_data.plot(
+        kind='bar',
+        width=.8,
+        ylabel='Page read/writes',
+        xlabel='Query sequence',
+        logy=logarithmic,
+        title='FluiDB SSB-TPCH performance\n(page budget: %d)' % budget)
+
+    # ax.yaxis.get_major_formatter().set_scientific(False)
+    ax.yaxis.set_major_formatter(EngFormatter())
+    ax.set_xticklabels(range(1, len(plt_data) + 1))
+    fig = ax.get_figure()
+    pdf_path = '/tmp/workload_%d%s.pdf' % (budget, "log" if logarithmic else "")
+    fig.savefig(pdf_path)
+    return pdf_path
+
+
+# WL_PATH = "ssb-workload/op_perf_prev.txt"
+WL_PATH = "ssb-workload/io_perf.txt"
+plot(17000, LineIter(WL_PATH).workloads())
